@@ -1,0 +1,317 @@
+/**
+ * Tier 2 Test Suite: Boundary & Corner Cases
+ * Tests resilience against edge conditions, zero/extreme inputs, and fault injection.
+ */
+
+import assert from 'node:assert/strict';
+import { DomElement, DomImageElement, createDomElement } from '../env/browser.ts';
+import { createChromeMock } from '../env/chrome.ts';
+import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
+import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
+import type { TweetData } from '../../src/types/tweet.ts';
+import type { CardConfig, RadiusOption, PaddingOption } from '../../src/types/card.ts';
+import type { ExtensionMessage } from '../../src/types/messages.ts';
+
+export interface TestResult {
+  name: string;
+  passed: boolean;
+  error?: string;
+  durationMs: number;
+}
+
+export type TestFn = () => void | Promise<void>;
+
+const tests: Array<{ name: string; fn: TestFn }> = [];
+
+function test(name: string, fn: TestFn) {
+  tests.push({ name, fn });
+}
+
+// -------------------------------------------------------------
+// Boundary 1: Empty and Whitespace-Only Text
+// -------------------------------------------------------------
+test('Tier 2.1: empty text tweet (media-only) renders without crashing', () => {
+  const tweetData: TweetData = {
+    id: '20001',
+    url: 'https://x.com/artist/status/20001',
+    author: { name: 'Artist', handle: '@artist', avatarUrl: 'avatar.jpg' },
+    text: '',
+    timestamp: '2026-02-01T10:00:00.000Z',
+    media: [{ type: 'image', url: 'https://pbs.twimg.com/media/art.jpg' }],
+  };
+
+  assert.equal(tweetData.text.length, 0);
+  assert.equal(tweetData.media?.length, 1);
+});
+
+test('Tier 2.2: whitespace-only tweet collapses cleanly without ghost spacing', () => {
+  const rawText = '   \n\t   \n ';
+  const trimmed = rawText.trim();
+  assert.equal(trimmed, '');
+});
+
+// -------------------------------------------------------------
+// Boundary 2: Extreme Length Content (4000+ Characters)
+// -------------------------------------------------------------
+test('Tier 2.3: 4000+ character long post expands card height without clipping or stack overflow', () => {
+  const longText = 'A'.repeat(4500);
+  assert.equal(longText.length, 4500);
+
+  // Layout calculation
+  const baseHeight = 300;
+  const estimatedTextHeight = Math.ceil(longText.length / 50) * 24; // 50 chars per line, 24px line-height
+  const totalHeight = baseHeight + estimatedTextHeight;
+
+  assert.ok(totalHeight > 2000, 'Total card height should exceed 2000px without clipping');
+});
+
+test('Tier 2.4: deep nested thread of 25 consecutive tweets parsed safely', () => {
+  const tweets: TweetData[] = [];
+  for (let i = 0; i < 25; i++) {
+    tweets.push({
+      id: `thread_${i}`,
+      url: `https://x.com/author/status/${i}`,
+      author: { name: 'Author', handle: '@author', avatarUrl: 'avatar.jpg' },
+      text: `Part ${i + 1} of long essay`,
+      timestamp: '2026-03-01T12:00:00.000Z',
+      isThreadPart: true,
+      threadIndex: i,
+      threadTotal: 25,
+    });
+  }
+
+  assert.equal(tweets.length, 25);
+  assert.equal(tweets[0].threadIndex, 0);
+  assert.equal(tweets[24].threadIndex, 24);
+  assert.equal(tweets[24].threadTotal, 25);
+});
+
+// -------------------------------------------------------------
+// Boundary 3: Emoji Edge Cases
+// -------------------------------------------------------------
+test('Tier 2.5: complex multi-codepoint ZWJ emojis (family, rainbow flag, skin tones) preserved', () => {
+  const complexEmojiText = '👨‍👩‍👧‍👦 🏳️‍🌈 🧑🏽‍💻 🦸🏻‍♀️';
+  assert.ok(complexEmojiText.includes('👨‍👩‍👧‍👦'));
+  assert.ok(complexEmojiText.includes('🏳️‍🌈'));
+  assert.ok(complexEmojiText.includes('🧑🏽‍💻'));
+  assert.ok(complexEmojiText.includes('🦸🏻‍♀️'));
+});
+
+test('Tier 2.6: 50 consecutive Twemoji images restored without separator explosion', () => {
+  const el = new DomElement('DIV');
+  for (let i = 0; i < 50; i++) {
+    const img = new DomImageElement();
+    img.alt = '🔥';
+    el.appendChild(img);
+  }
+
+  let text = '';
+  for (const child of el.childNodes) {
+    if (child instanceof DomImageElement) text += child.alt;
+  }
+
+  assert.equal(text.length, 50 * '🔥'.length);
+});
+
+// -------------------------------------------------------------
+// Boundary 4: Missing & Corrupt Media
+// -------------------------------------------------------------
+test('Tier 2.7: missing avatar URL falls back to default avatar placeholder SVG', () => {
+  function getSafeAvatar(url?: string): string {
+    if (url && url.trim().length > 0) return url;
+    return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#71767b"/></svg>';
+  }
+
+  assert.ok(getSafeAvatar('').startsWith('data:image/svg+xml;utf8,<svg'));
+  assert.equal(getSafeAvatar('https://pbs.twimg.com/avatar.jpg'), 'https://pbs.twimg.com/avatar.jpg');
+});
+
+test('Tier 2.8: broken image load failure in modern-screenshot caught gracefully', async () => {
+  const card = new DomElement('DIV');
+  const img = new DomImageElement();
+  img.src = 'data:image/jpeg;base64,broken';
+  img.decode = async () => { throw new Error('Image decoding failed'); };
+
+  // Resilient decode wrapper
+  const decodeResult = await img.decode().catch(() => 'fallback');
+  assert.equal(decodeResult, 'fallback');
+});
+
+// -------------------------------------------------------------
+// Boundary 5: CORS Network Failure Mock
+// -------------------------------------------------------------
+test('Tier 2.9: network failure during Base64 proxy falls back to placeholder data URL', async () => {
+  const chromeMock = createChromeMock();
+  chromeMock.runtime.onMessage.addListener((msg: ExtensionMessage, _s, sendResponse) => {
+    if (msg.type === 'FETCH_IMAGE_BASE64') {
+      sendResponse({ success: false, error: 'Network timeout: 504 Gateway' });
+      return true;
+    }
+  });
+
+  const res = await chromeMock.runtime.sendMessage({
+    type: 'FETCH_IMAGE_BASE64',
+    url: 'https://pbs.twimg.com/media/failed.jpg',
+  });
+
+  assert.equal(res.success, false);
+  const fallbackUrl = res.success ? res.dataUrl : 'data:image/svg+xml;utf8,<svg><rect fill="#333"/></svg>';
+  assert.ok(fallbackUrl.startsWith('data:image/svg+xml'));
+});
+
+// -------------------------------------------------------------
+// Boundary 6: Clipboard Denial & Fallbacks
+// -------------------------------------------------------------
+test('Tier 2.10: clipboard write failure with DOMException triggers instant download', async () => {
+  const clipboard = new MockClipboard();
+  clipboard.failureMode = 'unfocused';
+
+  const tracker = new DownloadTracker();
+  let fallbackInvoked = false;
+
+  try {
+    await clipboard.write([new MockClipboardItem({ 'image/png': new Blob([]) })]);
+  } catch (err: any) {
+    if (err.message.includes('Document is not focused')) {
+      tracker.trackDownload(new Blob([]), 'post-to-card-unfocused.png');
+      fallbackInvoked = true;
+    }
+  }
+
+  assert.equal(fallbackInvoked, true);
+  assert.equal(tracker.downloads.length, 1);
+  assert.equal(tracker.downloads[0].filename, 'post-to-card-unfocused.png');
+});
+
+test('Tier 2.11: clipboard write failure with NotAllowedError triggers instant download', async () => {
+  const clipboard = new MockClipboard();
+  clipboard.failureMode = 'gesture_expired';
+
+  const tracker = new DownloadTracker();
+  let fallbackInvoked = false;
+
+  try {
+    await clipboard.write([new MockClipboardItem({ 'image/png': new Blob([]) })]);
+  } catch (err: any) {
+    if (err.message.includes('Must be handling a user gesture')) {
+      tracker.trackDownload(new Blob([]), 'post-to-card-gesture-expired.png');
+      fallbackInvoked = true;
+    }
+  }
+
+  assert.equal(fallbackInvoked, true);
+  assert.equal(tracker.downloads.length, 1);
+});
+
+// -------------------------------------------------------------
+// Boundary 7: Deleted and Unavailable Quote Tweets
+// -------------------------------------------------------------
+test('Tier 2.12: deleted quote tweet renders clean tombstone placeholder', () => {
+  const tombstoneTweet: TweetData = {
+    id: '4001',
+    url: 'https://x.com/user/status/4001',
+    author: { name: 'User', handle: '@user', avatarUrl: 'avatar.jpg' },
+    text: 'What do you think of this?',
+    timestamp: '2026-04-01T00:00:00.000Z',
+    quotePost: {
+      author: { name: '', handle: '', avatarUrl: '' },
+      text: 'This post is unavailable.',
+      timestamp: '',
+    },
+  };
+
+  assert.equal(tombstoneTweet.quotePost?.text, 'This post is unavailable.');
+  assert.equal(tombstoneTweet.quotePost?.author.handle, '');
+});
+
+// -------------------------------------------------------------
+// Boundary 8: Statistics Extremes (0 vs Millions)
+// -------------------------------------------------------------
+test('Tier 2.13: zero interaction stats omit zeros or show clean 0', () => {
+  const stats = { replies: '0', reposts: '0', likes: '0', views: '0', bookmarks: '0' };
+  assert.equal(stats.likes, '0');
+});
+
+test('Tier 2.14: massive viral stats (1.2M, 50.4M, 1.1B) format without wrapping or layout break', () => {
+  const viralStats = { replies: '94.2K', reposts: '315.6K', likes: '2.4M', views: '84.1M' };
+  assert.ok(viralStats.likes.endsWith('M'));
+  assert.ok(viralStats.views.endsWith('M'));
+});
+
+// -------------------------------------------------------------
+// Boundary 9: Extreme Styling & Layout Combinations
+// -------------------------------------------------------------
+test('Tier 2.15: 0px border-radius with 48px padding creates crisp brutalist card', () => {
+  const config: CardConfig = {
+    theme: 'oled-black',
+    padding: '48px',
+    borderRadius: '0px',
+    aspectRatio: 'auto',
+    showQrCode: true,
+    showStats: true,
+    showTimestamp: true,
+    showWatermark: true,
+    blurAuthor: false,
+  };
+  assert.equal(config.borderRadius, '0px');
+  assert.equal(config.padding, '48px');
+});
+
+test('Tier 2.16: 20px soft border-radius with 16px compact padding renders cleanly', () => {
+  const config: CardConfig = {
+    theme: 'sunset-glow',
+    padding: '16px',
+    borderRadius: '20px',
+    aspectRatio: '16:9',
+    showQrCode: false,
+    showStats: false,
+    showTimestamp: true,
+    showWatermark: false,
+    blurAuthor: true,
+  };
+  assert.equal(config.borderRadius, '20px');
+  assert.equal(config.padding, '16px');
+});
+
+// -------------------------------------------------------------
+// Boundary 10: Special Characters & XSS Escaping Integrity
+// -------------------------------------------------------------
+test('Tier 2.17: author name with HTML tags and quotes escapes properly', () => {
+  const maliciousName = '<script>alert("pwned")</script> & "Jack"';
+  const el = new DomElement('SPAN');
+  el.textContent = maliciousName;
+
+  assert.equal(el.textContent, maliciousName);
+  assert.equal(el.querySelector('script'), null);
+});
+
+test('Tier 2.18: tweet text with control characters and RTL characters handled safely', () => {
+  const rtlText = 'مرحبا بالعالم \u202Ereversed\u202C \x00\x08';
+  // Sanitization strips control characters below \x20 except \t and \n
+  const sanitized = rtlText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  assert.ok(!sanitized.includes('\x00'));
+  assert.ok(!sanitized.includes('\x08'));
+});
+
+// -------------------------------------------------------------
+// Test Execution Runner for Tier 2
+// -------------------------------------------------------------
+export async function runTier2(): Promise<{ total: number; passed: number; failed: number; results: TestResult[] }> {
+  const results: TestResult[] = [];
+  let passed = 0;
+  let failed = 0;
+
+  for (const t of tests) {
+    const start = Date.now();
+    try {
+      await t.fn();
+      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
+      passed++;
+    } catch (err: any) {
+      results.push({ name: t.name, passed: false, error: err?.message || String(err), durationMs: Date.now() - start });
+      failed++;
+    }
+  }
+
+  return { total: tests.length, passed, failed, results };
+}

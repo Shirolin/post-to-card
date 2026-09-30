@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Post-to-Card",
+  "version": "1.0.0",
+  "description": "Convert Twitter/X posts and threads into beautifully formatted, high-resolution shareable card images locally and offline.",
+  "permissions": ["clipboardWrite", "storage"],
+  "host_permissions": [
+    "https://*.twimg.com/*",
+    "https://pbs.twimg.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://twitter.com/*",
+        "https://x.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

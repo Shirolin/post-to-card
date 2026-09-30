@@ -1,0 +1,124 @@
+/**
+ * Continuous same-author thread DOM fixture.
+ * Contains 3 interconnected tweets by @dan_abramov.
+ */
+
+import type { ThreadData } from '../../src/types/tweet.ts';
+
+export const THREAD_HTML = `
+<div id="timeline">
+  <!-- Tweet 1 (Root) -->
+  <article data-testid="tweet" class="thread-root">
+    <div data-testid="Tweet-User-Avatar">
+      <img alt="Dan" src="https://pbs.twimg.com/profile_images/999/dan_normal.jpg">
+    </div>
+    <div data-testid="User-Name">
+      <span>Dan Abramov</span>
+      <a href="/dan_abramov" role="link"><span>@dan_abramov</span></a>
+      <a href="/dan_abramov/status/1001" role="link">
+        <time datetime="2026-04-10T10:00:00.000Z">Apr 10</time>
+      </a>
+    </div>
+    <div data-testid="tweetText">
+      <span>1/3 React Server Components change how we think about mental models.</span>
+      <img alt="🧵" src="https://abs-0.twimg.com/emoji/v2/svg/1f9f5.svg">
+    </div>
+    <div role="group">
+      <div data-testid="like"><span>2.4K</span></div>
+    </div>
+  </article>
+
+  <!-- Tweet 2 (Middle) -->
+  <article data-testid="tweet" class="thread-middle">
+    <div data-testid="Tweet-User-Avatar">
+      <img alt="Dan" src="https://pbs.twimg.com/profile_images/999/dan_normal.jpg">
+    </div>
+    <div data-testid="User-Name">
+      <span>Dan Abramov</span>
+      <a href="/dan_abramov" role="link"><span>@dan_abramov</span></a>
+      <a href="/dan_abramov/status/1002" role="link">
+        <time datetime="2026-04-10T10:05:00.000Z">Apr 10</time>
+      </a>
+    </div>
+    <div data-testid="tweetText">
+      <span>2/3 Instead of sending all bundle JS to client, components stay on server.</span>
+    </div>
+    <div role="group">
+      <div data-testid="like"><span>1.8K</span></div>
+    </div>
+  </article>
+
+  <!-- Tweet 3 (Conclusion) -->
+  <article data-testid="tweet" class="thread-end">
+    <div data-testid="Tweet-User-Avatar">
+      <img alt="Dan" src="https://pbs.twimg.com/profile_images/999/dan_normal.jpg">
+    </div>
+    <div data-testid="User-Name">
+      <span>Dan Abramov</span>
+      <a href="/dan_abramov" role="link"><span>@dan_abramov</span></a>
+      <a href="/dan_abramov/status/1003" role="link">
+        <time datetime="2026-04-10T10:10:00.000Z">Apr 10</time>
+      </a>
+    </div>
+    <div data-testid="tweetText">
+      <span>3/3 Read the full architecture RFC on GitHub. End of thread.</span>
+    </div>
+    <div role="group">
+      <div data-testid="like"><span>3.1K</span></div>
+    </div>
+  </article>
+</div>
+`;
+
+export const EXPECTED_THREAD_DATA: ThreadData = {
+  author: {
+    name: 'Dan Abramov',
+    handle: '@dan_abramov',
+    avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
+  },
+  isSingle: false,
+  tweets: [
+    {
+      id: '1001',
+      url: 'https://x.com/dan_abramov/status/1001',
+      author: {
+        name: 'Dan Abramov',
+        handle: '@dan_abramov',
+        avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
+      },
+      text: '1/3 React Server Components change how we think about mental models. 🧵',
+      timestamp: '2026-04-10T10:00:00.000Z',
+      isThreadPart: true,
+      threadIndex: 0,
+      threadTotal: 3,
+    },
+    {
+      id: '1002',
+      url: 'https://x.com/dan_abramov/status/1002',
+      author: {
+        name: 'Dan Abramov',
+        handle: '@dan_abramov',
+        avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
+      },
+      text: '2/3 Instead of sending all bundle JS to client, components stay on server.',
+      timestamp: '2026-04-10T10:05:00.000Z',
+      isThreadPart: true,
+      threadIndex: 1,
+      threadTotal: 3,
+    },
+    {
+      id: '1003',
+      url: 'https://x.com/dan_abramov/status/1003',
+      author: {
+        name: 'Dan Abramov',
+        handle: '@dan_abramov',
+        avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
+      },
+      text: '3/3 Read the full architecture RFC on GitHub. End of thread.',
+      timestamp: '2026-04-10T10:10:00.000Z',
+      isThreadPart: true,
+      threadIndex: 2,
+      threadTotal: 3,
+    },
+  ],
+};

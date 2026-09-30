@@ -1,0 +1,658 @@
+/* ==========================================================================
+   Post-to-Card Rendering Target Styles
+   100% self-contained styling for the exported card
+   ========================================================================== */
+
+#post-to-card-export-target,
+.post-to-card-target {
+  width: 640px;
+  min-width: 640px;
+  max-width: 640px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: visible;
+  height: auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* -------------------------------------------------------------
+   Aspect Ratio Rules (Downward Fluid Expansion: min-height floor)
+   ------------------------------------------------------------- */
+.post-to-card-target[data-ratio="auto"],
+.post-to-card-target.ratio-auto {
+  min-height: unset;
+  height: auto;
+}
+
+.post-to-card-target[data-ratio="3:4"],
+.post-to-card-target.ratio-3-4 {
+  min-height: 853px;
+  height: auto;
+}
+
+.post-to-card-target[data-ratio="16:9"],
+.post-to-card-target.ratio-16-9 {
+  min-height: 360px;
+  height: auto;
+}
+
+/* Inner content expansion wrapper: keeps footer pinned to bottom when content is short */
+.post-to-card-body-content {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* -------------------------------------------------------------
+   Padding Options
+   ------------------------------------------------------------- */
+.post-to-card-target[data-padding="16px"],
+.post-to-card-target.padding-16px {
+  padding: 16px;
+  gap: 14px;
+}
+
+.post-to-card-target[data-padding="32px"],
+.post-to-card-target.padding-32px {
+  padding: 32px;
+  gap: 20px;
+}
+
+.post-to-card-target[data-padding="48px"],
+.post-to-card-target.padding-48px {
+  padding: 48px;
+  gap: 26px;
+}
+
+/* -------------------------------------------------------------
+   Border Radius Options
+   ------------------------------------------------------------- */
+.post-to-card-target[data-radius="0px"],
+.post-to-card-target.radius-0px {
+  border-radius: 0px;
+}
+.post-to-card-target[data-radius="0px"] .media-grid,
+.post-to-card-target[data-radius="0px"] .media-item,
+.post-to-card-target[data-radius="0px"] .quote-card,
+.post-to-card-target.radius-0px .media-grid,
+.post-to-card-target.radius-0px .media-item,
+.post-to-card-target.radius-0px .quote-card {
+  border-radius: 0px;
+}
+
+.post-to-card-target[data-radius="12px"],
+.post-to-card-target.radius-12px {
+  border-radius: 12px;
+}
+.post-to-card-target[data-radius="12px"] .media-grid,
+.post-to-card-target[data-radius="12px"] .media-item,
+.post-to-card-target[data-radius="12px"] .quote-card,
+.post-to-card-target.radius-12px .media-grid,
+.post-to-card-target.radius-12px .media-item,
+.post-to-card-target.radius-12px .quote-card {
+  border-radius: 8px;
+}
+
+.post-to-card-target[data-radius="20px"],
+.post-to-card-target.radius-20px {
+  border-radius: 20px;
+}
+.post-to-card-target[data-radius="20px"] .media-grid,
+.post-to-card-target[data-radius="20px"] .media-item,
+.post-to-card-target[data-radius="20px"] .quote-card,
+.post-to-card-target.radius-20px .media-grid,
+.post-to-card-target.radius-20px .media-item,
+.post-to-card-target.radius-20px .quote-card {
+  border-radius: 14px;
+}
+
+/* -------------------------------------------------------------
+   6 Curated Themes
+   ------------------------------------------------------------- */
+
+/* 1. Linear Dark */
+.post-to-card-target[data-theme="linear-dark"],
+.post-to-card-target.theme-linear-dark {
+  background: linear-gradient(135deg, #18191c 0%, #0d0e11 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 20px 40px rgba(0, 0, 0, 0.5);
+  color: #f3f4f6;
+  --text-sec: #9ca3af;
+  --accent: #818cf8;
+  --divider: rgba(255, 255, 255, 0.1);
+  --quote-bg: rgba(255, 255, 255, 0.03);
+  --quote-border: rgba(255, 255, 255, 0.08);
+  --qr-fill: #f3f4f6;
+}
+
+/* 2. Sunset Glow */
+.post-to-card-target[data-theme="sunset-glow"],
+.post-to-card-target.theme-sunset-glow {
+  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+  border: 1px solid rgba(255, 175, 140, 0.25);
+  box-shadow: 0 20px 48px rgba(74, 21, 75, 0.45);
+  color: #ffffff;
+  --text-sec: rgba(255, 255, 255, 0.75);
+  --accent: #ff8a65;
+  --divider: rgba(255, 255, 255, 0.18);
+  --quote-bg: rgba(0, 0, 0, 0.2);
+  --quote-border: rgba(255, 255, 255, 0.15);
+  --qr-fill: #ffffff;
+}
+
+/* 3. Aurora Purple */
+.post-to-card-target[data-theme="aurora-purple"],
+.post-to-card-target.theme-aurora-purple {
+  background: linear-gradient(135deg, #654ea3 0%, #eaafc8 100%);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: 0 16px 40px rgba(9, 2, 20, 0.8), 0 0 24px rgba(168, 85, 247, 0.15);
+  color: #ffffff;
+  --text-sec: #c084fc;
+  --accent: #38bdf8;
+  --divider: rgba(168, 85, 247, 0.25);
+  --quote-bg: rgba(168, 85, 247, 0.06);
+  --quote-border: rgba(168, 85, 247, 0.2);
+  --qr-fill: #f8fafc;
+}
+
+/* 4. Notion Clean White */
+.post-to-card-target[data-theme="notion-clean-white"],
+.post-to-card-target[data-theme="notion-white"],
+.post-to-card-target.theme-notion-clean-white,
+.post-to-card-target.theme-notion-white {
+  background: #ffffff;
+  border: 1px solid #e9e9e7;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+  color: #37352f;
+  --text-sec: #6b7280;
+  --accent: #2563eb;
+  --divider: #e5e7eb;
+  --quote-bg: #f9fafb;
+  --quote-border: #e5e7eb;
+  --qr-fill: #111827;
+}
+
+/* 5. Cyber Mint */
+.post-to-card-target[data-theme="cyber-mint"],
+.post-to-card-target.theme-cyber-mint {
+  background: linear-gradient(150deg, #070c0e 0%, #0d1619 50%, #080f12 100%);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 16px rgba(16, 185, 129, 0.08);
+  color: #f0fdf4;
+  --text-sec: #94a3b8;
+  --accent: #00ffcc;
+  --divider: rgba(16, 185, 129, 0.2);
+  --quote-bg: rgba(16, 185, 129, 0.04);
+  --quote-border: rgba(16, 185, 129, 0.18);
+  --qr-fill: #10b981;
+}
+
+/* 6. OLED Black */
+.post-to-card-target[data-theme="oled-black"],
+.post-to-card-target.theme-oled-black,
+.post-to-card-target.theme-oled {
+  background: #000000;
+  border: 1px solid #262626;
+  box-shadow: 0 0 0 1px #1a1a1a;
+  color: #ffffff;
+  --text-sec: #737373;
+  --accent: #ffffff;
+  --divider: #262626;
+  --quote-bg: #0d0d0d;
+  --quote-border: #262626;
+  --qr-fill: #ffffff;
+}
+
+/* -------------------------------------------------------------
+   Author Header & Profile Information
+   ------------------------------------------------------------- */
+.author-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+
+.author-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.author-avatar img,
+.author-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.author-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.author-name {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: #1d9bf0;
+}
+
+.author-handle {
+  font-size: 14px;
+  color: var(--text-sec, #9ca3af);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -------------------------------------------------------------
+   Author Privacy Blur (F22)
+   ------------------------------------------------------------- */
+.author-avatar.is-blurred img,
+.is-blurred .author-avatar img,
+.author-avatar-img.is-blurred {
+  filter: blur(6px);
+  transform: translateZ(0);
+}
+
+.author-name.is-blurred,
+.is-blurred .author-name {
+  filter: blur(6px);
+  user-select: none;
+}
+
+.author-handle.is-blurred,
+.is-blurred .author-handle {
+  filter: blur(6px);
+  user-select: none;
+}
+
+/* -------------------------------------------------------------
+   Tweet Text & Rich Content
+   ------------------------------------------------------------- */
+.tweet-text-content {
+  font-size: 16.5px;
+  line-height: 1.55;
+  word-break: break-word;
+  white-space: pre-wrap;
+  color: inherit;
+}
+
+.token-mention,
+.token-hashtag,
+.token-cashtag,
+.token-link {
+  color: var(--accent, #6366f1);
+  text-decoration: none;
+}
+
+.token-mention:hover,
+.token-hashtag:hover,
+.token-link:hover {
+  text-decoration: underline;
+}
+
+/* -------------------------------------------------------------
+   Multi-Image Grid (1 to 4 Images) & Ratio-Aware Responsive Layout
+   ------------------------------------------------------------- */
+.media-grid {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  overflow: hidden;
+  margin-top: 12px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Base Media Item Behavior */
+.media-item {
+  width: 100%;
+  display: block;
+  transition: max-height 0.2s cubic-bezier(0.16, 1, 0.3, 1), object-fit 0.15s ease;
+}
+
+/* Fit Modes (Contain vs Cover) */
+.media-fit-contain,
+.media-item.fit-contain,
+.media-grid.media-fit-contain .media-item,
+.media-grid[data-fit="contain"] .media-item,
+.post-to-card-target[data-fit="contain"] .media-item {
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.post-to-card-target[data-theme="notion-clean-white"] .media-item.fit-contain,
+.post-to-card-target[data-theme="notion-white"] .media-item.fit-contain,
+.post-to-card-target.theme-notion-clean-white .media-item.fit-contain,
+.post-to-card-target.theme-notion-white .media-item.fit-contain {
+  background: rgba(0, 0, 0, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.media-fit-cover,
+.media-item.fit-cover,
+.media-grid.media-fit-cover .media-item,
+.media-grid[data-fit="cover"] .media-item,
+.post-to-card-target[data-fit="cover"] .media-item {
+  object-fit: cover;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---------------- Single Image (Count = 1) ---------------- */
+.media-grid[data-count="1"] {
+  grid-template-columns: 1fr;
+}
+
+/* Single Image in Auto Ratio: natural proportion without harsh limits */
+.media-grid[data-count="1"] .media-item {
+  max-height: 520px;
+  height: auto;
+}
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="1"] .media-item,
+.post-to-card-target.ratio-auto .media-grid[data-count="1"] .media-item {
+  max-height: 520px;
+}
+
+/* Single Image in 3:4 Poster Ratio: expand dynamically to fill vertical canvas & eliminate dead space */
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"],
+.post-to-card-target.ratio-3-4 .media-grid[data-count="1"] {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+  margin-top: 14px;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] .media-item,
+.post-to-card-target.ratio-3-4 .media-grid[data-count="1"] .media-item {
+  max-height: 580px;
+  height: 100%;
+  width: 100%;
+}
+
+/* Single Image in 16:9 Landscape Ratio: compact constraint to maintain tight landscape frame */
+.post-to-card-target[data-ratio="16:9"] .post-to-card-body-content,
+.post-to-card-target.ratio-16-9 .post-to-card-body-content {
+  gap: 10px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"],
+.post-to-card-target.ratio-16-9 .media-grid[data-count="1"] {
+  margin-top: 8px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"] .media-item,
+.post-to-card-target.ratio-16-9 .media-grid[data-count="1"] .media-item {
+  max-height: 200px;
+  height: auto;
+}
+
+/* ---------------- Multi Images (Count = 2, 3, 4) ---------------- */
+.media-grid[data-count="2"] {
+  grid-template-columns: 1fr 1fr;
+  aspect-ratio: 16 / 9;
+}
+.media-grid[data-count="2"] .media-item {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* 2 images in 3:4: richer vertical aspect ratio */
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="2"],
+.post-to-card-target.ratio-3-4 .media-grid[data-count="2"] {
+  aspect-ratio: 4 / 3;
+  min-height: 280px;
+}
+/* 2 images in 16:9: sleeker horizontal grid */
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="2"],
+.post-to-card-target.ratio-16-9 .media-grid[data-count="2"] {
+  aspect-ratio: 21 / 9;
+  max-height: 180px;
+}
+
+.media-grid[data-count="3"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  aspect-ratio: 16 / 9;
+}
+.media-grid[data-count="3"] .media-item:first-child {
+  grid-row: span 2;
+}
+.media-grid[data-count="3"] .media-item {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="3"],
+.post-to-card-target.ratio-3-4 .media-grid[data-count="3"] {
+  aspect-ratio: 1 / 1;
+  min-height: 320px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="3"],
+.post-to-card-target.ratio-16-9 .media-grid[data-count="3"] {
+  aspect-ratio: 21 / 9;
+  max-height: 180px;
+}
+
+.media-grid[data-count="4"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  aspect-ratio: 16 / 9;
+}
+.media-grid[data-count="4"] .media-item {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="4"],
+.post-to-card-target.ratio-3-4 .media-grid[data-count="4"] {
+  aspect-ratio: 1 / 1;
+  min-height: 320px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="4"],
+.post-to-card-target.ratio-16-9 .media-grid[data-count="4"] {
+  aspect-ratio: 21 / 9;
+  max-height: 180px;
+}
+
+/* -------------------------------------------------------------
+   Quote Tweet Box
+   ------------------------------------------------------------- */
+.quote-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--quote-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--quote-border, rgba(255, 255, 255, 0.1));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.quote-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quote-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.quote-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: inherit;
+}
+
+.quote-handle {
+  font-size: 12.5px;
+  color: var(--text-sec, #9ca3af);
+}
+
+.quote-text {
+  font-size: 14px;
+  line-height: 1.45;
+  color: inherit;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* -------------------------------------------------------------
+   Thread Timeline Connector
+   ------------------------------------------------------------- */
+.thread-item-wrapper {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.thread-connector-line {
+  position: absolute;
+  top: 50px;
+  bottom: -20px;
+  left: 23px;
+  width: 2px;
+  background: var(--divider, rgba(255, 255, 255, 0.15));
+  z-index: 1;
+}
+
+.thread-tweet-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 20px;
+  position: relative;
+  z-index: 2;
+}
+
+.thread-divider {
+  height: 1px;
+  background: var(--divider, rgba(255, 255, 255, 0.1));
+  margin: 8px 0;
+  width: 100%;
+}
+
+/* -------------------------------------------------------------
+   Card Footer (Timestamp, Stats, QR Code, Watermark)
+   ------------------------------------------------------------- */
+.card-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  margin-top: auto;
+  border-top: 1px solid var(--divider, rgba(255, 255, 255, 0.1));
+}
+
+.card-footer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.card-timestamp {
+  font-size: 13px;
+  color: var(--text-sec, #9ca3af);
+  line-height: 1.4;
+}
+
+/* Tweet Interaction Statistics */
+.stats-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-sec, #9ca3af);
+  font-size: 13px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stat-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-block;
+  vertical-align: middle;
+  fill: currentColor;
+}
+
+.card-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.card-qr-container {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-qr-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.card-watermark {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-sec, #9ca3af);
+  opacity: 0.55;
+  user-select: none;
+}
