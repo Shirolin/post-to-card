@@ -333,7 +333,7 @@
    ------------------------------------------------------------- */
 .media-grid {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
   overflow: hidden;
   margin-top: 12px;
@@ -343,6 +343,9 @@
 /* Base Media Item Behavior */
 .media-item {
   width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   display: block;
   transition: max-height 0.2s cubic-bezier(0.16, 1, 0.3, 1), object-fit 0.15s ease;
 }
@@ -350,27 +353,37 @@
 /* Fit Modes (Contain vs Cover) */
 .media-fit-contain,
 .media-item.fit-contain,
+.media-video-poster.fit-contain,
 .media-grid.media-fit-contain .media-item,
 .media-grid[data-fit="contain"] .media-item,
-.post-to-card-target[data-fit="contain"] .media-item {
+.media-grid[data-fit="contain"] .media-video-poster,
+.post-to-card-target[data-fit="contain"] .media-item,
+.post-to-card-target[data-fit="contain"] .media-video-poster {
   object-fit: contain;
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  background: transparent;
+  box-shadow: none;
 }
 
 .post-to-card-target[data-theme="notion-clean-white"] .media-item.fit-contain,
 .post-to-card-target[data-theme="notion-white"] .media-item.fit-contain,
+.post-to-card-target[data-theme="notion-clean-white"] .media-video-poster.fit-contain,
+.post-to-card-target[data-theme="notion-white"] .media-video-poster.fit-contain,
 .post-to-card-target.theme-notion-clean-white .media-item.fit-contain,
-.post-to-card-target.theme-notion-white .media-item.fit-contain {
-  background: rgba(0, 0, 0, 0.03);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+.post-to-card-target.theme-notion-white .media-item.fit-contain,
+.post-to-card-target.theme-notion-clean-white .media-video-poster.fit-contain,
+.post-to-card-target.theme-notion-white .media-video-poster.fit-contain {
+  background: transparent;
+  box-shadow: none;
 }
 
 .media-fit-cover,
 .media-item.fit-cover,
+.media-video-poster.fit-cover,
 .media-grid.media-fit-cover .media-item,
 .media-grid[data-fit="cover"] .media-item,
-.post-to-card-target[data-fit="cover"] .media-item {
+.media-grid[data-fit="cover"] .media-video-poster,
+.post-to-card-target[data-fit="cover"] .media-item,
+.post-to-card-target[data-fit="cover"] .media-video-poster {
   object-fit: cover;
   background: transparent;
   box-shadow: none;
@@ -423,75 +436,357 @@
   height: auto;
 }
 
-/* ---------------- Multi Images (Count = 2, 3, 4) ---------------- */
-.media-grid[data-count="2"] {
-  grid-template-columns: 1fr 1fr;
-  aspect-ratio: 16 / 9;
+/* ---------------- Multi Images (Count = 2, 3, 4) in Grid Mode ---------------- */
+.media-grid:not(.media-layout-stack)[data-count="2"],
+.media-grid.media-layout-grid[data-count="2"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 16 / 10;
 }
-.media-grid[data-count="2"] .media-item {
+.media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="stacked"],
+.media-grid.media-layout-grid[data-count="2"][data-grid-layout="stacked"],
+.media-grid:not(.media-layout-stack)[data-count="2"].grid-stacked,
+.media-grid.media-layout-grid[data-count="2"].grid-stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 16 / 11;
+}
+/* Dual Portrait (2 tall / mobile screenshots side-by-side in Auto or Grid) */
+.media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="portrait-columns"],
+.media-grid.media-layout-grid[data-count="2"][data-grid-layout="portrait-columns"],
+.media-grid:not(.media-layout-stack)[data-count="2"].grid-portrait-columns,
+.media-grid.media-layout-grid[data-count="2"].grid-portrait-columns {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  aspect-ratio: 1 / 1;
+}
+.post-to-card-target[data-ratio="auto"] .media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="portrait-columns"],
+.post-to-card-target.ratio-auto .media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="portrait-columns"],
+.post-to-card-target[data-ratio="auto"] .media-grid.media-layout-grid[data-count="2"][data-grid-layout="portrait-columns"],
+.post-to-card-target.ratio-auto .media-grid.media-layout-grid[data-count="2"][data-grid-layout="portrait-columns"],
+.post-to-card-target[data-ratio="auto"] .media-grid:not(.media-layout-stack)[data-count="2"].grid-portrait-columns,
+.post-to-card-target.ratio-auto .media-grid:not(.media-layout-stack)[data-count="2"].grid-portrait-columns,
+.post-to-card-target[data-ratio="auto"] .media-grid.media-layout-grid[data-count="2"].grid-portrait-columns,
+.post-to-card-target.ratio-auto .media-grid.media-layout-grid[data-count="2"].grid-portrait-columns {
+  aspect-ratio: 1 / 1;
+  max-height: 640px;
+}
+.media-grid:not(.media-layout-stack)[data-count="2"] .media-item,
+.media-grid.media-layout-grid[data-count="2"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+.media-grid:not(.media-layout-stack)[data-count="2"][data-fit="contain"] .media-item,
+.media-grid.media-layout-grid[data-count="2"][data-fit="contain"] .media-item,
+.media-grid:not(.media-layout-stack)[data-count="2"][data-fit="contain"] .media-video-poster,
+.media-grid.media-layout-grid[data-count="2"][data-fit="contain"] .media-video-poster {
+  object-fit: contain;
+}
 /* 2 images in 3:4: richer vertical aspect ratio */
-.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="2"],
-.post-to-card-target.ratio-3-4 .media-grid[data-count="2"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="2"],
+.post-to-card-target.ratio-3-4 .media-grid:not(.media-layout-stack)[data-count="2"],
+.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="2"],
+.post-to-card-target.ratio-3-4 .media-grid.media-layout-grid[data-count="2"] {
   aspect-ratio: 4 / 3;
   min-height: 280px;
 }
 /* 2 images in 16:9: sleeker horizontal grid */
-.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="2"],
-.post-to-card-target.ratio-16-9 .media-grid[data-count="2"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="2"],
+.post-to-card-target.ratio-16-9 .media-grid:not(.media-layout-stack)[data-count="2"],
+.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="2"],
+.post-to-card-target.ratio-16-9 .media-grid.media-layout-grid[data-count="2"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
 
-.media-grid[data-count="3"] {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  aspect-ratio: 16 / 9;
+/* 3 images: Auto ratio uses comfortable 4:3 */
+.media-grid:not(.media-layout-stack)[data-count="3"],
+.media-grid.media-layout-grid[data-count="3"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 4 / 3;
 }
-.media-grid[data-count="3"] .media-item:first-child {
+/* Top-Hero: First image is wide/landscape/square -> spans 2 columns on top (row 1: 1.4fr), bottom 2 images on row 2 (1fr) */
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"],
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"],
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero,
+.media-grid.media-layout-grid[data-count="3"].grid-top-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"] .media-item:first-child,
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:first-child,
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero .media-item:first-child,
+.media-grid.media-layout-grid[data-count="3"].grid-top-hero .media-item:first-child {
+  grid-column: span 2;
+  grid-row: 1;
+}
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2),
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2),
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero .media-item:nth-child(2),
+.media-grid.media-layout-grid[data-count="3"].grid-top-hero .media-item:nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3),
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3),
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero .media-item:nth-child(3),
+.media-grid.media-layout-grid[data-count="3"].grid-top-hero .media-item:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="top-hero"],
+.post-to-card-target.ratio-auto .media-grid[data-count="3"][data-grid-layout="top-hero"],
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-top-hero,
+.post-to-card-target.ratio-auto .media-grid[data-count="3"].grid-top-hero {
+  aspect-ratio: 16 / 15;
+  max-height: 640px;
+}
+
+/* Left-Hero: First image is portrait/square/standard (< 1.2) -> spans 2 rows on left (1.6fr), right 2 images stacked vertically (1fr) */
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"],
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"],
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero,
+.media-grid.media-layout-grid[data-count="3"].grid-left-hero {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 4 / 3;
+}
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="left-hero"],
+.post-to-card-target.ratio-auto .media-grid[data-count="3"][data-grid-layout="left-hero"],
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-left-hero,
+.post-to-card-target.ratio-auto .media-grid[data-count="3"].grid-left-hero {
+  aspect-ratio: 4 / 3;
+  max-height: 640px;
+}
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"] .media-item:first-child,
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:first-child,
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero .media-item:first-child,
+.media-grid.media-layout-grid[data-count="3"].grid-left-hero .media-item:first-child {
   grid-row: span 2;
+  grid-column: 1;
 }
-.media-grid[data-count="3"] .media-item {
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2),
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2),
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero .media-item:nth-child(2),
+.media-grid.media-layout-grid[data-count="3"].grid-left-hero .media-item:nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3),
+.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3),
+.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero .media-item:nth-child(3),
+.media-grid.media-layout-grid[data-count="3"].grid-left-hero .media-item:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.media-grid:not(.media-layout-stack)[data-count="3"] .media-item,
+.media-grid.media-layout-grid[data-count="3"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="3"],
-.post-to-card-target.ratio-3-4 .media-grid[data-count="3"] {
+.media-grid:not(.media-layout-stack)[data-count="3"][data-fit="contain"] .media-item,
+.media-grid.media-layout-grid[data-count="3"][data-fit="contain"] .media-item,
+.media-grid:not(.media-layout-stack)[data-count="3"][data-fit="contain"] .media-video-poster,
+.media-grid.media-layout-grid[data-count="3"][data-fit="contain"] .media-video-poster {
+  object-fit: contain;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="3"],
+.post-to-card-target.ratio-3-4 .media-grid:not(.media-layout-stack)[data-count="3"],
+.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="3"],
+.post-to-card-target.ratio-3-4 .media-grid.media-layout-grid[data-count="3"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="3"],
-.post-to-card-target.ratio-16-9 .media-grid[data-count="3"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="3"],
+.post-to-card-target.ratio-16-9 .media-grid:not(.media-layout-stack)[data-count="3"],
+.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="3"],
+.post-to-card-target.ratio-16-9 .media-grid.media-layout-grid[data-count="3"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
 
-.media-grid[data-count="4"] {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  aspect-ratio: 16 / 9;
+/* 4 images: Auto ratio uses comfortable 4:3 */
+.media-grid:not(.media-layout-stack)[data-count="4"],
+.media-grid.media-layout-grid[data-count="4"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 4 / 3;
 }
-.media-grid[data-count="4"] .media-item {
+.media-grid:not(.media-layout-stack)[data-count="4"] .media-item,
+.media-grid.media-layout-grid[data-count="4"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="4"],
-.post-to-card-target.ratio-3-4 .media-grid[data-count="4"] {
+.media-grid:not(.media-layout-stack)[data-count="4"][data-fit="contain"] .media-item,
+.media-grid.media-layout-grid[data-count="4"][data-fit="contain"] .media-item,
+.media-grid:not(.media-layout-stack)[data-count="4"][data-fit="contain"] .media-video-poster,
+.media-grid.media-layout-grid[data-count="4"][data-fit="contain"] .media-video-poster {
+  object-fit: contain;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="4"],
+.post-to-card-target.ratio-3-4 .media-grid:not(.media-layout-stack)[data-count="4"],
+.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="4"],
+.post-to-card-target.ratio-3-4 .media-grid.media-layout-grid[data-count="4"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="4"],
+.post-to-card-target.ratio-16-9 .media-grid:not(.media-layout-stack)[data-count="4"],
+.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="4"],
+.post-to-card-target.ratio-16-9 .media-grid.media-layout-grid[data-count="4"] {
+  aspect-ratio: 21 / 9;
+  max-height: 180px;
+}
+
+/* ---------------- Multi Images (Stack Mode: 100% Full Display) ---------------- */
+.media-grid.media-layout-stack,
+.media-grid[data-layout="stack"],
+.post-to-card-target[data-media-layout="stack"] .media-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  width: 100% !important;
+  aspect-ratio: unset !important;
+  min-height: unset !important;
+  max-height: unset !important;
+  margin-top: 12px;
+}
+
+.media-grid.media-layout-stack .media-item,
+.media-grid[data-layout="stack"] .media-item,
+.post-to-card-target[data-media-layout="stack"] .media-item {
+  width: 100% !important;
+  height: auto !important;
+  max-height: unset !important;
+  aspect-ratio: unset !important;
+  object-fit: contain;
+  display: block;
+}
+
+.media-grid.media-layout-stack.fit-cover .media-item,
+.media-grid[data-layout="stack"].fit-cover .media-item,
+.media-grid.media-layout-stack .media-item.fit-cover {
+  object-fit: cover;
 }
 .post-to-card-target[data-ratio="16:9"] .media-grid[data-count="4"],
 .post-to-card-target.ratio-16-9 .media-grid[data-count="4"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
+}
+
+/* -------------------------------------------------------------
+   Video & Animated GIF Presentation (Non-obstructive Elegant UI)
+   ------------------------------------------------------------- */
+.media-item.media-video-item {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  background: rgba(0, 0, 0, 0.2);
+  width: 100%;
+}
+
+/* In auto ratio with single media, preserve natural proportion */
+.media-grid[data-count="1"] .media-item.media-video-item {
+  max-height: 520px;
+  height: auto;
+}
+
+.media-item.media-video-item .media-video-poster {
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  min-width: 0;
+  min-height: 0;
+  display: block;
+}
+
+/* Subtle Bottom Scrim: soft black vignette to guarantee contrast on bright video posters */
+.media-video-item .video-scrim-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Video Indicator Badge: Bottom-left frosted glass pill badge (zero center obstruction) */
+.media-video-item .video-indicator-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.media-video-item .video-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  background: rgba(15, 20, 25, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.media-video-item .video-badge-pill.gif-badge {
+  padding: 0 8px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  background: rgba(15, 20, 25, 0.82);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.media-video-item .video-play-icon {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.media-video-item .video-duration-text {
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+}
+
+/* Subtle Video Timeline Track: 2.5px player line at bottom edge for immediate video recognition */
+.media-video-item .video-progress-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.5px;
+  background: rgba(255, 255, 255, 0.25);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.media-video-item .video-progress-fill {
+  height: 100%;
+  width: 30%;
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+  border-radius: 0 1px 1px 0;
 }
 
 /* -------------------------------------------------------------

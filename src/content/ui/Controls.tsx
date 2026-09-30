@@ -150,6 +150,37 @@ export function Controls({
         </div>
       </div>
 
+      {/* 2.6 Multi-Image Layout (Grid vs Stack) */}
+      <div class="control-section">
+        <span class="control-label">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>{t.mediaLayout}</span>
+        </span>
+        <div class="btn-group">
+          <button
+            type="button"
+            class={`btn-group-item ${(config.mediaLayout || 'grid') === 'grid' ? 'is-active' : ''}`}
+            onClick={() => updateConfig({ mediaLayout: 'grid' })}
+            title={t.layoutGrid}
+          >
+            {t.layoutGrid}
+          </button>
+          <button
+            type="button"
+            class={`btn-group-item ${config.mediaLayout === 'stack' ? 'is-active' : ''}`}
+            onClick={() => updateConfig({ mediaLayout: 'stack' })}
+            title={t.layoutStack}
+          >
+            {t.layoutStack}
+          </button>
+        </div>
+      </div>
+
       {/* 3. Padding */}
       <div class="control-section">
         <span class="control-label">
@@ -256,6 +287,28 @@ export function Controls({
           >
             <span class="toggle-title">{t.blurAuthor}</span>
             <div class={`toggle-switch ${config.blurAuthor ? 'is-checked' : ''}`}>
+              <div class="toggle-thumb" />
+            </div>
+          </div>
+
+          {/* Tweet Action Bar Button */}
+          <div
+            class="toggle-item"
+            onClick={() => updateConfig({ showActionBarButton: config.showActionBarButton !== false ? false : true })}
+          >
+            <span class="toggle-title">{t.tweetActionButton}</span>
+            <div class={`toggle-switch ${config.showActionBarButton !== false ? 'is-checked' : ''}`}>
+              <div class="toggle-thumb" />
+            </div>
+          </div>
+
+          {/* Video Play Button / Indicator on Card */}
+          <div
+            class="toggle-item"
+            onClick={() => updateConfig({ showPlayButton: config.showPlayButton !== false ? false : true })}
+          >
+            <span class="toggle-title">{t.videoPlayButton}</span>
+            <div class={`toggle-switch ${config.showPlayButton !== false ? 'is-checked' : ''}`}>
               <div class="toggle-thumb" />
             </div>
           </div>

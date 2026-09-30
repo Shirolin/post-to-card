@@ -251,41 +251,231 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
 }
 
 /**
+ * Detects if a video container represents an animated GIF.
+ */
+export function isGifMedia(container: Element): boolean {
+  if (!container) return false;
+  const aria = (typeof container.getAttribute === 'function' ? container.getAttribute('aria-label') : '') || '';
+  if (aria.toUpperCase().includes('GIF')) return true;
+
+  if (typeof container.querySelector === 'function') {
+    if (container.querySelector('[aria-label*="GIF"], [data-testid="gifBadge"]')) return true;
+    const spans = container.querySelectorAll('span, div');
+    for (const el of Array.from(spans)) {
+      if (el.textContent?.trim() === 'GIF') return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Extracts video duration string (e.g. '0:42', '1:23', '12:05') from video controls.
+ */
+export function extractVideoDuration(container: Element): string | undefined {
+  if (!container || typeof container.querySelectorAll !== 'function') return undefined;
+
+  const candidateEls = container.querySelectorAll('time, span, div');
+  for (const el of Array.from(candidateEls)) {
+    const text = el.textContent?.trim() || '';
+    if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(text)) {
+      return text;
+    }
+  }
+
+  const ariaEls = container.querySelectorAll('[aria-label]');
+  for (const el of Array.from(ariaEls)) {
+    const label = el.getAttribute('aria-label') || '';
+    const match = label.match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Deeply searches an article or container for video elements and extracts
+ * the poster frame URL or captures a frame via HTML5 Canvas.
+ */
+export function extractVideoMedia(container: Element): MediaItem | null {
+  if (!container) return null;
+
+  // 1. Locate video container, video tag, or player overlay
+  const videoContainer = container.querySelector(
+    'div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"], div[aria-label*="video" i], video'
+  );
+  const videoEl = (container.querySelector('video') || (videoContainer?.tagName === 'VIDEO' ? videoContainer : null)) as HTMLVideoElement | null;
+
+  // Check if any thumbnail specifically belongs to video
+  const videoThumbImg = container.querySelector(
+    'img[src*="video_thumb"], img[src*="ext_tw_video_thumb"], img[src*="tweet_video_thumb"], img[src*="amplify_video_thumb"], img[src*="video_preview"]'
+  );
+
+  const hasVideo = Boolean(videoContainer || videoEl || videoThumbImg);
+  if (!hasVideo) return null;
+
+  const targetContainer = videoContainer || container;
+  const isGif = isGifMedia(targetContainer);
+  let duration = isGif ? undefined : extractVideoDuration(targetContainer);
+
+  // If duration wasn't found in DOM text, check native video element duration
+  if (!duration && videoEl && typeof videoEl.duration === 'number' && !isNaN(videoEl.duration) && videoEl.duration > 0) {
+    const totalSec = Math.floor(videoEl.duration);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    duration = `${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  let posterUrl: string | null = null;
+  let aspectRatio: number | undefined;
+
+  // Strategy A: Video element poster attribute
+  if (videoEl) {
+    const p = typeof videoEl.getAttribute === 'function' ? videoEl.getAttribute('poster') : (videoEl as any).poster;
+    if (p && String(p).trim().length > 0) {
+      posterUrl = String(p).trim();
+    }
+  }
+
+  // Strategy B: Any video thumbnail or preview img
+  if (!posterUrl && videoThumbImg) {
+    const src = (typeof videoThumbImg.getAttribute === 'function' ? videoThumbImg.getAttribute('src') : (videoThumbImg as any).src) || '';
+    if (src && !src.includes('profile_images') && !src.includes('/emoji/')) {
+      posterUrl = src;
+      const imgEl = videoThumbImg as unknown as { naturalWidth?: number; naturalHeight?: number };
+      const w = imgEl.naturalWidth || Number.parseFloat(videoThumbImg.getAttribute('width') || '0') || 0;
+      const h = imgEl.naturalHeight || Number.parseFloat(videoThumbImg.getAttribute('height') || '0') || 0;
+      if (w > 0 && h > 0) {
+        aspectRatio = Number((w / h).toFixed(3));
+      }
+    }
+  }
+
+  // Strategy C: extractVideoPosterUrl helper
+  if (!posterUrl && videoContainer) {
+    const p = extractVideoPosterUrl(videoContainer);
+    if (p && !p.includes('profile_images') && !p.includes('/emoji/')) {
+      posterUrl = p;
+    }
+  }
+
+  // Strategy D: Any preview img inside the target container or article (excluding quote tweets)
+  if (!posterUrl) {
+    const imgs = Array.from(targetContainer.querySelectorAll('img')).filter(img => !isInsideQuoteTweet(img));
+    for (const img of imgs) {
+      const src = (typeof img.getAttribute === 'function' ? img.getAttribute('src') : (img as any).src) || '';
+      if (src && !src.includes('profile_images') && !src.includes('/emoji/')) {
+        posterUrl = src;
+        const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+        const w = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+        const h = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+        if (w > 0 && h > 0) {
+          aspectRatio = Number((w / h).toFixed(3));
+        }
+        break;
+      }
+    }
+  }
+
+  // Strategy E: Background-image in inline styles
+  if (!posterUrl) {
+    const candidateEls = [targetContainer, ...Array.from(targetContainer.querySelectorAll('div, span'))];
+    for (const el of candidateEls) {
+      const style = (typeof el.getAttribute === 'function' ? el.getAttribute('style') : (el as any).style?.cssText) || '';
+      const match = style.match(/background(?:-image)?:\s*url\(['"]?(https?:\/\/[^'")]+)['"]?\)/i);
+      if (match && !match[1].includes('profile_images') && !match[1].includes('/emoji/')) {
+        posterUrl = match[1];
+        break;
+      }
+    }
+  }
+
+  // Strategy F: Capture current live frame from HTML5 <video> using Canvas
+  if (!posterUrl && videoEl && typeof document !== 'undefined') {
+    const vid = videoEl as unknown as { videoWidth?: number; videoHeight?: number };
+    if (vid.videoWidth && vid.videoHeight && vid.videoWidth > 0 && vid.videoHeight > 0) {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = vid.videoWidth;
+        canvas.height = vid.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(videoEl as any, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          if (dataUrl && dataUrl.length > 200) {
+            posterUrl = dataUrl;
+            aspectRatio = Number((vid.videoWidth / vid.videoHeight).toFixed(3));
+          }
+        }
+      } catch {
+        // Ignore CORS errors on canvas draw
+      }
+    }
+  }
+
+  // Strategy G: Twitter Open Graph image meta
+  if (!posterUrl && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+    const ogImg = document.querySelector('meta[property="og:image"]');
+    const content = ogImg?.getAttribute('content');
+    if (content && !content.includes('profile_images')) {
+      posterUrl = content;
+    }
+  }
+
+  // Infer aspect ratio if still missing
+  if (!aspectRatio && videoEl) {
+    const vid = videoEl as unknown as { videoWidth?: number; videoHeight?: number };
+    if (vid.videoWidth && vid.videoHeight && vid.videoWidth > 0 && vid.videoHeight > 0) {
+      aspectRatio = Number((vid.videoWidth / vid.videoHeight).toFixed(3));
+    }
+  }
+
+  if (!posterUrl) return null;
+
+  return {
+    type: isGif ? 'gif' : 'video',
+    url: posterUrl.startsWith('data:') ? posterUrl : upgradePhotoUrl(posterUrl),
+    originalUrl: posterUrl,
+    posterUrl: posterUrl,
+    duration,
+    aspectRatio,
+  };
+}
+
+/**
  * Extracts 1-4 high-res photos and video poster frames for the main tweet.
  * Excludes media belonging to nested quote tweets.
  */
 export function extractTweetMedia(article: Element): MediaItem[] | undefined {
-  const items: MediaItem[] = [];
+  // 1. Check for Video / GIF first: if article contains a video, extract dedicated video media
+  const videoMedia = extractVideoMedia(article);
+  if (videoMedia) {
+    return [videoMedia];
+  }
 
-  // 1. Photos
+  // 2. Photos
+  const items: MediaItem[] = [];
   const photoEls = Array.from(article.querySelectorAll('div[data-testid="tweetPhoto"] img'));
   const validPhotos = photoEls.filter(img => !isInsideQuoteTweet(img));
 
   for (const img of validPhotos.slice(0, 4)) {
     const rawSrc = img.getAttribute('src') || '';
     if (rawSrc) {
+      const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+      const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+      const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+      const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
+        ? Number((naturalWidth / naturalHeight).toFixed(3))
+        : undefined;
+
       items.push({
         type: 'image',
         url: upgradePhotoUrl(rawSrc),
         originalUrl: rawSrc,
         alt: img.getAttribute('alt') || undefined,
+        aspectRatio,
       });
-    }
-  }
-
-  // 2. Video Poster (only if no photos or within 4 item limit)
-  if (items.length < 4) {
-    const videoContainer = article.querySelector('div[data-testid="videoPlayer"], div[data-testid="videoComponent"], video');
-    if (videoContainer && !isInsideQuoteTweet(videoContainer)) {
-      const poster = extractVideoPosterUrl(videoContainer);
-      if (poster) {
-        items.push({
-          type: 'video',
-          url: poster,
-          originalUrl: poster,
-          posterUrl: poster,
-        });
-      }
     }
   }
 
@@ -336,30 +526,31 @@ export function extractQuoteTweet(article: Element): QuoteTweetData | undefined 
   const timestamp = timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '';
 
   // Media
+  // Media: check video first, then photos
   const media: MediaItem[] = [];
-  const photoEls = Array.from(quoteBox.querySelectorAll('div[data-testid="tweetPhoto"] img'));
-  for (const img of photoEls.slice(0, 4)) {
-    const src = img.getAttribute('src') || '';
-    if (src) {
-      media.push({
-        type: 'image',
-        url: upgradePhotoUrl(src),
-        originalUrl: src,
-        alt: img.getAttribute('alt') || undefined,
-      });
-    }
-  }
+  const quoteVideo = extractVideoMedia(quoteBox);
+  if (quoteVideo) {
+    media.push(quoteVideo);
+  } else {
+    const photoEls = Array.from(quoteBox.querySelectorAll('div[data-testid="tweetPhoto"] img'));
+    for (const img of photoEls.slice(0, 4)) {
+      const src = img.getAttribute('src') || '';
+      if (src) {
+        const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+        const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+        const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+        const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
+          ? Number((naturalWidth / naturalHeight).toFixed(3))
+          : undefined;
 
-  const videoEl = quoteBox.querySelector('div[data-testid="videoPlayer"], video');
-  if (videoEl && media.length < 4) {
-    const poster = extractVideoPosterUrl(videoEl);
-    if (poster) {
-      media.push({
-        type: 'video',
-        url: poster,
-        originalUrl: poster,
-        posterUrl: poster,
-      });
+        media.push({
+          type: 'image',
+          url: upgradePhotoUrl(src),
+          originalUrl: src,
+          alt: img.getAttribute('alt') || undefined,
+          aspectRatio,
+        });
+      }
     }
   }
 

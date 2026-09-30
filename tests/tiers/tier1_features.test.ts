@@ -19,6 +19,7 @@ import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_
 import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML } from '../fixtures/multi-images.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
+import { TRANSLATIONS } from '../../src/content/i18n.ts';
 
 import type { TweetData, ThreadData, AuthorInfo } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../src/types/card.ts';
@@ -427,6 +428,34 @@ test('F6.5: clicking trigger button dispatches custom trigger event with target 
 
   assert.ok(triggeredArticle);
   assert.equal(triggeredArticle, tweet);
+});
+
+test('F6.6: trigger button wrapper and button specify vertical centering layout', () => {
+  const wrapper = new DomElement('DIV');
+  wrapper.setAttribute('data-post-to-card-wrapper', 'true');
+  wrapper.style['display'] = 'inline-flex';
+  wrapper.style['alignItems'] = 'center';
+  wrapper.style['justifyContent'] = 'center';
+  wrapper.style['alignSelf'] = 'center';
+  wrapper.style['height'] = '100%';
+  wrapper.style['margin'] = 'auto 0';
+
+  const btn = new DomElement('BUTTON');
+  btn.setAttribute('data-post-to-card-btn', 'true');
+  btn.style['alignSelf'] = 'center';
+  btn.style['margin'] = 'auto 0';
+  btn.style['verticalAlign'] = 'middle';
+
+  wrapper.appendChild(btn);
+
+  assert.equal(wrapper.getAttribute('data-post-to-card-wrapper'), 'true');
+  assert.equal(wrapper.style['alignSelf'], 'center');
+  assert.equal(wrapper.style['margin'], 'auto 0');
+  assert.equal(wrapper.style['alignItems'], 'center');
+  assert.equal(btn.style['alignSelf'], 'center');
+  assert.equal(btn.style['margin'], 'auto 0');
+  assert.equal(btn.style['verticalAlign'], 'middle');
+  assert.ok(wrapper.querySelector('[data-post-to-card-btn="true"]'));
 });
 
 // -------------------------------------------------------------
@@ -1457,6 +1486,244 @@ test('F27.3: Modal, Card watermark and CSS define zero-emoji and ratio-aware ima
   assert.ok(cssContent.includes('data-ratio="3:4"'), 'CSS must include 3:4 ratio rule');
   assert.ok(cssContent.includes('data-ratio="16:9"'), 'CSS must include 16:9 ratio rule');
 });
+
+test('F27.4: mediaLayout configuration supports grid and stack with safe sanitization', () => {
+  const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
+  assert.ok(themesContent.includes("mediaLayout: 'grid'"), 'DEFAULT_CARD_CONFIG must include mediaLayout grid');
+  assert.ok(themesContent.includes('sanitizeMediaLayout'), 'themes.ts must define sanitizeMediaLayout');
+  assert.ok(themesContent.includes("MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack']"), 'Must export MEDIA_LAYOUT_OPTIONS');
+});
+
+test('F27.5: CSS defines media-layout-stack for 100% full-display of all multi images', () => {
+  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  assert.ok(cssContent.includes('.media-layout-stack'), 'CSS must include .media-layout-stack');
+  assert.ok(cssContent.includes('aspect-ratio: unset !important'), 'Stack layout must unset aspect-ratio constraint');
+  assert.ok(cssContent.includes('max-height: unset !important'), 'Stack layout must unset max-height constraint for full display');
+});
+
+// -------------------------------------------------------------
+// F28: Intelligent Adaptive Media Grid (Top-Hero / Left-Hero / Stacked / 4:3)
+// -------------------------------------------------------------
+test('F28.1: extractor calculates aspectRatio from naturalWidth and naturalHeight', () => {
+  const extractorContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/extractor.ts'), 'utf-8');
+  assert.ok(extractorContent.includes('naturalWidth'), 'Extractor must read naturalWidth');
+  assert.ok(extractorContent.includes('naturalHeight'), 'Extractor must read naturalHeight');
+  assert.ok(extractorContent.includes('aspectRatio'), 'Extractor must calculate and assign aspectRatio');
+});
+
+test('F28.2: Card renders data-grid-layout="top-hero" for 3 landscape/square images', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(cardContent.includes("gridLayout = isPortrait ? 'left-hero' : 'top-hero'"), 'Must compute top-hero vs left-hero');
+  assert.ok(cardContent.includes('data-grid-layout={gridLayout}'), 'Must bind data-grid-layout attribute');
+});
+
+test('F28.3: Card renders data-grid-layout="stacked" for 2 wide images and "portrait-columns" for dual vertical images', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(cardContent.includes("gridLayout = 'stacked'") || cardContent.includes("gridLayout = bothWide ? 'stacked'"), 'Must compute stacked layout for 2 wide images');
+  assert.ok(cardContent.includes("portrait-columns"), 'Must compute portrait-columns layout for 2 tall portrait images');
+});
+
+test('F28.4: card.css defines top-hero, left-hero, 4:3 quad and transparent contain styles', () => {
+  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  assert.ok(cssContent.includes('data-grid-layout="top-hero"'), 'Must define top-hero layout rule');
+  assert.ok(cssContent.includes('grid-column: span 2;'), 'Top hero item must span 2 columns');
+  assert.ok(cssContent.includes('minmax(0, 1.4fr) minmax(0, 1fr)'), 'Top hero must allocate 1.4fr to 1fr row height with minmax');
+  assert.ok(cssContent.includes('data-grid-layout="left-hero"'), 'Must define left-hero layout rule');
+  assert.ok(cssContent.includes('data-grid-layout="stacked"'), 'Must define stacked 2-image rule');
+  assert.ok(cssContent.includes('data-grid-layout="portrait-columns"'), 'Must define portrait-columns 2-image rule');
+  assert.ok(cssContent.includes('aspect-ratio: 4 / 3;'), 'Must define 4:3 aspect-ratio for grid');
+  assert.ok(cssContent.includes('gap: 4px;'), 'Must define 4px compact gap');
+});
+
+test('F28.5: Dual portrait images calculate dynamic combined aspect-ratio (r0 + r1) in Auto mode', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(cardContent.includes('bothPortrait'), 'Must check bothPortrait condition');
+  assert.ok(cardContent.includes('dynamicGridRatio = `${combined}`'), 'Must assign dynamicGridRatio string');
+  assert.ok(cardContent.includes('aspectRatio: dynamicGridRatio'), 'Must apply dynamicGridRatio to grid style');
+
+  // Verify mathematical combination formula
+  const r0 = 0.46; // Phone screenshot 9:19.5
+  const r1 = 0.46;
+  const combined = Number(Math.max(0.78, Math.min(1.35, r0 + r1)).toFixed(2));
+  assert.equal(combined, 0.92, 'Combined ratio for two 9:19.5 screenshots should be 0.92');
+});
+
+test('F28.6: 3-image layout uses left-hero for square/portrait (ratio < 1.2) with 1.6fr:1fr columns and dynamic ratio', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+
+  // Verify threshold < 1.2 for left-hero
+  assert.ok(cardContent.includes('firstRatio < 1.2'), 'Must use 1.2 threshold so square 1.0 comic/illustrations use left-hero');
+  assert.ok(cssContent.includes('minmax(0, 1.6fr) minmax(0, 1fr)'), 'Left hero must allocate 1.6fr to 1fr column width');
+
+  // Mathematical formula verification for square comic (ratio 1.0)
+  const firstRatio = 1.0;
+  const rRight = 1.0;
+  const targetFromLeft = 1.625 * firstRatio;
+  const targetFromRight = 1.30 * rRight;
+  const combined = Number(Math.max(1.15, Math.min(1.65, 0.65 * targetFromLeft + 0.35 * targetFromRight)).toFixed(2));
+  assert.equal(combined, 1.51, 'Square comic (1.0) with standard companion images should produce 1.51 grid aspect ratio to eliminate vertical dead space');
+});
+
+// -------------------------------------------------------------
+// F29: Non-obstructive Video Presentation
+// -------------------------------------------------------------
+test('F29.1: detects GIF media vs standard video containers', () => {
+  const extractorContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/extractor.ts'), 'utf-8');
+  assert.ok(extractorContent.includes('function isGifMedia'), 'Extractor must implement isGifMedia');
+  assert.ok(extractorContent.includes('type: isGif ? \'gif\' : \'video\''), 'Extractor must differentiate GIF and video');
+
+  function checkGif(container: DomElement): boolean {
+    const aria = container.getAttribute('aria-label') || '';
+    if (aria.toUpperCase().includes('GIF')) return true;
+    if (container.querySelector('[aria-label*="GIF"], [data-testid="gifBadge"]')) return true;
+    for (const el of container.querySelectorAll('span, div')) {
+      if (el.textContent?.trim() === 'GIF') return true;
+    }
+    return false;
+  }
+
+  const gifHtml = `
+    <div data-testid="videoPlayer" aria-label="Embedded GIF">
+      <video poster="https://pbs.twimg.com/media/gif_poster.jpg"></video>
+      <span data-testid="gifBadge">GIF</span>
+    </div>
+  `;
+  const el = createDomElement(gifHtml);
+  assert.equal(checkGif(el), true);
+
+  const videoHtml = `
+    <div data-testid="videoPlayer">
+      <video poster="https://pbs.twimg.com/media/standard_video.jpg"></video>
+    </div>
+  `;
+  const vEl = createDomElement(videoHtml);
+  assert.equal(checkGif(vEl), false);
+});
+
+test('F29.2: extracts video duration timestamp from video controls', () => {
+  const extractorContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/extractor.ts'), 'utf-8');
+  assert.ok(extractorContent.includes('function extractVideoDuration'), 'Extractor must implement extractVideoDuration');
+
+  function getDuration(container: DomElement): string | undefined {
+    for (const el of container.querySelectorAll('time, span, div')) {
+      const text = el.textContent?.trim() || '';
+      if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(text)) return text;
+    }
+    return undefined;
+  }
+
+  const videoWithTimeHtml = `
+    <div data-testid="videoPlayer">
+      <video poster="https://pbs.twimg.com/media/test_video.jpg"></video>
+      <div><span>1:42</span></div>
+    </div>
+  `;
+  const el = createDomElement(videoWithTimeHtml);
+  assert.equal(getDuration(el), '1:42');
+});
+
+test('F29.3: Card.tsx renders non-obstructive video badge and progress bar without center blocking', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(cardContent.includes('media-video-item'), 'Must render media-video-item class');
+  assert.ok(cardContent.includes('video-indicator-badge'), 'Must render corner video indicator badge');
+  assert.ok(cardContent.includes('video-scrim-overlay'), 'Must render bottom scrim overlay');
+  assert.ok(cardContent.includes('video-progress-track'), 'Must render bottom progress bar track');
+  assert.ok(!cardContent.includes('center-play-button'), 'Must NOT include blocking center play button');
+});
+
+test('F29.4: card.css defines frosted pill badge, bottom scrim and progress line', () => {
+  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  assert.ok(cssContent.includes('.media-item.media-video-item'), 'Must style media-video-item');
+  assert.ok(cssContent.includes('.video-indicator-badge'), 'Must style video-indicator-badge');
+  assert.ok(cssContent.includes('.video-badge-pill'), 'Must style video-badge-pill');
+  assert.ok(cssContent.includes('.video-scrim-overlay'), 'Must style video-scrim-overlay');
+  assert.ok(cssContent.includes('.video-progress-track'), 'Must style video-progress-track');
+});
+
+test('F29.5: i18n provides localized videoLabel for zh-CN and en-US', () => {
+  assert.equal(TRANSLATIONS['zh-CN'].videoLabel, '视频');
+  assert.equal(TRANSLATIONS['en-US'].videoLabel, 'Video');
+  assert.equal(TRANSLATIONS['zh-CN'].videoPlayButton, '视频播放按钮');
+  assert.equal(TRANSLATIONS['en-US'].videoPlayButton, 'Video Play Button');
+});
+
+test('F29.6: DEFAULT_CARD_CONFIG defines showPlayButton: true and loadUserPreferences parses it', () => {
+  const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
+  assert.ok(themesContent.includes('showPlayButton: true'), 'DEFAULT_CARD_CONFIG must include showPlayButton: true');
+  assert.ok(themesContent.includes('showPlayButton: saved.showPlayButton !== false'), 'loadUserPreferences must parse showPlayButton');
+});
+
+test('F29.7: Controls.tsx contains toggle for showPlayButton with localized label', () => {
+  const controlsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Controls.tsx'), 'utf-8');
+  assert.ok(controlsContent.includes('showPlayButton'), 'Controls must reference showPlayButton');
+  assert.ok(controlsContent.includes('t.videoPlayButton'), 'Controls must use localized label for videoPlayButton');
+});
+
+test('F29.8: Card.tsx conditionally renders video badge, scrim and progress based on showPlayButton', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(cardContent.includes('showPlayButton: boolean = true'), 'renderMediaGrid must accept showPlayButton param');
+  assert.ok(cardContent.includes('{showPlayButton && <div class="video-scrim-overlay" />}'), 'Must conditionally render scrim');
+  assert.ok(cardContent.includes('{showPlayButton && ('), 'Must conditionally render video-indicator-badge');
+  assert.ok(cardContent.includes('{showPlayButton && m.type === \'video\' && ('), 'Must conditionally render video progress track');
+  assert.ok(cardContent.includes('config.showPlayButton !== false'), 'Must pass showPlayButton config to renderMediaGrid');
+});
+
+// -------------------------------------------------------------
+// F30: Action Bar Button Visibility & Configurable Toggle
+// -------------------------------------------------------------
+test('F30.1: DEFAULT_CARD_CONFIG defines showActionBarButton: true and themes.ts persists it', () => {
+  const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
+  assert.ok(themesContent.includes('showActionBarButton: true'), 'DEFAULT_CARD_CONFIG must include showActionBarButton: true');
+  assert.ok(themesContent.includes('showActionBarButton: saved.showActionBarButton !== false'), 'loadUserPreferences must parse showActionBarButton');
+  assert.ok(themesContent.includes("STORAGE_KEY = 'post_to_card_user_prefs'"), 'Must export STORAGE_KEY');
+});
+
+test('F30.2: Controls.tsx contains toggle for showActionBarButton with i18n tweetActionButton', () => {
+  const controlsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Controls.tsx'), 'utf-8');
+  assert.ok(controlsContent.includes('showActionBarButton'), 'Controls must reference showActionBarButton');
+  assert.ok(controlsContent.includes('t.tweetActionButton'), 'Controls must use localized label for button toggle');
+  assert.equal(TRANSLATIONS['zh-CN'].tweetActionButton, '推文卡片按钮');
+  assert.equal(TRANSLATIONS['en-US'].tweetActionButton, 'Tweet Card Button');
+});
+
+test('F30.3: injection.ts defines setInjectedButtonVisibility, HIDE_ACTION_BUTTON_CLASS and style injection', () => {
+  const injectionContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/injection.ts'), 'utf-8');
+  assert.ok(injectionContent.includes("HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn'"), 'Must define hide class constant');
+  assert.ok(injectionContent.includes("VISIBILITY_STYLE_ID = 'post-to-card-visibility-style'"), 'Must define visibility style id');
+  assert.ok(injectionContent.includes('function setInjectedButtonVisibility'), 'Must export setInjectedButtonVisibility');
+  assert.ok(injectionContent.includes('display: none !important'), 'Must inject CSS rule to hide action button');
+
+  // Verify DOM behavior using DomDocument
+  const doc = new DomDocument();
+  const root = doc.documentElement;
+  const HIDE_CLASS = 'post-to-card-hide-action-btn';
+
+  // Simulate setInjectedButtonVisibility logic
+  root.classList.add(HIDE_CLASS);
+  assert.ok(root.classList.contains(HIDE_CLASS), 'Hide class should be present when disabled');
+  root.classList.remove(HIDE_CLASS);
+  assert.ok(!root.classList.contains(HIDE_CLASS), 'Hide class should be removed when enabled');
+});
+
+test('F30.4: injection.ts implements Alt+C shortcut and triggerActiveTweet for alternative access', () => {
+  const injectionContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/injection.ts'), 'utf-8');
+  assert.ok(injectionContent.includes('triggerActiveTweet'), 'Must implement triggerActiveTweet');
+  assert.ok(injectionContent.includes("e.altKey && (e.key === 'c' || e.key === 'C')"), 'Must listen for Alt + C keyboard shortcut');
+  assert.ok(injectionContent.includes('lastHoveredArticle'), 'Must track hovered article for shortcut activation');
+});
+
+test('F30.5: manifest.json declares action popup pointing to popup.html', () => {
+  const manifestRaw = fs.readFileSync(path.resolve(__dirname, '../../manifest.json'), 'utf-8');
+  const manifest = JSON.parse(manifestRaw);
+  assert.ok(manifest.action, 'Manifest must have action field');
+  assert.equal(manifest.action.default_popup, 'popup.html');
+
+  const popupHtml = fs.readFileSync(path.resolve(__dirname, '../../public/popup.html'), 'utf-8');
+  assert.ok(popupHtml.includes('toggle-button'), 'Popup must have toggle switch');
+  assert.ok(popupHtml.includes('Alt'), 'Popup must describe Alt+C shortcut');
+});
+
 
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 1

@@ -66,7 +66,7 @@ export function extractVideoPosterUrl(videoElementOrContainer: Element | null | 
     }
 
     const previewImg = videoElementOrContainer.querySelector(
-      'img[src*="video_preview"], img[src*="amplify_video_thumb"], img[src*="/media/"]'
+      'img[src*="video_preview"], img[src*="amplify_video_thumb"], img[src*="ext_tw_video_thumb"], img[src*="/media/"]'
     );
     if (previewImg) {
       const src = typeof previewImg.getAttribute === 'function'

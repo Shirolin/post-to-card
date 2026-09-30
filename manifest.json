@@ -8,6 +8,10 @@
     "https://*.twimg.com/*",
     "https://pbs.twimg.com/*"
   ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Post-to-Card"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

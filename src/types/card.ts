@@ -13,6 +13,7 @@ export type AspectRatioOption = 'auto' | '3:4' | '16:9';
 export type Locale = 'zh-CN' | 'en-US';
 
 export type ImageFitOption = 'contain' | 'cover';
+export type MediaLayoutOption = 'grid' | 'stack';
 
 export interface CardConfig {
   theme: ThemeId;
@@ -20,11 +21,14 @@ export interface CardConfig {
   borderRadius: RadiusOption;
   aspectRatio: AspectRatioOption;
   imageFit?: ImageFitOption;
+  mediaLayout?: MediaLayoutOption;
   showQrCode: boolean;
   showStats: boolean;
   showTimestamp: boolean;
   showWatermark: boolean;
   blurAuthor: boolean;
+  showActionBarButton?: boolean;
+  showPlayButton?: boolean;
   locale?: Locale;
 }
 

@@ -32,6 +32,18 @@ function initContentScript(): void {
     // Supplementary scans for dynamic SPA feed hydration
     setTimeout(() => controller.injectAll(), 500);
     setTimeout(() => controller.injectAll(), 1500);
+
+    // Listen for extension messages (e.g. from popup or background)
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (message?.type === 'TRIGGER_ACTIVE_CARD') {
+          const success = controller.triggerActiveTweet();
+          sendResponse({ success });
+          return false;
+        }
+        return false;
+      });
+    }
   } catch (err) {
     console.error('[Post-to-Card] Initialization error:', err);
   }

@@ -1,6 +1,6 @@
 import type { JSX } from 'preact';
 import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet';
-import type { CardConfig, ImageFitOption, AspectRatioOption } from '../../types/card';
+import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption } from '../../types/card';
 import { CardQrCode } from './qrcode';
 import { getMediaRadius, getAspectMinHeight } from './themes';
 import { formatLocaleTimestamp, getTranslation } from '../i18n';
@@ -75,38 +75,272 @@ function renderTweetContent(tweet: TweetData) {
   return <div class="tweet-text-content">{tweet.text}</div>;
 }
 
+export function calculateDynamicGridRatio(
+  count: number,
+  gridLayout: string,
+  items: MediaItem[]
+): number | undefined {
+  if (count === 3) {
+    const r0 = items[0]?.aspectRatio;
+    if (gridLayout === 'left-hero') {
+      if (r0 === undefined) return 1.30;
+      const r1 = items[1]?.aspectRatio;
+      const r2 = items[2]?.aspectRatio;
+      const rRight = (r1 !== undefined && r2 !== undefined) ? (r1 + r2) / 2 : (r1 ?? r2 ?? 1.0);
+      // Left cell aspect ratio in 1.6fr:1fr columns is 0.615 * R_grid.
+      // Target R_grid to let r0 fill left column: 1.625 * r0.
+      // Balanced with right column target (0.77 * R_grid ~ rRight): 1.30 * rRight.
+      const targetFromLeft = 1.625 * r0;
+      const targetFromRight = 1.30 * rRight;
+      const combined = (r1 !== undefined || r2 !== undefined)
+        ? 0.65 * targetFromLeft + 0.35 * targetFromRight
+        : targetFromLeft;
+      return Number(Math.max(1.15, Math.min(1.65, combined)).toFixed(2));
+    } else {
+      // Top-hero: Row 1 is 1.4fr out of 2.4fr (0.583 H).
+      // Row 1 cell aspect ratio is R_grid / 0.583 = 1.714 * R_grid.
+      // Target R_grid to let r0 fill Row 1: 0.583 * r0.
+      const r0Val = r0 ?? 1.6;
+      const combined = 0.583 * r0Val;
+      return Number(Math.max(1.00, Math.min(1.40, combined)).toFixed(2));
+    }
+  }
+
+  if (count === 2) {
+    const r0 = items[0]?.aspectRatio;
+    const r1 = items[1]?.aspectRatio;
+    if (r0 === undefined || r1 === undefined) return 1.60;
+    if (gridLayout === 'stacked') {
+      return Number(Math.max(0.75, Math.min(1.45, (r0 * r1) / (r0 + r1))).toFixed(2));
+    } else if (gridLayout === 'portrait-columns') {
+      return Number(Math.max(0.78, Math.min(1.65, r0 + r1)).toFixed(2));
+    } else {
+      // Dual columns side-by-side: natural aspect ratio is r0 + r1
+      return Number(Math.max(1.20, Math.min(2.10, r0 + r1)).toFixed(2));
+    }
+  }
+
+  if (count === 4) {
+    const ratios = items.map(i => i.aspectRatio).filter((r): r is number => r !== undefined);
+    if (ratios.length >= 2) {
+      const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+      return Number(Math.max(0.85, Math.min(1.85, avg)).toFixed(2));
+    }
+  }
+
+  return undefined;
+}
+
 function renderMediaGrid(
   media: MediaItem[] | undefined,
   mediaRadius: string,
   altPrefix: string = 'Tweet photo',
   imageFit: ImageFitOption = 'contain',
-  aspectRatio: AspectRatioOption = 'auto'
+  aspectRatio: AspectRatioOption = 'auto',
+  mediaLayout: MediaLayoutOption = 'grid',
+  videoLabel: string = 'Video',
+  showPlayButton: boolean = true
 ) {
   if (!media || media.length === 0) return null;
   const items = media.slice(0, 4);
   const count = items.length;
   const ratioClass = `ratio-${aspectRatio.replace(':', '-')}`;
   const fitClass = `fit-${imageFit}`;
+  const layoutClass = `media-layout-${mediaLayout}`;
+
+  let gridLayout = 'default';
+  let dynamicGridRatio: string | undefined;
+
+  if (count === 3) {
+    // 阈值 1.2：首图为竖图、正方形图（1.0，如漫画、插画）或接近正方形图（< 1.2）时采用 Twitter 标准「左一右二」Left-Hero；
+    // 仅当首图为明确的横幅宽图（>= 1.2，如 16:9 全景、横向照片）时才采用「上一下二」Top-Hero
+    const firstRatio = items[0]?.aspectRatio;
+    const isPortrait = (firstRatio !== undefined) ? (firstRatio < 1.2) : true;
+    gridLayout = isPortrait ? 'left-hero' : 'top-hero';
+    if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
+      const combined = calculateDynamicGridRatio(count, gridLayout, items);
+      if (combined) {
+        dynamicGridRatio = `${combined}`;
+      }
+    }
+  } else if (count === 2) {
+    const r0 = items[0]?.aspectRatio;
+    const r1 = items[1]?.aspectRatio;
+    const bothWide = (r0 !== undefined && r1 !== undefined) ? (r0 >= 1.25 && r1 >= 1.25) : false;
+    const bothPortrait = (r0 !== undefined && r1 !== undefined)
+      ? (r0 <= 0.88 && r1 <= 0.88)
+      : ((r0 !== undefined && r0 <= 0.85) || (r1 !== undefined && r1 <= 0.85));
+
+    if (bothWide) {
+      gridLayout = 'stacked';
+    } else if (bothPortrait) {
+      gridLayout = 'portrait-columns';
+    } else {
+      gridLayout = 'columns';
+    }
+    if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
+      const combined = calculateDynamicGridRatio(count, gridLayout, items);
+      if (combined) {
+        dynamicGridRatio = `${combined}`;
+      }
+    }
+  } else if (count === 4) {
+    gridLayout = 'quad';
+    if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
+      const combined = calculateDynamicGridRatio(count, gridLayout, items);
+      if (combined) {
+        dynamicGridRatio = `${combined}`;
+      }
+    }
+  }
+  const gridLayoutClass = `grid-${gridLayout}`;
 
   return (
     <div
-      class={`media-grid media-count-${count} ${ratioClass} ${fitClass}`}
+      class={`media-grid media-count-${count} ${ratioClass} ${fitClass} ${layoutClass} ${gridLayoutClass}`}
       data-count={count}
       data-ratio={aspectRatio}
       data-fit={imageFit}
-      style={{ borderRadius: mediaRadius }}
+      data-layout={mediaLayout}
+      data-grid-layout={gridLayout}
+      style={{
+        borderRadius: mediaRadius,
+        aspectRatio: dynamicGridRatio,
+      }}
     >
-      {items.map((m, idx) => (
-        <img
-          key={idx}
-          src={m.url}
-          alt={m.alt || `${altPrefix} ${idx + 1}`}
-          class={`media-item ${fitClass} ${ratioClass}`}
-          data-fit={imageFit}
-          style={{ borderRadius: count === 1 ? mediaRadius : undefined }}
-          loading="eager"
-        />
-      ))}
+      {items.map((m, idx) => {
+        const isVideo = m.type === 'video' || m.type === 'gif';
+        const itemRadius = (count === 1 || mediaLayout === 'stack') ? mediaRadius : undefined;
+
+        if (isVideo) {
+          return (
+            <div
+              key={idx}
+              class={`media-item media-video-item ${fitClass} ${ratioClass} ${layoutClass}`}
+              data-fit={imageFit}
+              data-layout={mediaLayout}
+              data-media-type={m.type}
+              style={{
+                borderRadius: itemRadius,
+                aspectRatio: (count === 1 && m.aspectRatio) ? `${m.aspectRatio}` : undefined,
+              }}
+            >
+              <img
+                src={m.url}
+                alt={m.alt || `${altPrefix} ${idx + 1}`}
+                class={`media-video-poster ${fitClass} ${ratioClass}`}
+                data-fit={imageFit}
+                loading="eager"
+                onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => {
+                  const imgEl = e.currentTarget;
+                  if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+                    const ratio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
+                    if (!m.aspectRatio) {
+                      m.aspectRatio = ratio;
+                    }
+                    if (count === 1) {
+                      const wrapper = imgEl.closest ? (imgEl.closest('.media-video-item') as HTMLElement) : null;
+                      if (wrapper && !wrapper.style.aspectRatio) {
+                        wrapper.style.aspectRatio = `${ratio}`;
+                      }
+                    }
+                  }
+                }}
+              />
+              {/* Subtle Bottom Scrim for Contrast & Protection */}
+              {showPlayButton && <div class="video-scrim-overlay" />}
+
+              {/* Video Type / Duration Pill Badge */}
+              {showPlayButton && (
+                <div class="video-indicator-badge">
+                  {m.type === 'gif' ? (
+                    <span class="video-badge-pill gif-badge">GIF</span>
+                  ) : (
+                    <div class="video-badge-pill">
+                      <svg class="video-play-icon" viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
+                        <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />
+                      </svg>
+                      <span class="video-duration-text">{m.duration || videoLabel}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Subtle Video Progress Scrub Line (for videos only) */}
+              {showPlayButton && m.type === 'video' && (
+                <div class="video-progress-track">
+                  <div class="video-progress-fill" />
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <img
+            key={idx}
+            src={m.url}
+            alt={m.alt || `${altPrefix} ${idx + 1}`}
+            class={`media-item ${fitClass} ${ratioClass} ${layoutClass}`}
+            data-fit={imageFit}
+            data-layout={mediaLayout}
+            style={{ borderRadius: itemRadius }}
+            loading="eager"
+            onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => {
+              const imgEl = e.currentTarget;
+              if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight && !m.aspectRatio) {
+                m.aspectRatio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
+                const grid = imgEl.closest ? (imgEl.closest('.media-grid') as HTMLElement) : null;
+                if (grid) {
+                  if (count === 2) {
+                    const r0 = items[0]?.aspectRatio;
+                    const r1 = items[1]?.aspectRatio;
+                    if (r0 !== undefined && r1 !== undefined) {
+                      const bothWide = r0 >= 1.25 && r1 >= 1.25;
+                      const bothPortrait = (r0 <= 0.88 && r1 <= 0.88) || ((r0 + r1) / 2 <= 0.88);
+                      let newLayout = 'columns';
+                      if (bothWide) newLayout = 'stacked';
+                      else if (bothPortrait) newLayout = 'portrait-columns';
+
+                      grid.setAttribute('data-grid-layout', newLayout);
+                      grid.classList.remove('grid-columns', 'grid-stacked', 'grid-portrait-columns');
+                      grid.classList.add(`grid-${newLayout}`);
+
+                      if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
+                        const combined = calculateDynamicGridRatio(count, newLayout, items);
+                        if (combined) {
+                          grid.style.aspectRatio = `${combined}`;
+                        }
+                      }
+                    }
+                  } else if (count === 3) {
+                    const r0 = items[0]?.aspectRatio;
+                    if (r0 !== undefined) {
+                      const isPortrait = r0 < 1.2;
+                      const newLayout = isPortrait ? 'left-hero' : 'top-hero';
+                      grid.setAttribute('data-grid-layout', newLayout);
+                      grid.classList.remove('grid-top-hero', 'grid-left-hero');
+                      grid.classList.add(`grid-${newLayout}`);
+
+                      if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
+                        const combined = calculateDynamicGridRatio(count, newLayout, items);
+                        if (combined) {
+                          grid.style.aspectRatio = `${combined}`;
+                        }
+                      }
+                    }
+                  } else if (count === 4 && aspectRatio === 'auto' && mediaLayout !== 'stack') {
+                    const combined = calculateDynamicGridRatio(count, 'quad', items);
+                    if (combined) {
+                      grid.style.aspectRatio = `${combined}`;
+                    }
+                  }
+                }
+              }
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -199,6 +433,7 @@ export function Card({ data, config }: CardProps): JSX.Element {
   const isThread = subsequentTweets.length > 0;
 
   const imageFit = config.imageFit || 'contain';
+  const mediaLayout = config.mediaLayout || 'grid';
   const mediaRadius = getMediaRadius(config.borderRadius);
   const minHeightStyle = getAspectMinHeight(config.aspectRatio, 640);
 
@@ -209,6 +444,7 @@ export function Card({ data, config }: CardProps): JSX.Element {
     `radius-${config.borderRadius}`,
     `ratio-${config.aspectRatio.replace(':', '-')}`,
     `fit-${imageFit}`,
+    `media-layout-${mediaLayout}`,
   ].join(' ');
 
   return (
@@ -220,6 +456,7 @@ export function Card({ data, config }: CardProps): JSX.Element {
       data-radius={config.borderRadius}
       data-ratio={config.aspectRatio}
       data-fit={imageFit}
+      data-media-layout={mediaLayout}
       style={{
         padding: config.padding,
         borderRadius: config.borderRadius,
@@ -235,7 +472,7 @@ export function Card({ data, config }: CardProps): JSX.Element {
           <div class="thread-tweet-block">
             {renderAuthorHeader(mainTweet.author, config.blurAuthor, t.verified)}
             {renderTweetContent(mainTweet)}
-            {renderMediaGrid(mainTweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio)}
+            {renderMediaGrid(mainTweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
 
             {/* Quote Tweet if present */}
             {mainTweet.quotePost && (
@@ -252,7 +489,7 @@ export function Card({ data, config }: CardProps): JSX.Element {
                   <span class="quote-handle">{mainTweet.quotePost.author.handle}</span>
                 </div>
                 <div class="quote-text">{mainTweet.quotePost.text}</div>
-                {renderMediaGrid(mainTweet.quotePost.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio)}
+                {renderMediaGrid(mainTweet.quotePost.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
               </div>
             )}
           </div>
@@ -268,7 +505,7 @@ export function Card({ data, config }: CardProps): JSX.Element {
                 <div class="thread-divider" />
                 {renderAuthorHeader(subTweet.author, config.blurAuthor, t.verified)}
                 {renderTweetContent(subTweet)}
-                {renderMediaGrid(subTweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio)}
+                {renderMediaGrid(subTweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
 
                 {subTweet.quotePost && (
                   <div class="quote-card" style={{ borderRadius: mediaRadius }}>
@@ -284,7 +521,7 @@ export function Card({ data, config }: CardProps): JSX.Element {
                       <span class="quote-handle">{subTweet.quotePost.author.handle}</span>
                     </div>
                     <div class="quote-text">{subTweet.quotePost.text}</div>
-                    {renderMediaGrid(subTweet.quotePost.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio)}
+                    {renderMediaGrid(subTweet.quotePost.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
                   </div>
                 )}
               </div>

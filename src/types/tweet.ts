@@ -12,6 +12,7 @@ export interface MediaItem {
   posterUrl?: string;
   alt?: string;
   aspectRatio?: number;
+  duration?: string;
 }
 
 export interface TweetStats {

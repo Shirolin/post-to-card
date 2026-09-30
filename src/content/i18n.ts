@@ -18,6 +18,9 @@ export interface Translations {
   imageFit: string;
   fitContain: string;
   fitCover: string;
+  mediaLayout: string;
+  layoutGrid: string;
+  layoutStack: string;
   padding: string;
   borderRadius: string;
   elementsAndPrivacy: string;
@@ -28,6 +31,8 @@ export interface Translations {
   timestamp: string;
   watermark: string;
   blurAuthor: string;
+  tweetActionButton: string;
+  videoPlayButton: string;
 
   // Themes
   theme_linear_dark: string;
@@ -56,6 +61,7 @@ export interface Translations {
   likes: string;
   views: string;
   photoAlt: string;
+  videoLabel: string;
 }
 
 export const TRANSLATIONS: Record<Locale, Translations> = {
@@ -70,6 +76,9 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     imageFit: '图片适配',
     fitContain: '完整展示',
     fitCover: '填充铺满',
+    mediaLayout: '多图排版',
+    layoutGrid: '拼图网格',
+    layoutStack: '纵向平铺 (完整长图)',
     padding: '内边距',
     borderRadius: '卡片圆角',
     elementsAndPrivacy: '展示模块与隐私',
@@ -79,6 +88,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     timestamp: '发布时间',
     watermark: '微水印尾标',
     blurAuthor: '作者隐私脱敏',
+    tweetActionButton: '推文卡片按钮',
+    videoPlayButton: '视频播放按钮',
 
     theme_linear_dark: 'Linear 暗黑',
     theme_sunset_glow: '夕阳微醺',
@@ -104,6 +115,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     likes: '次喜欢',
     views: '次浏览',
     photoAlt: '推文配图',
+    videoLabel: '视频',
   },
   'en-US': {
     brandName: 'Post to Card',
@@ -116,6 +128,9 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     imageFit: 'Image Fit',
     fitContain: 'Fit',
     fitCover: 'Fill',
+    mediaLayout: 'Multi-Image Layout',
+    layoutGrid: 'Grid',
+    layoutStack: 'Stack (Full)',
     padding: 'Padding',
     borderRadius: 'Border Radius',
     elementsAndPrivacy: 'Elements & Privacy',
@@ -125,6 +140,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     timestamp: 'Timestamp',
     watermark: 'Watermark',
     blurAuthor: 'Blur Author (Privacy)',
+    tweetActionButton: 'Tweet Card Button',
+    videoPlayButton: 'Video Play Button',
 
     theme_linear_dark: 'Linear Dark',
     theme_sunset_glow: 'Sunset Glow',
@@ -150,6 +167,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     likes: 'Likes',
     views: 'Views',
     photoAlt: 'Tweet photo',
+    videoLabel: 'Video',
   },
 };
 

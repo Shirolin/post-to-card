@@ -62,6 +62,8 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F26 | Clipboard Copy with Fallback | 复制图片至剪贴板，异常时自动平滑降级为本地 PNG 下载 | M5 | ORIGINAL_REQUEST §R3 |
 | F27 | E2E Testing Suite (Tiers 1-4) | 4 层验收测试套件，全面覆盖全部特性与真实用例 | M-TEST | Acceptance Criteria |
 | F28 | Adversarial Testing & Audit | Tier 5 对抗性边缘强化与 Forensic Auditor 门禁审计 | M6 | Integrity Forensics |
+| F29 | Non-Obstructive Video Styling | 视频帖胶囊角标与渐变进度条，无遮挡预览与高清 poster | M6 | Feature Enhancement |
+| F30 | Configurable Action Button | 支持推文卡片按钮显隐开关、Popup 快捷管理、Alt+C 快捷键与多标签实时同步 | M6 | Feature Enhancement |
 
 ---
 

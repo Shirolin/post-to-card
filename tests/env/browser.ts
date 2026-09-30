@@ -574,6 +574,21 @@ function querySelectorInternal(root: DomNode, selector: string): DomElement | nu
 }
 
 function querySelectorAllInternal(root: DomNode, selector: string): DomElement[] {
+  if (selector.includes(',')) {
+    const subSelectors = selector.split(',').map(s => s.trim()).filter(Boolean);
+    const seen = new Set<DomElement>();
+    const results: DomElement[] = [];
+    for (const sub of subSelectors) {
+      for (const el of querySelectorAllInternal(root, sub)) {
+        if (!seen.has(el)) {
+          seen.add(el);
+          results.push(el);
+        }
+      }
+    }
+    return results;
+  }
+
   // Support descendant combinators (e.g. "div[role='group'] button")
   const tokens = selector.split(/\s+/).filter(Boolean);
   if (tokens.length === 1) {

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'preact/hooks';
 import type { ThreadData } from '../../types/tweet';
 import type { CardConfig } from '../../types/card';
 import { DEFAULT_CARD_CONFIG, loadUserPreferences, saveUserPreferences } from './themes';
+import { setInjectedButtonVisibility } from '../adapter/injection';
 import { Card } from './Card';
 import { Controls } from './Controls';
 import { Modal } from './Modal';
@@ -30,6 +31,7 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     loadUserPreferences().then((saved) => {
       if (mounted) {
         setConfig(saved);
+        setInjectedButtonVisibility(saved.showActionBarButton !== false);
       }
     });
     return () => {
@@ -39,6 +41,7 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
 
   const handleConfigChange = (newConfig: CardConfig) => {
     setConfig(newConfig);
+    setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
     saveUserPreferences(newConfig).catch(() => {});
   };
 

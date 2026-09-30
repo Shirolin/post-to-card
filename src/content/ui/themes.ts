@@ -1,4 +1,4 @@
-import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, CardConfig } from '../../types/card';
+import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig } from '../../types/card';
 import { detectDefaultLocale, sanitizeLocale } from '../i18n';
 export { sanitizeLocale };
 
@@ -124,6 +124,7 @@ export const PADDING_OPTIONS: PaddingOption[] = ['16px', '32px', '48px'];
 export const RADIUS_OPTIONS: RadiusOption[] = ['0px', '12px', '20px'];
 export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = ['auto', '3:4', '16:9'];
 export const IMAGE_FIT_OPTIONS: ImageFitOption[] = ['contain', 'cover'];
+export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
 
 export const DEFAULT_CARD_CONFIG: CardConfig = {
   theme: 'linear-dark',
@@ -131,11 +132,14 @@ export const DEFAULT_CARD_CONFIG: CardConfig = {
   borderRadius: '12px',
   aspectRatio: 'auto',
   imageFit: 'contain',
+  mediaLayout: 'grid',
   showQrCode: true,
   showStats: true,
   showTimestamp: true,
   showWatermark: true,
   blurAuthor: false,
+  showActionBarButton: true,
+  showPlayButton: true,
   locale: detectDefaultLocale(),
 };
 
@@ -160,6 +164,13 @@ export function sanitizeImageFit(val?: string): ImageFitOption {
   return 'contain';
 }
 
+export function sanitizeMediaLayout(val?: string): MediaLayoutOption {
+  if (val === 'grid' || val === 'stack') {
+    return val;
+  }
+  return 'grid';
+}
+
 export function getMediaRadius(cardRadius: RadiusOption): string {
   if (cardRadius === '0px') return '0px';
   if (cardRadius === '12px') return '8px';
@@ -179,7 +190,7 @@ export function getAspectMinHeightNumber(ratio: AspectRatioOption, width: number
   return 0;
 }
 
-const STORAGE_KEY = 'post_to_card_user_prefs';
+export const STORAGE_KEY = 'post_to_card_user_prefs';
 
 export async function loadUserPreferences(): Promise<CardConfig> {
   return new Promise((resolve) => {
@@ -197,6 +208,9 @@ export async function loadUserPreferences(): Promise<CardConfig> {
             padding: sanitizePadding(saved.padding),
             borderRadius: sanitizeRadius(saved.borderRadius),
             imageFit: sanitizeImageFit(saved.imageFit),
+            mediaLayout: sanitizeMediaLayout(saved.mediaLayout),
+            showActionBarButton: saved.showActionBarButton !== false,
+            showPlayButton: saved.showPlayButton !== false,
             locale: sanitizeLocale(saved.locale),
           });
         } else {
