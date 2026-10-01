@@ -1743,22 +1743,22 @@ test('F29.2: extracts video duration timestamp from video controls', () => {
   assert.equal(getDuration(el), '1:42');
 });
 
-test('F29.3: Card.tsx renders non-obstructive video badge and progress bar without center blocking', () => {
+test('F29.3: Card.tsx renders non-obstructive video badge without center blocking or progress bar', () => {
   const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   assert.ok(cardContent.includes('media-video-item'), 'Must render media-video-item class');
   assert.ok(cardContent.includes('video-indicator-badge'), 'Must render corner video indicator badge');
   assert.ok(cardContent.includes('video-scrim-overlay'), 'Must render bottom scrim overlay');
-  assert.ok(cardContent.includes('video-progress-track'), 'Must render bottom progress bar track');
   assert.ok(!cardContent.includes('center-play-button'), 'Must NOT include blocking center play button');
+  assert.ok(!cardContent.includes('video-progress-track'), 'Must NOT render the bottom video progress bar');
 });
 
-test('F29.4: card.css defines frosted pill badge, bottom scrim and progress line', () => {
+test('F29.4: card.css defines frosted pill badge and bottom scrim, with no progress line', () => {
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
   assert.ok(cssContent.includes('.media-item.media-video-item'), 'Must style media-video-item');
   assert.ok(cssContent.includes('.video-indicator-badge'), 'Must style video-indicator-badge');
   assert.ok(cssContent.includes('.video-badge-pill'), 'Must style video-badge-pill');
   assert.ok(cssContent.includes('.video-scrim-overlay'), 'Must style video-scrim-overlay');
-  assert.ok(cssContent.includes('.video-progress-track'), 'Must style video-progress-track');
+  assert.ok(!cssContent.includes('.video-progress-track'), 'Must NOT style the video progress bar');
 });
 
 test('F29.5: i18n provides localized videoLabel for zh-CN and en-US', () => {
@@ -1780,12 +1780,11 @@ test('F29.7: Controls.tsx contains toggle for showPlayButton with localized labe
   assert.ok(controlsContent.includes('t.videoPlayButton'), 'Controls must use localized label for videoPlayButton');
 });
 
-test('F29.8: Card.tsx conditionally renders video badge, scrim and progress based on showPlayButton', () => {
+test('F29.8: Card.tsx conditionally renders video badge and scrim based on showPlayButton', () => {
   const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   assert.ok(cardContent.includes('showPlayButton: boolean = true'), 'renderMediaGrid must accept showPlayButton param');
   assert.ok(cardContent.includes('{showPlayButton && <div class="video-scrim-overlay" />}'), 'Must conditionally render scrim');
   assert.ok(cardContent.includes('{showPlayButton && ('), 'Must conditionally render video-indicator-badge');
-  assert.ok(cardContent.includes('{showPlayButton && m.type === \'video\' && ('), 'Must conditionally render video progress track');
   assert.ok(cardContent.includes('config.showPlayButton !== false'), 'Must pass showPlayButton config to renderMediaGrid');
 });
 

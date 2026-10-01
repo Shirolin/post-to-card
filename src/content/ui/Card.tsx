@@ -41,36 +41,40 @@ function formatStat(value?: string | number): string {
   return value.toLocaleString();
 }
 
+function renderRichTokens(tokens: NonNullable<TweetData['richTokens']>, className: string) {
+  return (
+    <div class={className}>
+      {tokens.map((token, index) => {
+        if (token.type === 'mention') {
+          return (
+            <span key={index} class="token-mention">
+              {token.value}
+            </span>
+          );
+        }
+        if (token.type === 'hashtag' || token.type === 'cashtag' || token.type === 'emoji') {
+          return (
+            <span key={index} class={token.type === 'emoji' ? 'token-emoji' : `token-${token.type}`}>
+              {token.value}
+            </span>
+          );
+        }
+        if (token.type === 'link') {
+          return (
+            <span key={index} class="token-link">
+              {token.value}
+            </span>
+          );
+        }
+        return <span key={index}>{token.value}</span>;
+      })}
+    </div>
+  );
+}
+
 function renderTweetContent(tweet: TweetData) {
   if (tweet.richTokens && tweet.richTokens.length > 0) {
-    return (
-      <div class="tweet-text-content">
-        {tweet.richTokens.map((token, index) => {
-          if (token.type === 'mention') {
-            return (
-              <span key={index} class="token-mention">
-                {token.value}
-              </span>
-            );
-          }
-          if (token.type === 'hashtag' || token.type === 'emoji') {
-            return (
-              <span key={index} class={token.type === 'hashtag' ? 'token-hashtag' : 'token-emoji'}>
-                {token.value}
-              </span>
-            );
-          }
-          if (token.type === 'link') {
-            return (
-              <span key={index} class="token-link">
-                {token.value}
-              </span>
-            );
-          }
-          return <span key={index}>{token.value}</span>;
-        })}
-      </div>
-    );
+    return renderRichTokens(tweet.richTokens, 'tweet-text-content');
   }
 
   return <div class="tweet-text-content">{tweet.text}</div>;
@@ -266,13 +270,6 @@ function renderMediaGrid(
                   )}
                 </div>
               )}
-
-              {/* Subtle Video Progress Scrub Line (for videos only) */}
-              {showPlayButton && m.type === 'video' && (
-                <div class="video-progress-track">
-                  <div class="video-progress-fill" />
-                </div>
-              )}
             </div>
           );
         }
@@ -448,20 +445,36 @@ function renderQuoteCard(
   mediaLayout: MediaLayoutOption,
   showPlayButton: boolean
 ) {
+  const { author, text, richTokens, timestamp } = quotePost;
+
   return (
     <div class="quote-card" style={{ borderRadius: mediaRadius }}>
       <div class="quote-author">
-        {quotePost.author.avatarUrl && (
+        {author.avatarUrl && (
           <img
-            src={quotePost.author.avatarUrl}
-            alt={quotePost.author.name}
+            src={author.avatarUrl}
+            alt={author.name}
             class="quote-avatar"
           />
         )}
-        <span class="quote-name">{quotePost.author.name}</span>
-        <span class="quote-handle">{quotePost.author.handle}</span>
+        <span class="quote-name">{author.name}</span>
+        {author.verified && (
+          <span class="verified-badge quote-verified-badge" title={t.verified}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+              <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.19 1.91-2.19 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.3 11.96l1.41-1.41 2.83 2.83 6.36-6.36 1.41 1.41-7.77 7.77z" />
+            </svg>
+          </span>
+        )}
+        <span class="quote-handle">{author.handle}</span>
+        {timestamp && (
+          <span class="quote-timestamp">{formatLocaleTimestamp(timestamp, 'en-US')}</span>
+        )}
       </div>
-      <div class="quote-text">{quotePost.text}</div>
+      {richTokens && richTokens.length > 0 ? (
+        renderRichTokens(richTokens, 'quote-text')
+      ) : (
+        <div class="quote-text">{text}</div>
+      )}
       {renderMediaGrid(quotePost.media, mediaRadius, t.photoAlt, imageFit, aspectRatio, mediaLayout, t.videoLabel, showPlayButton)}
     </div>
   );

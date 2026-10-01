@@ -6,8 +6,8 @@
  */
 
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet';
-import { restoreUnicodeEmojis, cleanTweetText } from './emojis';
-import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls';
+import { restoreUnicodeEmojis, cleanTweetText } from './emojis.ts';
+import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 
 export type RichTokenType = 'text' | 'mention' | 'hashtag' | 'cashtag' | 'link' | 'emoji';
 
@@ -79,12 +79,13 @@ function extractDisplayName(userNameEl: Element): string {
 }
 
 /**
- * Extracts AuthorInfo (name, handle, high-res avatar, verified badge).
+ * Extracts AuthorInfo (name, handle, high-res avatar, verified badge)
+ * from an explicit container. Used for both the main tweet and the nested
+ * quote box, so quote authors get identical treatment to the main author.
  */
-export function extractAuthorInfo(article: Element): AuthorInfo {
-  const userNameEl = article.querySelector('div[data-testid="User-Name"]');
-  const avatarImg = article.querySelector('div[data-testid="Tweet-User-Avatar"] img') ||
-    article.querySelector('img[src*="profile_images"]');
+function extractAuthorFrom(userNameEl: Element | null, scope: Element): AuthorInfo {
+  const avatarImg = scope.querySelector('div[data-testid="Tweet-User-Avatar"] img') ||
+    scope.querySelector('img[src*="profile_images"]');
 
   const avatarUrl = avatarImg
     ? upgradeAvatarUrl(avatarImg.getAttribute('src') || '')
@@ -103,6 +104,8 @@ export function extractAuthorInfo(article: Element): AuthorInfo {
   const name = extractDisplayName(userNameEl);
 
   // 2. Handle (@username)
+  //    The first non-status anchor is the display-name link on current Twitter/X,
+  //    so it must never be trusted as the handle text; derive it from href instead.
   let handle = '';
   const handleLink = userNameEl.querySelector('a[href^="/"]:not([href*="/status/"])');
   if (handleLink) {
@@ -123,7 +126,7 @@ export function extractAuthorInfo(article: Element): AuthorInfo {
 
   // 3. Verified Badge
   const verifiedSvg = userNameEl.querySelector('svg[data-testid="icon-verified"], svg[aria-label*="Verified"]') ||
-    article.querySelector('svg[data-testid="icon-verified"]');
+    scope.querySelector('svg[data-testid="icon-verified"]');
   const verified = Boolean(verifiedSvg);
 
   return {
@@ -132,6 +135,13 @@ export function extractAuthorInfo(article: Element): AuthorInfo {
     avatarUrl,
     verified,
   };
+}
+
+/**
+ * Extracts AuthorInfo (name, handle, high-res avatar, verified badge).
+ */
+export function extractAuthorInfo(article: Element): AuthorInfo {
+  return extractAuthorFrom(article.querySelector('div[data-testid="User-Name"]'), article);
 }
 
 /**
@@ -149,7 +159,8 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
 
     // Node.TEXT_NODE === 3
     if (node.nodeType === 3) {
-      const val = node.nodeValue || '';
+      // Drop pretty-print indentation whitespace; real line breaks are <br> tags.
+      const val = (node.nodeValue || '').replace(/\s*\n\s*/g, ' ');
       if (val) {
         tokens.push({ type: 'text', value: val });
       }
@@ -501,25 +512,21 @@ export function extractQuoteTweet(article: Element): QuoteTweetData | undefined 
     };
   }
 
-  // Author
+  // Author (scoped to the quote box so the main author never leaks in)
   const quoteUser = quoteBox.querySelector('div[data-testid="User-Name"]');
-  let quoteAuthor: AuthorInfo = { name: '', handle: '', avatarUrl: '' };
-  if (quoteUser) {
-    const name = extractDisplayName(quoteUser);
-    const handleEl = quoteUser.querySelector('a[href^="/"]:not([href*="/status/"])');
-    const handle = handleEl?.textContent?.trim() || '';
-    const avatarEl = quoteBox.querySelector('img[src*="profile_images"]');
-    const avatarUrl = avatarEl ? upgradeAvatarUrl(avatarEl.getAttribute('src') || '') : '';
-    quoteAuthor = {
-      name,
-      handle,
-      avatarUrl,
-    };
-  }
+  const quoteAuthor = extractAuthorFrom(quoteUser, quoteBox);
 
   // Text
   const textEl = quoteBox.querySelector('div[data-testid="tweetText"]');
   const text = textEl ? cleanTweetText(textEl) : '';
+  const quoteRichTokens = textEl ? extractRichTokens(textEl) : [];
+
+  // Permalink to the quoted post
+  const quoteStatusLink = quoteBox.querySelector('a[href*="/status/"]');
+  const quoteHref = quoteStatusLink?.getAttribute('href') || '';
+  const quoteUrl = quoteHref
+    ? (quoteHref.startsWith('http') ? quoteHref : `https://x.com${quoteHref}`)
+    : undefined;
 
   // Timestamp
   const timeEl = quoteBox.querySelector('time');
@@ -554,10 +561,14 @@ export function extractQuoteTweet(article: Element): QuoteTweetData | undefined 
     }
   }
 
+  type CompatibleToken = NonNullable<TweetData['richTokens']>[number];
+
   return {
     author: quoteAuthor,
     text,
+    richTokens: quoteRichTokens.length > 0 ? (quoteRichTokens as unknown as CompatibleToken[]) : undefined,
     timestamp,
+    url: quoteUrl,
     media: media.length > 0 ? media : undefined,
   };
 }

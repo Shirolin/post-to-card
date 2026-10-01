@@ -8,6 +8,8 @@ import { DomElement, DomImageElement, createDomElement } from '../env/browser.ts
 import { createChromeMock } from '../env/chrome.ts';
 import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
+import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/extractor.ts';
+import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import type { TweetData } from '../../src/types/tweet.ts';
 import type { CardConfig, RadiusOption, PaddingOption } from '../../src/types/card.ts';
 import type { ExtensionMessage } from '../../src/types/messages.ts';
@@ -291,6 +293,88 @@ test('Tier 2.18: tweet text with control characters and RTL characters handled s
   const sanitized = rtlText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
   assert.ok(!sanitized.includes('\x00'));
   assert.ok(!sanitized.includes('\x08'));
+});
+
+// -------------------------------------------------------------
+// Boundary 11: Quote Tweet Author Identity (real extractor)
+// The display-name anchor and the handle anchor share the same href on
+// Twitter/X, so a naive textContent read renders "任天堂株式会社 任天堂株式会社"
+// instead of "任天堂株式会社 @Nintendo". These lock the fix.
+// -------------------------------------------------------------
+test('Tier 2.19: quote author handle is derived from href, not the display-name link text', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.equal(data?.quotePost?.author.name, 'Sam Altman');
+  assert.equal(
+    data?.quotePost?.author.handle,
+    '@sama',
+    'Quote handle must come from href, not from the display-name anchor text'
+  );
+});
+
+test('Tier 2.20: quote author captures verified badge and its own avatar', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const quote = extractTweetData(article)?.quotePost;
+
+  assert.equal(quote?.author.verified, true, 'Verified badge inside the quote box must be detected');
+  assert.ok(
+    quote?.author.avatarUrl.includes('sama_400x400'),
+    'Quote avatar must come from the quote box, not the main author'
+  );
+  assert.ok(!quote?.author.avatarUrl.includes('satya'), 'Main author avatar must not leak into the quote');
+});
+
+test('Tier 2.21: main tweet handle is unaffected when display-name link shares href with handle link', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.equal(data?.author.handle, '@satyanadella');
+});
+
+// -------------------------------------------------------------
+// Boundary 12: Quote Tweet Rich Content & Formatting Whitespace
+// -------------------------------------------------------------
+test('Tier 2.22: quote text preserves rich tokens so hashtags and links render styled', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const quote = extractTweetData(article)?.quotePost;
+
+  assert.ok(quote?.richTokens && quote.richTokens.length > 0, 'Quote must expose rich tokens');
+  const types = quote.richTokens.map(t => t.type);
+  assert.ok(types.includes('text'), 'Quote rich tokens must include plain text runs');
+});
+
+test('Tier 2.23: pretty-print indentation whitespace never leaks into tweet or quote text', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.ok(
+    !data?.text.includes('\n'),
+    'Main tweet text must not contain raw newlines (real breaks are <br> tags)'
+  );
+  assert.ok(
+    !data?.quotePost?.text.includes('\n'),
+    'Quote text must not contain raw newlines (real breaks are <br> tags)'
+  );
+});
+
+test('Tier 2.24: quote permalink is captured and points at the quoted post', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.equal(data?.quotePost?.url, 'https://x.com/sama/status/4999');
+});
+
+test('Tier 2.25: quote extraction returns undefined for a tweet without a quote box', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/user"><span>@user</span></a></div>
+      <div data-testid="tweetText"><span>plain tweet, no quote</span></div>
+    </article>
+  `);
+
+  assert.equal(extractQuoteTweet(article), undefined);
+  assert.equal(extractTweetData(article)?.quotePost, undefined);
 });
 
 // -------------------------------------------------------------

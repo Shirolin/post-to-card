@@ -21,10 +21,15 @@ export const QUOTE_TWEET_HTML = `
     <span>Excited to welcome the new Copilot features!</span>
   </div>
 
-  <!-- Nested Quote Tweet Box -->
+  <!-- Nested Quote Tweet Box: display-name link shares href with the handle link,
+       mirroring current Twitter/X so handle must be derived from href, not text -->
   <div role="link" tabindex="0" class="quote-box" data-testid="quoteTweet">
+    <div data-testid="Tweet-User-Avatar">
+      <img alt="Sam" src="https://pbs.twimg.com/profile_images/999/sama_normal.jpg">
+    </div>
     <div data-testid="User-Name">
-      <span>Sam Altman</span>
+      <a href="/sama" role="link"><span>Sam Altman</span></a>
+      <div><svg data-testid="icon-verified" aria-label="Verified account"></svg></div>
       <a href="/sama" role="link"><span>@sama</span></a>
       <a href="/sama/status/4999" role="link">
         <time datetime="2026-05-01T11:30:00.000Z">May 1</time>
@@ -58,10 +63,12 @@ export const EXPECTED_QUOTE_TWEET_DATA: TweetData = {
     author: {
       name: 'Sam Altman',
       handle: '@sama',
-      avatarUrl: '',
+      avatarUrl: 'https://pbs.twimg.com/profile_images/999/sama_400x400.jpg',
+      verified: true,
     },
     text: 'GPT-5.5 is now rolling out to all users. Enjoy!',
     timestamp: '2026-05-01T11:30:00.000Z',
+    url: 'https://x.com/sama/status/4999',
     media: [
       {
         type: 'image',

@@ -21,7 +21,11 @@ export function restoreUnicodeEmojis(node: Node | null | undefined): string {
 
     // Node.TEXT_NODE === 3
     if (child.nodeType === 3) {
-      result += child.nodeValue || '';
+      const raw = child.nodeValue || '';
+      // Twitter renders real line breaks as <br>, never as literal newlines in
+      // text nodes. Any newline here is server-side pretty-print indentation and
+      // must not leak into the card. Intra-line spaces are preserved.
+      result += raw.replace(/\s*\n\s*/g, ' ');
       continue;
     }
 

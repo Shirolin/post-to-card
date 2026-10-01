@@ -26,8 +26,10 @@ export interface TweetStats {
 export interface QuoteTweetData {
   author: AuthorInfo;
   text: string;
+  richTokens?: TweetData['richTokens'];
   media?: MediaItem[];
   timestamp?: string;
+  url?: string;
 }
 
 export interface TweetData {
@@ -35,7 +37,7 @@ export interface TweetData {
   url: string;
   author: AuthorInfo;
   text: string; // unicode emojis restored
-  richTokens?: Array<{ type: 'text' | 'mention' | 'hashtag' | 'link' | 'emoji'; value: string; href?: string }>;
+  richTokens?: Array<{ type: 'text' | 'mention' | 'hashtag' | 'cashtag' | 'link' | 'emoji'; value: string; href?: string }>;
   timestamp: string; // ISO or formatted
   stats?: TweetStats;
   media?: MediaItem[];
