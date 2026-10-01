@@ -18,27 +18,90 @@ export interface RichToken {
 }
 
 /**
+ * Returns true when `el` sits inside an <article> that is itself nested in
+ * another <article> (how X sometimes renders a quoted post).
+ */
+function isInsideNestedArticle(el: Element): boolean {
+  let curr: Element | null = el.parentElement;
+  let seenArticle = false;
+  while (curr) {
+    if ((curr.tagName || '').toUpperCase() === 'ARTICLE') {
+      if (seenArticle) return true;
+      seenArticle = true;
+    }
+    curr = curr.parentElement;
+  }
+  return false;
+}
+
+/**
+ * Locates the quoted-post container inside a tweet article.
+ *
+ * X has changed the marker for this box more than once, and a missed match is
+ * silent: the quote is dropped AND its media leaks into the main tweet. So we
+ * fall back through progressively weaker structural signals instead of trusting
+ * a single data-testid.
+ */
+export function findQuoteContainer(article: Element): Element | null {
+  if (!article || typeof article.querySelector !== 'function') return null;
+
+  // 1. Canonical marker used by current X.
+  const byTestId = article.querySelector('div[data-testid="quoteTweet"]');
+  if (byTestId) return byTestId;
+
+  // 2. Legacy class name kept for older captures.
+  const byClass = article.querySelector('.quote-box');
+  if (byClass) return byClass;
+
+  // 3. Nested <article> — the quoted post rendered as its own article.
+  //    Filter out `article` itself: some DOM shims make querySelector match the
+  //    root, and the real DOM never matches the element you query from.
+  const nestedArticles = Array.from(article.querySelectorAll('article')).filter(a => a !== article);
+  if (nestedArticles.length > 0) return nestedArticles[0];
+
+  // 4. Structural fallback: any descendant that owns a second User-Name plus a
+  //    tweetText, while not containing the main post's User-Name.
+  const mainUserName = article.querySelector('div[data-testid="User-Name"]');
+  const allUserNames = Array.from(article.querySelectorAll('div[data-testid="User-Name"]'));
+  for (const userName of allUserNames) {
+    if (userName === mainUserName) continue;
+
+    let node: Element | null = userName.parentElement;
+    while (node && node !== article) {
+      if (node.querySelector('div[data-testid="tweetText"]')) {
+        if (!mainUserName || !node.contains(mainUserName)) return node;
+        break;
+      }
+      node = node.parentElement;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Checks if a given DOM element is nested inside a Quote Tweet box.
  */
 function isInsideQuoteTweet(el: Element): boolean {
   if (typeof el.closest === 'function') {
-    return Boolean(
+    if (
       el.closest('div[data-testid="quoteTweet"]') ||
       el.closest('.quote-box')
-    );
-  }
-
-  let curr: Node | null = el.parentNode;
-  while (curr) {
-    const parentEl = curr as Element;
-    if (
-      (typeof parentEl.getAttribute === 'function' && parentEl.getAttribute('data-testid') === 'quoteTweet') ||
-      (parentEl.className && String(parentEl.className).includes('quote-box'))
     ) {
       return true;
     }
-    curr = curr.parentNode;
   }
+
+  if (isInsideNestedArticle(el)) return true;
+
+  // Structural fallback: compare against the resolved quote container of the
+  // nearest article so media filtering stays in sync with quote extraction.
+  const article = typeof el.closest === 'function' ? el.closest('article') : null;
+  if (article) {
+    const quote = findQuoteContainer(article);
+    if (quote && quote !== el && quote.contains(el)) return true;
+  }
+
   return false;
 }
 
@@ -490,15 +553,53 @@ export function extractTweetMedia(article: Element): MediaItem[] | undefined {
     }
   }
 
+  // 3. Link card preview image (external site card, e.g. "来自 nintendo.com").
+  if (items.length === 0) {
+    const cardMedia = extractLinkCardMedia(article);
+    if (cardMedia) items.push(cardMedia);
+  }
+
   return items.length > 0 ? items : undefined;
+}
+
+/**
+ * Extracts the preview image of an external link card (e.g. "来自 nintendo.com").
+ * Twitter/X renders these inside `div[data-testid="card.wrapper"]`, which the
+ * photo/video strategies do not recognise, so the media silently disappeared.
+ */
+function extractLinkCardMedia(article: Element): MediaItem | undefined {
+  const card = article.querySelector('div[data-testid="card.wrapper"], div[data-testid="card.layoutLarge.media"]');
+  if (!card || isInsideQuoteTweet(card)) return undefined;
+
+  // Prefer the dedicated card image testid, then any non-avatar image.
+  const img = card.querySelector('img[data-testid="card-image"], img[src*="card_img"]') ||
+    Array.from(card.querySelectorAll('img')).find(candidate => {
+      const src = candidate.getAttribute('src') || '';
+      return src && !src.includes('profile_images') && !src.includes('/emoji/');
+    });
+  if (!img) return undefined;
+
+  const src = img.getAttribute('src') || '';
+  if (!src || src.includes('profile_images') || src.includes('/emoji/')) return undefined;
+
+  const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+  const w = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+  const h = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+
+  return {
+    type: 'image',
+    url: upgradePhotoUrl(src),
+    originalUrl: src,
+    alt: img.getAttribute('alt') || undefined,
+    aspectRatio: (w > 0 && h > 0) ? Number((w / h).toFixed(3)) : undefined,
+  };
 }
 
 /**
  * Extracts nested Quote Tweet data (author, text, media, timestamp).
  */
 export function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
-  const quoteBox = article.querySelector('div[data-testid="quoteTweet"]') ||
-    article.querySelector('.quote-box');
+  const quoteBox = findQuoteContainer(article);
 
   if (!quoteBox) return undefined;
 
@@ -559,9 +660,21 @@ export function extractQuoteTweet(article: Element): QuoteTweetData | undefined 
         });
       }
     }
+
+    // Quoted post may itself only carry an external link card.
+    if (media.length === 0) {
+      const quoteCardMedia = extractLinkCardMedia(quoteBox);
+      if (quoteCardMedia) media.push(quoteCardMedia);
+    }
   }
 
   type CompatibleToken = NonNullable<TweetData['richTokens']>[number];
+
+  // A marker that yielded no identity and no body is not a usable quote: X
+  // leaves empty shells in some layouts, and rendering one produces a blank box.
+  if (!text && !quoteAuthor.name && !quoteAuthor.handle && media.length === 0) {
+    return undefined;
+  }
 
   return {
     author: quoteAuthor,

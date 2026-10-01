@@ -770,17 +770,17 @@
 }
 
 /* -------------------------------------------------------------
-   Quote Tweet Box
+   Quote Tweet Box — reads as a nested, secondary post
    ------------------------------------------------------------- */
 .quote-card {
   margin-top: 4px;
-  padding: 12px 14px;
+  padding: 11px 13px 12px;
   background: var(--quote-bg, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--quote-border, rgba(255, 255, 255, 0.1));
   border-left: 3px solid var(--quote-accent, var(--accent, #6366f1));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   overflow: hidden;
 }
 
@@ -789,35 +789,38 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  line-height: 1.25;
 }
 
 .quote-avatar {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
 }
 
 .quote-name {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 700;
   color: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  flex-shrink: 0;
+  max-width: 60%;
 }
 
 .quote-verified-badge {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
 }
 
 .quote-handle,
 .quote-timestamp {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-sec, #9ca3af);
   white-space: nowrap;
   overflow: hidden;
@@ -826,17 +829,40 @@
   min-width: 0;
 }
 
+.quote-timestamp-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.quote-timestamp-link:hover {
+  text-decoration: underline;
+}
+
 .quote-timestamp::before {
   content: "·";
   margin-right: 6px;
 }
 
 .quote-text {
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 14.5px;
+  line-height: 1.5;
   color: inherit;
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+/* Keep quoted media inside the box's own radius instead of the card radius.
+   Specificity must match `.post-to-card-target[data-radius=...] .media-grid`
+   so this later rule wins the tie. */
+.post-to-card-target .quote-card .media-grid {
+  margin-top: 3px;
+  border-radius: 8px;
+}
+
+/* Honour an explicit square-corner choice inside the quote box too. */
+.post-to-card-target[data-radius="0px"] .quote-card .media-grid,
+.post-to-card-target.radius-0px .quote-card .media-grid {
+  border-radius: 0;
 }
 
 /* -------------------------------------------------------------

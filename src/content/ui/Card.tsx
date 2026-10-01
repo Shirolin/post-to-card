@@ -1,6 +1,6 @@
 import type { JSX } from 'preact';
 import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet';
-import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption } from '../../types/card';
+import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card';
 import { CardQrCode } from './qrcode';
 import { getMediaRadius, getAspectMinHeight } from './themes';
 import { formatLocaleTimestamp, getTranslation } from '../i18n';
@@ -443,20 +443,21 @@ function renderQuoteCard(
   imageFit: ImageFitOption,
   aspectRatio: AspectRatioOption,
   mediaLayout: MediaLayoutOption,
-  showPlayButton: boolean
+  showPlayButton: boolean,
+  locale: Locale = 'en-US'
 ) {
-  const { author, text, richTokens, timestamp } = quotePost;
+  const { author, text, richTokens, timestamp, url } = quotePost;
+  const timestampText = timestamp ? formatLocaleTimestamp(timestamp, locale) : '';
 
   return (
     <div class="quote-card" style={{ borderRadius: mediaRadius }}>
       <div class="quote-author">
-        {author.avatarUrl && (
-          <img
-            src={author.avatarUrl}
-            alt={author.name}
-            class="quote-avatar"
-          />
-        )}
+        <img
+          src={author.avatarUrl || defaultAvatar}
+          alt={author.name}
+          class="quote-avatar"
+          loading="eager"
+        />
         <span class="quote-name">{author.name}</span>
         {author.verified && (
           <span class="verified-badge quote-verified-badge" title={t.verified}>
@@ -466,15 +467,27 @@ function renderQuoteCard(
           </span>
         )}
         <span class="quote-handle">{author.handle}</span>
-        {timestamp && (
-          <span class="quote-timestamp">{formatLocaleTimestamp(timestamp, 'en-US')}</span>
+        {timestampText && (
+          url ? (
+            <a
+              class="quote-timestamp quote-timestamp-link"
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={url}
+            >
+              {timestampText}
+            </a>
+          ) : (
+            <span class="quote-timestamp">{timestampText}</span>
+          )
         )}
       </div>
       {richTokens && richTokens.length > 0 ? (
         renderRichTokens(richTokens, 'quote-text')
-      ) : (
+      ) : text ? (
         <div class="quote-text">{text}</div>
-      )}
+      ) : null}
       {renderMediaGrid(quotePost.media, mediaRadius, t.photoAlt, imageFit, aspectRatio, mediaLayout, t.videoLabel, showPlayButton)}
     </div>
   );
@@ -493,7 +506,7 @@ function renderSingleTweet(
       {renderAuthorHeader(tweet.author, config.blurAuthor, t.verified)}
       {renderTweetContent(tweet)}
       {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-      {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false)}
+      {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, config.locale || 'en-US')}
     </div>
   );
 }
@@ -543,7 +556,7 @@ function renderThreadTweet(
         {renderAuthorDetails(tweet.author, config.blurAuthor, t.verified)}
         {renderTweetContent(tweet)}
         {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-        {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false)}
+        {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, config.locale || 'en-US')}
       </div>
     </div>
   );

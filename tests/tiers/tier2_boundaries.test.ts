@@ -377,6 +377,119 @@ test('Tier 2.25: quote extraction returns undefined for a tweet without a quote 
   assert.equal(extractTweetData(article)?.quotePost, undefined);
 });
 
+test('Tier 2.26: quoted post rendered as a nested <article> is still detected', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <a href="/main"><span>Main Author</span></a>
+        <a href="/main"><span>@main</span></a>
+      </div>
+      <div data-testid="tweetText"><span>look at this</span></div>
+      <article data-testid="tweet">
+        <div data-testid="User-Name">
+          <a href="/nested"><span>Nested Author</span></a>
+          <a href="/nested"><span>@nested</span></a>
+        </div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+      </article>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote, 'Nested article must be recognised as the quoted post');
+  assert.equal(quote.author.name, 'Nested Author');
+  assert.equal(quote.author.handle, '@nested');
+  assert.equal(quote.text, 'quoted body');
+});
+
+test('Tier 2.27: quote box without a data-testid is found structurally', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <a href="/main"><span>Main Author</span></a>
+      </div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div role="link" tabindex="0">
+        <div data-testid="User-Name">
+          <a href="/quoted"><span>Quoted Author</span></a>
+          <a href="/quoted"><span>@quoted</span></a>
+        </div>
+        <div data-testid="tweetText"><span>quoted body without marker</span></div>
+      </div>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote, 'Structural fallback must locate the quote box');
+  assert.equal(quote.author.handle, '@quoted');
+  assert.equal(quote.text, 'quoted body without marker');
+  assert.equal(
+    extractTweetData(article)?.text,
+    'main body',
+    'Main tweet text must not be replaced by the quoted body'
+  );
+});
+
+test('Tier 2.28: quoted media never leaks into the main tweet media list', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div role="link" tabindex="0">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/media/quoted_only.png?format=png&name=small">
+        </div>
+      </div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  assert.ok(data?.quotePost, 'Quote must be detected');
+  assert.equal(data?.media, undefined, 'Main tweet must have no media of its own');
+  assert.equal(data?.quotePost?.media?.length, 1, 'Quoted media must belong to the quote');
+});
+
+test('Tier 2.29: an empty quote marker without content is not treated as a quote', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div data-testid="quoteTweet"></div>
+    </article>
+  `);
+
+  assert.equal(
+    extractTweetData(article)?.quotePost,
+    undefined,
+    'A quote marker with no author or text must not produce an empty quote card'
+  );
+  assert.equal(extractTweetData(article)?.text, 'main body');
+});
+
+test('Tier 2.30: external link card preview image is extracted as media', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>check this link</span></div>
+      <div data-testid="card.wrapper">
+        <div data-testid="card.layoutLarge.media">
+          <img data-testid="card-image" src="https://pbs.twimg.com/card_img/123/nintendo?format=jpg&name=small" alt="Nintendo Today!">
+        </div>
+      </div>
+    </article>
+  `);
+
+  const media = extractTweetData(article)?.media;
+  assert.ok(media && media.length === 1, 'Link card preview must yield one media item');
+  assert.ok(media[0].url.includes('card_img'), 'Link card media must point at the card image');
+  assert.ok(
+    media[0].url.includes('name=large'),
+    'Link card preview must be upgraded to the large variant so exports stay sharp'
+  );
+});
+
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 2
 // -------------------------------------------------------------

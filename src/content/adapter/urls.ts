@@ -18,6 +18,7 @@ export const getHighResAvatarUrl = upgradeAvatarUrl;
 /**
  * Upgrades a Twitter photo URL to large resolution.
  * Supports both query parameter format (?format=...&name=large) and legacy colon suffix (:large).
+ * Covers tweet media (`/media/`) and external link-card previews (`/card_img/`).
  */
 export function upgradePhotoUrl(url: string): string {
   if (!url) return '';
@@ -29,7 +30,10 @@ export function upgradePhotoUrl(url: string): string {
 
   try {
     const parsed = new URL(url);
-    if (parsed.hostname.includes('twimg.com') && parsed.pathname.includes('/media/')) {
+    if (
+      parsed.hostname.includes('twimg.com') &&
+      (parsed.pathname.includes('/media/') || parsed.pathname.includes('/card_img/'))
+    ) {
       parsed.searchParams.set('name', 'large');
       return parsed.toString();
     }
