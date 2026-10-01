@@ -9,6 +9,7 @@ import { Sparkles } from 'lucide-preact';
 export interface CardProps {
   data: ThreadData | TweetData;
   config: CardConfig;
+  onExcludeTweet?: (tweetId: string) => void;
 }
 
 function normalizeThreadData(data: ThreadData | TweetData): ThreadData {
@@ -345,34 +346,47 @@ function renderMediaGrid(
   );
 }
 
-function renderAuthorHeader(author: AuthorInfo, isBlurred: boolean, verifiedTitle: string = 'Verified') {
-  const defaultAvatar =
-    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2371767b"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
+const defaultAvatar =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2371767b"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
 
+function renderAuthorAvatar(author: AuthorInfo, isBlurred: boolean) {
   const blurClass = isBlurred ? 'is-blurred' : '';
+  return (
+    <div class={`author-avatar ${blurClass}`}>
+      <img
+        src={author.avatarUrl || defaultAvatar}
+        alt={author.name}
+        class={`author-avatar-img ${blurClass}`}
+      />
+    </div>
+  );
+}
 
+function renderAuthorDetails(author: AuthorInfo, isBlurred: boolean, verifiedTitle: string = 'Verified') {
+  const blurClass = isBlurred ? 'is-blurred' : '';
+  return (
+    <div class="author-details">
+      <div class="author-name-row">
+        <span class={`author-name ${blurClass}`}>{author.name}</span>
+        {author.verified && (
+          <span class="verified-badge" title={verifiedTitle}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.3 11.96l1.41-1.41 2.83 2.83 6.36-6.36 1.41 1.41-7.77 7.77z" />
+            </svg>
+          </span>
+        )}
+      </div>
+      <span class={`author-handle ${blurClass}`}>{author.handle}</span>
+    </div>
+  );
+}
+
+function renderAuthorHeader(author: AuthorInfo, isBlurred: boolean, verifiedTitle: string = 'Verified') {
+  const blurClass = isBlurred ? 'is-blurred' : '';
   return (
     <div class={`author-header ${blurClass}`}>
-      <div class={`author-avatar ${blurClass}`}>
-        <img
-          src={author.avatarUrl || defaultAvatar}
-          alt={author.name}
-          class={`author-avatar-img ${blurClass}`}
-        />
-      </div>
-      <div class="author-details">
-        <div class="author-name-row">
-          <span class={`author-name ${blurClass}`}>{author.name}</span>
-          {author.verified && (
-            <span class="verified-badge" title={verifiedTitle}>
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.3 11.96l1.41-1.41 2.83 2.83 6.36-6.36 1.41 1.41-7.77 7.77z" />
-              </svg>
-            </span>
-          )}
-        </div>
-        <span class={`author-handle ${blurClass}`}>{author.handle}</span>
-      </div>
+      {renderAuthorAvatar(author, isBlurred)}
+      {renderAuthorDetails(author, isBlurred, verifiedTitle)}
     </div>
   );
 }
@@ -425,12 +439,121 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
   );
 }
 
-export function Card({ data, config }: CardProps): JSX.Element {
+function renderQuoteCard(
+  quotePost: NonNullable<TweetData['quotePost']>,
+  mediaRadius: string,
+  t: ReturnType<typeof getTranslation>,
+  imageFit: ImageFitOption,
+  aspectRatio: AspectRatioOption,
+  mediaLayout: MediaLayoutOption,
+  showPlayButton: boolean
+) {
+  return (
+    <div class="quote-card" style={{ borderRadius: mediaRadius }}>
+      <div class="quote-author">
+        {quotePost.author.avatarUrl && (
+          <img
+            src={quotePost.author.avatarUrl}
+            alt={quotePost.author.name}
+            class="quote-avatar"
+          />
+        )}
+        <span class="quote-name">{quotePost.author.name}</span>
+        <span class="quote-handle">{quotePost.author.handle}</span>
+      </div>
+      <div class="quote-text">{quotePost.text}</div>
+      {renderMediaGrid(quotePost.media, mediaRadius, t.photoAlt, imageFit, aspectRatio, mediaLayout, t.videoLabel, showPlayButton)}
+    </div>
+  );
+}
+
+function renderSingleTweet(
+  tweet: TweetData,
+  config: CardConfig,
+  t: ReturnType<typeof getTranslation>,
+  mediaRadius: string,
+  imageFit: ImageFitOption,
+  mediaLayout: MediaLayoutOption
+) {
+  return (
+    <div class="single-tweet-block">
+      {renderAuthorHeader(tweet.author, config.blurAuthor, t.verified)}
+      {renderTweetContent(tweet)}
+      {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
+      {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false)}
+    </div>
+  );
+}
+
+function renderThreadTweet(
+  tweet: TweetData,
+  isLast: boolean,
+  config: CardConfig,
+  t: ReturnType<typeof getTranslation>,
+  mediaRadius: string,
+  imageFit: ImageFitOption,
+  mediaLayout: MediaLayoutOption,
+  onExcludeTweet?: (tweetId: string) => void,
+  canExclude?: boolean
+) {
+  const tweetKey = tweet.id;
+  return (
+    <div class="thread-item">
+      {/* On-card quick exclude button */}
+      {canExclude && onExcludeTweet && tweetKey && (
+        <button
+          type="button"
+          class="thread-exclude-btn"
+          title={t.excludeThisTweet}
+          aria-label={t.excludeThisTweet}
+          onClick={(e) => {
+            e.stopPropagation();
+            onExcludeTweet(tweetKey);
+          }}
+          data-html2canvas-ignore="true"
+        >
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      )}
+
+      {/* Left Column: Avatar + Continuous Timeline Line */}
+      <div class="thread-gutter">
+        {renderAuthorAvatar(tweet.author, config.blurAuthor)}
+        {!isLast && <div class="thread-connector-line" />}
+      </div>
+
+      {/* Right Column: Author Info + Content + Media + Quote */}
+      <div class="thread-content-col">
+        {renderAuthorDetails(tweet.author, config.blurAuthor, t.verified)}
+        {renderTweetContent(tweet)}
+        {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
+        {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false)}
+      </div>
+    </div>
+  );
+}
+
+export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
   const t = getTranslation(config.locale || 'en-US');
   const thread = normalizeThreadData(data);
-  const mainTweet = thread.tweets[0];
-  const subsequentTweets = thread.tweets.slice(1);
-  const isThread = subsequentTweets.length > 0;
+  const excludedSet = new Set(config.excludedTweetIds || []);
+
+  // Filter out manually excluded tweets
+  const activeTweets = thread.tweets.filter((tweet, idx) => {
+    const key = tweet.id || String(idx);
+    return !excludedSet.has(key);
+  });
+
+  // Guarantee at least one tweet is rendered (prefer target tweet or first available)
+  const targetIndex = thread.targetTweetIndex ?? 0;
+  const fallbackTweet = thread.tweets[targetIndex] || thread.tweets[0];
+  const effectiveTweets = activeTweets.length > 0 ? activeTweets : [fallbackTweet];
+
+  const isThread = effectiveTweets.length > 1;
+  const mainTweet = effectiveTweets[0];
 
   const imageFit = config.imageFit || 'contain';
   const mediaLayout = config.mediaLayout || 'grid';
@@ -466,68 +589,26 @@ export function Card({ data, config }: CardProps): JSX.Element {
       }}
     >
       <div class="post-to-card-body-content">
-        {/* Main Tweet */}
-        <div class="thread-item-wrapper">
-          {isThread && <div class="thread-connector-line" />}
-          <div class="thread-tweet-block">
-            {renderAuthorHeader(mainTweet.author, config.blurAuthor, t.verified)}
-            {renderTweetContent(mainTweet)}
-            {renderMediaGrid(mainTweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-
-            {/* Quote Tweet if present */}
-            {mainTweet.quotePost && (
-              <div class="quote-card" style={{ borderRadius: mediaRadius }}>
-                <div class="quote-author">
-                  {mainTweet.quotePost.author.avatarUrl && (
-                    <img
-                      src={mainTweet.quotePost.author.avatarUrl}
-                      alt={mainTweet.quotePost.author.name}
-                      class="quote-avatar"
-                    />
-                  )}
-                  <span class="quote-name">{mainTweet.quotePost.author.name}</span>
-                  <span class="quote-handle">{mainTweet.quotePost.author.handle}</span>
-                </div>
-                <div class="quote-text">{mainTweet.quotePost.text}</div>
-                {renderMediaGrid(mainTweet.quotePost.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-              </div>
-            )}
+        {!isThread ? (
+          renderSingleTweet(mainTweet, config, t, mediaRadius, imageFit, mediaLayout)
+        ) : (
+          <div class="thread-list">
+            {effectiveTweets.map((tweet, index) => {
+              const isLast = index === effectiveTweets.length - 1;
+              return renderThreadTweet(
+                tweet,
+                isLast,
+                config,
+                t,
+                mediaRadius,
+                imageFit,
+                mediaLayout,
+                onExcludeTweet,
+                effectiveTweets.length > 1
+              );
+            })}
           </div>
-        </div>
-
-        {/* Subsequent Thread Tweets */}
-        {subsequentTweets.map((subTweet, index) => {
-          const isLastSub = index === subsequentTweets.length - 1;
-          return (
-            <div key={subTweet.id || index} class="thread-item-wrapper">
-              {!isLastSub && <div class="thread-connector-line" />}
-              <div class="thread-tweet-block">
-                <div class="thread-divider" />
-                {renderAuthorHeader(subTweet.author, config.blurAuthor, t.verified)}
-                {renderTweetContent(subTweet)}
-                {renderMediaGrid(subTweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-
-                {subTweet.quotePost && (
-                  <div class="quote-card" style={{ borderRadius: mediaRadius }}>
-                    <div class="quote-author">
-                      {subTweet.quotePost.author.avatarUrl && (
-                        <img
-                          src={subTweet.quotePost.author.avatarUrl}
-                          alt={subTweet.quotePost.author.name}
-                          class="quote-avatar"
-                        />
-                      )}
-                      <span class="quote-name">{subTweet.quotePost.author.name}</span>
-                      <span class="quote-handle">{subTweet.quotePost.author.handle}</span>
-                    </div>
-                    <div class="quote-text">{subTweet.quotePost.text}</div>
-                    {renderMediaGrid(subTweet.quotePost.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        )}
       </div>
 
       {/* Card Footer */}

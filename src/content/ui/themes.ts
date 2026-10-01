@@ -141,6 +141,7 @@ export const DEFAULT_CARD_CONFIG: CardConfig = {
   showActionBarButton: true,
   showPlayButton: true,
   locale: detectDefaultLocale(),
+  excludedTweetIds: [],
 };
 
 export function sanitizePadding(val: string): PaddingOption {

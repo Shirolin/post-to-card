@@ -836,38 +836,124 @@
 }
 
 /* -------------------------------------------------------------
-   Thread Timeline Connector
+   Single Tweet Layout
    ------------------------------------------------------------- */
+.single-tweet-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* -------------------------------------------------------------
+   Thread Timeline Layout (Native Twitter Two-Column Gutter)
+   ------------------------------------------------------------- */
+.thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
+.thread-item {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+  position: relative;
+}
+
+.thread-exclude-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(15, 20, 25, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: all 0.15s ease;
+  z-index: 10;
+  padding: 0;
+}
+
+.thread-item:hover .thread-exclude-btn {
+  opacity: 0.85;
+  transform: scale(1);
+}
+
+.thread-exclude-btn:hover {
+  opacity: 1 !important;
+  background: rgba(239, 68, 68, 0.85);
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+.thread-gutter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 48px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.thread-gutter .author-avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.thread-connector-line {
+  width: 2px;
+  flex: 1 1 auto;
+  min-height: 16px;
+  background: var(--divider, rgba(255, 255, 255, 0.18));
+  margin-top: 6px;
+  margin-bottom: 6px;
+  border-radius: 1px;
+}
+
+.thread-content-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 10px;
+  padding-bottom: 24px;
+}
+
+.thread-content-col .author-details {
+  min-height: 48px;
+  justify-content: center;
+}
+
+.thread-item:last-child .thread-content-col {
+  padding-bottom: 8px;
+}
+
+/* Backward compatibility fallbacks */
 .thread-item-wrapper {
   display: flex;
   flex-direction: column;
   position: relative;
 }
-
-.thread-connector-line {
-  position: absolute;
-  top: 50px;
-  bottom: -20px;
-  left: 23px;
-  width: 2px;
-  background: var(--divider, rgba(255, 255, 255, 0.15));
-  z-index: 1;
-}
-
 .thread-tweet-block {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-bottom: 20px;
   position: relative;
-  z-index: 2;
 }
-
 .thread-divider {
-  height: 1px;
-  background: var(--divider, rgba(255, 255, 255, 0.1));
-  margin: 8px 0;
-  width: 100%;
+  display: none;
 }
 
 /* -------------------------------------------------------------

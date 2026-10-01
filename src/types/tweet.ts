@@ -49,4 +49,5 @@ export interface ThreadData {
   author: AuthorInfo;
   tweets: TweetData[];
   isSingle: boolean;
+  targetTweetIndex?: number;
 }

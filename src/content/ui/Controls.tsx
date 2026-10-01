@@ -1,5 +1,6 @@
 import type { JSX } from 'preact';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card';
+import type { ThreadData } from '../../types/tweet';
 import { THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS } from './themes';
 import { getTranslation } from '../i18n';
 import {
@@ -12,6 +13,7 @@ import {
   SlidersHorizontal,
   Copy,
   Download,
+  ListFilter,
 } from 'lucide-preact';
 
 export interface ControlsProps {
@@ -22,6 +24,7 @@ export interface ControlsProps {
   isExporting?: boolean;
   statusMessage?: string;
   isErrorStatus?: boolean;
+  threadData?: ThreadData;
 }
 
 export function Controls({
@@ -32,6 +35,7 @@ export function Controls({
   isExporting = false,
   statusMessage = '',
   isErrorStatus = false,
+  threadData,
 }: ControlsProps): JSX.Element {
   const t = getTranslation(config.locale || 'en-US');
 
@@ -45,6 +49,42 @@ export function Controls({
     const key = `theme_${themeId.replace(/-/g, '_')}` as keyof typeof t;
     return (t[key] as string) || defaultName;
   };
+
+  const excludedSet = new Set(config.excludedTweetIds || []);
+  const totalTweets = threadData?.tweets.length || 0;
+  const activeCount = (totalTweets > 0 && threadData)
+    ? threadData.tweets.filter((item, idx) => !excludedSet.has(item.id || String(idx))).length
+    : 0;
+
+  const handleToggleExclude = (tweetKey: string) => {
+    const nextSet = new Set(excludedSet);
+    if (nextSet.has(tweetKey)) {
+      nextSet.delete(tweetKey);
+    } else {
+      if (activeCount > 1) {
+        nextSet.add(tweetKey);
+      }
+    }
+    updateConfig({ excludedTweetIds: Array.from(nextSet) });
+  };
+
+  const handleSelectAll = () => {
+    updateConfig({ excludedTweetIds: [] });
+  };
+
+  const handleSelectCurrentOnly = () => {
+    if (!threadData) return;
+    const targetIdx = threadData.targetTweetIndex ?? 0;
+    const targetKey = threadData.tweets[targetIdx]?.id || String(targetIdx);
+    const toExclude = threadData.tweets
+      .map((item, idx) => item.id || String(idx))
+      .filter((k) => k !== targetKey);
+    updateConfig({ excludedTweetIds: toExclude });
+  };
+
+  const targetKey = threadData
+    ? (threadData.tweets[threadData.targetTweetIndex ?? 0]?.id || String(threadData.targetTweetIndex ?? 0))
+    : '';
 
   return (
     <div class="controls-panel">
@@ -71,6 +111,67 @@ export function Controls({
           </button>
         </div>
       </div>
+
+      {/* 0.5 Tweet Scope & Thread Item Manager */}
+      {threadData && totalTweets > 1 && (
+        <div class="control-section tweet-manager-section">
+          <div class="control-section-header">
+            <span class="control-label">
+              <ListFilter size={14} strokeWidth={2} />
+              <span>{t.manageTweets} ({activeCount}/{totalTweets})</span>
+            </span>
+            <div class="tweet-manager-actions">
+              <button
+                type="button"
+                class="btn-text-action"
+                onClick={handleSelectAll}
+                disabled={activeCount === totalTweets}
+              >
+                {t.selectAll}
+              </button>
+              <button
+                type="button"
+                class="btn-text-action"
+                onClick={handleSelectCurrentOnly}
+                disabled={activeCount === 1 && !excludedSet.has(targetKey)}
+              >
+                {t.selectCurrentOnly}
+              </button>
+            </div>
+          </div>
+          <div class="tweet-manager-list">
+            {threadData.tweets.map((tweet, idx) => {
+              const key = tweet.id || String(idx);
+              const isExcluded = excludedSet.has(key);
+              const isTarget = idx === (threadData.targetTweetIndex ?? 0);
+              const previewSnippet = tweet.text ? tweet.text.replace(/\s+/g, ' ').slice(0, 28) : `#${idx + 1}`;
+              const hasMedia = tweet.media && tweet.media.length > 0;
+              const isOnlyOneActive = activeCount === 1 && !isExcluded;
+
+              return (
+                <div
+                  key={key}
+                  class={`tweet-manager-item ${isExcluded ? 'is-excluded' : 'is-included'} ${isTarget ? 'is-target' : ''}`}
+                  onClick={() => !isOnlyOneActive && handleToggleExclude(key)}
+                  title={isOnlyOneActive ? '' : (isExcluded ? t.selectAll : t.excludeThisTweet)}
+                >
+                  <div class={`tweet-checkbox ${!isExcluded ? 'is-checked' : ''}`}>
+                    {!isExcluded && (
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <span class="tweet-index-badge">#{idx + 1}</span>
+                  <span class="tweet-snippet">{previewSnippet}{tweet.text && tweet.text.length > 28 ? '...' : ''}</span>
+                  {hasMedia && <span class="tweet-media-indicator">🖼️{tweet.media!.length}</span>}
+                  {isExcluded && <span class="tweet-excluded-tag">{t.excludedBadge}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 1. Theme Picker */}
       <div class="control-section">

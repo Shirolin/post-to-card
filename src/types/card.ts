@@ -30,5 +30,6 @@ export interface CardConfig {
   showActionBarButton?: boolean;
   showPlayButton?: boolean;
   locale?: Locale;
+  excludedTweetIds?: string[];
 }
 

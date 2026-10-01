@@ -25,6 +25,13 @@ export interface Translations {
   borderRadius: string;
   elementsAndPrivacy: string;
 
+  // Tweet Scope & Management
+  manageTweets: string;
+  selectAll: string;
+  selectCurrentOnly: string;
+  excludedBadge: string;
+  excludeThisTweet: string;
+
   // Toggles
   qrCode: string;
   metricsAndStats: string;
@@ -83,6 +90,12 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     borderRadius: '卡片圆角',
     elementsAndPrivacy: '展示模块与隐私',
 
+    manageTweets: '包含推文',
+    selectAll: '全选',
+    selectCurrentOnly: '仅此推文',
+    excludedBadge: '已剔除',
+    excludeThisTweet: '剔除此推文',
+
     qrCode: '原文二维码',
     metricsAndStats: '互动数据',
     timestamp: '发布时间',
@@ -134,6 +147,12 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     padding: 'Padding',
     borderRadius: 'Border Radius',
     elementsAndPrivacy: 'Elements & Privacy',
+
+    manageTweets: 'Included Tweets',
+    selectAll: 'Select All',
+    selectCurrentOnly: 'Current Only',
+    excludedBadge: 'Excluded',
+    excludeThisTweet: 'Exclude Tweet',
 
     qrCode: 'QR Code',
     metricsAndStats: 'Metrics & Stats',

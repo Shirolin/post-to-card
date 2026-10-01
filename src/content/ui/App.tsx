@@ -84,11 +84,24 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     }
   };
 
+  const handleExcludeTweet = (tweetId: string) => {
+    const currentExcluded = new Set(config.excludedTweetIds || []);
+    if (currentExcluded.has(tweetId)) {
+      currentExcluded.delete(tweetId);
+    } else {
+      const total = threadData.tweets.length;
+      if (currentExcluded.size < total - 1) {
+        currentExcluded.add(tweetId);
+      }
+    }
+    handleConfigChange({ ...config, excludedTweetIds: Array.from(currentExcluded) });
+  };
+
   return (
     <Modal onClose={onClose} locale={config.locale}>
       <div class="preview-stage">
         <div class="preview-wrapper">
-          <Card data={threadData} config={config} />
+          <Card data={threadData} config={config} onExcludeTweet={handleExcludeTweet} />
         </div>
       </div>
       <Controls
@@ -99,6 +112,7 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
         isExporting={isExporting}
         statusMessage={statusMessage}
         isErrorStatus={isErrorStatus}
+        threadData={threadData}
       />
     </Modal>
   );

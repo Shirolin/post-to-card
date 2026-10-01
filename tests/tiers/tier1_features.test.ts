@@ -835,6 +835,126 @@ test('F14.5: flags single tweet as isSingle: true', () => {
   assert.equal(EXPECTED_SINGLE_TWEET_DATA.isThreadPart, false);
 });
 
+test('F14.6: thread layout isolates connector line in thread-gutter and text in thread-content-col to prevent line-text intersection', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+
+  // Verify two-column timeline architecture in Card.tsx
+  assert.ok(cardContent.includes('class="thread-list"'), 'Card must render thread-list container');
+  assert.ok(cardContent.includes('class="thread-item"'), 'Card must render thread-item rows');
+  assert.ok(cardContent.includes('class="thread-gutter"'), 'Card must isolate avatar and connector line in thread-gutter');
+  assert.ok(cardContent.includes('class="thread-content-col"'), 'Card must place text and media in thread-content-col');
+
+  // Verify connector line is in gutter, while text is in content column
+  assert.ok(cardContent.includes('{renderAuthorAvatar(tweet.author, config.blurAuthor)}'), 'Avatar must render in thread gutter');
+  assert.ok(cardContent.includes('{!isLast && <div class="thread-connector-line" />}'), 'Connector line must render in thread gutter');
+
+  // Verify CSS styles
+  assert.ok(cssContent.includes('.thread-item'), 'CSS must style thread-item');
+  assert.ok(cssContent.includes('.thread-gutter'), 'CSS must style thread-gutter');
+  assert.ok(cssContent.includes('.thread-content-col'), 'CSS must style thread-content-col');
+  assert.ok(cssContent.includes('flex-direction: row'), 'thread-item must use horizontal row layout');
+});
+
+test('F14.7: profile feed isolation - prevents misjudging independent same-author tweets as thread', () => {
+  const threadCode = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/thread.ts'), 'utf-8');
+  assert.ok(threadCode.includes('isStatusDetailPage'), 'thread.ts must distinguish status detail page');
+  assert.ok(threadCode.includes('hasNativeThreadConnector'), 'thread.ts must check for native DOM connector');
+  assert.ok(threadCode.includes('isThreadConnectedPair'), 'thread.ts must strictly evaluate tweet pairs');
+  assert.ok(threadCode.includes('isTemporallyConnected'), 'thread.ts must check temporal sequence');
+
+  // Verify that on non-detail pages without positive proof, it does not merge
+  assert.ok(threadCode.includes('hasNativeThreadConnector(artA') && threadCode.includes('In profile or feed without any thread markers, DO NOT merge!'), 'Must treat feed tweets without native connectors as standalone single tweet');
+
+  // Verify DOM pattern: profile feed without connector has no thread-connected SVG/DIV
+  const profileFeedHtml = `
+  <div id="timeline">
+    <article data-testid="tweet" id="tweet-august">
+      <div data-testid="User-Name">
+        <span>Shiro</span>
+        <a href="/shirolin"><span>@shirolin</span></a>
+        <a href="/shirolin/status/1000"><time datetime="2026-08-14T10:00:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetText"><span>August standalone tweet</span></div>
+    </article>
+    <article data-testid="tweet" id="tweet-september">
+      <div data-testid="User-Name">
+        <span>Shiro</span>
+        <a href="/shirolin"><span>@shirolin</span></a>
+        <a href="/shirolin/status/2000"><time datetime="2026-09-30T10:00:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetText"><span>September standalone tweet</span></div>
+    </article>
+  </div>
+  `;
+  const container = createDomElement(profileFeedHtml);
+  const targetArt = container.querySelector('#tweet-august')!;
+  const nextArt = container.querySelector('#tweet-september')!;
+  
+  // Neither article has native thread connector elements
+  const hasConnector = targetArt.querySelector('[data-testid="tweet"] [style*="width: 2px"]') !== null;
+  assert.equal(hasConnector, false, 'Profile tweets have no native visual thread connector');
+});
+
+test('F14.8: excludes replies by same author targeting third-party users', () => {
+  const threadCode = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/thread.ts'), 'utf-8');
+  assert.ok(threadCode.includes('getReplyingToHandle'), 'thread.ts must extract replying-to handle');
+  assert.ok(threadCode.includes('replyTarget !== tweetA.author.handle.toLowerCase()'), 'thread.ts must break thread when replying to another user');
+
+  const conversationHtml = `
+  <div id="timeline">
+    <article data-testid="tweet" id="tweet-main">
+      <div data-testid="User-Name">
+        <span>Alice</span>
+        <a href="/alice"><span>@alice</span></a>
+        <a href="/alice/status/1001"><time datetime="2026-08-14T10:00:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetText"><span>Main insight</span></div>
+    </article>
+    <article data-testid="tweet" id="tweet-reply-bob">
+      <div data-testid="User-Name">
+        <span>Alice</span>
+        <a href="/alice"><span>@alice</span></a>
+        <a href="/alice/status/1002"><time datetime="2026-08-14T10:02:00.000Z"></time></a>
+      </div>
+      <div>
+        <span>Replying to </span><a href="/bob"><span>@bob</span></a>
+      </div>
+      <div data-testid="tweetText"><span>Replying to Bob comment</span></div>
+    </article>
+  </div>
+  `;
+  const container = createDomElement(conversationHtml);
+  const replyTweet = container.querySelector('#tweet-reply-bob')!;
+  
+  // Replying text analysis
+  const hasReplyPrefix = replyTweet.textContent.includes('Replying to') || replyTweet.textContent.includes('回复');
+  assert.ok(hasReplyPrefix, 'Reply tweet must contain reply prefix');
+  const replyingLink = replyTweet.querySelector('a[href^="/bob"]');
+  assert.ok(replyingLink, 'Replying link to bob must exist');
+});
+
+test('F14.9: Card UI supports excludedTweetIds filtering, quick exclusion and tweet manager', () => {
+  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  const controlsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Controls.tsx'), 'utf-8');
+  const modalCss = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/modal.css'), 'utf-8');
+
+  // Verify excludedTweetIds filtering in Card.tsx
+  assert.ok(cardContent.includes('config.excludedTweetIds'), 'Card.tsx must read excludedTweetIds');
+  assert.ok(cardContent.includes('thread-exclude-btn'), 'Card.tsx must render on-card quick exclude button');
+  assert.ok(cardContent.includes('onExcludeTweet'), 'Card.tsx must support onExcludeTweet callback');
+
+  // Verify Tweet Manager UI in Controls.tsx
+  assert.ok(controlsContent.includes('tweet-manager-section'), 'Controls.tsx must render tweet manager section');
+  assert.ok(controlsContent.includes('handleToggleExclude'), 'Controls.tsx must support toggle exclude');
+  assert.ok(controlsContent.includes('handleSelectAll'), 'Controls.tsx must support select all');
+  assert.ok(controlsContent.includes('handleSelectCurrentOnly'), 'Controls.tsx must support select current only');
+
+  // Verify modal styling
+  assert.ok(modalCss.includes('.tweet-manager-section'), 'modal.css must style tweet manager section');
+  assert.ok(modalCss.includes('.tweet-manager-item'), 'modal.css must style tweet manager items');
+});
+
 // -------------------------------------------------------------
 // F15: Custom Element & Shadow DOM
 // -------------------------------------------------------------
