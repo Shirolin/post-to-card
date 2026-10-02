@@ -308,6 +308,32 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
     }
   }
 
+  // 3. Logged-out fallback. A real public tweet page was observed to render
+  //    without any data-testid, so neither div[role="group"] nor the reply/like
+  //    testids match. The reply button is still present as a bare anchor, and
+  //    its own row is the correct place to attach the trigger.
+  if (count === 0) {
+    const bareActions = Array.from(
+      document.querySelectorAll(`${TWEET_ARTICLE_SELECTOR} a[role="button"], ${TWEET_ARTICLE_SELECTOR} [role="button"]`)
+    ).filter(el => isTopLevelActionBar(el));
+
+    // The reply action is the first interactive element in a tweet's footer;
+    // anchoring to it keeps the button in the native row without needing any
+    // testid to locate it.
+    const anchor = bareActions.find(el => {
+      const label = (el.textContent || '').trim();
+      return /^(?:回复|Reply|Comment)$/i.test(label);
+    }) || bareActions[0];
+
+    if (anchor && typeof anchor.closest === 'function') {
+      const row = anchor.closest('div') as Element | null;
+      const target = row && row.parentElement ? row.parentElement : anchor;
+      if (injectIntoActionBar(target, onTrigger)) {
+        count++;
+      }
+    }
+  }
+
   return count;
 }
 

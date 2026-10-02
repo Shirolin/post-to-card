@@ -16,12 +16,20 @@ export { getReplyingToHandle, getRetweetedBy };
 /**
  * Locates tweet articles, strongest signal first.
  *
- * `data-testid` is X's own anchor and is the primary choice. The fallbacks
- * matter because every data-testid is absent on logged-out pages, where the
- * whole extension would otherwise silently match nothing.
+ * `data-testid` is X's own anchor and the primary choice. The fallbacks matter
+ * because the DOM was observed to carry no data-testid attributes at all on
+ * logged-out pages, where the primary and the testid-dependent structural
+ * fallback both match nothing. The final entry is the only path that works
+ * there, since a bare `article` inside `main` is still rendered.
  */
-export const TWEET_ARTICLE_SELECTOR =
-  'article[data-testid="tweet"], article[role="article"], [data-testid="cellInnerDiv"] article';
+export const TWEET_ARTICLE_SELECTOR = [
+  'article[data-testid="tweet"]',
+  'article[role="article"]',
+  '[data-testid="cellInnerDiv"] article',
+  // Logged-out fallback: verified against a real public tweet page, where the
+  // only surviving marker is the bare tag inside the main column.
+  'main article',
+].join(', ');
 
 /**
  * Detects whether a tweet article element is an advertisement or sponsored post.

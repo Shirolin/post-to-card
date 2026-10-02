@@ -630,6 +630,12 @@ test('Tier 2.39: the article selector falls back past data-testid', () => {
     TWEET_ARTICLE_SELECTOR.includes('cellInnerDiv'),
     'a structural fallback is required for layouts without either marker'
   );
+  // Verified against a real logged-out tweet page, where the page carried no
+  // data-testid and no role, leaving only the bare tag inside main.
+  assert.ok(
+    TWEET_ARTICLE_SELECTOR.includes('main article'),
+    'a bare main article fallback is required for logged-out pages'
+  );
 });
 
 // -------------------------------------------------------------
