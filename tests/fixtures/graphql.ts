@@ -408,3 +408,64 @@ export const TWEET_DETAIL_VISIBILITY_JSON = JSON.stringify({
     }
   }
 });
+
+/**
+ * A post whose body carries entities. The offsets are real, so the parser's
+ * index walking and URL display rewriting can be pinned.
+ *
+ * body: "See https://t.co/abc123 and #build by @ada_builds ($NVDA)"
+ *         0123456789...           ^4..23  ^28..34   ^38..49    ^51..56
+ */
+export const TWEET_DETAIL_ENTITIES_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-9001',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '9001',
+                      core: {
+                        user_results: {
+                          result: {
+                            legacy: { screen_name: 'ada_builds', name: 'Ada Nakamura' },
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/1/ada.jpg'
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: 'See https://t.co/abc123 and #build by @ada_builds ($NVDA)',
+                        created_at: 'Mon Dec 22 19:00:00 +0000 2025',
+                        entities: {
+                          hashtags: [{ text: 'build', indices: [28, 34] }],
+                          symbols: [{ text: 'NVDA', indices: [51, 56] }],
+                          user_mentions: [{ screen_name: 'ada_builds', indices: [38, 49] }],
+                          urls: [
+                            {
+                              url: 'https://t.co/abc123',
+                              expanded_url: 'https://github.com/post-to-card',
+                              display_url: 'github.com/post-to-card',
+                              indices: [4, 23]
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});

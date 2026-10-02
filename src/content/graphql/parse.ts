@@ -18,6 +18,75 @@ function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+type RichToken = NonNullable<TweetData['richTokens']>[number];
+
+/**
+ * Builds the styled-token view of a body from X's entity ranges.
+ *
+ * X keeps entity offsets against the same string it returns as the body, so the
+ * visible text is reconstructed by walking the ranges in order. URLs are the one
+ * exception: the body carries the t.co redirect while X — and therefore the card
+ * — shows the human-readable `display_url`.
+ *
+ * Returns undefined when the body has no styled segments, so plain posts keep the
+ * simple string path.
+ */
+function parseRichTokens(text: string, entityContainer: unknown): RichToken[] | undefined {
+  if (!text || !isObject(entityContainer)) return undefined;
+
+  const ranges: Array<{ start: number; end: number; token: RichToken }> = [];
+
+  const add = (list: unknown, make: (entity: Json, visible: string) => RichToken) => {
+    if (!Array.isArray(list)) return;
+    for (const raw of list) {
+      if (!isObject(raw)) continue;
+      const indices = Array.isArray(raw.indices) ? raw.indices : null;
+      if (!indices || indices.length < 2) continue;
+      const start = Number(indices[0]);
+      const end = Number(indices[1]);
+      if (!Number.isInteger(start) || !Number.isInteger(end)) continue;
+      if (start < 0 || end > text.length || end <= start) continue;
+      ranges.push({ start, end, token: make(raw, text.slice(start, end)) });
+    }
+  };
+
+  add(entityContainer.hashtags, (_e, visible) => ({ type: 'hashtag', value: visible }));
+  add(entityContainer.symbols, (_e, visible) => ({ type: 'cashtag', value: visible }));
+  add(entityContainer.user_mentions, (_e, visible) => ({ type: 'mention', value: visible }));
+  add(entityContainer.urls, (entity, visible) => ({
+    type: 'link',
+    value: str(entity.display_url) || visible,
+    href: str(entity.expanded_url) || str(entity.url) || undefined,
+  }));
+
+  if (ranges.length === 0) return undefined;
+
+  // Entity order is not guaranteed; overlaps only occur in malformed payloads,
+  // where the first range wins and the rest are dropped.
+  ranges.sort((a, b) => a.start - b.start);
+  const tokens: RichToken[] = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    if (range.start < cursor) continue;
+    if (range.start > cursor) tokens.push({ type: 'text', value: text.slice(cursor, range.start) });
+    tokens.push(range.token);
+    cursor = range.end;
+  }
+  if (cursor < text.length) tokens.push({ type: 'text', value: text.slice(cursor) });
+
+  return tokens;
+}
+
+/**
+ * Picks the entity container that matches the body text in use: long posts keep
+ * their entities beside the note body, shorter posts under `legacy`.
+ */
+function entitySourceFor(noteResult: unknown, legacy: Json): unknown {
+  const noteEntitySet = isObject(noteResult) ? noteResult.entity_set : undefined;
+  if (isObject(noteEntitySet)) return noteEntitySet;
+  return isObject(legacy.entities) ? legacy.entities : undefined;
+}
+
 /**
  * Unwraps a `TweetUnion`: results can be a plain Tweet, a visibility wrapper
  * around one, a tombstone, unavailable, or missing entirely.
@@ -197,9 +266,11 @@ function parseQuote(tweet: Json): QuoteTweetData | undefined {
   if (!quoted.tweet) return undefined;
   const inner = quoted.tweet;
   const legacy = isObject(inner.legacy) ? inner.legacy : {};
+  const quoteText = str(legacy.full_text) || '';
   return {
     author: parseAuthor(inner),
-    text: str(legacy.full_text) || '',
+    text: quoteText,
+    richTokens: parseRichTokens(quoteText, isObject(legacy.entities) ? legacy.entities : undefined),
     timestamp: parseXDate(legacy.created_at),
     media: parseMedia(inner),
     url: inner.rest_id
@@ -231,6 +302,7 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     url: `https://x.com/i/status/${id}`,
     author: parseAuthor(tweet),
     text,
+    richTokens: parseRichTokens(text, entitySourceFor(noteResult, legacy)),
     timestamp: parseXDate(legacy.created_at),
     stats: parseStats(tweet),
     media: parseMedia(tweet),
@@ -252,7 +324,9 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     const noteOriginalResult = isObject(noteOriginal) ? noteOriginal.result : undefined;
 
     data.author = originalAuthor;
-    data.text = (isObject(noteOriginalResult) ? str(noteOriginalResult.text) : undefined) || str(originalLegacy.full_text) || text;
+    const originalText = (isObject(noteOriginalResult) ? str(noteOriginalResult.text) : undefined) || str(originalLegacy.full_text) || text;
+    data.text = originalText;
+    data.richTokens = parseRichTokens(originalText, entitySourceFor(noteOriginalResult, originalLegacy));
     data.id = str(original.rest_id) || str(originalLegacy.id_str) || id;
     data.url = `https://x.com/${originalAuthor.handle.replace(/^@/, '')}/status/${data.id}`;
     // Media can be truncated on the outer object, so read the nested original.

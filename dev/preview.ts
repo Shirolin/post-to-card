@@ -147,6 +147,28 @@ const quoteThreadData: ThreadData = {
   ],
 };
 
+/**
+ * A single post that X is showing translated. Exists so the "translated from"
+ * notice can be reviewed on its own (?translated=1).
+ */
+const translatedThreadData: ThreadData = {
+  author: { name: 'Wilker', handle: '@wilkerverso', avatarUrl: avatar, verified: true },
+  isSingle: true,
+  targetTweetIndex: 0,
+  tweets: [
+    {
+      id: '3001',
+      url: 'https://x.com/wilkerverso/status/3001',
+      author: { name: 'Wilker', handle: '@wilkerverso', avatarUrl: avatar, verified: true },
+      timestamp: '2026-10-02T09:24:00.000Z',
+      text: '大概是我目前最喜欢的游戏战斗！\n\n演出很美，Trokka很美，她的招式很美，竞技场也很美！\n\n挨揍了？\n当然他妈的揍了！',
+      translatedFrom: '翻译自 葡萄牙语',
+      media: [{ type: 'image', url: photo1, aspectRatio: 1.6 }],
+      stats: { replies: '14', reposts: '6', likes: '192', views: '4.6万' },
+    },
+  ],
+};
+
 const container = document.querySelector('post-to-card-container') as HTMLElement & {
   shadow: ShadowRoot;
   mountPoint: HTMLDivElement;
@@ -181,8 +203,14 @@ if (offParts.has('time') || offParts.has('timestamp')) harnessConfig.showTimesta
 if (offParts.has('wm') || offParts.has('watermark')) harnessConfig.showWatermark = false;
 
 // ?quote=1 swaps in a single post that quotes another, so the quote card's
-// presentation can be reviewed on its own.
-const activeThreadData = params.get('quote') === '1' ? quoteThreadData : threadData;
+// presentation can be reviewed on its own. ?translated=1 swaps in a post X is
+// showing translated, to review the "translated from" notice.
+const activeThreadData =
+  params.get('quote') === '1'
+    ? quoteThreadData
+    : params.get('translated') === '1'
+      ? translatedThreadData
+      : threadData;
 
 /**
  * ?a11y=1 runs a scripted focus-trap check against the live modal and writes

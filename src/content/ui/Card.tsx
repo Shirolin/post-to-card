@@ -4,7 +4,7 @@ import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, 
 import { CardQrCode } from './qrcode';
 import { getMediaRadius, getAspectMinHeight } from './themes';
 import { formatLocaleTimestamp, getTranslation } from '../i18n';
-import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn } from 'lucide-preact';
+import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
 
 export interface CardProps {
   data: ThreadData | TweetData;
@@ -406,6 +406,21 @@ function renderRetweetNotice(tweet: TweetData, label: string) {
 }
 
 /**
+ * X's own "translated from <language>" notice, reproduced verbatim above the
+ * body. It is attribution from the source page rather than card UI, so it is not
+ * re-localized into the card's locale.
+ */
+function renderTranslationNotice(tweet: TweetData) {
+  if (!tweet.translatedFrom) return null;
+  return (
+    <div class="translation-notice">
+      <Languages class="translation-notice-icon" size={14} strokeWidth={2} aria-hidden="true" />
+      <span>{tweet.translatedFrom}</span>
+    </div>
+  );
+}
+
+/**
  * True when a stats object would render at least one metric. Kept separate so
  * the card footer can decide whether it has content without duplicating the
  * formatting rules.
@@ -537,6 +552,7 @@ function renderSingleTweet(
     <div class="single-tweet-block">
       {renderRetweetNotice(tweet, t.retweetedBy)}
       {renderAuthorHeader(tweet.author, config.blurAuthor, t.verified)}
+      {renderTranslationNotice(tweet)}
       {renderTweetContent(tweet)}
       {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
       {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, config.locale || 'en-US')}
@@ -588,6 +604,7 @@ function renderThreadTweet(
       <div class="thread-content-col">
         {renderRetweetNotice(tweet, t.retweetedBy)}
         {renderAuthorDetails(tweet.author, config.blurAuthor, t.verified)}
+        {renderTranslationNotice(tweet)}
         {renderTweetContent(tweet)}
         {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
         {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, config.locale || 'en-US')}

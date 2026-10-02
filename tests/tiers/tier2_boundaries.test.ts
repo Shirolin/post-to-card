@@ -638,6 +638,60 @@ test('Tier 2.39: the article selector falls back past data-testid', () => {
   );
 });
 
+test('Tier 2.40: a translated post carries X’s "translated from" notice verbatim', () => {
+  // X renders the notice as the sibling directly above the body: a translate
+  // glyph, the label, and a "show original" toggle. The toggle must not end up
+  // in the extracted label.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div>
+        <svg viewBox="0 0 24 24"></svg>
+        <span>Translated from Portuguese</span>
+        <button aria-label="Show original"><span>Show original</span></button>
+      </div>
+      <div data-testid="tweetText" lang="en"><span>Best combat in a game so far</span></div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  assert.equal(data?.translatedFrom, 'Translated from Portuguese');
+  assert.equal(data?.text, 'Best combat in a game so far');
+});
+
+test('Tier 2.41: an untranslated post has no translation notice', () => {
+  // The row above the body is normally the author line, which must not be
+  // mistaken for a translation notice.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>hello</span></div>
+    </article>
+  `);
+
+  assert.equal(extractTweetData(article)?.translatedFrom, undefined);
+});
+
+test('Tier 2.42: a self-labelled link is tokenized, not dropped as a media permalink', () => {
+  // Regression guard. The old "visible text equals href" test for media
+  // permalinks also swallowed a genuine URL whose label is the URL itself,
+  // which dropped the styled link and left the raw body text unstyled.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/alice"><span>Alice</span></a></div>
+      <div data-testid="tweetText">
+        <span>Try </span>
+        <a href="https://example.com/app?x=1" role="link">https://example.com/app?x=1</a>
+      </div>
+    </article>
+  `);
+
+  const tokens = extractTweetData(article)?.richTokens || [];
+  const link = tokens.find(tk => tk.type === 'link');
+  assert.ok(link, 'a self-labelled URL must survive as a link token');
+  assert.equal(link!.value, 'https://example.com/app?x=1');
+});
+
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 2
 // -------------------------------------------------------------

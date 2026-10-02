@@ -49,6 +49,21 @@
   font-weight: 700;
 }
 
+/* X's own "translated from <language>" notice, reproduced verbatim. */
+.translation-notice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--text-sec);
+  margin-bottom: 8px;
+}
+
+.translation-notice-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
 .quote-card-unavailable {
   padding: 14px 16px;
   display: flex;
@@ -245,6 +260,9 @@
   color: #ffffff;
   --text-sec: #737373;
   --accent: #ffffff;
+  /* The accent is pure white here, so links need their own colour or they
+     vanish into the body text. */
+  --link: #60a5fa;
   --divider: #262626;
   --quote-bg: #0d0d0d;
   --quote-border: #262626;
@@ -349,8 +367,9 @@
    ------------------------------------------------------------- */
 .tweet-text-content {
   font-size: 16.5px;
-  line-height: 1.55;
-  word-break: break-word;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
   white-space: pre-wrap;
   color: inherit;
 }
@@ -359,7 +378,7 @@
 .token-hashtag,
 .token-cashtag,
 .token-link {
-  color: var(--accent, #6366f1);
+  color: var(--link, var(--accent, #6366f1));
   text-decoration: none;
 }
 
@@ -893,9 +912,10 @@
 
 .quote-text {
   font-size: 14.5px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: inherit;
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
   white-space: pre-wrap;
 }
 

@@ -253,10 +253,11 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
         // Skip the trailing media permalink. X serves these from both
         // pic.twitter.com (legacy) and pic.x.com (current); missing the latter
         // let it fall through to the mention branch below and leak into the
-        // rendered body text. The text-equals-href check catches both domains
-        // without hardcoding either.
+        // rendered body text. Match the pic host in either the href or the
+        // visible label — a bare "text equals href" test also swallowed genuine
+        // self-labelled links (e.g. a URL whose label is the URL itself).
         const isMediaPermalink = /pic\.(?:twitter|x)\.com/.test(href) ||
-          (text && (text === href || text.replace(/^https?:\/\//, '') === href.replace(/^https?:\/\//, '')));
+          /pic\.(?:twitter|x)\.com/.test(text);
         if (isMediaPermalink) {
           return;
         }
@@ -871,6 +872,33 @@ export function extractTimestamp(article: Element): string {
 }
 
 /**
+ * Text of X's "translated from <language>" notice, or undefined when the post is
+ * shown in its original language.
+ *
+ * X renders the notice as a row directly above the body: a translate glyph, the
+ * label, and a "show original" toggle button. The row has no data-testid and the
+ * label is localized by X, so it is identified structurally — the sibling
+ * immediately before the body that carries a button. The toggle itself is
+ * dropped because a static card cannot be clicked.
+ */
+export function extractTranslationNotice(tweetTextEl: Element | null | undefined): string | undefined {
+  if (!tweetTextEl) return undefined;
+
+  const notice = tweetTextEl.previousElementSibling;
+  if (!notice || typeof notice.querySelector !== 'function') return undefined;
+
+  // The toggle is what separates this row from any other sibling; a post body is
+  // never preceded by an unrelated button.
+  if (!notice.querySelector('button')) return undefined;
+
+  const label = Array.from(notice.querySelectorAll('span'))
+    .find(span => !(typeof span.closest === 'function' && span.closest('button')))
+    ?.textContent?.trim();
+
+  return label || undefined;
+}
+
+/**
  * Extracts complete, production-grade TweetData model from a tweet article DOM element.
  */
 export function extractTweetData(article: Element): TweetData | null {
@@ -890,6 +918,7 @@ export function extractTweetData(article: Element): TweetData | null {
   const media = extractTweetMedia(article);
   const quotePost = extractQuoteTweet(article);
   const retweetedBy = getRetweetedBy(article);
+  const translatedFrom = validTextEl ? extractTranslationNotice(validTextEl) : undefined;
 
   type CompatibleToken = NonNullable<TweetData['richTokens']>[number];
 
@@ -904,6 +933,7 @@ export function extractTweetData(article: Element): TweetData | null {
     media,
     quotePost,
     retweetedBy: retweetedBy || undefined,
+    translatedFrom,
     isThreadPart: false,
     // Diagnostic only. A rising count of fallback/none values is the early
     // signal that X changed its DOM, ahead of user reports.

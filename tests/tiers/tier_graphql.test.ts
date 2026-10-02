@@ -19,6 +19,7 @@ import {
   TWEET_DETAIL_CURSOR_ONLY_JSON,
   TWEET_DETAIL_VISIBILITY_JSON,
   TWEET_DETAIL_NEW_USER_SHAPE_JSON,
+  TWEET_DETAIL_ENTITIES_JSON,
 } from '../fixtures/graphql.ts';
 
 export interface TestResult {
@@ -188,6 +189,33 @@ test('gql.16: the XHR hook forwards only the arguments the caller supplied', asy
     /init === undefined\s*\?\s*originalFetch\(input\)/.test(source),
     'fetch must also omit init rather than passing an explicit undefined'
   );
+});
+
+test('gql.17: entities become styled tokens and URLs show their display form', () => {
+  // The DOM channel already colours links, mentions, hashtags and cashtags; the
+  // GraphQL channel used to hand back a plain string, so the same post looked
+  // different depending on which channel answered.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_ENTITIES_JSON, 'TweetDetail', 'q1');
+  const tokens = parsed.thread?.tweets[0].richTokens;
+  assert.ok(tokens, 'a body with entities must produce rich tokens');
+
+  assert.deepEqual(tokens, [
+    { type: 'text', value: 'See ' },
+    { type: 'link', value: 'github.com/post-to-card', href: 'https://github.com/post-to-card' },
+    { type: 'text', value: ' and ' },
+    { type: 'hashtag', value: '#build' },
+    { type: 'text', value: ' by ' },
+    { type: 'mention', value: '@ada_builds' },
+    { type: 'text', value: ' (' },
+    { type: 'cashtag', value: '$NVDA' },
+    { type: 'text', value: ')' },
+  ]);
+});
+
+test('gql.18: a body without entities keeps the plain string path', () => {
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1');
+  const first = parsed.thread?.tweets.find((t) => t.id === '1001');
+  assert.equal(first?.richTokens, undefined, 'no entities means no token array');
 });
 
 export async function runTierGraphQL(): Promise<{

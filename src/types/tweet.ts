@@ -53,6 +53,12 @@ export interface TweetData {
    */
   retweetedBy?: string;
   /**
+   * X's own "translated from <language>" notice, verbatim, when the visible body
+   * is a machine translation. Kept as X rendered it because the source-language
+   * name is localized by X and no language code is exposed in the DOM.
+   */
+  translatedFrom?: string;
+  /**
    * Which extraction strategy produced this record. Purely diagnostic: a rising
    * count of `fallback` here is the early warning that X changed its DOM,
    * ahead of user reports.
