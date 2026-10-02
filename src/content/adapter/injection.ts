@@ -7,14 +7,14 @@
 
 import type { ThreadData } from '../../types/tweet';
 import { extractContinuousThread, TWEET_ARTICLE_SELECTOR } from './thread.ts';
-import { loadUserPreferences, STORAGE_KEY } from '../ui/themes';
+import { loadUserPreferences, STORAGE_KEY } from '../ui/themes.ts';
 
 interface CustomObserver {
   observe: (target: Node, options?: MutationObserverInit) => void;
   disconnect: () => void;
 }
 
-import { getTranslation, detectDefaultLocale } from '../i18n';
+import { getTranslation, detectDefaultLocale } from '../i18n.ts';
 
 export const HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn';
 export const VISIBILITY_STYLE_ID = 'post-to-card-visibility-style';
@@ -44,10 +44,12 @@ export function setInjectedButtonVisibility(visible: boolean): void {
         align-self: center !important;
         height: 100% !important;
         margin: auto 0 !important;
+        flex-shrink: 0 !important;
       }
       [data-post-to-card-btn="true"] {
         align-self: center !important;
         margin: auto 0 !important;
+        flex-shrink: 0 !important;
         vertical-align: middle !important;
       }
     `;
@@ -67,17 +69,23 @@ export function setInjectedButtonVisibility(visible: boolean): void {
   }
 }
 
+/**
+ * Lucide's `layout-panel-top`, copied from the installed package so the shape
+ * matches exactly. The previous glyph was the Image icon, whose rounded square
+ * plus circle reads as a camera at this size and was easily confused with X's
+ * own media controls.
+ */
 export const TRIGGER_BUTTON_SVG = `
 <svg viewBox="0 0 24 24" width="18.75" height="18.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
-  <circle cx="9" cy="9" r="2"></circle>
-  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+  <rect width="18" height="7" x="3" y="3" rx="1" ry="1"></rect>
+  <rect width="7" height="7" x="3" y="14" rx="1" ry="1"></rect>
+  <rect width="7" height="7" x="14" y="14" rx="1" ry="1"></rect>
 </svg>
 `.trim();
 
 /**
- * Creates the sleek Post-to-Card trigger button formatted to blend
- * natively into the Twitter/X tweet action bar using Lucide Image icon.
+ * Creates the Post-to-Card trigger button, formatted to blend into the X tweet
+ * action bar while remaining visually distinct from its native controls.
  */
 export function createTriggerButton(onClick: () => void): HTMLElement {
   const t = getTranslation(detectDefaultLocale());
@@ -111,10 +119,13 @@ export function createTriggerButton(onClick: () => void): HTMLElement {
     btn.style.outline = 'none';
     btn.style.cursor = 'pointer';
     btn.style.padding = '0';
+    // Matches the hit area X gives its own action buttons in a measured bar:
+    // a 20px tall row with ~34px of pitch, so the target is wide enough to click
+    // while the box itself does not overflow the row vertically.
     btn.style.width = '34.75px';
-    btn.style.height = '34.75px';
+    btn.style.height = '100%';
     btn.style.minWidth = '34.75px';
-    btn.style.minHeight = '34.75px';
+    btn.style.minHeight = '20px';
     btn.style.flexShrink = '0';
     btn.style.borderRadius = '9999px';
     btn.style.lineHeight = '1';
@@ -187,12 +198,15 @@ export function createActionBarButtonWrapper(): HTMLElement {
   }
 
   if (wrapper.style) {
+    // Sized from a measured action bar rather than copied from a native class.
+    // The live bar is 20px tall with roughly 34px of horizontal pitch between
+    // items, so the wrapper matches that and stays vertically centred without
+    // inheriting a min-height that would overflow the row.
     wrapper.style.display = 'inline-flex';
     wrapper.style.alignItems = 'center';
     wrapper.style.justifyContent = 'center';
     wrapper.style.alignSelf = 'center';
     wrapper.style.height = '100%';
-    wrapper.style.minHeight = '34.75px';
     wrapper.style.maxHeight = '100%';
     wrapper.style.margin = 'auto 0';
     wrapper.style.flexShrink = '0';
@@ -202,7 +216,14 @@ export function createActionBarButtonWrapper(): HTMLElement {
 }
 
 /**
- * Injects the trigger button into a single tweet action bar with deduplication guard.
+ * Injects the trigger button into a single tweet action bar.
+ *
+ * Deduplication is anchored to the owning tweet, not to the container. The
+ * three lookup strategies below resolve to different elements for the same
+ * post — the role=group wrapper, the reply button's parent, and the action row
+ * itself — so a container-level marker let one tweet receive several buttons.
+ * Marking the article makes the guard hold no matter which element a given
+ * strategy lands on.
  */
 export function injectIntoActionBar(
   actionBar: Element,
@@ -210,31 +231,38 @@ export function injectIntoActionBar(
 ): boolean {
   if (!actionBar) return false;
 
-  // Deduplication guard
+  const article = typeof actionBar.closest === 'function'
+    ? actionBar.closest(TWEET_ARTICLE_SELECTOR)
+    : null;
+
+  // Deduplication guard, checked on the container and on its tweet.
   if (
     actionBar.getAttribute('data-post-to-card-injected') === 'true' ||
     (typeof actionBar.querySelector === 'function' && actionBar.querySelector('[data-post-to-card-btn="true"]'))
   ) {
     return false;
   }
+  if (article) {
+    if (
+      article.getAttribute('data-post-to-card-injected') === 'true' ||
+      (typeof article.querySelector === 'function' && article.querySelector('[data-post-to-card-btn="true"]'))
+    ) {
+      return false;
+    }
+  }
 
   actionBar.setAttribute('data-post-to-card-injected', 'true');
+  if (article) article.setAttribute('data-post-to-card-injected', 'true');
 
   const btn = createTriggerButton(() => {
-    let article: Element | null = null;
-    if (typeof btn.closest === 'function') {
-      article = btn.closest(TWEET_ARTICLE_SELECTOR);
-    }
-    if (!article && typeof actionBar.closest === 'function') {
-      article = actionBar.closest(TWEET_ARTICLE_SELECTOR);
-    }
+    const target = article || (typeof btn.closest === 'function' ? btn.closest(TWEET_ARTICLE_SELECTOR) : null);
 
-    if (article) {
+    if (target) {
       if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
         try {
           const evt = typeof CustomEvent === 'function'
-            ? new CustomEvent('post-to-card:trigger', { detail: { article } })
-            : { type: 'post-to-card:trigger', detail: { article } };
+            ? new CustomEvent('post-to-card:trigger', { detail: { article: target } })
+            : { type: 'post-to-card:trigger', detail: { article: target } };
           window.dispatchEvent(evt as Event);
         } catch {
           // Ignore environment differences
@@ -242,26 +270,27 @@ export function injectIntoActionBar(
       }
 
       if (onTrigger) {
-        onTrigger(article);
+        onTrigger(target);
       }
     }
   });
 
   const wrapper = createActionBarButtonWrapper();
 
-  // If Twitter native button wrappers exist as siblings, copy their class list for seamless integration
-  if (typeof actionBar.querySelector === 'function') {
-    const siblingBtn = actionBar.querySelector('button[data-testid="reply"], button[data-testid="like"], button[data-testid="retweet"], button');
-    if (siblingBtn && siblingBtn.parentElement && siblingBtn.parentElement !== actionBar) {
-      const parentClass = siblingBtn.parentElement.getAttribute('class');
-      if (parentClass && typeof wrapper.setAttribute === 'function') {
-        wrapper.setAttribute('class', parentClass);
-      }
-    }
-  }
-
+  // The wrapper no longer copies a native sibling's class list. Doing so pulled
+  // in X's own layout rules — including a min-height and margins that had to be
+  // fought with !important overrides — and made the button shift whenever X
+  // restyled its action bar. It now carries only its own class.
   wrapper.appendChild(btn);
-  actionBar.appendChild(wrapper);
+
+  // Appended, so the trigger lands at the very end of the action row, after
+  // share. This is the position it has always occupied and is the intended
+  // one: keeping it out of the engagement group stops it reading as a fifth
+  // metric, and the bar is a single space-between flex row with no separators
+  // to align against.
+  if (typeof actionBar.appendChild === 'function') {
+    actionBar.appendChild(wrapper);
+  }
   return true;
 }
 
@@ -274,11 +303,14 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
   }
 
   // 1. Primary selector: the action group of a top-level tweet.
-  //    `div[role="group"]` is a generic container that also occurs inside quoted
-  //    posts, so a group nested in a quote is skipped — otherwise the button
-  //    would appear inside the quoted card and would extract the inner tweet.
+  //
+  //    `div[role="group"]` is a generic container that is not specific to the
+  //    action bar: it also appears inside media players and quoted posts. A bare
+  //    match therefore attaches the trigger to the photo or video block instead
+  //    of the action row. Only a group that actually holds the engagement
+  //    controls qualifies, and each tweet contributes exactly one candidate.
   const selector = `${TWEET_ARTICLE_SELECTOR} div[role="group"]:not([data-post-to-card-injected="true"])`;
-  const actionBars = Array.from(document.querySelectorAll(selector)).filter(isTopLevelActionBar);
+  const actionBars = findActionBars(selector);
 
   let count = 0;
   for (const bar of actionBars) {
@@ -287,7 +319,8 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
     }
   }
 
-  // 2. Secondary fallback: if no group matched, locate via tweet action buttons
+  // 2. Secondary fallback: only runs when the primary selector matched nothing
+  //    anywhere on the page, so it cannot double-inject alongside stage 1.
   if (count === 0) {
     const actionButtons = Array.from(
       document.querySelectorAll(
@@ -310,31 +343,86 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
 
   // 3. Logged-out fallback. A real public tweet page was observed to render
   //    without any data-testid, so neither div[role="group"] nor the reply/like
-  //    testids match. The reply button is still present as a bare anchor, and
-  //    its own row is the correct place to attach the trigger.
+  //    testids match. The engagement controls are still present, so the trigger
+  //    is anchored to the row that holds them rather than to an arbitrary
+  //    role=button, which on a media-rich tweet can sit inside the photo block.
   if (count === 0) {
-    const bareActions = Array.from(
-      document.querySelectorAll(`${TWEET_ARTICLE_SELECTOR} a[role="button"], ${TWEET_ARTICLE_SELECTOR} [role="button"]`)
-    ).filter(el => isTopLevelActionBar(el));
+    const articles = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR));
 
-    // The reply action is the first interactive element in a tweet's footer;
-    // anchoring to it keeps the button in the native row without needing any
-    // testid to locate it.
-    const anchor = bareActions.find(el => {
-      const label = (el.textContent || '').trim();
-      return /^(?:回复|Reply|Comment)$/i.test(label);
-    }) || bareActions[0];
+    for (const article of articles) {
+      if (article.getAttribute('data-post-to-card-injected') === 'true') continue;
 
-    if (anchor && typeof anchor.closest === 'function') {
-      const row = anchor.closest('div') as Element | null;
-      const target = row && row.parentElement ? row.parentElement : anchor;
-      if (injectIntoActionBar(target, onTrigger)) {
+      // Locate the engagement row by the controls it contains, in either the
+      // testid form or the labelled form seen when logged out.
+      const controls = Array.from(article.querySelectorAll('[role="button"], a[role="link"]'))
+        .filter(el => isTopLevelActionBar(el))
+        .filter(el => {
+          const label = (el.getAttribute('aria-label') || el.textContent || '').trim();
+          return /^(?:回复|Reply|Comment|转帖|Repost|Retweet|喜欢|Like)\b/i.test(label) || /^\d/.test(label);
+        });
+
+      if (controls.length === 0) continue;
+
+      // Group the controls and attach to the common container they live in.
+      const row = typeof controls[0].closest === 'function'
+        ? controls[0].closest('div[role="group"]') || controls[0].parentElement?.parentElement
+        : null;
+      const target = row || controls[0].parentElement;
+      if (target && injectIntoActionBar(target, onTrigger)) {
         count++;
       }
     }
   }
 
   return count;
+}
+
+/**
+ * Resolves the action bar for every tweet, at most one per tweet.
+ *
+ * `div[role="group"]` is not unique to the action row: media players and quoted
+ * posts contain their own. Matching them put the trigger on the photo block.
+ * A real action bar is identified by the engagement controls it holds, so
+ * candidates are grouped by owning tweet and only the qualifying one is kept.
+ */
+function findActionBars(selector: string): Element[] {
+  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return [];
+
+  const candidates = Array.from(document.querySelectorAll(selector)).filter(isTopLevelActionBar);
+  const byArticle = new Map<Element, Element>();
+
+  for (const candidate of candidates) {
+    if (typeof candidate.closest !== 'function') continue;
+    const article = candidate.closest(TWEET_ARTICLE_SELECTOR);
+    if (!article) continue;
+
+    const existing = byArticle.get(article);
+    // Prefer a group that actually contains the engagement controls.
+    if (!existing || isActionBar(candidate)) {
+      if (!existing || !isActionBar(existing) || isActionBar(candidate)) {
+        byArticle.set(article, candidate);
+      }
+    }
+  }
+
+  return Array.from(byArticle.values());
+}
+
+/**
+ * True when a group holds the reply, retweet or like controls, which is what
+ * distinguishes the action bar from a media player or quote container.
+ */
+export function isActionBar(el: Element): boolean {
+  if (typeof el.querySelector !== 'function') return false;
+  if (
+    el.querySelector('button[data-testid="reply"], button[data-testid="retweet"], button[data-testid="unretweet"], button[data-testid="like"], button[data-testid="unlike"]')
+  ) {
+    return true;
+  }
+  // The engagement controls are always present on a live bar; the aria-label
+  // aggregates their counts and is used when the testids are absent.
+  const label = typeof el.getAttribute === 'function' ? el.getAttribute('aria-label') || '' : '';
+  return /\d/.test(label) && /回复|Reply|转帖|Repost|Retweet|喜欢|Like/i.test(label);
 }
 
 /**

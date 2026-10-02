@@ -1,5 +1,5 @@
 import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig } from '../../types/card';
-import { detectDefaultLocale, sanitizeLocale } from '../i18n';
+import { detectDefaultLocale, sanitizeLocale } from '../i18n.ts';
 export { sanitizeLocale };
 
 export interface ThemeTokens {

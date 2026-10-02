@@ -65,6 +65,30 @@ export const FOUR_PHOTOS_HTML = `
 </article>
 `;
 
+/**
+ * A media-rich tweet. Observed on a live two-image post: the media block also
+ * carries a role="group", so a bare group match attaches the trigger to the
+ * photo area instead of the action row.
+ */
+export const MEDIA_WITH_INNER_GROUP_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name"><a href="/user/status/8010"><time datetime="2026-07-01T00:00:00.000Z"></time></a></div>
+  <div data-testid="tweetPhoto">
+    <div role="group" aria-label="图片 1 / 2">
+      <img src="https://pbs.twimg.com/media/left.jpg?format=jpg&name=small" alt="Left">
+    </div>
+    <div role="group" aria-label="图片 2 / 2">
+      <img src="https://pbs.twimg.com/media/right.jpg?format=jpg&name=small" alt="Right">
+    </div>
+  </div>
+  <div role="group" aria-label="8 回复、6 次转帖、68 喜欢、4637 次观看">
+    <div><button data-testid="reply" aria-label="8 回复。回复"></button></div>
+    <div><button data-testid="retweet" aria-label="6 次转帖。转帖"></button></div>
+    <div><button data-testid="like" aria-label="68 喜欢次数。喜欢"></button></div>
+  </div>
+</article>
+`;
+
 export const LEGACY_PHOTO_URL_HTML = `
 <article data-testid="tweet">
   <div data-testid="User-Name">

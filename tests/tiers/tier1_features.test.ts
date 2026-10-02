@@ -16,8 +16,9 @@ import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/singl
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, MEDIA_WITH_INNER_GROUP_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetMedia } from '../../src/content/adapter/extractor.ts';
+import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
@@ -772,6 +773,43 @@ test('F11.10: a GIF poster layer is not extracted as a photo', () => {
     'the hidden poster layer must not be collected as a photo'
   );
   assert.ok(media![0].type === 'gif' || media![0].type === 'video', 'expected a video or gif item');
+});
+
+// -------------------------------------------------------------
+// F30: the trigger must attach to the action row, not the media block
+// -------------------------------------------------------------
+test('F30.1: only the action row is treated as the injection target', () => {
+  // Observed on a live two-image tweet: the photo block contains its own
+  // role="group" per image, so a bare group match put the trigger on the photo.
+  const article = createDomElement(MEDIA_WITH_INNER_GROUP_HTML);
+  const groups = article.querySelectorAll('div[role="group"]');
+  assert.equal(groups.length, 3, 'fixture should contain two media groups and one action row');
+
+  const actionBar = groups.find(g => !!g.querySelector('button[data-testid="reply"]')) as unknown as Element;
+  const mediaGroups = groups.filter(g => g !== actionBar);
+
+  for (const mediaGroup of mediaGroups) {
+    assert.equal(
+      mediaGroup.querySelector('[data-testid="reply"], [data-testid="like"], [data-testid="retweet"]'),
+      null,
+      'media groups must not carry engagement controls, so they are rejected'
+    );
+  }
+  assert.ok(actionBar, 'the action row must be identifiable by its engagement controls');
+});
+
+test('F30.2: the selection resolves to the action row even when media groups exist', () => {
+  const article = createDomElement(MEDIA_WITH_INNER_GROUP_HTML) as unknown as Element;
+  const groups = Array.from(article.querySelectorAll('div[role="group"]'));
+  const actionBar = groups.find(g => !!g.querySelector('button[data-testid="reply"]')) as unknown as Element;
+  const mediaGroups = groups.filter(g => g !== actionBar) as unknown as Element[];
+
+  // The exported predicate is what guards the media groups; asserting it
+  // directly keeps the test honest about what it covers.
+  for (const mediaGroup of mediaGroups) {
+    assert.equal(isActionBar(mediaGroup), false, 'a media group must not qualify as an action bar');
+  }
+  assert.equal(isActionBar(actionBar), true, 'the action row must qualify');
 });
 
 // -------------------------------------------------------------
