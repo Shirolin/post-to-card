@@ -4,7 +4,7 @@ import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, 
 import { CardQrCode } from './qrcode';
 import { getMediaRadius, getAspectMinHeight } from './themes';
 import { formatLocaleTimestamp, getTranslation } from '../i18n';
-import { Sparkles } from 'lucide-preact';
+import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn } from 'lucide-preact';
 
 export interface CardProps {
   data: ThreadData | TweetData;
@@ -434,33 +434,25 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
     <div class="stats-row">
       {replyStr && (
         <span class="stat-item" title={`${replyStr} ${t.replies}`}>
-          <svg class="stat-icon" viewBox="0 0 24 24">
-            <path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.24c-4.426 0-8.01-3.58-8.01-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.32 2.688 6.01 6.005 6.01h2.245v2.22l4.908-2.72c2.032-1.12 3.342-3.26 3.342-5.51 0-3.39-2.75-6-6.134-6H9.756z" />
-          </svg>
+          <MessageCircle class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
           {replyStr}
         </span>
       )}
       {repostStr && (
         <span class="stat-item" title={`${repostStr} ${t.reposts}`}>
-          <svg class="stat-icon" viewBox="0 0 24 24">
-            <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 20.12l-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14z" />
-          </svg>
+          <Repeat2 class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
           {repostStr}
         </span>
       )}
       {likeStr && (
         <span class="stat-item" title={`${likeStr} ${t.likes}`}>
-          <svg class="stat-icon" viewBox="0 0 24 24">
-            <path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-2.428.13-4.246 2.05-4.297 4.56-.057 2.81 1.636 5.86 4.965 8.79 2.222 1.96 4.675 3.34 4.877 3.45l.154.09.153-.09c.203-.11 2.656-1.49 4.877-3.45 3.33-2.93 5.023-5.98 4.966-8.79-.052-2.51-1.87-4.43-4.298-4.56zm-4.694 14.55C10.74 19.33 3.99 14.99 4.007 10.08c.03-1.46 1.056-2.57 2.404-2.65.89-.05 1.97.35 2.923 1.65l1.67 2.27 1.67-2.27c.952-1.3 2.032-1.7 2.922-1.65 1.348.08 2.374 1.19 2.404 2.65.018 4.91-6.733 9.25-7.996 9.97z" />
-          </svg>
+          <Heart class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
           {likeStr}
         </span>
       )}
       {viewsStr && (
         <span class="stat-item" title={`${viewsStr} ${t.views}`}>
-          <svg class="stat-icon" viewBox="0 0 24 24">
-            <path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7h2v7h-2z" />
-          </svg>
+          <ChartNoAxesColumn class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
           {viewsStr}
         </span>
       )}

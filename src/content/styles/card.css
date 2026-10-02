@@ -1081,7 +1081,7 @@
   height: 15px;
   display: inline-block;
   vertical-align: middle;
-  fill: currentColor;
+  flex-shrink: 0;
 }
 
 .card-footer-right {
