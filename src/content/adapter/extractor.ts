@@ -543,20 +543,33 @@ export function extractVideoMedia(container: Element): MediaItem | null {
 }
 
 /**
- * True when an image is a hidden layer belonging to a video player rather than a
- * photo the author attached.
- *
- * Observed on a live GIF post: the poster frame sits inside the same
- * tweetPhoto wrapper, at `opacity: 0` and `z-index: -1`, behind the <video>.
- * Counting it as a photo would render a GIF as both an image and a video.
+ * True when an image is a video's poster frame rather than a photo the author
+ * attached. Counting one as a photo renders the same asset twice — once through
+ * the photo pass and again as the video item — so both video and GIF posts must
+ * exclude it.
  */
 function isMediaPosterLayer(img: Element): boolean {
+  // 1. X names video thumbnails distinctly from user photos (which live under
+  //    /media/), so the source is the most direct signal. A GIF's poster is
+  //    visible (no opacity:0), which is why the structural checks alone missed
+  //    it and the same frame rendered twice.
+  const src = img.getAttribute('src') || '';
+  if (/(?:amplify|ext_tw|tweet)_video_thumb|video_preview/.test(src)) return true;
+
   if (typeof img.closest === 'function') {
-    // A video inside the same container means this img is the poster, not a photo.
-    if (img.closest('div[data-testid="tweetPhoto"] video')) return true;
+    // 2. A <video> in the same tweetPhoto wrapper means this img is its poster.
+    //    `closest('… video')` cannot express this: closest only matches
+    //    ancestors, and an <img>'s ancestors are never a <video>, so the check
+    //    silently never fired and regular video posters were collected as
+    //    photos. The wrapper is located first, then queried for the video.
+    const photoWrapper = img.closest('div[data-testid="tweetPhoto"]');
+    if (photoWrapper && typeof photoWrapper.querySelector === 'function' && photoWrapper.querySelector('video')) {
+      return true;
+    }
     if (img.closest('div[data-testid="videoPlayer"], div[data-testid="videoComponent"]')) return true;
   }
 
+  // 3. A hidden poster layer layered behind the video.
   const style = img.getAttribute('style') || '';
   if (/opacity:\s*0(?:[;\s]|$)/i.test(style)) return true;
 
@@ -602,6 +615,17 @@ export function extractTweetMedia(article: Element): MediaItem[] | undefined {
   if (items.length < 4) {
     const videoMedia = extractVideoMedia(article);
     if (videoMedia) {
+      // The video's poster is also an <img> in the tweet, so the photo pass can
+      // collect the very same asset. Listing it twice renders the frame twice —
+      // once plain and once with the play badge — so an exact match is dropped
+      // in favour of the video item, which carries the duration.
+      const posterKey = videoMedia.originalUrl || videoMedia.url;
+      const duplicateIndex = items.findIndex(
+        (item) => item.type === 'image' && (item.originalUrl || item.url) === posterKey
+      );
+      if (duplicateIndex >= 0) {
+        items.splice(duplicateIndex, 1);
+      }
       items.push(videoMedia);
     }
   }

@@ -131,6 +131,28 @@ export const GIF_POSTER_LAYER_HTML = `
 `;
 
 /**
+ * A regular video post whose poster frame is *visible* (no `opacity: 0`), as
+ * opposed to the hidden GIF layer above.
+ *
+ * The poster is a plain `<img>` inside the tweetPhoto wrapper with the `<video>`
+ * beside it, so the photo pass collects the frame and the video pass collects it
+ * again as the poster. The card then showed the same frame twice: once plain and
+ * once with the duration badge.
+ */
+export const VIDEO_VISIBLE_POSTER_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8011"><time datetime="2026-10-02T01:43:00.000Z"></time></a>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/tweet_video_thumb/video_frame.jpg" alt="">
+    <video poster="https://pbs.twimg.com/tweet_video_thumb/video_frame.jpg"></video>
+    <button data-testid="playButton" aria-label="播放"></button>
+  </div>
+</article>
+`;
+
+/**
  * A tweet that pairs a photo with a GIF side by side, the layout that previously
  * rendered as the GIF only because video detection short-circuited the photos.
  */

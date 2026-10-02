@@ -16,7 +16,7 @@ import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/singl
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, MEDIA_WITH_INNER_GROUP_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetMedia } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
@@ -773,6 +773,19 @@ test('F11.10: a GIF poster layer is not extracted as a photo', () => {
     'the hidden poster layer must not be collected as a photo'
   );
   assert.ok(media![0].type === 'gif' || media![0].type === 'video', 'expected a video or gif item');
+});
+
+test('F11.11: a visible video poster is not also collected as a photo', () => {
+  // Regression guard. A regular video's poster is visible (no opacity:0), so the
+  // structural checks that caught the hidden GIF layer missed it and the frame
+  // rendered twice: once as a photo, once as the video item with the duration.
+  const tweet = createDomElement(VIDEO_VISIBLE_POSTER_HTML);
+  const media = extractTweetMedia(tweet as unknown as Element);
+
+  assert.ok(media, 'expected the video to be extracted');
+  assert.equal(media!.length, 1, 'a video post must yield exactly one item');
+  assert.equal(media![0].type, 'video', 'the item must be the video, not its poster');
+  assert.match(media![0].url, /video_frame/, 'the poster frame supplies the still');
 });
 
 // -------------------------------------------------------------
