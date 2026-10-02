@@ -811,17 +811,24 @@
 }
 
 /* -------------------------------------------------------------
-   Quote Tweet Box — reads as a nested, secondary post
+   Quote Tweet Box — a nested surface, not a blockquote.
+
+   An earlier version carried a 3px theme-accent stripe down the left edge.
+   That is the stock "blockquote" chrome every generator emits, and it fought
+   the card for attention while encoding nothing: the nested author row already
+   says "another post". The quote now reads as a recessed panel — same family as
+   the card, one step quieter — and the hierarchy comes from surface, spacing
+   and type size rather than an arbitrary colour bar.
    ------------------------------------------------------------- */
 .quote-card {
-  margin-top: 4px;
-  padding: 11px 13px 12px;
+  position: relative;
+  margin-top: 12px;
+  padding: 12px 14px 13px;
   background: var(--quote-bg, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--quote-border, rgba(255, 255, 255, 0.1));
-  border-left: 3px solid var(--quote-accent, var(--accent, #6366f1));
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   overflow: hidden;
 }
 
