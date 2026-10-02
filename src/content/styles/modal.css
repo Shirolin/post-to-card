@@ -1,9 +1,15 @@
 /* ==========================================================================
    Post-to-Card Modal & Shell Styles
    100% self-contained styles for Shadow DOM isolation
+
+   Accent palette is aligned with Twitter/X dark mode so the overlay reads as
+   part of the host page rather than a foreign layer.
    ========================================================================== */
 
-:host {
+/* `.ptc-scope` mirrors the token host for the dev harness, which renders the
+   panels outside a shadow root where `:host` cannot match. */
+:host,
+.ptc-scope {
   all: initial;
   display: block;
   position: fixed;
@@ -14,6 +20,29 @@
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
   box-sizing: border-box;
+
+  /* Design tokens */
+  --ptc-accent: #1d9bf0;
+  --ptc-accent-hover: #1a8cd8;
+  --ptc-accent-soft: rgba(29, 155, 240, 0.15);
+  --ptc-accent-ring: rgba(29, 155, 240, 0.45);
+  --ptc-danger: #f4212e;
+  --ptc-success: #00ba7c;
+
+  --ptc-bg-shell: #000000;
+  --ptc-bg-panel: #16171b;
+  --ptc-bg-raised: rgba(255, 255, 255, 0.04);
+  --ptc-bg-hover: rgba(255, 255, 255, 0.08);
+  --ptc-border: rgba(255, 255, 255, 0.1);
+  --ptc-border-strong: rgba(255, 255, 255, 0.2);
+
+  --ptc-text: #e7e9ea;
+  --ptc-text-muted: #71767b;
+  --ptc-text-dim: #536471;
+
+  --ptc-radius-sm: 6px;
+  --ptc-radius: 10px;
+  --ptc-radius-lg: 16px;
 }
 
 *, *::before, *::after {
@@ -22,22 +51,33 @@
   padding: 0;
 }
 
+/* Single visible focus treatment for every interactive element. */
+:is(button, [role="button"], [role="switch"], [role="radio"], [role="checkbox"], a):focus {
+  outline: none;
+}
+
+:is(button, [role="button"], [role="switch"], [role="radio"], [role="checkbox"], a):focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: 2px;
+  border-radius: var(--ptc-radius-sm);
+}
+
 /* -------------------------------------------------------------
    Modal Backdrop
    ------------------------------------------------------------- */
 #post-to-card-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   overflow: hidden;
   z-index: 2147483647;
-  animation: ptc-fade-in 0.18s ease-out;
+  animation: ptc-fade-in 0.16s ease-out;
 }
 
 @keyframes ptc-fade-in {
@@ -48,7 +88,7 @@
 @keyframes ptc-scale-in {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(8px);
+    transform: scale(0.975) translateY(6px);
   }
   to {
     opacity: 1;
@@ -64,14 +104,14 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 1120px;
+  max-width: 1140px;
   max-height: 92vh;
   height: 90vh;
-  background: #121316;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  color: #f3f4f6;
+  background: var(--ptc-bg-shell);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius-lg);
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.85);
+  color: var(--ptc-text);
   overflow: hidden;
   animation: ptc-scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -83,18 +123,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  gap: 16px;
+  padding: 12px 16px 12px 18px;
+  border-bottom: 1px solid var(--ptc-border);
+  background: var(--ptc-bg-panel);
   flex-shrink: 0;
 }
 
 .modal-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 16px;
-  font-weight: 600;
+  gap: 9px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: #ffffff;
 }
@@ -103,12 +145,28 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--ptc-accent);
   color: #ffffff;
-  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.modal-brand-name {
+  white-space: nowrap;
+}
+
+.modal-header-summary {
+  padding-left: 10px;
+  margin-left: 2px;
+  border-left: 1px solid var(--ptc-border);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ptc-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .modal-close-btn {
@@ -117,24 +175,23 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.06);
-  color: #9ca3af;
+  background: transparent;
+  color: var(--ptc-text-muted);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .modal-close-btn svg {
-  width: 16px;
-  height: 16px;
   stroke: currentColor;
   stroke-width: 2px;
 }
 
 .modal-close-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--ptc-bg-hover);
   color: #ffffff;
 }
 
@@ -151,33 +208,70 @@
 /* Left Stage / Preview Pane */
 .preview-stage {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000000;
+  overflow: hidden;
+}
+
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--ptc-border);
+  background: var(--ptc-bg-panel);
+  flex-shrink: 0;
+}
+
+.preview-toolbar-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ptc-text-muted);
+}
+
+/* Top-aligned: a tall thread must start at the top of the scroll area rather
+   than being centered and clipped out of view. */
+.preview-viewport {
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 32px 24px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: radial-gradient(circle at 50% 30%, rgba(30, 32, 40, 0.6) 0%, rgba(12, 13, 16, 0.95) 100%);
+  padding: 24px;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(29, 155, 240, 0.07) 0%, transparent 55%),
+    #000000;
 }
 
-.preview-stage::-webkit-scrollbar {
-  width: 8px;
+.preview-viewport::-webkit-scrollbar {
+  width: 10px;
 }
-.preview-stage::-webkit-scrollbar-track {
+.preview-viewport::-webkit-scrollbar-track {
   background: transparent;
 }
-.preview-stage::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+.preview-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
-.preview-stage::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+.preview-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+  background-clip: content-box;
 }
 
-.preview-wrapper {
+/* `zoom` scales layout space too, so the scroll container stays accurate
+   without transform hacks that would blur the card. */
+.preview-scale {
   display: flex;
   justify-content: center;
-  width: 100%;
+  flex-shrink: 0;
 }
 
 /* Right Controls Panel */
@@ -186,39 +280,76 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 24px;
-  background: #16171b;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  overflow-y: auto;
+  background: var(--ptc-bg-panel);
+  border-left: 1px solid var(--ptc-border);
+  overflow: hidden;
 }
 
-.controls-panel::-webkit-scrollbar {
-  width: 6px;
+/* Scrolling region sits between the panel edges; the export bar stays pinned. */
+.controls-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 20px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.controls-panel::-webkit-scrollbar-track {
+
+.controls-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.controls-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-.controls-panel::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
+.controls-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.controls-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+  background-clip: content-box;
 }
 
 .control-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
 }
 
 .control-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #9ca3af;
+  letter-spacing: 0.06em;
+  color: var(--ptc-text-muted);
+}
+
+.control-label svg {
+  flex-shrink: 0;
+}
+
+.control-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ptc-accent-soft);
+  color: var(--ptc-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.control-hint {
+  font-size: 11px;
+  color: var(--ptc-text-dim);
 }
 
 /* Theme Swatches Grid */
@@ -233,192 +364,351 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 8px 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  padding: 6px 5px 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ptc-radius);
   cursor: pointer;
-  transition: all 0.15s ease;
-  color: #d1d5db;
-  font-size: 11px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  color: var(--ptc-text-muted);
+  font-family: inherit;
 }
 
 .theme-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--ptc-bg-raised);
 }
 
 .theme-button.is-active {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: #6366f1;
+  background: var(--ptc-accent-soft);
+  border-color: var(--ptc-accent);
   color: #ffffff;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
 }
 
 .theme-swatch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--ptc-border);
+  transition: border-color 0.15s ease;
 }
 
-/* Button Group (Padding, Radius, Aspect Ratio) */
+.theme-button:hover .theme-swatch {
+  border-color: var(--ptc-border-strong);
+}
+
+/* Dark swatches need a light ring to read as a distinct surface. */
+.theme-swatch-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--ptc-accent);
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+.theme-button-label {
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Button Group (Language, Image Fit, Layout, Padding, Radius, Ratio, Zoom) */
 .btn-group {
   display: flex;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 2px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius);
+  padding: 3px;
   gap: 2px;
+}
+
+.btn-group-compact {
+  padding: 2px;
+}
+/* Compact groups size to content instead of stretching, so short labels
+   like "100%" are never clipped by the ellipsis rule. */
+.btn-group-compact {
+  width: auto;
+  flex: 0 0 auto;
+}
+.btn-group-compact .btn-group-item {
+  flex: 0 0 auto;
+  padding: 4px 11px;
+  font-size: 11px;
+  letter-spacing: 0.01em;
 }
 
 .btn-group-item {
   flex: 1;
-  padding: 7px 10px;
+  padding: 7px 6px;
   background: transparent;
   border: none;
-  border-radius: 6px;
-  color: #9ca3af;
+  border-radius: 7px;
+  color: var(--ptc-text-muted);
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
-.btn-group-item:hover {
+.btn-group-item:hover:not(.is-active) {
+  background: var(--ptc-bg-raised);
   color: #ffffff;
 }
 
 .btn-group-item.is-active {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--ptc-accent);
   color: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.btn-group-item:focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: 1px;
 }
 
 /* Feature Toggles List */
 .toggles-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
 .toggle-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 2px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ptc-border);
+  font-family: inherit;
   cursor: pointer;
   user-select: none;
+  text-align: left;
   transition: background 0.15s ease;
 }
 
+.toggle-item:last-child {
+  border-bottom: none;
+}
+
 .toggle-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .toggle-title {
-  font-size: 13px;
-  color: #e5e7eb;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ptc-text);
 }
 
 .toggle-switch {
   position: relative;
-  width: 36px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
+  width: 38px;
+  height: 21px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  flex-shrink: 0;
   transition: background 0.2s ease;
 }
 
 .toggle-switch.is-checked {
-  background: #6366f1;
+  background: var(--ptc-accent);
 }
 
 .toggle-thumb {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   background: #ffffff;
   border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .toggle-switch.is-checked .toggle-thumb {
-  transform: translateX(16px);
+  transform: translateX(17px);
 }
 
-/* Export Actions */
-.export-actions {
+/* -------------------------------------------------------------
+   Collapsible Low-Frequency Settings
+   ------------------------------------------------------------- */
+.more-section {
+  gap: 0;
+}
+
+.more-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 10px;
+  background: var(--ptc-bg-raised);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius);
+  color: var(--ptc-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.more-toggle:hover {
+  background: var(--ptc-bg-hover);
+  border-color: var(--ptc-border-strong);
+}
+
+.more-chevron {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--ptc-text-muted);
+  flex-shrink: 0;
+}
+
+.more-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.more-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 18px;
+  padding: 16px 2px 2px;
+  animation: ptc-reveal 0.18s ease-out;
+}
+
+.more-body[hidden] {
+  display: none;
+}
+
+@keyframes ptc-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* -------------------------------------------------------------
+   Sticky Export Action Bar
+   ------------------------------------------------------------- */
+.export-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  background: var(--ptc-bg-panel);
+  border-top: 1px solid var(--ptc-border);
+  box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* Fixed-height live region keeps the buttons from shifting when a
+   status message appears or clears. */
+.status-region {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16px;
+}
+
+.status-message {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--ptc-success);
+  animation: ptc-fade-in 0.15s ease-out;
+}
+
+.status-message.is-error {
+  color: var(--ptc-danger);
+}
+
+.export-buttons {
+  display: flex;
+  gap: 8px;
 }
 
 .btn-primary {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 12px 18px;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: var(--ptc-accent);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--ptc-radius);
   color: #ffffff;
+  font-family: inherit;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.5);
+.btn-primary:hover:not(:disabled) {
+  background: var(--ptc-accent-hover);
 }
 
-.btn-primary:active {
-  transform: translateY(0);
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 11px 18px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  color: #e5e7eb;
-  font-size: 13px;
-  font-weight: 500;
+  width: 46px;
+  flex-shrink: 0;
+  padding: 12px 0;
+  background: var(--ptc-bg-raised);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius);
+  color: var(--ptc-text);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+.btn-secondary:hover:not(:disabled) {
+  background: var(--ptc-bg-hover);
+  border-color: var(--ptc-border-strong);
 }
 
-.status-message {
-  font-size: 12px;
-  text-align: center;
-  color: #10b981;
-  min-height: 18px;
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: ptc-spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 
-.status-message.is-error {
-  color: #ef4444;
+@keyframes ptc-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* -------------------------------------------------------------
@@ -426,8 +716,8 @@
    ------------------------------------------------------------- */
 .tweet-manager-section {
   background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius-lg);
   padding: 12px;
   gap: 10px;
 }
@@ -436,112 +726,129 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   width: 100%;
 }
 
 .tweet-manager-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .btn-text-action {
   background: transparent;
   border: none;
-  color: #818cf8;
-  font-size: 11px;
-  font-weight: 500;
+  color: var(--ptc-accent);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-  line-height: 1;
+  padding: 3px 6px;
+  border-radius: var(--ptc-radius-sm);
+  transition: background 0.15s ease;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .btn-text-action:hover:not(:disabled) {
-  color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.15);
+  background: var(--ptc-accent-soft);
 }
 
 .btn-text-action:disabled {
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--ptc-text-dim);
   cursor: not-allowed;
 }
 
 .tweet-manager-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 180px;
+  gap: 4px;
+  max-height: 176px;
   overflow-y: auto;
   padding-right: 2px;
 }
 
 .tweet-manager-list::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 .tweet-manager-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
 }
 
 .tweet-manager-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ptc-radius);
+  font-family: inherit;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, opacity 0.15s ease;
   user-select: none;
+  text-align: left;
 }
 
-.tweet-manager-item:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.12);
+.tweet-manager-item:hover:not(:disabled) {
+  background: var(--ptc-bg-raised);
+}
+
+.tweet-manager-item:disabled {
+  cursor: not-allowed;
+}
+
+.tweet-manager-item.is-included {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .tweet-manager-item.is-excluded {
-  opacity: 0.55;
-  background: rgba(255, 255, 255, 0.015);
-  border-color: rgba(255, 255, 255, 0.04);
+  opacity: 0.5;
+}
+
+.tweet-manager-item.is-excluded .tweet-snippet {
+  text-decoration: line-through;
 }
 
 .tweet-manager-item.is-target {
-  border-left: 2px solid #6366f1;
+  border-left: 2px solid var(--ptc-accent);
 }
 
 .tweet-checkbox {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--ptc-border-strong);
   background: transparent;
   flex-shrink: 0;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
   color: #ffffff;
 }
 
 .tweet-checkbox.is-checked {
-  background: #6366f1;
-  border-color: #6366f1;
+  background: var(--ptc-accent);
+  border-color: var(--ptc-accent);
 }
 
 .tweet-index-badge {
   font-size: 11px;
   font-weight: 700;
-  color: #9ca3af;
+  color: var(--ptc-text-muted);
   flex-shrink: 0;
+  min-width: 18px;
 }
 
 .tweet-snippet {
   font-size: 11.5px;
-  color: #e5e7eb;
+  color: var(--ptc-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -550,42 +857,57 @@
 }
 
 .tweet-manager-item.is-excluded .tweet-snippet {
-  text-decoration: line-through;
-  color: #9ca3af;
+  color: var(--ptc-text-muted);
 }
 
 .tweet-media-indicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-size: 10px;
-  color: #9ca3af;
+  font-weight: 600;
+  color: var(--ptc-text-muted);
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.06);
-  padding: 1px 4px;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 2px 5px;
   border-radius: 4px;
 }
 
-.tweet-excluded-tag {
-  font-size: 10px;
-  color: #f87171;
-  background: rgba(239, 68, 68, 0.12);
-  padding: 1px 5px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-/* Responsive adjustment */
+/* -------------------------------------------------------------
+   Responsive: stack panes on narrow viewports
+   ------------------------------------------------------------- */
 @media (max-width: 900px) {
+  #post-to-card-backdrop {
+    padding: 0;
+  }
   #post-to-card-dialog,
   .post-to-card-dialog {
-    height: 96vh;
-    max-height: 96vh;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
   }
   .modal-body {
     flex-direction: column;
   }
+  .preview-stage {
+    flex: 1;
+    min-height: 0;
+  }
   .controls-panel {
     width: 100%;
-    max-height: 280px;
+    max-height: 45vh;
     border-left: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--ptc-border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

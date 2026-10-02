@@ -11,6 +11,8 @@ import { Modal } from './Modal';
 import type { Locale } from '../../types/card';
 import { getTranslation } from '../i18n';
 
+const ZOOM_LEVELS = [0.5, 0.75, 1] as const;
+
 export interface AppProps {
   threadData: ThreadData;
   onClose: () => void;
@@ -22,6 +24,10 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isErrorStatus, setIsErrorStatus] = useState<boolean>(false);
+  // Preview-only scale. Never applied to the export target, so exported
+  // dimensions stay at the fixed 640px card width.
+  const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.length - 1);
+  const zoom = ZOOM_LEVELS[zoomIndex];
 
   const t = getTranslation(config.locale || 'en-US');
 
@@ -97,11 +103,43 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     handleConfigChange({ ...config, excludedTweetIds: Array.from(currentExcluded) });
   };
 
+  const activeTweetCount =
+    threadData.tweets.filter(
+      (tweet, idx) => !(config.excludedTweetIds || []).includes(tweet.id || String(idx))
+    ).length || 1;
+
   return (
-    <Modal onClose={onClose} locale={config.locale}>
+    <Modal
+      onClose={onClose}
+      locale={config.locale}
+      summary={`${t.previewSummary.replace('{count}', String(activeTweetCount))}`}
+    >
       <div class="preview-stage">
-        <div class="preview-wrapper">
-          <Card data={threadData} config={config} onExcludeTweet={handleExcludeTweet} />
+        <div class="preview-toolbar" role="group" aria-label={t.zoomLabel}>
+          <span class="preview-toolbar-label">{t.zoomLabel}</span>
+          <div class="btn-group btn-group-compact">
+            {ZOOM_LEVELS.map((level, idx) => (
+              <button
+                key={level}
+                type="button"
+                role="radio"
+                aria-checked={idx === zoomIndex}
+                class={`btn-group-item ${idx === zoomIndex ? 'is-active' : ''}`}
+                onClick={() => setZoomIndex(idx)}
+              >
+                {Math.round(level * 100)}%
+              </button>
+            ))}
+          </div>
+        </div>
+        <div class="preview-viewport">
+          <div
+            class="preview-scale"
+            style={{ zoom: `${zoom}` }}
+            data-html2canvas-ignore="true"
+          >
+            <Card data={threadData} config={config} onExcludeTweet={handleExcludeTweet} />
+          </div>
         </div>
       </div>
       <Controls

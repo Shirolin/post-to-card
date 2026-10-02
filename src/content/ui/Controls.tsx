@@ -1,8 +1,9 @@
 import type { JSX } from 'preact';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card';
 import type { ThreadData } from '../../types/tweet';
-import { THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS } from './themes';
+import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card';
+import { THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes';
 import { getTranslation } from '../i18n';
+import { useId, useState } from 'preact/hooks';
 import {
   Languages,
   Palette,
@@ -14,7 +15,21 @@ import {
   Copy,
   Download,
   ListFilter,
+  ChevronDown,
+  Check,
+  LayoutGrid,
 } from 'lucide-preact';
+
+interface AspectOption {
+  value: AspectRatioOption;
+  label: string;
+}
+
+const ASPECT_OPTIONS: AspectOption[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: '3:4', label: '3:4' },
+  { value: '16:9', label: '16:9' },
+];
 
 export interface ControlsProps {
   config: CardConfig;
@@ -25,6 +40,70 @@ export interface ControlsProps {
   statusMessage?: string;
   isErrorStatus?: boolean;
   threadData?: ThreadData;
+}
+
+interface ToggleSpec {
+  key: keyof CardConfig;
+  label: string;
+}
+
+/**
+ * Segmented single-choice control. Rendered as a radio group so keyboard users
+ * get arrow-key navigation and screen readers announce the selection state.
+ */
+function Segmented<T extends string>({
+  name,
+  options,
+  value,
+  onSelect,
+  labels,
+  titles,
+}: {
+  name: string;
+  options: readonly T[];
+  value: T;
+  onSelect: (next: T) => void;
+  /** Display text when the raw option value is not user-facing (e.g. locale codes). */
+  labels?: Record<string, string>;
+  titles?: Record<string, string>;
+}): JSX.Element {
+  return (
+    <div class="btn-group" role="radiogroup" aria-label={name}>
+      {options.map((opt) => {
+        const isActive = value === opt;
+        return (
+          <button
+            key={opt}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            class={`btn-group-item ${isActive ? 'is-active' : ''}`}
+            onClick={() => onSelect(opt)}
+            title={titles?.[opt]}
+          >
+            {labels?.[opt] || opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Toggle({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      class="toggle-item"
+      onClick={onToggle}
+    >
+      <span class="toggle-title">{label}</span>
+      <span class={`toggle-switch ${checked ? 'is-checked' : ''}`} aria-hidden="true">
+        <span class="toggle-thumb" />
+      </span>
+    </button>
+  );
 }
 
 export function Controls({
@@ -38,6 +117,8 @@ export function Controls({
   threadData,
 }: ControlsProps): JSX.Element {
   const t = getTranslation(config.locale || 'en-US');
+  const [showMore, setShowMore] = useState<boolean>(false);
+  const moreId = useId();
 
   const updateConfig = (patch: Partial<CardConfig>) => {
     onChange({ ...config, ...patch });
@@ -72,377 +153,307 @@ export function Controls({
     updateConfig({ excludedTweetIds: [] });
   };
 
-  const handleSelectCurrentOnly = () => {
-    if (!threadData) return;
-    const targetIdx = threadData.targetTweetIndex ?? 0;
-    const targetKey = threadData.tweets[targetIdx]?.id || String(targetIdx);
-    const toExclude = threadData.tweets
-      .map((item, idx) => item.id || String(idx))
-      .filter((k) => k !== targetKey);
-    updateConfig({ excludedTweetIds: toExclude });
-  };
-
   const targetKey = threadData
     ? (threadData.tweets[threadData.targetTweetIndex ?? 0]?.id || String(threadData.targetTweetIndex ?? 0))
     : '';
 
+  const handleSelectCurrentOnly = () => {
+    if (!threadData) return;
+    const targetIdx = threadData.targetTweetIndex ?? 0;
+    const key = threadData.tweets[targetIdx]?.id || String(targetIdx);
+    const toExclude = threadData.tweets
+      .map((item, idx) => item.id || String(idx))
+      .filter((k) => k !== key);
+    updateConfig({ excludedTweetIds: toExclude });
+  };
+
+  const toggles: ToggleSpec[] = [
+    { key: 'showQrCode', label: t.qrCode },
+    { key: 'showStats', label: t.metricsAndStats },
+    { key: 'showTimestamp', label: t.timestamp },
+    { key: 'showWatermark', label: t.watermark },
+    { key: 'blurAuthor', label: t.blurAuthor },
+  ];
+
   return (
     <div class="controls-panel">
-      {/* 0. Language Selector */}
-      <div class="control-section">
-        <span class="control-label">
-          <Languages size={14} strokeWidth={2} />
-          <span>{t.language}</span>
-        </span>
-        <div class="btn-group">
-          <button
-            type="button"
-            class={`btn-group-item ${config.locale === 'zh-CN' ? 'is-active' : ''}`}
-            onClick={() => updateConfig({ locale: 'zh-CN' })}
-          >
-            中文
-          </button>
-          <button
-            type="button"
-            class={`btn-group-item ${config.locale === 'en-US' ? 'is-active' : ''}`}
-            onClick={() => updateConfig({ locale: 'en-US' })}
-          >
-            English
-          </button>
-        </div>
-      </div>
-
-      {/* 0.5 Tweet Scope & Thread Item Manager */}
-      {threadData && totalTweets > 1 && (
-        <div class="control-section tweet-manager-section">
-          <div class="control-section-header">
-            <span class="control-label">
-              <ListFilter size={14} strokeWidth={2} />
-              <span>{t.manageTweets} ({activeCount}/{totalTweets})</span>
-            </span>
-            <div class="tweet-manager-actions">
-              <button
-                type="button"
-                class="btn-text-action"
-                onClick={handleSelectAll}
-                disabled={activeCount === totalTweets}
-              >
-                {t.selectAll}
-              </button>
-              <button
-                type="button"
-                class="btn-text-action"
-                onClick={handleSelectCurrentOnly}
-                disabled={activeCount === 1 && !excludedSet.has(targetKey)}
-              >
-                {t.selectCurrentOnly}
-              </button>
-            </div>
-          </div>
-          <div class="tweet-manager-list">
-            {threadData.tweets.map((tweet, idx) => {
-              const key = tweet.id || String(idx);
-              const isExcluded = excludedSet.has(key);
-              const isTarget = idx === (threadData.targetTweetIndex ?? 0);
-              const previewSnippet = tweet.text ? tweet.text.replace(/\s+/g, ' ').slice(0, 28) : `#${idx + 1}`;
-              const hasMedia = tweet.media && tweet.media.length > 0;
-              const isOnlyOneActive = activeCount === 1 && !isExcluded;
-
-              return (
-                <div
-                  key={key}
-                  class={`tweet-manager-item ${isExcluded ? 'is-excluded' : 'is-included'} ${isTarget ? 'is-target' : ''}`}
-                  onClick={() => !isOnlyOneActive && handleToggleExclude(key)}
-                  title={isOnlyOneActive ? '' : (isExcluded ? t.selectAll : t.excludeThisTweet)}
+      <div class="controls-scroll">
+        {/* 1. Thread scope — highest-value control when a thread is open */}
+        {threadData && totalTweets > 1 && (
+          <section class="control-section tweet-manager-section">
+            <div class="control-section-header">
+              <span class="control-label">
+                <ListFilter size={14} strokeWidth={2} />
+                <span>{t.manageTweets}</span>
+                <span class="control-count">{activeCount}/{totalTweets}</span>
+              </span>
+              <div class="tweet-manager-actions">
+                <button
+                  type="button"
+                  class="btn-text-action"
+                  onClick={handleSelectAll}
+                  disabled={activeCount === totalTweets}
                 >
-                  <div class={`tweet-checkbox ${!isExcluded ? 'is-checked' : ''}`}>
-                    {!isExcluded && (
-                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                  {t.selectAll}
+                </button>
+                <button
+                  type="button"
+                  class="btn-text-action"
+                  onClick={handleSelectCurrentOnly}
+                  disabled={activeCount === 1 && !excludedSet.has(targetKey)}
+                >
+                  {t.selectCurrentOnly}
+                </button>
+              </div>
+            </div>
+            <div class="tweet-manager-list" role="group" aria-label={t.manageTweets}>
+              {threadData.tweets.map((tweet, idx) => {
+                const key = tweet.id || String(idx);
+                const isExcluded = excludedSet.has(key);
+                const isTarget = idx === (threadData.targetTweetIndex ?? 0);
+                const snippet = tweet.text ? tweet.text.replace(/\s+/g, ' ').slice(0, 30) : `#${idx + 1}`;
+                const hasMedia = tweet.media && tweet.media.length > 0;
+                const isOnlyOneActive = activeCount === 1 && !isExcluded;
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={!isExcluded}
+                    disabled={isOnlyOneActive}
+                    class={`tweet-manager-item ${isExcluded ? 'is-excluded' : 'is-included'} ${isTarget ? 'is-target' : ''}`}
+                    onClick={() => !isOnlyOneActive && handleToggleExclude(key)}
+                    title={isOnlyOneActive ? t.selectCurrentOnly : (isExcluded ? t.selectAll : t.excludeThisTweet)}
+                  >
+                    <span class={`tweet-checkbox ${!isExcluded ? 'is-checked' : ''}`} aria-hidden="true">
+                      {!isExcluded && (
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </span>
+                    <span class="tweet-index-badge">#{idx + 1}</span>
+                    <span class="tweet-snippet">{snippet}{tweet.text && tweet.text.length > 30 ? '…' : ''}</span>
+                    {hasMedia && (
+                      <span class="tweet-media-indicator" aria-hidden="true">
+                        <LayoutGrid size={10} strokeWidth={2} />
+                        {tweet.media!.length}
+                      </span>
                     )}
-                  </div>
-                  <span class="tweet-index-badge">#{idx + 1}</span>
-                  <span class="tweet-snippet">{previewSnippet}{tweet.text && tweet.text.length > 28 ? '...' : ''}</span>
-                  {hasMedia && <span class="tweet-media-indicator">🖼️{tweet.media!.length}</span>}
-                  {isExcluded && <span class="tweet-excluded-tag">{t.excludedBadge}</span>}
-                </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* 2. Theme — the single most impactful visual choice */}
+        <section class="control-section">
+          <span class="control-label">
+            <Palette size={14} strokeWidth={2} />
+            <span>{t.theme}</span>
+          </span>
+          <div class="theme-grid" role="radiogroup" aria-label={t.theme}>
+            {themeList.map((th) => {
+              const isActive = config.theme === th.id;
+              const displayName = getThemeDisplayName(th.id, th.name);
+              return (
+                <button
+                  key={th.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isActive}
+                  class={`theme-button ${isActive ? 'is-active' : ''}`}
+                  onClick={() => updateConfig({ theme: th.id as ThemeId })}
+                  title={displayName}
+                >
+                  <span class="theme-swatch" style={{ background: th.preview }} aria-hidden="true">
+                    {isActive && (
+                      <span class="theme-swatch-check">
+                        <Check size={13} strokeWidth={3} />
+                      </span>
+                    )}
+                  </span>
+                  <span class="theme-button-label">{displayName}</span>
+                </button>
               );
             })}
           </div>
-        </div>
-      )}
+        </section>
 
-      {/* 1. Theme Picker */}
-      <div class="control-section">
-        <span class="control-label">
-          <Palette size={14} strokeWidth={2} />
-          <span>{t.theme}</span>
-        </span>
-        <div class="theme-grid">
-          {themeList.map((th) => {
-            const isActive = config.theme === th.id;
-            const displayName = getThemeDisplayName(th.id, th.name);
-            return (
-              <button
-                key={th.id}
-                type="button"
-                class={`theme-button ${isActive ? 'is-active' : ''}`}
-                onClick={() => updateConfig({ theme: th.id as ThemeId })}
-                title={displayName}
-              >
-                <div
-                  class="theme-swatch"
-                  style={{ background: th.preview }}
-                />
-                <span>{displayName}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        {/* 3. Aspect ratio */}
+        <section class="control-section">
+          <span class="control-label">
+            <Maximize2 size={14} strokeWidth={2} />
+            <span>{t.aspectRatio}</span>
+          </span>
+          <div class="btn-group" role="radiogroup" aria-label={t.aspectRatio}>
+            {ASPECT_OPTIONS.map((opt) => {
+              const isActive = config.aspectRatio === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={isActive}
+                  class={`btn-group-item ${isActive ? 'is-active' : ''}`}
+                  onClick={() => updateConfig({ aspectRatio: opt.value })}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-      {/* 2. Aspect Ratio */}
-      <div class="control-section">
-        <span class="control-label">
-          <Maximize2 size={14} strokeWidth={2} />
-          <span>{t.aspectRatio}</span>
-        </span>
-        <div class="btn-group">
-          {ASPECT_RATIO_OPTIONS.map((ratio) => {
-            const isActive = config.aspectRatio === ratio;
-            return (
-              <button
-                key={ratio}
-                type="button"
-                class={`btn-group-item ${isActive ? 'is-active' : ''}`}
-                onClick={() => updateConfig({ aspectRatio: ratio as AspectRatioOption })}
-              >
-                {ratio === 'auto' ? 'Auto' : ratio}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        {/* 4. Element toggles */}
+        <section class="control-section">
+          <span class="control-label">
+            <SlidersHorizontal size={14} strokeWidth={2} />
+            <span>{t.elementsAndPrivacy}</span>
+          </span>
+          <div class="toggles-list">
+            {toggles.map((item) => (
+              <Toggle
+                key={String(item.key)}
+                label={item.label}
+                checked={Boolean(config[item.key])}
+                onToggle={() => updateConfig({ [item.key]: !config[item.key] } as Partial<CardConfig>)}
+              />
+            ))}
+            <Toggle
+              label={t.tweetActionButton}
+              checked={config.showActionBarButton !== false}
+              onToggle={() => updateConfig({ showActionBarButton: config.showActionBarButton === false })}
+            />
+            <Toggle
+              label={t.videoPlayButton}
+              checked={config.showPlayButton !== false}
+              onToggle={() => updateConfig({ showPlayButton: config.showPlayButton === false })}
+            />
+          </div>
+        </section>
 
-      {/* 2.5 Image Fit (Contain vs Cover) */}
-      <div class="control-section">
-        <span class="control-label">
-          <Scaling size={14} strokeWidth={2} />
-          <span>{t.imageFit}</span>
-        </span>
-        <div class="btn-group">
+        {/* 5. Collapsible low-frequency settings */}
+        <section class="control-section more-section">
           <button
             type="button"
-            class={`btn-group-item ${(config.imageFit || 'contain') === 'contain' ? 'is-active' : ''}`}
-            onClick={() => updateConfig({ imageFit: 'contain' })}
-            title={t.fitContain}
+            class="more-toggle"
+            aria-expanded={showMore}
+            aria-controls={moreId}
+            onClick={() => setShowMore((v) => !v)}
           >
-            {t.fitContain}
+            <ChevronDown size={15} strokeWidth={2} class={`more-chevron ${showMore ? 'is-open' : ''}`} aria-hidden="true" />
+            <span>{showMore ? t.lessSettings : t.moreSettings}</span>
           </button>
-          <button
-            type="button"
-            class={`btn-group-item ${config.imageFit === 'cover' ? 'is-active' : ''}`}
-            onClick={() => updateConfig({ imageFit: 'cover' })}
-            title={t.fitCover}
-          >
-            {t.fitCover}
-          </button>
-        </div>
+
+          <div id={moreId} class="more-body" hidden={!showMore}>
+            <div class="control-section">
+              <span class="control-label">
+                <Languages size={14} strokeWidth={2} />
+                <span>{t.language}</span>
+              </span>
+              <Segmented
+                name={t.language}
+                options={['zh-CN', 'en-US'] as const}
+                value={(config.locale || 'zh-CN') as 'zh-CN' | 'en-US'}
+                onSelect={(next) => updateConfig({ locale: next })}
+                labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
+              />
+            </div>
+
+            <div class="control-section">
+              <span class="control-label">
+                <Scaling size={14} strokeWidth={2} />
+                <span>{t.imageFit}</span>
+              </span>
+              <Segmented
+                name={t.imageFit}
+                options={['contain', 'cover'] as const}
+                value={(config.imageFit || 'contain') as 'contain' | 'cover'}
+                onSelect={(next) => updateConfig({ imageFit: next })}
+                labels={{ contain: t.fitContain, cover: t.fitCover }}
+                titles={{ contain: t.fitContain, cover: t.fitCover }}
+              />
+            </div>
+
+            <div class="control-section">
+              <span class="control-label">
+                <LayoutGrid size={14} strokeWidth={2} />
+                <span>{t.mediaLayout}</span>
+              </span>
+              <Segmented
+                name={t.mediaLayout}
+                options={['grid', 'stack'] as const}
+                value={(config.mediaLayout || 'grid') as 'grid' | 'stack'}
+                onSelect={(next) => updateConfig({ mediaLayout: next })}
+                labels={{ grid: t.layoutGrid, stack: t.layoutStack }}
+                titles={{ grid: t.layoutGrid, stack: t.layoutStack }}
+              />
+            </div>
+
+            <div class="control-section">
+              <span class="control-label">
+                <Space size={14} strokeWidth={2} />
+                <span>{t.padding}</span>
+              </span>
+              <Segmented
+                name={t.padding}
+                options={PADDING_OPTIONS}
+                value={config.padding}
+                onSelect={(next) => updateConfig({ padding: next as PaddingOption })}
+              />
+            </div>
+
+            <div class="control-section">
+              <span class="control-label">
+                <Square size={14} strokeWidth={2} />
+                <span>{t.borderRadius}</span>
+              </span>
+              <Segmented
+                name={t.borderRadius}
+                options={RADIUS_OPTIONS}
+                value={config.borderRadius}
+                onSelect={(next) => updateConfig({ borderRadius: next as RadiusOption })}
+              />
+            </div>
+          </div>
+        </section>
       </div>
 
-      {/* 2.6 Multi-Image Layout (Grid vs Stack) */}
-      <div class="control-section">
-        <span class="control-label">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-          </svg>
-          <span>{t.mediaLayout}</span>
-        </span>
-        <div class="btn-group">
-          <button
-            type="button"
-            class={`btn-group-item ${(config.mediaLayout || 'grid') === 'grid' ? 'is-active' : ''}`}
-            onClick={() => updateConfig({ mediaLayout: 'grid' })}
-            title={t.layoutGrid}
-          >
-            {t.layoutGrid}
-          </button>
-          <button
-            type="button"
-            class={`btn-group-item ${config.mediaLayout === 'stack' ? 'is-active' : ''}`}
-            onClick={() => updateConfig({ mediaLayout: 'stack' })}
-            title={t.layoutStack}
-          >
-            {t.layoutStack}
-          </button>
-        </div>
-      </div>
-
-      {/* 3. Padding */}
-      <div class="control-section">
-        <span class="control-label">
-          <Space size={14} strokeWidth={2} />
-          <span>{t.padding}</span>
-        </span>
-        <div class="btn-group">
-          {PADDING_OPTIONS.map((p) => {
-            const isActive = config.padding === p;
-            const label = p === '16px' ? '16px' : p === '32px' ? '32px' : '48px';
-            return (
-              <button
-                key={p}
-                type="button"
-                class={`btn-group-item ${isActive ? 'is-active' : ''}`}
-                onClick={() => updateConfig({ padding: p as PaddingOption })}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. Border Radius */}
-      <div class="control-section">
-        <span class="control-label">
-          <Square size={14} strokeWidth={2} />
-          <span>{t.borderRadius}</span>
-        </span>
-        <div class="btn-group">
-          {RADIUS_OPTIONS.map((r) => {
-            const isActive = config.borderRadius === r;
-            const label = r === '0px' ? '0px' : r === '12px' ? '12px' : '20px';
-            return (
-              <button
-                key={r}
-                type="button"
-                class={`btn-group-item ${isActive ? 'is-active' : ''}`}
-                onClick={() => updateConfig({ borderRadius: r as RadiusOption })}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 5. Feature Toggles */}
-      <div class="control-section">
-        <span class="control-label">
-          <SlidersHorizontal size={14} strokeWidth={2} />
-          <span>{t.elementsAndPrivacy}</span>
-        </span>
-        <div class="toggles-list">
-          {/* QR Code */}
-          <div
-            class="toggle-item"
-            onClick={() => updateConfig({ showQrCode: !config.showQrCode })}
-          >
-            <span class="toggle-title">{t.qrCode}</span>
-            <div class={`toggle-switch ${config.showQrCode ? 'is-checked' : ''}`}>
-              <div class="toggle-thumb" />
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div
-            class="toggle-item"
-            onClick={() => updateConfig({ showStats: !config.showStats })}
-          >
-            <span class="toggle-title">{t.metricsAndStats}</span>
-            <div class={`toggle-switch ${config.showStats ? 'is-checked' : ''}`}>
-              <div class="toggle-thumb" />
-            </div>
-          </div>
-
-          {/* Timestamp */}
-          <div
-            class="toggle-item"
-            onClick={() => updateConfig({ showTimestamp: !config.showTimestamp })}
-          >
-            <span class="toggle-title">{t.timestamp}</span>
-            <div class={`toggle-switch ${config.showTimestamp ? 'is-checked' : ''}`}>
-              <div class="toggle-thumb" />
-            </div>
-          </div>
-
-          {/* Watermark */}
-          <div
-            class="toggle-item"
-            onClick={() => updateConfig({ showWatermark: !config.showWatermark })}
-          >
-            <span class="toggle-title">{t.watermark}</span>
-            <div class={`toggle-switch ${config.showWatermark ? 'is-checked' : ''}`}>
-              <div class="toggle-thumb" />
-            </div>
-          </div>
-
-          {/* Author Privacy Blur */}
-          <div
-            class="toggle-item"
-            onClick={() => updateConfig({ blurAuthor: !config.blurAuthor })}
-          >
-            <span class="toggle-title">{t.blurAuthor}</span>
-            <div class={`toggle-switch ${config.blurAuthor ? 'is-checked' : ''}`}>
-              <div class="toggle-thumb" />
-            </div>
-          </div>
-
-          {/* Tweet Action Bar Button */}
-          <div
-            class="toggle-item"
-            onClick={() => updateConfig({ showActionBarButton: config.showActionBarButton !== false ? false : true })}
-          >
-            <span class="toggle-title">{t.tweetActionButton}</span>
-            <div class={`toggle-switch ${config.showActionBarButton !== false ? 'is-checked' : ''}`}>
-              <div class="toggle-thumb" />
-            </div>
-          </div>
-
-          {/* Video Play Button / Indicator on Card */}
-          <div
-            class="toggle-item"
-            onClick={() => updateConfig({ showPlayButton: config.showPlayButton !== false ? false : true })}
-          >
-            <span class="toggle-title">{t.videoPlayButton}</span>
-            <div class={`toggle-switch ${config.showPlayButton !== false ? 'is-checked' : ''}`}>
-              <div class="toggle-thumb" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 6. Export Actions */}
+      {/* Sticky primary action bar — always reachable regardless of scroll position */}
       <div class="export-actions">
-        {statusMessage && (
-          <div class={`status-message ${isErrorStatus ? 'is-error' : ''}`}>
-            {statusMessage}
-          </div>
-        )}
-
-        <button
-          type="button"
-          class="btn-primary"
-          onClick={onExportCopy}
-          disabled={isExporting}
-        >
-          <Copy size={16} strokeWidth={2} />
-          <span>{isExporting ? t.exporting : t.copyImage}</span>
-        </button>
-
-        <button
-          type="button"
-          class="btn-secondary"
-          onClick={onExportDownload}
-          disabled={isExporting}
-        >
-          <Download size={16} strokeWidth={2} />
-          <span>{t.downloadPng}</span>
-        </button>
+        <div class="status-region" role="status" aria-live="polite">
+          {statusMessage && (
+            <div class={`status-message ${isErrorStatus ? 'is-error' : ''}`}>
+              {statusMessage}
+            </div>
+          )}
+        </div>
+        <div class="export-buttons">
+          <button
+            type="button"
+            class="btn-primary"
+            onClick={onExportCopy}
+            disabled={isExporting}
+          >
+            {isExporting
+              ? <span class="spinner" aria-hidden="true" />
+              : <Copy size={16} strokeWidth={2} aria-hidden="true" />}
+            <span>{isExporting ? t.exporting : t.copyImage}</span>
+          </button>
+          <button
+            type="button"
+            class="btn-secondary"
+            onClick={onExportDownload}
+            disabled={isExporting}
+            aria-label={t.downloadPng}
+            title={t.downloadPng}
+          >
+            <Download size={16} strokeWidth={2} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );

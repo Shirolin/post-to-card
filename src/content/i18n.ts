@@ -12,7 +12,10 @@ export interface Translations {
   triggerButtonTitle: string;
 
   // Controls Sections
+  moreSettings: string;
+  lessSettings: string;
   language: string;
+  layoutAndStyle: string;
   theme: string;
   aspectRatio: string;
   imageFit: string;
@@ -61,6 +64,11 @@ export interface Translations {
   targetNotFound: string;
   clipboardFallbackNotice: string;
 
+  // Preview
+  zoomLabel: string;
+  previewSummary: string;
+  tweetUnit: string;
+
   // Card Content
   verified: string;
   replies: string;
@@ -77,7 +85,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     close: '关闭窗口',
     triggerButtonTitle: '生成推文卡片',
 
+    moreSettings: '更多设置',
+    lessSettings: '收起设置',
     language: '界面语言',
+    layoutAndStyle: '版式与样式',
     theme: '视觉主题',
     aspectRatio: '画幅比例',
     imageFit: '图片适配',
@@ -85,11 +96,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     fitCover: '填充铺满',
     mediaLayout: '多图排版',
     layoutGrid: '拼图网格',
-    layoutStack: '纵向平铺 (完整长图)',
+    layoutStack: '纵向平铺',
     padding: '内边距',
     borderRadius: '卡片圆角',
     elementsAndPrivacy: '展示模块与隐私',
-
     manageTweets: '包含推文',
     selectAll: '全选',
     selectCurrentOnly: '仅此推文',
@@ -122,6 +132,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     targetNotFound: '未找到卡片渲染节点。',
     clipboardFallbackNotice: '剪贴板写入受限，已自动为您下载高清图片！',
 
+    zoomLabel: '预览缩放',
+    previewSummary: '共 {count} 条推文',
+    tweetUnit: '条',
+
     verified: '已认证账号',
     replies: '条回复',
     reposts: '次转推',
@@ -135,7 +149,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     close: 'Close modal',
     triggerButtonTitle: 'Post to Card',
 
+    moreSettings: 'More Settings',
+    lessSettings: 'Hide Settings',
     language: 'Language',
+    layoutAndStyle: 'Layout & Style',
     theme: 'Theme',
     aspectRatio: 'Aspect Ratio',
     imageFit: 'Image Fit',
@@ -143,11 +160,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     fitCover: 'Fill',
     mediaLayout: 'Multi-Image Layout',
     layoutGrid: 'Grid',
-    layoutStack: 'Stack (Full)',
+    layoutStack: 'Stack',
     padding: 'Padding',
     borderRadius: 'Border Radius',
     elementsAndPrivacy: 'Elements & Privacy',
-
     manageTweets: 'Included Tweets',
     selectAll: 'Select All',
     selectCurrentOnly: 'Current Only',
@@ -179,6 +195,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     exportFailed: 'Export failed',
     targetNotFound: 'Export target not found.',
     clipboardFallbackNotice: 'Clipboard restricted; auto-downloaded PNG!',
+
+    zoomLabel: 'Preview Zoom',
+    previewSummary: '{count} tweets',
+    tweetUnit: 'tweets',
 
     verified: 'Verified',
     replies: 'Replies',
