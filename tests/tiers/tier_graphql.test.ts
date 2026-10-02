@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseTweetDetailResponse } from '../../src/content/graphql/parse.ts';
+import { applyDomTranslation } from '../../src/content/graphql/bridge.ts';
+import type { ThreadData } from '../../src/types/tweet.ts';
 import {
   TWEET_DETAIL_THREAD_JSON,
   TWEET_DETAIL_QUOTE_JSON,
@@ -216,6 +218,67 @@ test('gql.18: a body without entities keeps the plain string path', () => {
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1');
   const first = parsed.thread?.tweets.find((t) => t.id === '1001');
   assert.equal(first?.richTokens, undefined, 'no entities means no token array');
+});
+
+test('gql.19: a page translation wins over the GraphQL original body', () => {
+  // X translates client-side, so the translated body and its notice live only in
+  // the DOM while GraphQL carries the original body. Without this merge, opening
+  // a card from the tweet detail page silently reverted to the original language.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_ENTITIES_JSON, 'TweetDetail', 'q1');
+  const thread = parsed.thread!;
+  const original = thread.tweets[0];
+
+  const domThread: ThreadData = {
+    author: original.author,
+    isSingle: true,
+    targetTweetIndex: 0,
+    tweets: [
+      {
+        id: '9001',
+        url: original.url,
+        author: original.author,
+        timestamp: original.timestamp,
+        text: '看看 github.com/post-to-card 和 #build，来自 @ada_builds',
+        richTokens: [
+          { type: 'text', value: '看看 ' },
+          { type: 'link', value: 'github.com/post-to-card' },
+        ],
+        translatedFrom: '翻译自 英语',
+      },
+    ],
+  };
+
+  applyDomTranslation(thread, domThread);
+
+  assert.equal(thread.tweets[0].text, domThread.tweets[0].text, 'the visible translation must win');
+  assert.equal(thread.tweets[0].translatedFrom, '翻译自 英语');
+  assert.deepEqual(thread.tweets[0].richTokens, domThread.tweets[0].richTokens);
+});
+
+test('gql.20: an untranslated page leaves the GraphQL body untouched', () => {
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_ENTITIES_JSON, 'TweetDetail', 'q1');
+  const thread = parsed.thread!;
+  const originalText = thread.tweets[0].text;
+
+  const domThread: ThreadData = {
+    author: thread.author,
+    isSingle: true,
+    targetTweetIndex: 0,
+    tweets: [
+      {
+        id: '9001',
+        url: thread.tweets[0].url,
+        author: thread.author,
+        timestamp: thread.tweets[0].timestamp,
+        text: 'a different DOM reading',
+      },
+    ],
+  };
+
+  applyDomTranslation(thread, domThread);
+
+  assert.equal(thread.tweets[0].text, originalText, 'GraphQL stays authoritative without a translation');
+  assert.equal(thread.tweets[0].translatedFrom, undefined);
 });
 
 export async function runTierGraphQL(): Promise<{

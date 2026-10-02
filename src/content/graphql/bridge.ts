@@ -105,6 +105,28 @@ export function hasGraphQLData(): boolean {
   return cache.size > 0;
 }
 
+/**
+ * Folds the page's translation into a GraphQL result.
+ *
+ * X translates client-side, so the translated body and its "translated from"
+ * notice exist only in the rendered DOM; the GraphQL payload carries the
+ * original body. When GraphQL answers, copy the visible body over the target
+ * tweet so the card does not silently revert to the original language.
+ */
+export function applyDomTranslation(graphqlThread: ThreadData, domThread: ThreadData): void {
+  const domTarget = domThread.tweets[domThread.targetTweetIndex ?? 0];
+  if (!domTarget?.translatedFrom) return;
+
+  const target =
+    graphqlThread.tweets.find((tweet) => tweet.id === domTarget.id) ??
+    graphqlThread.tweets[graphqlThread.targetTweetIndex ?? 0];
+  if (!target) return;
+
+  target.text = domTarget.text;
+  target.richTokens = domTarget.richTokens;
+  target.translatedFrom = domTarget.translatedFrom;
+}
+
 /** Exposed for diagnostics: the queryId currently observed per operation. */
 export function observedQueryIds(): Record<string, string> {
   const out: Record<string, string> = {};

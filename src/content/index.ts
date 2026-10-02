@@ -9,7 +9,7 @@ import type { ThreadData } from '../types/tweet';
 import { initTwitterInjection } from './adapter/injection';
 import { openCardModal } from './container/element';
 import { exportCardFlow } from './engine';
-import { initGraphQLBridge, lookupFromGraphQL } from './graphql/bridge.ts';
+import { initGraphQLBridge, lookupFromGraphQL, applyDomTranslation } from './graphql/bridge.ts';
 import { extractTweetId } from './adapter/extractor.ts';
 
 function handleCardExport(
@@ -44,6 +44,9 @@ function resolveThreadData(domThread: ThreadData, article?: Element): ThreadData
         queryId: fromGraphQL.queryId,
       };
     }
+    // A translation exists only in the page, so the visible body has to win
+    // even when GraphQL supplies the structure.
+    applyDomTranslation(fromGraphQL.thread, domThread);
     return fromGraphQL.thread;
   }
 
