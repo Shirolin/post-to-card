@@ -235,13 +235,15 @@
 }
 
 /* Top-aligned: a tall thread must start at the top of the scroll area rather
-   than being centered and clipped out of view. */
+   than being centered and clipped out of view.
+   The card is centered by the child's auto margins, not `justify-content`,
+   because a 640px card wider than a narrow viewport would otherwise overflow
+   the left edge into a region the scroll container cannot reach. */
 .preview-viewport {
   flex: 1;
   min-height: 0;
   display: flex;
   align-items: flex-start;
-  justify-content: center;
   padding: 24px;
   overflow: auto;
   background:
@@ -267,11 +269,14 @@
 }
 
 /* `zoom` scales layout space too, so the scroll container stays accurate
-   without transform hacks that would blur the card. */
+   without transform hacks that would blur the card. Auto margins centre the
+   card while a card wider than the viewport stays reachable by scrolling
+   instead of being clipped on the left. */
 .preview-scale {
   display: flex;
   justify-content: center;
   flex-shrink: 0;
+  margin: 0 auto;
 }
 
 /* Right Controls Panel */

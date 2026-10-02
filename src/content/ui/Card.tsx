@@ -405,6 +405,21 @@ function renderRetweetNotice(tweet: TweetData, label: string) {
   );
 }
 
+/**
+ * True when a stats object would render at least one metric. Kept separate so
+ * the card footer can decide whether it has content without duplicating the
+ * formatting rules.
+ */
+export function hasRenderableStats(stats: TweetStats | undefined): boolean {
+  if (!stats) return false;
+  return Boolean(
+    formatStat(stats.replies) ||
+      formatStat(stats.reposts) ||
+      formatStat(stats.likes) ||
+      formatStat(stats.views || stats.bookmarks)
+  );
+}
+
 function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTranslation>) {
   if (!stats) return null;
   const replyStr = formatStat(stats.replies);
@@ -623,6 +638,18 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
     `media-layout-${mediaLayout}`,
   ].join(' ');
 
+  // Only render the footer when it actually has content, otherwise its top
+  // border and padding leave a stray divider at the bottom of the card.
+  const footerTimestamp = config.showTimestamp
+    ? formatLocaleTimestamp(mainTweet.timestamp, config.locale || 'en-US')
+    : '';
+  const hasFooterStats = Boolean(config.showStats && hasRenderableStats(mainTweet.stats));
+  const hasFooterLeft = Boolean(footerTimestamp || hasFooterStats);
+  const hasFooterRight = Boolean(
+    config.showWatermark || (config.showQrCode && mainTweet.url)
+  );
+  const showFooter = hasFooterLeft || hasFooterRight;
+
   return (
     <div
       id="post-to-card-export-target"
@@ -665,26 +692,32 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       </div>
 
       {/* Card Footer */}
-      <div class="card-footer">
-        <div class="card-footer-left">
-          {config.showTimestamp && (
-            <span class="card-timestamp">{formatLocaleTimestamp(mainTweet.timestamp, config.locale || 'en-US')}</span>
-          )}
-          {config.showStats && renderStats(mainTweet.stats, t)}
-        </div>
-
-        <div class="card-footer-right">
-          {config.showWatermark && (
-            <div class="card-watermark" title="Post-to-Card">
-              <Sparkles size={13} strokeWidth={2} aria-hidden="true" />
-              <span>Post to Card</span>
+      {showFooter && (
+        <div class="card-footer">
+          {hasFooterLeft && (
+            <div class="card-footer-left">
+              {footerTimestamp && (
+                <span class="card-timestamp">{footerTimestamp}</span>
+              )}
+              {config.showStats && renderStats(mainTweet.stats, t)}
             </div>
           )}
-          {config.showQrCode && mainTweet.url && (
-            <CardQrCode url={mainTweet.url} />
+
+          {hasFooterRight && (
+            <div class="card-footer-right">
+              {config.showWatermark && (
+                <div class="card-watermark" title="Post-to-Card">
+                  <Sparkles size={13} strokeWidth={2} aria-hidden="true" />
+                  <span>Post to Card</span>
+                </div>
+              )}
+              {config.showQrCode && mainTweet.url && (
+                <CardQrCode url={mainTweet.url} />
+              )}
+            </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { ComponentChildren, JSX } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { Locale } from '../../types/card';
 import { getTranslation } from '../i18n';
 import { Sparkles, X } from 'lucide-preact';
@@ -102,29 +102,48 @@ export function Modal({ isOpen = true, locale = 'en-US', summary, onClose, child
   const dialogRef = useRef<HTMLDivElement | null>(null);
   // Captured before the dialog steals focus, so it can be restored on close.
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  // Guards the initial focus so a later re-render cannot yank focus back.
+  const hasFocusedRef = useRef(false);
 
   /**
    * Callback ref rather than a plain ref read inside the effect: Preact has
    * not attached the node during the first effect pass, so focusing from
    * there silently did nothing. This fires the moment the node is inserted.
+   *
+   * The callback identity must stay stable. An inline ref is re-invoked on
+   * every render — Preact detaches it with `null` and reattaches the node —
+   * which pulled focus back onto the dialog each time a control was changed
+   * and broke arrow-key navigation inside the radio groups.
    */
-  const attachDialog = (node: HTMLDivElement | null) => {
+  const attachDialog = useCallback((node: HTMLDivElement | null) => {
     dialogRef.current = node;
     if (!node) return;
     if (!restoreFocusRef.current) {
       restoreFocusRef.current = document.activeElement as HTMLElement | null;
     }
-    node.focus();
-  };
+    if (!hasFocusedRef.current) {
+      hasFocusedRef.current = true;
+      node.focus();
+    }
+  }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      // Reset so a reopen (without unmounting) focuses the dialog again.
+      hasFocusedRef.current = false;
+      return;
+    }
 
     lockScroll();
 
     // Fallback for the case where the node already existed before this effect
-    // ran (e.g. a re-render that did not remount the dialog).
-    dialogRef.current?.focus();
+    // ran (e.g. a re-render that did not remount the dialog). Guarded so it can
+    // only ever fire once: an unguarded focus here runs after the first user
+    // interaction and pulls focus off whatever control was just used.
+    if (!hasFocusedRef.current) {
+      hasFocusedRef.current = true;
+      dialogRef.current?.focus();
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {

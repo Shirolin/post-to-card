@@ -34,6 +34,7 @@ export interface Translations {
   selectCurrentOnly: string;
   excludedBadge: string;
   excludeThisTweet: string;
+  mediaOnlyTweet: string;
 
   // Toggles
   qrCode: string;
@@ -107,6 +108,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     selectCurrentOnly: '仅此推文',
     excludedBadge: '已剔除',
     excludeThisTweet: '剔除此推文',
+    mediaOnlyTweet: '纯媒体推文',
 
     qrCode: '原文二维码',
     metricsAndStats: '互动数据',
@@ -173,6 +175,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     selectCurrentOnly: 'Current Only',
     excludedBadge: 'Excluded',
     excludeThisTweet: 'Exclude Tweet',
+    mediaOnlyTweet: 'Media only',
 
     qrCode: 'QR Code',
     metricsAndStats: 'Metrics & Stats',

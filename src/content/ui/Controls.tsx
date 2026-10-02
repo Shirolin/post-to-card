@@ -4,6 +4,7 @@ import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOptio
 import { THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes';
 import { getTranslation } from '../i18n';
 import { useId, useState } from 'preact/hooks';
+import { handleRadioKeyDown } from './radioGroup';
 import {
   Languages,
   Palette,
@@ -77,8 +78,10 @@ function Segmented<T extends string>({
             type="button"
             role="radio"
             aria-checked={isActive}
+            tabIndex={isActive ? 0 : -1}
             class={`btn-group-item ${isActive ? 'is-active' : ''}`}
             onClick={() => onSelect(opt)}
+            onKeyDown={(e) => handleRadioKeyDown(e, options, value, onSelect)}
             title={titles?.[opt]}
           >
             {labels?.[opt] || opt}
@@ -211,7 +214,8 @@ export function Controls({
                 const key = tweet.id || String(idx);
                 const isExcluded = excludedSet.has(key);
                 const isTarget = idx === (threadData.targetTweetIndex ?? 0);
-                const snippet = tweet.text ? tweet.text.replace(/\s+/g, ' ').slice(0, 30) : `#${idx + 1}`;
+                const trimmedText = tweet.text ? tweet.text.replace(/\s+/g, ' ').trim() : '';
+                const snippet = trimmedText ? trimmedText.slice(0, 30) : t.mediaOnlyTweet;
                 const hasMedia = tweet.media && tweet.media.length > 0;
                 const isOnlyOneActive = activeCount === 1 && !isExcluded;
 
@@ -234,7 +238,7 @@ export function Controls({
                       )}
                     </span>
                     <span class="tweet-index-badge">#{idx + 1}</span>
-                    <span class="tweet-snippet">{snippet}{tweet.text && tweet.text.length > 30 ? '…' : ''}</span>
+                    <span class="tweet-snippet">{snippet}{trimmedText.length > 30 ? '…' : ''}</span>
                     {hasMedia && (
                       <span class="tweet-media-indicator" aria-hidden="true">
                         <LayoutGrid size={10} strokeWidth={2} />
@@ -264,8 +268,17 @@ export function Controls({
                   type="button"
                   role="radio"
                   aria-checked={isActive}
+                  tabIndex={isActive ? 0 : -1}
                   class={`theme-button ${isActive ? 'is-active' : ''}`}
                   onClick={() => updateConfig({ theme: th.id as ThemeId })}
+                  onKeyDown={(e) =>
+                    handleRadioKeyDown(
+                      e,
+                      themeList.map((item) => item.id as ThemeId),
+                      config.theme,
+                      (next) => updateConfig({ theme: next })
+                    )
+                  }
                   title={displayName}
                 >
                   <span class="theme-swatch" style={{ background: th.preview }} aria-hidden="true">
@@ -297,8 +310,17 @@ export function Controls({
                   type="button"
                   role="radio"
                   aria-checked={isActive}
+                  tabIndex={isActive ? 0 : -1}
                   class={`btn-group-item ${isActive ? 'is-active' : ''}`}
                   onClick={() => updateConfig({ aspectRatio: opt.value })}
+                  onKeyDown={(e) =>
+                    handleRadioKeyDown(
+                      e,
+                      ASPECT_OPTIONS.map((item) => item.value),
+                      config.aspectRatio,
+                      (next) => updateConfig({ aspectRatio: next })
+                    )
+                  }
                 >
                   {opt.label}
                 </button>

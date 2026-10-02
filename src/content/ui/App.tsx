@@ -7,6 +7,7 @@ import { setInjectedButtonVisibility } from '../adapter/injection';
 import { Card } from './Card';
 import { Controls } from './Controls';
 import { Modal } from './Modal';
+import { handleRadioKeyDown } from './radioGroup';
 
 import type { Locale } from '../../types/card';
 import { getTranslation } from '../i18n';
@@ -117,15 +118,24 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
       <div class="preview-stage">
         <div class="preview-toolbar" role="group" aria-label={t.zoomLabel}>
           <span class="preview-toolbar-label">{t.zoomLabel}</span>
-          <div class="btn-group btn-group-compact">
+          <div class="btn-group btn-group-compact" role="radiogroup" aria-label={t.zoomLabel}>
             {ZOOM_LEVELS.map((level, idx) => (
               <button
                 key={level}
                 type="button"
                 role="radio"
                 aria-checked={idx === zoomIndex}
+                tabIndex={idx === zoomIndex ? 0 : -1}
                 class={`btn-group-item ${idx === zoomIndex ? 'is-active' : ''}`}
                 onClick={() => setZoomIndex(idx)}
+                onKeyDown={(e) =>
+                  handleRadioKeyDown(
+                    e,
+                    ZOOM_LEVELS,
+                    ZOOM_LEVELS[zoomIndex],
+                    (next) => setZoomIndex(ZOOM_LEVELS.indexOf(next))
+                  )
+                }
               >
                 {Math.round(level * 100)}%
               </button>
