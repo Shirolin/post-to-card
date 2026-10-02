@@ -8,6 +8,8 @@
  */
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { parseTweetDetailResponse } from '../../src/content/graphql/parse.ts';
 import {
   TWEET_DETAIL_THREAD_JSON,
@@ -134,6 +136,29 @@ test('gql.13: the observed queryId is echoed for drift monitoring', () => {
   assert.equal(parsed.queryId, 'zoF7_t363wZyzylk-BLfZQ',
     'the current id is recorded only so a rotation shows up in diagnostics');
   assert.equal(parsed.operationName, 'TweetDetail');
+});
+
+test('gql.14: the XHR hook forwards only the arguments the caller supplied', async () => {
+  // Regression guard. Forwarding an explicit undefined for open()'s optional
+  // `async` parameter coerces it to false, which turned every X request
+  // synchronous and made the page throw when it set xhr.timeout, leaving the
+  // timeline unable to load. Verified against a live page.
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/content/graphql/hook.ts'),
+    'utf8'
+  );
+  assert.ok(
+    /originalOpen\.apply\(\s*this,\s*\[method, url, \.\.\.rest\]/.test(source),
+    'open() must be forwarded with apply so omitted arguments stay omitted'
+  );
+  assert.ok(
+    !/originalOpen\.call\(\s*this,\s*method/.test(source),
+    'open() must not be forwarded with call, which would pass explicit undefineds'
+  );
+  assert.ok(
+    /init === undefined\s*\?\s*originalFetch\(input\)/.test(source),
+    'fetch must also omit init rather than passing an explicit undefined'
+  );
 });
 
 export async function runTierGraphQL(): Promise<{

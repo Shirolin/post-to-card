@@ -84,16 +84,11 @@ function installXhrHook(): void {
         });
       });
     }
-    return originalOpen.call(
-      this,
-      method,
-      url as string,
-      // `open` accepts these as optional; forwarding undefined keeps the
-      // browser's own default resolution intact.
-      rest[0] as boolean,
-      rest[1] as string,
-      rest[2] as string
-    );
+    // Forward only the arguments the caller actually supplied. Passing an
+    // explicit `undefined` for the optional `async` parameter is coerced to
+    // false, which silently turns the page's requests synchronous and makes X
+    // throw when it later sets `xhr.timeout`.
+    return originalOpen.apply(this, [method, url, ...rest] as Parameters<typeof originalOpen>);
   } as typeof proto.open;
 
   (proto as unknown as { __ptcHooked?: boolean }).__ptcHooked = true;
@@ -109,9 +104,15 @@ function installFetchHook(): void {
   ): Promise<Response> {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     const info = extractRequestInfo(url);
-    if (!info) return originalFetch(input, init);
+    // Call through with exactly the arguments received, so an absent init
+    // stays absent rather than becoming an explicit undefined.
+    const callThrough = () => (init === undefined
+      ? originalFetch(input)
+      : originalFetch(input, init));
 
-    const response = await originalFetch(input, init);
+    if (!info) return callThrough();
+
+    const response = await callThrough();
     try {
       // Clone so the page can still consume the body.
       const body = response.status === 200 ? await response.clone().text() : '';

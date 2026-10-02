@@ -7,7 +7,18 @@ import { Sparkles, X } from 'lucide-preact';
 let activeScrollLocks = 0;
 let previousOverflow = '';
 let previousPaddingRight = '';
+let previousDocOverflow = '';
+let previousScrollY = 0;
 
+/**
+ * Freezes the host page's scroll while the modal is open.
+ *
+ * The lock is applied to documentElement, which is the scrolling element on an
+ * X page; locking only body left the document scrollable and reset the position
+ * to the top on release. The offset is also captured explicitly and restored,
+ * because the host page is a single-page app whose layout can shift while the
+ * overlay is mounted.
+ */
 export function lockScroll(): void {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
@@ -16,9 +27,14 @@ export function lockScroll(): void {
     const body = document.body;
     const scrollbarWidth = window.innerWidth - (docEl?.clientWidth || body?.clientWidth || 0);
 
+    previousScrollY = window.scrollY || docEl?.scrollTop || 0;
+    previousDocOverflow = docEl ? docEl.style.overflow : '';
     previousOverflow = body ? body.style.overflow : '';
     previousPaddingRight = body ? body.style.paddingRight : '';
 
+    if (docEl) {
+      docEl.style.overflow = 'hidden';
+    }
     if (body) {
       body.style.overflow = 'hidden';
       if (scrollbarWidth > 0) {
@@ -30,13 +46,22 @@ export function lockScroll(): void {
 }
 
 export function unlockScroll(): void {
-  if (typeof document === 'undefined') return;
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
   activeScrollLocks = Math.max(0, activeScrollLocks - 1);
-  if (activeScrollLocks === 0 && document.body) {
+  if (activeScrollLocks > 0) return;
+
+  const docEl = document.documentElement;
+  if (docEl) {
+    docEl.style.overflow = previousDocOverflow;
+  }
+  if (document.body) {
     document.body.style.overflow = previousOverflow;
     document.body.style.paddingRight = previousPaddingRight;
   }
+
+  // Restored after the overflow change so the offset survives.
+  window.scrollTo(0, previousScrollY);
 }
 
 export interface ModalProps {
