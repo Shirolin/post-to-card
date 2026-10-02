@@ -6,8 +6,24 @@
  */
 
 /**
+ * Normalises the whitespace of a single text node.
+ *
+ * X renders line breaks as literal "\n" inside a `white-space: pre-wrap` block,
+ * not as <br> elements, so a content-bearing node's newlines are real and must
+ * survive. Whitespace-only nodes are the indentation between elements and
+ * collapse to a single separator space, which is what keeps inline spacing
+ * around emoji and links intact.
+ */
+export function normalizeTweetWhitespace(raw: string): string {
+  if (!raw) return '';
+  if (!/\S/.test(raw)) return ' ';
+  return raw.replace(/[^\S\n]+/g, ' ').replace(/ ?\n ?/g, '\n');
+}
+
+/**
  * Recursively traverses a DOM node tree and reconstructs the text content
- * with native Unicode emojis restored from img[alt] attributes and <br> converted to \n.
+ * with native Unicode emojis restored from img[alt] attributes and real line
+ * breaks preserved.
  */
 export function restoreUnicodeEmojis(node: Node | null | undefined): string {
   if (!node) return '';
@@ -21,11 +37,7 @@ export function restoreUnicodeEmojis(node: Node | null | undefined): string {
 
     // Node.TEXT_NODE === 3
     if (child.nodeType === 3) {
-      const raw = child.nodeValue || '';
-      // Twitter renders real line breaks as <br>, never as literal newlines in
-      // text nodes. Any newline here is server-side pretty-print indentation and
-      // must not leak into the card. Intra-line spaces are preserved.
-      result += raw.replace(/\s*\n\s*/g, ' ');
+      result += normalizeTweetWhitespace(child.nodeValue || '');
       continue;
     }
 

@@ -6,7 +6,7 @@
  */
 
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet';
-import { restoreUnicodeEmojis, cleanTweetText } from './emojis.ts';
+import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
 
@@ -214,8 +214,9 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
 
     // Node.TEXT_NODE === 3
     if (node.nodeType === 3) {
-      // Drop pretty-print indentation whitespace; real line breaks are <br> tags.
-      const val = (node.nodeValue || '').replace(/\s*\n\s*/g, ' ');
+      // X's real line breaks live in the text as "\n" (the body renders as
+      // pre-wrap), while indentation between elements must stay a single space.
+      const val = normalizeTweetWhitespace(node.nodeValue || '');
       if (val) {
         tokens.push({ type: 'text', value: val });
       }

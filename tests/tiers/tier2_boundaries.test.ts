@@ -692,6 +692,33 @@ test('Tier 2.42: a self-labelled link is tokenized, not dropped as a media perma
   assert.equal(link!.value, 'https://example.com/app?x=1');
 });
 
+test('Tier 2.43: real line breaks in the body survive as newlines', () => {
+  // X renders line breaks as literal "\n" inside a pre-wrap block, not as <br>
+  // elements. Collapsing them to spaces flattened a bulleted/paragraph post into
+  // a single blob on the card.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>first line
+
+- bullet
+- bullet two
+
+last line</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.text, 'first line\n\n- bullet\n- bullet two\n\nlast line');
+
+  const textToken = (tweet?.richTokens || []).find(tk => tk.type === 'text');
+  assert.equal(
+    textToken?.value,
+    'first line\n\n- bullet\n- bullet two\n\nlast line',
+    'the token view must keep the same line breaks as the body text'
+  );
+});
+
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 2
 // -------------------------------------------------------------
