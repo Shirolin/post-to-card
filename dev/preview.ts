@@ -12,7 +12,7 @@ import '../src/content/container/element';
 import { App } from '../src/content/ui/App';
 import { Card } from '../src/content/ui/Card';
 import { Controls } from '../src/content/ui/Controls';
-import { DEFAULT_CARD_CONFIG } from '../src/content/ui/themes';
+import { DEFAULT_CARD_CONFIG, sanitizeRadius, sanitizeTheme } from '../src/content/ui/themes';
 import modalCss from '../src/content/styles/modal.css?inline';
 import cardCss from '../src/content/styles/card.css?inline';
 
@@ -41,6 +41,19 @@ const photo3 = svg(
   `<rect width="800" height="520" fill="#052e16"/><path d="M0 420l200-160 150 110 190-140 260 200v90H0z" fill="#16a34a"/><circle cx="180" cy="120" r="46" fill="#fde68a"/>`,
   800,
   520
+);
+
+/** 16:9 video poster with a bright sky and a burned-in subtitle band. */
+const videoPoster = svg(
+  `<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ec5f0"/><stop offset="1" stop-color="#dcecf7"/></linearGradient></defs>
+   <rect width="1280" height="720" fill="url(#sky)"/>
+   <ellipse cx="240" cy="140" rx="150" ry="52" fill="#ffffff" opacity=".75"/>
+   <ellipse cx="900" cy="230" rx="200" ry="60" fill="#ffffff" opacity=".6"/>
+   <path d="M0 470l260-150 210 130 250-170 300 190 260-90v340H0z" fill="#5c7f9c"/>
+   <path d="M0 560l300-110 280 120 320-90 380 110v130H0z" fill="#3c5a72"/>
+   <text x="640" y="662" font-family="sans-serif" font-size="40" font-weight="700" fill="#ffffff" text-anchor="middle">М? О, в чём дело, отброс сомняний?</text>`,
+  1280,
+  720
 );
 
 const author = {
@@ -169,6 +182,66 @@ const translatedThreadData: ThreadData = {
   ],
 };
 
+/**
+ * A post with a Chinese display name, handle and body. The two serif themes
+ * set a Song face for the author line, and CJK glyph fallback is the one part
+ * of the type stack a Latin-only fixture cannot review (?cjk=1).
+ */
+const cjkThreadData: ThreadData = {
+  author: { name: '沈亦航', handle: '@yi_hang', avatarUrl: avatar, verified: true },
+  isSingle: true,
+  targetTweetIndex: 0,
+  tweets: [
+    {
+      id: '4001',
+      url: 'https://x.com/yi_hang/status/4001',
+      author: { name: '沈亦航', handle: '@yi_hang', avatarUrl: avatar, verified: true },
+      timestamp: '2026-10-02T09:24:00.000Z',
+      text: '把卡片从「换渐变皮肤」改成「纸张材料 + 字阶 + 一条签名装饰」，默认就好看多了。',
+      stats: { replies: '12', reposts: '88', likes: '1.2K', views: '3.1万' },
+      quotePost: {
+        author: { name: '林晚舟', handle: '@wanzhou', avatarUrl: avatar, verified: true },
+        text: '排版不是装饰，是把优先级说出来。',
+        timestamp: '2026-10-01T12:00:00.000Z',
+        url: 'https://x.com/wanzhou/status/4000',
+      },
+    },
+  ],
+};
+
+/**
+ * A video post with burnt-in subtitles.
+ *
+ * Every other fixture uses still images, which left the video poster, the play
+ * badge and the bottom scrim unreviewable in any theme (?video=1). The subtitle
+ * band matters most: it is the case where the scrim and the badge sit on top of
+ * text the card cannot re-typeset.
+ */
+const videoThreadData: ThreadData = {
+  author: { name: 'Yuito Kisaragi', handle: '@yuito_0917', avatarUrl: avatar },
+  isSingle: true,
+  targetTweetIndex: 0,
+  tweets: [
+    {
+      id: '5001',
+      url: 'https://x.com/yuito_0917/status/5001',
+      author: { name: 'Yuito Kisaragi', handle: '@yuito_0917', avatarUrl: avatar },
+      timestamp: '2026-10-02T09:15:00.000Z',
+      richTokens: [
+        { type: 'text', value: 'ロシア語を話すヤニねこ、大家さんの声優さんが凄すぎる' },
+        { type: 'text', value: '\n' },
+        { type: 'hashtag', value: '#ヤニねこ' },
+        { type: 'text', value: ' ' },
+        { type: 'link', value: 'https://t.co/ShtaNmzn5y', href: 'https://t.co/ShtaNmzn5y' },
+      ],
+      media: [
+        { type: 'video', url: videoPoster, aspectRatio: 1.777, duration: '2:38' },
+      ],
+      stats: { replies: '55', reposts: '518', likes: '4.4K', views: '654.6K' },
+    },
+  ],
+};
+
 const container = document.querySelector('post-to-card-container') as HTMLElement & {
   shadow: ShadowRoot;
   mountPoint: HTMLDivElement;
@@ -185,13 +258,16 @@ const params = new URLSearchParams(location.search);
 
 /**
  * Optional overrides so a single card state can be inspected without clicking
- * through the panel: ?theme=notion-clean-white&ratio=3:4&padding=48px&radius=20px
+ * through the panel: ?theme=hairline&ratio=3:4&padding=48px&radius=20px
+ *
+ * The theme goes through the same sanitizer as stored preferences, so a retired
+ * id in a bookmarked URL still resolves to its replacement paper.
  */
 const harnessConfig = { ...DEFAULT_CARD_CONFIG } as typeof DEFAULT_CARD_CONFIG;
-if (params.get('theme')) harnessConfig.theme = params.get('theme') as typeof harnessConfig.theme;
+if (params.get('theme')) harnessConfig.theme = sanitizeTheme(params.get('theme'));
 if (params.get('ratio')) harnessConfig.aspectRatio = params.get('ratio') as typeof harnessConfig.aspectRatio;
 if (params.get('padding')) harnessConfig.padding = params.get('padding') as typeof harnessConfig.padding;
-if (params.get('radius')) harnessConfig.borderRadius = params.get('radius') as typeof harnessConfig.borderRadius;
+if (params.get('radius')) harnessConfig.borderRadius = sanitizeRadius(params.get('radius')!);
 if (params.get('fit')) harnessConfig.imageFit = params.get('fit') as typeof harnessConfig.imageFit;
 if (params.get('layout')) harnessConfig.mediaLayout = params.get('layout') as typeof harnessConfig.mediaLayout;
 if (params.get('locale')) harnessConfig.locale = params.get('locale') as typeof harnessConfig.locale;
@@ -210,7 +286,11 @@ const activeThreadData =
     ? quoteThreadData
     : params.get('translated') === '1'
       ? translatedThreadData
-      : threadData;
+      : params.get('video') === '1'
+        ? videoThreadData
+        : params.get('cjk') === '1'
+          ? cjkThreadData
+          : threadData;
 
 /**
  * ?a11y=1 runs a scripted focus-trap check against the live modal and writes

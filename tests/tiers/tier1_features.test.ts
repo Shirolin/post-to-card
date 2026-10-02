@@ -22,6 +22,7 @@ import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme } from '../../src/content/ui/themes.ts';
 
 import type { TweetData, ThreadData, AuthorInfo } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../src/types/card.ts';
@@ -348,7 +349,7 @@ test('F5.3: content script does not use eval or innerHTML injection of unescaped
 test('F5.4: local storage preferences stored without remote sync', async () => {
   const chromeMock = createChromeMock();
   const config: CardConfig = {
-    theme: 'cyber-mint',
+    theme: 'nocturne',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -1175,54 +1176,211 @@ test('F16.4: font stack includes cross-platform clean sans-serif fallbacks', () 
 
 test('F16.5: inline style injection populates textContent correctly', () => {
   const style = new DomElement('STYLE');
-  style.textContent = '.theme-oled { background: #000; }';
-  assert.equal(style.textContent, '.theme-oled { background: #000; }');
+  style.textContent = '.theme-nocturne { background: #30302e; }';
+  assert.equal(style.textContent, '.theme-nocturne { background: #30302e; }');
 });
 
 // -------------------------------------------------------------
-// F17: 6 Curated Preset Themes
+// F17: Curated Themes (3 primary papers + 2 phase-2 materials + 1 experimental)
 // -------------------------------------------------------------
-test('F17.1: Linear Dark theme tokens verified', () => {
-  const theme: ThemeId = 'linear-dark';
-  const tokens = {
-    background: 'linear-gradient(135deg, #18191c 0%, #0d0e11 100%)',
-    textColor: '#f3f4f6',
-    accentColor: '#5e6ad2',
-  };
-  assert.ok(tokens.background.includes('#18191c'));
+const THEME_IDS: ThemeId[] = [
+  'parchment',
+  'nocturne',
+  'hairline',
+  'terminal',
+  'broadsheet',
+  'brutalist',
+];
+
+test('F17.1: all six themes ship, and every theme exposes a full token set', () => {
+  assert.deepEqual(Object.keys(THEMES).sort(), [...THEME_IDS].sort());
+  for (const id of THEME_IDS) {
+    const tokens = THEMES[id].tokens;
+    for (const key of [
+      'canvas',
+      'surface',
+      'text',
+      'muted',
+      'faint',
+      'accent',
+      'link',
+      'border',
+      'divider',
+      'quoteBackground',
+      'quoteBorder',
+      'qrFill',
+      'rule',
+      'fontDisplay',
+      'fontBody',
+      'radius',
+      'mediaRadius',
+      'borderWidth',
+      'shadow',
+    ] as const) {
+      assert.ok(tokens[key], `${id} must define ${key}`);
+    }
+    assert.equal(THEMES[id].id, id);
+  }
 });
 
-test('F17.2: Sunset Glow theme tokens verified', () => {
-  const tokens = {
-    background: 'linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%)',
-    textColor: '#ffffff',
-  };
-  assert.ok(tokens.background.includes('#ff416c'));
+test('F17.2: no theme paints pure white, and none ships a full-bleed gradient', () => {
+  for (const id of THEME_IDS) {
+    assert.notEqual(THEMES[id].tokens.surface.toLowerCase(), '#ffffff');
+    assert.notEqual(THEMES[id].tokens.canvas.toLowerCase(), '#ffffff');
+    // A gradient surface would be the "gradient skin" this replaced; only the
+    // picker swatch may use one, and only as a two-stop paper tint.
+    assert.ok(!/gradient/i.test(THEMES[id].tokens.surface), `${id} surface must be a flat colour`);
+  }
 });
 
-test('F17.3: Aurora Purple theme tokens verified', () => {
-  const tokens = {
-    background: 'linear-gradient(135deg, #654ea3 0%, #eaafc8 100%)',
-    textColor: '#ffffff',
+test('F17.3: the value ramp is monotone from text to faint on every theme', () => {
+  const luminance = (hex: string): number => {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
-  assert.ok(tokens.background.includes('#654ea3'));
+  for (const id of THEME_IDS) {
+    const { text, muted, faint } = THEMES[id].tokens;
+    // A dark theme climbs toward the light; a light theme descends. Either way
+    // the three steps must not invert halfway.
+    const dark = luminance(text) < luminance(faint);
+    const seq = [text, muted, faint].map(luminance);
+    for (let i = 1; i < seq.length; i++) {
+      if (dark) assert.ok(seq[i] >= seq[i - 1], `${id} ramp must brighten: ${i}`);
+      else assert.ok(seq[i] <= seq[i - 1], `${id} ramp must dim: ${i}`);
+    }
+  }
 });
 
-test('F17.4: Notion Clean White theme tokens verified', () => {
-  const tokens = {
-    background: '#ffffff',
-    textColor: '#37352f',
-    borderColor: '#e9e9e7',
-  };
-  assert.equal(tokens.background, '#ffffff');
-  assert.equal(tokens.textColor, '#37352f');
+test('F17.4: serif, sans and mono faces are each used where the material calls for it', () => {
+  assert.match(THEMES.parchment.tokens.fontDisplay, /Georgia/);
+  assert.match(THEMES.nocturne.tokens.fontDisplay, /Georgia/);
+  assert.ok(!/Georgia|Times|Songti|SimSun/i.test(THEMES.hairline.tokens.fontDisplay));
+  // Terminal is a console: body and display must both be monospace.
+  assert.match(THEMES.terminal.tokens.fontDisplay, /monospace/);
+  assert.match(THEMES.terminal.tokens.fontBody, /monospace/);
+  // Broadsheet sets the body in the display serif, the way newsprint does.
+  assert.equal(THEMES.broadsheet.tokens.fontBody, THEMES.broadsheet.tokens.fontDisplay);
 });
 
-test('F17.5: OLED Black and Cyber Mint theme tokens verified', () => {
-  const oledTokens = { background: '#000000', textColor: '#ffffff' };
-  const mintTokens = { background: '#0d1117', accentColor: '#00ffcc' };
-  assert.equal(oledTokens.background, '#000000');
-  assert.equal(mintTokens.accentColor, '#00ffcc');
+test('F17.5: the three primary papers share one accent, so the brand colour never forks', () => {
+  const primary: ThemeId[] = ['parchment', 'nocturne', 'hairline'];
+  const accents = primary.map((id) => THEMES[id].tokens.accent);
+  assert.equal(new Set(accents).size, 1);
+  assert.equal(accents[0], '#c96442');
+  // The phase-2 materials are allowed their own ink, but each must still be
+  // exactly one accent — a theme may not carry two competing highlights.
+  for (const id of THEME_IDS) {
+    assert.ok(THEMES[id].tokens.accent, `${id} must define an accent`);
+  }
+});
+
+test('F17.5b: Brutalist is the only experimental theme, and it stays off the default picker', () => {
+  assert.deepEqual([...EXPERIMENTAL_THEMES], ['brutalist']);
+  assert.equal(DEFAULT_CARD_CONFIG.theme, 'parchment');
+  assert.ok(!EXPERIMENTAL_THEMES.has(DEFAULT_CARD_CONFIG.theme));
+  // Every theme must be reachable from the ordered picker list.
+  assert.deepEqual([...THEME_ORDER].sort(), [...THEME_IDS].sort());
+  assert.equal(THEME_ORDER[0], 'parchment');
+  assert.equal(THEME_ORDER[THEME_ORDER.length - 1], 'brutalist');
+});
+
+test('F17.6: retired presets migrate to a live theme instead of resetting', () => {
+  assert.equal(sanitizeTheme('linear-dark'), 'nocturne');
+  assert.equal(sanitizeTheme('notion-clean-white'), 'parchment');
+  assert.equal(sanitizeTheme('oled-black'), 'nocturne');
+  assert.equal(sanitizeTheme('sunset-glow'), 'parchment');
+  assert.equal(sanitizeTheme('nonsense'), 'parchment');
+  assert.equal(sanitizeTheme(undefined), 'parchment');
+  for (const alias of Object.keys(LEGACY_THEME_ALIASES)) {
+    assert.ok(THEMES[sanitizeTheme(alias)], `legacy id ${alias} must resolve to a live theme`);
+  }
+});
+
+test('F17.7: every theme name is localised in both locales', () => {
+  for (const id of THEME_IDS) {
+    const key = `theme_${id}` as keyof typeof TRANSLATIONS['en-US'];
+    assert.ok(TRANSLATIONS['zh-CN'][key], `zh-CN missing ${key}`);
+    assert.ok(TRANSLATIONS['en-US'][key], `en-US missing ${key}`);
+  }
+});
+
+test('F17.8: the preview mat reads as a board the sheet sits on, in every theme', () => {
+  // A mat within a couple of percent of the sheet makes a light card read as a
+  // patch on the stage rather than paper on a board, which is the difference
+  // between "a card" and "a design". Nocturne already separates well; this keeps
+  // it that way and stops the light mats drifting back toward the surface.
+  const luminance = (hex: string): number => {
+    const channel = (c: number): number => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const n = parseInt(hex.slice(1), 16);
+    return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+  };
+  for (const id of THEME_IDS) {
+    const { canvas, surface } = THEMES[id].tokens;
+    const [hi, lo] = [luminance(canvas), luminance(surface)].sort((a, b) => b - a);
+    const separation = (hi + 0.05) / (lo + 0.05);
+    assert.ok(separation >= 1.15, `${id} mat ${canvas} sits only ${separation.toFixed(3)}:1 off ${surface}`);
+  }
+});
+
+test('F17.10: no theme smuggles a second chromatic colour onto the card', () => {
+  // The verified tick used to be a hard-coded Twitter blue — the most saturated
+  // thing on every card, and not even the theme's accent. Ink is the only colour
+  // the sheet may carry besides the accent.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  assert.ok(
+    !/1d9bf0|1da1f2/i.test(css),
+    'card.css must not carry a hard-coded Twitter blue'
+  );
+  const badgeRule = css.slice(css.indexOf('.verified-badge {'));
+  assert.ok(
+    badgeRule.slice(0, badgeRule.indexOf('}')).includes('color: inherit'),
+    'verified tick must print in the sheet ink, not a brand blue'
+  );
+});
+
+test('F17.9: body, handle, footnote and link all clear 4.5:1 on their own paper', () => {
+  // A footnote can be quiet, but "quieter" is a size decision, not a licence to
+  // ship meta text below the contrast floor. This is the check that keeps a
+  // future palette tweak from quietly dimming the stats row into the dark.
+  const srgb = (channel: number): number => {
+    const s = channel / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string): number => {
+    const n = parseInt(hex.slice(1), 16);
+    return (
+      0.2126 * srgb((n >> 16) & 255) +
+      0.7152 * srgb((n >> 8) & 255) +
+      0.0722 * srgb(n & 255)
+    );
+  };
+  const contrast = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  for (const id of THEME_IDS) {
+    const { surface, text, muted, faint, link } = THEMES[id].tokens;
+    for (const [label, colour] of [
+      ['text', text],
+      ['muted', muted],
+      ['faint', faint],
+      ['link', link],
+    ] as const) {
+      const ratio = contrast(colour, surface);
+      assert.ok(
+        ratio >= 4.5,
+        `${id} ${label} ${colour} on ${surface} is ${ratio.toFixed(2)}:1, below 4.5:1`
+      );
+    }
+  }
 });
 
 // -------------------------------------------------------------
@@ -1236,12 +1394,11 @@ test('F18.1: supports 3 padding options: 16px, 32px, 48px', () => {
   assert.equal(options[2], '48px');
 });
 
-test('F18.2: supports 3 border radius options: 0px, 12px, 20px', () => {
-  const options: RadiusOption[] = ['0px', '12px', '20px'];
-  assert.equal(options.length, 3);
-  assert.equal(options[0], '0px');
-  assert.equal(options[1], '12px');
-  assert.equal(options[2], '20px');
+test('F18.2: offers three explicit corners plus a follow-theme option', () => {
+  const options: RadiusOption[] = ['theme', '0px', '12px', '20px'];
+  assert.equal(options.length, 4);
+  assert.equal(options[0], 'theme');
+  assert.equal(RADIUS_OPTIONS[0], 'theme');
 });
 
 test('F18.3: invalid padding option falls back to 32px', () => {
@@ -1253,22 +1410,36 @@ test('F18.3: invalid padding option falls back to 32px', () => {
 });
 
 test('F18.4: invalid border radius option falls back to 12px', () => {
-  function sanitizeRadius(val: string): RadiusOption {
-    if (val === '0px' || val === '12px' || val === '20px') return val;
-    return '12px';
-  }
   assert.equal(sanitizeRadius('100px'), '12px');
+  assert.equal(sanitizeRadius('theme'), 'theme');
 });
 
 test('F18.5: inner media items synchronize rounding with card border radius', () => {
-  function getMediaRadius(cardRadius: RadiusOption): string {
-    if (cardRadius === '0px') return '0px';
-    if (cardRadius === '12px') return '8px';
-    return '14px';
+  assert.deepEqual(resolveRadius('0px', 'parchment'), { card: '0px', media: '0px' });
+  assert.deepEqual(resolveRadius('12px', 'parchment'), { card: '12px', media: '8px' });
+  assert.deepEqual(resolveRadius('20px', 'parchment'), { card: '20px', media: '14px' });
+});
+
+test('F18.6: follow-theme defers the corner to the theme, and inner never exceeds the card', () => {
+  for (const id of THEME_IDS) {
+    const { card, media } = resolveRadius('theme', id);
+    assert.equal(card, THEMES[id].tokens.radius);
+    assert.equal(media, THEMES[id].tokens.mediaRadius);
+    // Inner may equal the card (a square material is square throughout) but
+    // must never be rounder than the card, which would look like a photo
+    // bulging out of a square frame.
+    assert.ok(
+      parseFloat(media) <= parseFloat(card),
+      `${id} media corner ${media} must not exceed card corner ${card}`
+    );
   }
-  assert.equal(getMediaRadius('0px'), '0px');
-  assert.equal(getMediaRadius('12px'), '8px');
-  assert.equal(getMediaRadius('20px'), '14px');
+  // The three primary papers must not all round alike, or the option does nothing.
+  const papers: ThemeId[] = ['parchment', 'nocturne', 'hairline'];
+  assert.equal(new Set(papers.map((id) => resolveRadius('theme', id).card)).size, 3);
+  // Hairline and the phase-2 materials read as square or near-square.
+  for (const id of ['hairline', 'terminal', 'broadsheet', 'brutalist'] as ThemeId[]) {
+    assert.ok(parseFloat(resolveRadius('theme', id).card) <= 4, `${id} should be near-square`);
+  }
 });
 
 // -------------------------------------------------------------
@@ -1361,7 +1532,7 @@ test('F20.5: offline generation functions without internet or external CDN', () 
 // -------------------------------------------------------------
 test('F21.1: toggling showQrCode hides or displays QR element in DOM', () => {
   const config: CardConfig = {
-    theme: 'linear-dark',
+    theme: 'parchment',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -1394,7 +1565,7 @@ test('F21.4: toggling showWatermark hides brand watermark', () => {
 
 test('F21.5: controls state updates reactively without full card remount', () => {
   let state: CardConfig = {
-    theme: 'linear-dark',
+    theme: 'parchment',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -1407,7 +1578,7 @@ test('F21.5: controls state updates reactively without full card remount', () =>
 
   state = { ...state, showWatermark: false };
   assert.equal(state.showWatermark, false);
-  assert.equal(state.theme, 'linear-dark');
+  assert.equal(state.theme, 'parchment');
 });
 
 // -------------------------------------------------------------
@@ -1867,22 +2038,30 @@ test('F29.2: extracts video duration timestamp from video controls', () => {
   assert.equal(getDuration(el), '1:42');
 });
 
-test('F29.3: Card.tsx renders non-obstructive video badge without center blocking or progress bar', () => {
+test('F29.3: Card.tsx renders a corner video badge, and nothing that dims the poster', () => {
   const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   assert.ok(cardContent.includes('media-video-item'), 'Must render media-video-item class');
   assert.ok(cardContent.includes('video-indicator-badge'), 'Must render corner video indicator badge');
-  assert.ok(cardContent.includes('video-scrim-overlay'), 'Must render bottom scrim overlay');
   assert.ok(!cardContent.includes('center-play-button'), 'Must NOT include blocking center play button');
   assert.ok(!cardContent.includes('video-progress-track'), 'Must NOT render the bottom video progress bar');
+  // The badge is an opaque pill, so the scrim that used to back it only darkened
+  // the poster — and dimmed burnt-in subtitles the card cannot re-typeset.
+  assert.ok(!cardContent.includes('video-scrim-overlay'), 'Must NOT render a bottom scrim over the poster');
 });
 
-test('F29.4: card.css defines frosted pill badge and bottom scrim, with no progress line', () => {
+test('F29.4: card.css styles an opaque pill with no glass and no scrim, and no progress line', () => {
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
   assert.ok(cssContent.includes('.media-item.media-video-item'), 'Must style media-video-item');
   assert.ok(cssContent.includes('.video-indicator-badge'), 'Must style video-indicator-badge');
   assert.ok(cssContent.includes('.video-badge-pill'), 'Must style video-badge-pill');
-  assert.ok(cssContent.includes('.video-scrim-overlay'), 'Must style video-scrim-overlay');
+  assert.ok(!cssContent.includes('.video-scrim-overlay'), 'Must NOT style a bottom scrim');
   assert.ok(!cssContent.includes('.video-progress-track'), 'Must NOT style the video progress bar');
+  // Scoped to the badge rule: the thread exclude button may stay frosted because
+  // it is UI-only and marked data-html2canvas-ignore, so it never reaches the
+  // export. Only the badge sits on exported pixels.
+  const pillRule = cssContent.slice(cssContent.indexOf('.media-video-item .video-badge-pill {'));
+  const pillBlock = pillRule.slice(0, pillRule.indexOf('}'));
+  assert.ok(!pillBlock.includes('backdrop-filter'), 'Must NOT blur the badge: the themes ban glass surfaces');
 });
 
 test('F29.5: i18n provides localized videoLabel for zh-CN and en-US', () => {
@@ -1904,10 +2083,9 @@ test('F29.7: Controls.tsx contains toggle for showPlayButton with localized labe
   assert.ok(controlsContent.includes('t.videoPlayButton'), 'Controls must use localized label for videoPlayButton');
 });
 
-test('F29.8: Card.tsx conditionally renders video badge and scrim based on showPlayButton', () => {
+test('F29.8: Card.tsx conditionally renders the video badge based on showPlayButton', () => {
   const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   assert.ok(cardContent.includes('showPlayButton: boolean = true'), 'renderMediaGrid must accept showPlayButton param');
-  assert.ok(cardContent.includes('{showPlayButton && <div class="video-scrim-overlay" />}'), 'Must conditionally render scrim');
   assert.ok(cardContent.includes('{showPlayButton && ('), 'Must conditionally render video-indicator-badge');
   assert.ok(cardContent.includes('config.showPlayButton !== false'), 'Must pass showPlayButton config to renderMediaGrid');
 });

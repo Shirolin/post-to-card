@@ -1,7 +1,7 @@
 import type { JSX } from 'preact';
 import type { ThreadData } from '../../types/tweet';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card';
-import { THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes';
 import { getTranslation } from '../i18n';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup';
@@ -127,7 +127,14 @@ export function Controls({
     onChange({ ...config, ...patch });
   };
 
-  const themeList = Object.values(THEMES);
+  // Brutalist is deliberately experimental, so it is not in the main rotation.
+  // It only joins the picker once the user opens "More", or when it is already
+  // the active theme (otherwise a saved Brutalist config would show no
+  // selection at all).
+  const themeList = THEME_ORDER.map((id) => THEMES[id]);
+  const visibleThemes = themeList.filter(
+    (th) => !EXPERIMENTAL_THEMES.has(th.id) || showMore || config.theme === th.id
+  );
 
   const getThemeDisplayName = (themeId: string, defaultName: string) => {
     const key = `theme_${themeId.replace(/-/g, '_')}` as keyof typeof t;
@@ -259,7 +266,7 @@ export function Controls({
             <span>{t.theme}</span>
           </span>
           <div class="theme-grid" role="radiogroup" aria-label={t.theme}>
-            {themeList.map((th) => {
+            {visibleThemes.map((th) => {
               const isActive = config.theme === th.id;
               const displayName = getThemeDisplayName(th.id, th.name);
               return (
@@ -274,7 +281,7 @@ export function Controls({
                   onKeyDown={(e) =>
                     handleRadioKeyDown(
                       e,
-                      themeList.map((item) => item.id as ThemeId),
+                      visibleThemes.map((item) => item.id as ThemeId),
                       config.theme,
                       (next) => updateConfig({ theme: next })
                     )
@@ -438,6 +445,7 @@ export function Controls({
                 options={RADIUS_OPTIONS}
                 value={config.borderRadius}
                 onSelect={(next) => updateConfig({ borderRadius: next as RadiusOption })}
+                labels={{ theme: t.borderRadiusFollowTheme }}
               />
             </div>
           </div>

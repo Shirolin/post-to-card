@@ -26,6 +26,7 @@ export interface Translations {
   layoutStack: string;
   padding: string;
   borderRadius: string;
+  borderRadiusFollowTheme: string;
   elementsAndPrivacy: string;
 
   // Tweet Scope & Management
@@ -46,12 +47,12 @@ export interface Translations {
   videoPlayButton: string;
 
   // Themes
-  theme_linear_dark: string;
-  theme_sunset_glow: string;
-  theme_aurora_purple: string;
-  theme_notion_clean_white: string;
-  theme_cyber_mint: string;
-  theme_oled_black: string;
+  theme_parchment: string;
+  theme_nocturne: string;
+  theme_hairline: string;
+  theme_terminal: string;
+  theme_broadsheet: string;
+  theme_brutalist: string;
 
   // Export Actions & Status
   copyImage: string;
@@ -102,6 +103,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     layoutStack: '纵向平铺',
     padding: '内边距',
     borderRadius: '卡片圆角',
+    borderRadiusFollowTheme: '跟随主题',
     elementsAndPrivacy: '展示模块与隐私',
     manageTweets: '包含推文',
     selectAll: '全选',
@@ -118,12 +120,12 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     tweetActionButton: '推文卡片按钮',
     videoPlayButton: '视频播放按钮',
 
-    theme_linear_dark: 'Linear 暗黑',
-    theme_sunset_glow: '夕阳微醺',
-    theme_aurora_purple: '极光夜紫',
-    theme_notion_clean_white: 'Notion 纯白',
-    theme_cyber_mint: '极客薄荷',
-    theme_oled_black: '极致纯黑',
+    theme_parchment: '羊皮纸',
+    theme_nocturne: '暗刊',
+    theme_hairline: '细线',
+    theme_terminal: '终端',
+    theme_broadsheet: '报纸栏',
+    theme_brutalist: '粗野派',
 
     copyImage: '复制图片',
     downloadPng: '保存 PNG',
@@ -169,6 +171,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     layoutStack: 'Stack',
     padding: 'Padding',
     borderRadius: 'Border Radius',
+    borderRadiusFollowTheme: 'Follow Theme',
     elementsAndPrivacy: 'Elements & Privacy',
     manageTweets: 'Included Tweets',
     selectAll: 'Select All',
@@ -185,12 +188,12 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     tweetActionButton: 'Tweet Card Button',
     videoPlayButton: 'Video Play Button',
 
-    theme_linear_dark: 'Linear Dark',
-    theme_sunset_glow: 'Sunset Glow',
-    theme_aurora_purple: 'Aurora Purple',
-    theme_notion_clean_white: 'Notion White',
-    theme_cyber_mint: 'Cyber Mint',
-    theme_oled_black: 'OLED Black',
+    theme_parchment: 'Parchment',
+    theme_nocturne: 'Nocturne',
+    theme_hairline: 'Hairline',
+    theme_terminal: 'Terminal',
+    theme_broadsheet: 'Broadsheet',
+    theme_brutalist: 'Brutalist',
 
     copyImage: 'Copy Image',
     downloadPng: 'Download PNG',

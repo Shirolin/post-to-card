@@ -107,8 +107,8 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - **F14 (Thread Connector)**: 3-tweet same-author chaining, sponsored ad interception, third-party reply exclusion, thread index/total calculation, single tweet flag.
 - **F15 (Shadow DOM Container)**: Custom element registration, open shadowRoot attachment, InvalidStateError on double attach, singleton guard, unmount cleanup.
 - **F16 (Inline Style Isolation)**: ShadowRoot style tag, :host all: initial, zero host CSS leakage, font stack fallbacks, textContent injection.
-- **F17 (6 Curated Themes)**: Linear Dark, Sunset Glow, Aurora Purple, Notion Clean White, OLED Black, Cyber Mint design tokens.
-- **F18 (Padding & Radius)**: 16px/32px/48px padding, 0px/12px/20px radius, padding fallback, radius fallback, media corner synchronization.
+- **F17 (Curated Themes, P0 + P2)**: 6 套主题 token 表（羊皮纸 / 暗刊 / 细线 + 终端 / 报纸栏 / 粗野派）、纯白禁令、无渐变面、明度阶单调性、衬线/无衬/等宽字族、强调色、退役主题 id 迁移、双语主题名、正文/副文/脚注/链接 4.5:1 对比度底线、垫底与卡面分离度、禁止硬编码品牌蓝、实验性主题不进默认转盘。
+- **F18 (Padding & Radius)**: 16px/32px/48px padding, follow-theme plus 0px/12px/20px radius, padding fallback, radius fallback, media corner synchronization, per-theme corner deferral.
 - **F19 (Fluid Expansion)**: Auto ratio unconstrained, 3:4 ratio 853px min-height, 16:9 ratio 360px min-height, downward expansion without clipping, overflow: visible.
 - **F20 (Offline QR Code)**: Vector SVG generation, UTM/tracking parameter stripping, crispEdges shape rendering, long URL support, 100% offline.
 - **F21 (Controls & Toggles)**: showQrCode toggle, showStats toggle, showTimestamp toggle, showWatermark toggle, reactive state updates.
@@ -150,9 +150,9 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - Chrome storage preference saving and modal rehydration
 
 ### Tier 4: Real-World Scenarios (4 End-to-End Workflows)
-- **Workflow 1**: Single Viral Tweet with 4 photos converted to Cyber Mint card and copied to clipboard.
+- **Workflow 1**: Single Viral Tweet with 4 photos converted to Nocturne card and copied to clipboard.
 - **Workflow 2**: 3-Tweet thread with author blur fails clipboard (unfocused) and gracefully downloads PNG.
-- **Workflow 3**: Quote tweet rendered in Sunset Glow at Ultra-HD (scale: 3, 288 DPI).
+- **Workflow 3**: Quote tweet rendered in Parchment at Ultra-HD (scale: 3, 288 DPI).
 - **Workflow 4**: SPA navigation clears modal, Esc dismisses modal, and body scroll unlocks.
 
 ---

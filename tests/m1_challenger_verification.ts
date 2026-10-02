@@ -54,16 +54,13 @@ async function runAll() {
   // ==========================================
   console.log('[1] Verifying Type Completeness & Soundness against ORIGINAL_REQUEST.md...');
 
-  await check('ThemeId covers all 6 curated themes from R2', () => {
+  await check('ThemeId covers the 3 curated paper themes', () => {
     const themes: ThemeId[] = [
-      'linear-dark',
-      'sunset-glow',
-      'aurora-purple',
-      'notion-clean-white',
-      'cyber-mint',
-      'oled-black',
+      'parchment',
+      'nocturne',
+      'hairline',
     ];
-    assert.equal(themes.length, 6);
+    assert.equal(themes.length, 3);
   });
 
   await check('PaddingOption covers 16px, 32px, 48px from R2', () => {
@@ -83,7 +80,7 @@ async function runAll() {
 
   await check('CardConfig covers all 5 toggles and configuration dimensions from R2', () => {
     const config: CardConfig = {
-      theme: 'linear-dark',
+      theme: 'parchment',
       padding: '32px',
       borderRadius: '12px',
       aspectRatio: 'auto',
@@ -354,7 +351,7 @@ async function runAll() {
 
     const sampleState: ConsumerState = {
       config: {
-        theme: 'oled-black',
+        theme: 'nocturne',
         padding: '48px',
         borderRadius: '20px',
         aspectRatio: '16:9',
@@ -386,7 +383,7 @@ async function runAll() {
       },
     };
 
-    assert.equal(sampleState.config.theme, 'oled-black');
+    assert.equal(sampleState.config.theme, 'nocturne');
     assert.equal(sampleState.config.borderRadius, '20px');
     assert.equal(sampleState.config.blurAuthor, true);
   });

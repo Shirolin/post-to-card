@@ -2,7 +2,7 @@ import type { JSX } from 'preact';
 import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet';
 import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card';
 import { CardQrCode } from './qrcode';
-import { getMediaRadius, getAspectMinHeight } from './themes';
+import { resolveRadius, getAspectMinHeight, THEMES } from './themes';
 import { formatLocaleTimestamp, getTranslation } from '../i18n';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
 
@@ -252,10 +252,8 @@ function renderMediaGrid(
                   }
                 }}
               />
-              {/* Subtle Bottom Scrim for Contrast & Protection */}
-              {showPlayButton && <div class="video-scrim-overlay" />}
-
-              {/* Video Type / Duration Pill Badge */}
+              {/* Play badge sits on the poster without a scrim: the pill is
+                  opaque, so a gradient would only dim the image. */}
               {showPlayButton && (
                 <div class="video-indicator-badge">
                   {m.type === 'gif' ? (
@@ -634,7 +632,11 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
 
   const imageFit = config.imageFit || 'contain';
   const mediaLayout = config.mediaLayout || 'grid';
-  const mediaRadius = getMediaRadius(config.borderRadius);
+  // `data-radius`/`radius-*` stay keyed on the stored option so the explicit
+  // corner rules still match; only the inline values resolve 'theme'.
+  const radius = resolveRadius(config.borderRadius, config.theme);
+  const mediaRadius = radius.media;
+  const tokens = THEMES[config.theme].tokens;
   const minHeightStyle = getAspectMinHeight(config.aspectRatio, 640);
 
   const cardClasses = [
@@ -671,7 +673,27 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       data-media-layout={mediaLayout}
       style={{
         padding: config.padding,
-        borderRadius: config.borderRadius,
+        borderRadius: radius.card,
+        boxShadow: tokens.shadow,
+        // Every theme colour and the type pair come from the token table and are
+        // injected here. card.css only consumes them, so there is one place to
+        // edit a theme and no second copy to drift out of sync.
+        '--canvas': tokens.canvas,
+        '--surface': tokens.surface,
+        '--text': tokens.text,
+        '--text-sec': tokens.muted,
+        '--faint': tokens.faint,
+        '--accent': tokens.accent,
+        '--link': tokens.link,
+        '--border-color': tokens.border,
+        '--divider': tokens.divider,
+        '--quote-bg': tokens.quoteBackground,
+        '--quote-border': tokens.quoteBorder,
+        '--qr-fill': tokens.qrFill,
+        '--rule': tokens.rule,
+        '--border-width': tokens.borderWidth,
+        '--font-display': tokens.fontDisplay,
+        '--font-body': tokens.fontBody,
         minHeight: minHeightStyle === 'auto' ? 'unset' : minHeightStyle,
         height: 'auto',
         overflow: 'visible',

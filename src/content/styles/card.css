@@ -14,7 +14,7 @@
   position: relative;
   overflow: visible;
   height: auto;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif);
   line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -45,7 +45,9 @@
 }
 
 .retweet-handle {
-  color: var(--accent);
+  /* `--link`, like every other handle in the card. Raw accent is the decorative
+     terracotta and does not clear text contrast on the light papers. */
+  color: var(--link, var(--accent));
   font-weight: 700;
 }
 
@@ -170,103 +172,348 @@
 }
 
 /* -------------------------------------------------------------
-   6 Curated Themes
+   Themes — paper, not gradient.
+
+   The values below are NOT defined here. Each theme's colours, type pair and
+   edge weight are injected as custom properties on the card root by Card.tsx
+   from the single token table in themes.ts. This file only consumes them.
+
+   That split exists because a second hand-written copy of every theme in this
+   file silently drifted from the token table: a contrast fix landed in
+   themes.ts and never reached the rendered card, because CSS was still using
+   its own stale hex. One source, or the two disagree.
+
+   `--canvas` is the mat the card sits on (preview stage), not the card itself,
+   so the sheet keeps its own edge.
    ------------------------------------------------------------- */
-
-/* 1. Linear Dark */
-.post-to-card-target[data-theme="linear-dark"],
-.post-to-card-target.theme-linear-dark {
-  background: linear-gradient(135deg, #18191c 0%, #0d0e11 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 20px 40px rgba(0, 0, 0, 0.5);
-  color: #f3f4f6;
-  --text-sec: #9ca3af;
-  --accent: #818cf8;
-  --divider: rgba(255, 255, 255, 0.1);
-  --quote-bg: rgba(255, 255, 255, 0.03);
-  --quote-border: rgba(255, 255, 255, 0.08);
-  --qr-fill: #f3f4f6;
+.post-to-card-target {
+  background: var(--surface, #faf9f5);
+  border-style: solid;
+  border-width: var(--border-width, 1px);
+  border-color: var(--border-color, #e8e6dc);
+  color: var(--text, #141413);
 }
 
-/* 2. Sunset Glow */
-.post-to-card-target[data-theme="sunset-glow"],
-.post-to-card-target.theme-sunset-glow {
-  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
-  border: 1px solid rgba(255, 175, 140, 0.25);
-  box-shadow: 0 20px 48px rgba(74, 21, 75, 0.45);
-  color: #ffffff;
-  --text-sec: rgba(255, 255, 255, 0.75);
-  --accent: #ff8a65;
-  --divider: rgba(255, 255, 255, 0.18);
-  --quote-bg: rgba(0, 0, 0, 0.2);
-  --quote-border: rgba(255, 255, 255, 0.15);
-  --qr-fill: #ffffff;
+/* A light avatar placeholder cannot be a white glow; it reads as the
+   quote panel instead so a transparent avatar still has an edge. */
+.post-to-card-target[data-theme="parchment"] .author-avatar,
+.post-to-card-target.theme-parchment .author-avatar,
+.post-to-card-target[data-theme="hairline"] .author-avatar,
+.post-to-card-target.theme-hairline .author-avatar,
+.post-to-card-target[data-theme="broadsheet"] .author-avatar,
+.post-to-card-target.theme-broadsheet .author-avatar,
+.post-to-card-target[data-theme="brutalist"] .author-avatar,
+.post-to-card-target.theme-brutalist .author-avatar {
+  background: var(--quote-bg, #f1efe7);
 }
 
-/* 3. Aurora Purple */
-.post-to-card-target[data-theme="aurora-purple"],
-.post-to-card-target.theme-aurora-purple {
-  background: linear-gradient(135deg, #654ea3 0%, #eaafc8 100%);
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  box-shadow: 0 16px 40px rgba(9, 2, 20, 0.8), 0 0 24px rgba(168, 85, 247, 0.15);
-  color: #ffffff;
-  --text-sec: #c084fc;
-  --accent: #38bdf8;
-  --divider: rgba(168, 85, 247, 0.25);
-  --quote-bg: rgba(168, 85, 247, 0.06);
-  --quote-border: rgba(168, 85, 247, 0.2);
-  --qr-fill: #f8fafc;
+/* -------------------------------------------------------------
+   Type scale is part of the theme: the paper and the letterforms
+   move together, which is what makes the switch read as a change of
+   material rather than a repaint.
+
+   Every theme supplies `--font-display`, so the family is applied
+   once here and each theme below only chooses size and weight.
+   ------------------------------------------------------------- */
+.author-name,
+.quote-name {
+  font-family: var(--font-display);
 }
 
-/* 4. Notion Clean White */
-.post-to-card-target[data-theme="notion-clean-white"],
-.post-to-card-target[data-theme="notion-white"],
-.post-to-card-target.theme-notion-clean-white,
-.post-to-card-target.theme-notion-white {
-  background: #ffffff;
-  border: 1px solid #e9e9e7;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
-  color: #37352f;
-  --text-sec: #6b7280;
-  --accent: #2563eb;
-  --divider: #e5e7eb;
-  --quote-bg: #f9fafb;
-  --quote-border: #e5e7eb;
-  --qr-fill: #111827;
+.post-to-card-target[data-theme="parchment"] .author-name,
+.post-to-card-target.theme-parchment .author-name,
+.post-to-card-target[data-theme="parchment"] .quote-name,
+.post-to-card-target.theme-parchment .quote-name,
+.post-to-card-target[data-theme="nocturne"] .author-name,
+.post-to-card-target.theme-nocturne .author-name,
+.post-to-card-target[data-theme="nocturne"] .quote-name,
+.post-to-card-target.theme-nocturne .quote-name {
+  font-weight: 600;
+  letter-spacing: 0.005em;
 }
 
-/* 5. Cyber Mint */
-.post-to-card-target[data-theme="cyber-mint"],
-.post-to-card-target.theme-cyber-mint {
-  background: linear-gradient(150deg, #070c0e 0%, #0d1619 50%, #080f12 100%);
-  border: 1px solid rgba(16, 185, 129, 0.28);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 16px rgba(16, 185, 129, 0.08);
-  color: #f0fdf4;
-  --text-sec: #94a3b8;
-  --accent: #00ffcc;
-  --divider: rgba(16, 185, 129, 0.2);
-  --quote-bg: rgba(16, 185, 129, 0.04);
-  --quote-border: rgba(16, 185, 129, 0.18);
-  --qr-fill: #10b981;
+.post-to-card-target[data-theme="parchment"] .author-name,
+.post-to-card-target.theme-parchment .author-name {
+  font-size: 17.5px;
 }
 
-/* 6. OLED Black */
-.post-to-card-target[data-theme="oled-black"],
-.post-to-card-target.theme-oled-black,
-.post-to-card-target.theme-oled {
-  background: #000000;
-  border: 1px solid #262626;
-  box-shadow: 0 0 0 1px #1a1a1a;
-  color: #ffffff;
-  --text-sec: #737373;
-  --accent: #ffffff;
-  /* The accent is pure white here, so links need their own colour or they
-     vanish into the body text. */
-  --link: #60a5fa;
-  --divider: #262626;
-  --quote-bg: #0d0d0d;
-  --quote-border: #262626;
-  --qr-fill: #ffffff;
+.post-to-card-target[data-theme="nocturne"] .author-name,
+.post-to-card-target.theme-nocturne .author-name {
+  font-size: 18.5px;
+}
+
+.post-to-card-target[data-theme="parchment"] .tweet-text-content,
+.post-to-card-target.theme-parchment .tweet-text-content {
+  font-size: 17px;
+  line-height: 1.78;
+}
+
+.post-to-card-target[data-theme="hairline"] .author-name,
+.post-to-card-target.theme-hairline .author-name,
+.post-to-card-target[data-theme="hairline"] .quote-name,
+.post-to-card-target.theme-hairline .quote-name {
+  font-size: 15.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+.post-to-card-target[data-theme="hairline"] .tweet-text-content,
+.post-to-card-target.theme-hairline .tweet-text-content {
+  font-size: 16px;
+  line-height: 1.62;
+}
+
+/* Terminal: monospace everywhere, one size, tight leading. The grid is the
+   point, so nothing is allowed to vary its advance width. */
+.post-to-card-target[data-theme="terminal"] .author-name,
+.post-to-card-target.theme-terminal .author-name,
+.post-to-card-target[data-theme="terminal"] .quote-name,
+.post-to-card-target.theme-terminal .quote-name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.post-to-card-target[data-theme="terminal"] .tweet-text-content,
+.post-to-card-target.theme-terminal .tweet-text-content {
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.post-to-card-target[data-theme="terminal"] .card-timestamp,
+.post-to-card-target.theme-terminal .card-timestamp,
+.post-to-card-target[data-theme="terminal"] .stats-row,
+.post-to-card-target.theme-terminal .stats-row {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* Broadsheet: serif throughout, large headline, all-caps kickers. */
+.post-to-card-target[data-theme="broadsheet"] .author-name,
+.post-to-card-target.theme-broadsheet .author-name,
+.post-to-card-target[data-theme="broadsheet"] .quote-name,
+.post-to-card-target.theme-broadsheet .quote-name {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.post-to-card-target[data-theme="broadsheet"] .tweet-text-content,
+.post-to-card-target.theme-broadsheet .tweet-text-content {
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.72;
+}
+
+.post-to-card-target[data-theme="broadsheet"] .card-timestamp,
+.post-to-card-target.theme-broadsheet .card-timestamp,
+.post-to-card-target[data-theme="broadsheet"] .stats-row,
+.post-to-card-target.theme-broadsheet .stats-row {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Brutalist: heavy sans, oversized headline, no letter-spacing niceties. */
+.post-to-card-target[data-theme="brutalist"] .author-name,
+.post-to-card-target.theme-brutalist .author-name,
+.post-to-card-target[data-theme="brutalist"] .quote-name,
+.post-to-card-target.theme-brutalist .quote-name {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.post-to-card-target[data-theme="brutalist"] .tweet-text-content,
+.post-to-card-target.theme-brutalist .tweet-text-content {
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+/* -------------------------------------------------------------
+   One signature rule per theme.
+
+   Positioned rather than a flex child, so it can sit inside the
+   card's padding without being pushed around by the body's gap.
+   ------------------------------------------------------------- */
+.post-to-card-body-content {
+  position: relative;
+}
+
+/* Parchment: a full-width cream standfirst rule.
+
+   This started life as a short terracotta tick, which is what the accent is
+   for elsewhere — but as an isolated dash above the byline it read as a stray
+   red mark with nothing anchoring it. A full-width rule reads as a decision the
+   layout made, and it leaves the accent to mean one thing: emphasis in text. */
+.post-to-card-target[data-theme="parchment"] .post-to-card-body-content,
+.post-to-card-target.theme-parchment .post-to-card-body-content {
+  padding-top: 18px;
+}
+
+.post-to-card-target[data-theme="parchment"] .post-to-card-body-content::before,
+.post-to-card-target.theme-parchment .post-to-card-body-content::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--rule);
+}
+
+/* Nocturne: a masthead — hairline across the top, one terracotta tick. */
+.post-to-card-target[data-theme="nocturne"] .post-to-card-body-content,
+.post-to-card-target.theme-nocturne .post-to-card-body-content {
+  padding-top: 17px;
+}
+
+.post-to-card-target[data-theme="nocturne"] .post-to-card-body-content::before,
+.post-to-card-target.theme-nocturne .post-to-card-body-content::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.post-to-card-target[data-theme="nocturne"] .post-to-card-body-content::after,
+.post-to-card-target.theme-nocturne .post-to-card-body-content::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 1px;
+  background: var(--rule);
+}
+
+/* Hairline: one full-width hairline, no tick. */
+.post-to-card-target[data-theme="hairline"] .post-to-card-body-content,
+.post-to-card-target.theme-hairline .post-to-card-body-content {
+  padding-top: 18px;
+}
+
+.post-to-card-target[data-theme="hairline"] .post-to-card-body-content::before,
+.post-to-card-target.theme-hairline .post-to-card-body-content::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--rule);
+}
+
+/* Terminal: a phosphor scanline. Repeating-linear-gradient rather than a single
+   line, so it reads as a CRT refresh band instead of a border. Kept faint and
+   short — a full-height scanline over body text is unreadable at 12px. */
+.post-to-card-target[data-theme="terminal"] .post-to-card-body-content,
+.post-to-card-target.theme-terminal .post-to-card-body-content {
+  padding-top: 20px;
+}
+
+.post-to-card-target[data-theme="terminal"] .post-to-card-body-content::before,
+.post-to-card-target.theme-terminal .post-to-card-body-content::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--rule) 0,
+    var(--rule) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+}
+
+/* Broadsheet: a masthead — a double rule, the way a paper separates its flag
+   from the column furniture. Two hairlines with a 3px gap. */
+.post-to-card-target[data-theme="broadsheet"] .post-to-card-body-content,
+.post-to-card-target.theme-broadsheet .post-to-card-body-content {
+  padding-top: 20px;
+}
+
+.post-to-card-target[data-theme="broadsheet"] .post-to-card-body-content::before,
+.post-to-card-target.theme-broadsheet .post-to-card-body-content::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5px;
+  border-top: 2px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Brutalist: one thick rule, matching the frame's 3px. */
+.post-to-card-target[data-theme="brutalist"] .post-to-card-body-content,
+.post-to-card-target.theme-brutalist .post-to-card-body-content {
+  padding-top: 22px;
+}
+
+.post-to-card-target[data-theme="brutalist"] .post-to-card-body-content::before,
+.post-to-card-target.theme-brutalist .post-to-card-body-content::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--rule);
+}
+
+/* -------------------------------------------------------------
+   Footnote & data treatment.
+
+   Parchment sets the footer as a footnote; Nocturne steps it down
+   again; Hairline turns it into a labelled data strip with tabular
+   figures and rules between the columns.
+   ------------------------------------------------------------- */
+.post-to-card-target[data-theme="parchment"] .card-timestamp,
+.post-to-card-target.theme-parchment .card-timestamp,
+.post-to-card-target[data-theme="parchment"] .stats-row,
+.post-to-card-target.theme-parchment .stats-row {
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+
+.post-to-card-target[data-theme="nocturne"] .card-timestamp,
+.post-to-card-target.theme-nocturne .card-timestamp,
+.post-to-card-target[data-theme="nocturne"] .stats-row,
+.post-to-card-target.theme-nocturne .stats-row {
+  /* Quieter via size and spacing, never via opacity: `--faint` is already the
+     dimmest step, and fading it again drops the stats under 4.5:1. */
+  font-size: 12.5px;
+  letter-spacing: 0.015em;
+}
+
+.post-to-card-target[data-theme="hairline"] .card-timestamp,
+.post-to-card-target.theme-hairline .card-timestamp,
+.post-to-card-target[data-theme="hairline"] .stats-row,
+.post-to-card-target.theme-hairline .stats-row {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.post-to-card-target[data-theme="hairline"] .stats-row,
+.post-to-card-target.theme-hairline .stats-row {
+  gap: 0;
+}
+
+.post-to-card-target[data-theme="hairline"] .stat-item + .stat-item,
+.post-to-card-target.theme-hairline .stat-item + .stat-item {
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid var(--divider);
 }
 
 /* -------------------------------------------------------------
@@ -321,6 +568,11 @@
   text-overflow: ellipsis;
 }
 
+/* Verification tick is printed in the sheet's own ink, not Twitter blue.
+   Three themes share one accent, and a hard-coded brand blue was slipping a
+   second, louder colour onto every card — most jarring on Hairline, where the
+   whole system is black rules on warm white. The badge shape and its tooltip
+   still carry the meaning; only the ink changed. */
 .verified-badge {
   display: inline-flex;
   align-items: center;
@@ -328,7 +580,7 @@
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  color: #1d9bf0;
+  color: inherit;
 }
 
 .author-handle {
@@ -420,18 +672,6 @@
 .post-to-card-target[data-fit="contain"] .media-item,
 .post-to-card-target[data-fit="contain"] .media-video-poster {
   object-fit: contain;
-  background: transparent;
-  box-shadow: none;
-}
-
-.post-to-card-target[data-theme="notion-clean-white"] .media-item.fit-contain,
-.post-to-card-target[data-theme="notion-white"] .media-item.fit-contain,
-.post-to-card-target[data-theme="notion-clean-white"] .media-video-poster.fit-contain,
-.post-to-card-target[data-theme="notion-white"] .media-video-poster.fit-contain,
-.post-to-card-target.theme-notion-clean-white .media-item.fit-contain,
-.post-to-card-target.theme-notion-white .media-item.fit-contain,
-.post-to-card-target.theme-notion-clean-white .media-video-poster.fit-contain,
-.post-to-card-target.theme-notion-white .media-video-poster.fit-contain {
   background: transparent;
   box-shadow: none;
 }
@@ -766,19 +1006,11 @@
   display: block;
 }
 
-/* Subtle Bottom Scrim: soft black vignette to guarantee contrast on bright video posters */
-.media-video-item .video-scrim-overlay {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 56px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 100%);
-  pointer-events: none;
-  z-index: 1;
-}
+/* No bottom scrim. There used to be a 56px black gradient whose only job was
+   to give the translucent play badge something to sit against. The badge is now
+   an opaque pill, so the scrim only darkened the poster — and on the many posts
+   with burnt-in subtitles it was dimming text the card cannot re-typeset. */
 
-/* Video Indicator Badge: Bottom-left frosted glass pill badge (zero center obstruction) */
 .media-video-item .video-indicator-badge {
   position: absolute;
   bottom: 10px;
@@ -789,23 +1021,24 @@
   pointer-events: none;
 }
 
+/* Video Indicator Badge: flat solid pill (zero center obstruction).
+
+   Deliberately not frosted glass — the three themes ban blurred surfaces,
+   and a backdrop-filter reads as a smudge in a flat export. */
 .media-video-item .video-badge-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 24px;
   padding: 0 9px 0 7px;
-  background: rgba(15, 20, 25, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(20, 20, 19, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 9999px;
   color: #ffffff;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .media-video-item .video-badge-pill.gif-badge {
@@ -813,8 +1046,8 @@
   font-weight: 700;
   font-size: 11px;
   letter-spacing: 0.06em;
-  background: rgba(15, 20, 25, 0.82);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(20, 20, 19, 0.86);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .media-video-item .video-play-icon {
@@ -894,6 +1127,11 @@
   text-overflow: ellipsis;
   flex-shrink: 1;
   min-width: 0;
+}
+
+/* Time is footnote material: a step below the handle it sits beside. */
+.quote-timestamp {
+  color: var(--faint, var(--text-sec, #9ca3af));
 }
 
 .quote-timestamp-link {
@@ -1077,7 +1315,7 @@
 
 .card-timestamp {
   font-size: 13px;
-  color: var(--text-sec, #9ca3af);
+  color: var(--faint, var(--text-sec, #9ca3af));
   line-height: 1.4;
 }
 
@@ -1086,7 +1324,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  color: var(--text-sec, #9ca3af);
+  color: var(--faint, var(--text-sec, #9ca3af));
   font-size: 13px;
 }
 

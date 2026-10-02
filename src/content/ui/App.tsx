@@ -2,7 +2,7 @@ import type { JSX } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import type { ThreadData } from '../../types/tweet';
 import type { CardConfig } from '../../types/card';
-import { DEFAULT_CARD_CONFIG, loadUserPreferences, saveUserPreferences } from './themes';
+import { DEFAULT_CARD_CONFIG, THEMES, loadUserPreferences, saveUserPreferences } from './themes';
 import { setInjectedButtonVisibility } from '../adapter/injection';
 import { Card } from './Card';
 import { Controls } from './Controls';
@@ -142,7 +142,10 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
             ))}
           </div>
         </div>
-        <div class="preview-viewport">
+        <div
+          class="preview-viewport"
+          style={{ '--ptc-preview-canvas': THEMES[config.theme].tokens.canvas }}
+        >
           <div
             class="preview-scale"
             style={{ zoom: `${zoom}` }}

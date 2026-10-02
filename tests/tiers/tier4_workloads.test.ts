@@ -34,9 +34,9 @@ function test(name: string, fn: TestFn) {
 }
 
 // -------------------------------------------------------------
-// Workflow 1: Single Viral Tweet with 4 Images -> Cyber Mint -> Clipboard Copy
+// Workflow 1: Single Viral Tweet with 4 Images -> Nocturne -> Clipboard Copy
 // -------------------------------------------------------------
-test('Tier 4.1: [End-to-End Workflow 1] Viral Tweet with 4 photos converted to Cyber Mint card and copied to clipboard', async () => {
+test('Tier 4.1: [End-to-End Workflow 1] Viral Tweet with 4 photos converted to Nocturne card and copied to clipboard', async () => {
   // 1. Setup DOM document and Chrome extension mocks
   const doc = new DomDocument();
   const chromeMock = createChromeMock();
@@ -98,9 +98,9 @@ test('Tier 4.1: [End-to-End Workflow 1] Viral Tweet with 4 photos converted to C
   const shadow = container.attachShadow({ mode: 'open' });
   doc.body.appendChild(container);
 
-  // 6. User chooses configuration: Cyber Mint + 32px padding + 12px radius + QR code
+  // 6. User chooses configuration: Nocturne + 32px padding + 12px radius + QR code
   const config: CardConfig = {
-    theme: 'cyber-mint',
+    theme: 'nocturne',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -156,7 +156,7 @@ test('Tier 4.1: [End-to-End Workflow 1] Viral Tweet with 4 photos converted to C
 });
 
 // -------------------------------------------------------------
-// Workflow 2: Educational Long Thread -> OLED Black -> Fallback Download
+// Workflow 2: Educational Long Thread -> Nocturne -> Fallback Download
 // -------------------------------------------------------------
 test('Tier 4.2: [End-to-End Workflow 2] 3-Tweet thread with author blur fails clipboard and gracefully downloads PNG', async () => {
   const doc = new DomDocument();
@@ -181,9 +181,9 @@ test('Tier 4.2: [End-to-End Workflow 2] 3-Tweet thread with author blur fails cl
   const articles = threadFeed.querySelectorAll('article[data-testid="tweet"]');
   assert.equal(articles.length, 3);
 
-  // 3. User chooses OLED Black + 3:4 Poster Ratio + Author Privacy Blur
+  // 3. User chooses Nocturne + 3:4 Poster Ratio + Author Privacy Blur
   const config: CardConfig = {
-    theme: 'oled-black',
+    theme: 'nocturne',
     padding: '48px',
     borderRadius: '20px',
     aspectRatio: '3:4',
@@ -238,15 +238,15 @@ test('Tier 4.2: [End-to-End Workflow 2] 3-Tweet thread with author blur fails cl
 });
 
 // -------------------------------------------------------------
-// Workflow 3: Single Tweet with Quote Tweet -> Sunset Glow -> Ultra-HD 3x Export
+// Workflow 3: Single Tweet with Quote Tweet -> Parchment -> Ultra-HD 3x Export
 // -------------------------------------------------------------
-test('Tier 4.3: [End-to-End Workflow 3] Quote tweet rendered in Sunset Glow at scale: 3', async () => {
+test('Tier 4.3: [End-to-End Workflow 3] Quote tweet rendered in Parchment at scale: 3', async () => {
   const doc = new DomDocument();
   const quoteTweetArticle = createDomElement(QUOTE_TWEET_HTML);
   doc.body.appendChild(quoteTweetArticle);
 
   const card = new DomElement('DIV');
-  card.className = 'theme-sunset-glow';
+  card.className = 'theme-parchment';
 
   // Add proxied quote tweet image
   const img = new DomImageElement();
