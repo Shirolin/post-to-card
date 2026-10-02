@@ -88,6 +88,25 @@ export const VIDEO_POSTER_HTML = `
 `;
 
 /**
+ * A GIF post as actually rendered: the videoPlayer/videoComponent testids are
+ * gone, the play button is the only stable marker, and the poster frame lives
+ * inside the tweetPhoto wrapper as a hidden image layered behind the <video>.
+ * Without the hidden-image filter this yields the same asset twice.
+ */
+export const GIF_POSTER_LAYER_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8009"><time datetime="2026-07-01T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/tweet_video_thumb/gif_hidden_poster.jpg" style="opacity: 0; z-index: -1" alt="">
+    <video poster="https://pbs.twimg.com/tweet_video_thumb/gif_visible_poster.jpg"></video>
+    <button data-testid="playButton" aria-label="播放这个 GIF"></button>
+  </div>
+</article>
+`;
+
+/**
  * A tweet that pairs a photo with a GIF side by side, the layout that previously
  * rendered as the GIF only because video detection short-circuited the photos.
  */

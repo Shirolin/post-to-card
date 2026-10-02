@@ -377,12 +377,24 @@ export function extractVideoDuration(container: Element): string | undefined {
 export function extractVideoMedia(container: Element): MediaItem | null {
   if (!container) return null;
 
-  // 1. Locate the video container. The aria-label match is deliberately exact:
-  //    a `*=` substring match also catches external link cards (e.g. a YouTube
-  //    preview) and misreports them as tweet video.
+  // 1. Locate the video container. Verified against a live GIF post: the
+  //    data-testid variants are no longer rendered, so only the bare <video>
+  //    matched and targetContainer degraded to the whole article. The play
+  //    button is the stable marker, so the container is derived from it rather
+  //    than the other way round — a `:has()` ancestor selector would resolve to
+  //    the outermost match and reintroduce that same problem. The aria-label
+  //    match stays exact, since a `*=` substring match also catches external
+  //    link cards such as YouTube previews.
+  const playButton = container.querySelector('button[data-testid="playButton"]');
+  const mediaWrapper = playButton
+    ? (typeof playButton.closest === 'function'
+        ? playButton.closest('div[data-testid="tweetPhoto"], div[style*="overflow"], div')
+        : null)
+    : null;
+
   const videoContainer = container.querySelector(
     'div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"], video'
-  );
+  ) || mediaWrapper;
   const videoEl = (container.querySelector('video') || (videoContainer?.tagName === 'VIDEO' ? videoContainer : null)) as HTMLVideoElement | null;
 
   // Check if any thumbnail specifically belongs to video
@@ -531,6 +543,27 @@ export function extractVideoMedia(container: Element): MediaItem | null {
 }
 
 /**
+ * True when an image is a hidden layer belonging to a video player rather than a
+ * photo the author attached.
+ *
+ * Observed on a live GIF post: the poster frame sits inside the same
+ * tweetPhoto wrapper, at `opacity: 0` and `z-index: -1`, behind the <video>.
+ * Counting it as a photo would render a GIF as both an image and a video.
+ */
+function isMediaPosterLayer(img: Element): boolean {
+  if (typeof img.closest === 'function') {
+    // A video inside the same container means this img is the poster, not a photo.
+    if (img.closest('div[data-testid="tweetPhoto"] video')) return true;
+    if (img.closest('div[data-testid="videoPlayer"], div[data-testid="videoComponent"]')) return true;
+  }
+
+  const style = img.getAttribute('style') || '';
+  if (/opacity:\s*0(?:[;\s]|$)/i.test(style)) return true;
+
+  return false;
+}
+
+/**
  * Extracts up to 4 high-res photos plus any video/GIF poster frame for the main
  * tweet. Excludes media belonging to nested quote tweets.
  *
@@ -542,7 +575,7 @@ export function extractTweetMedia(article: Element): MediaItem[] | undefined {
   // 1. Photos inside tweetPhoto containers
   const items: MediaItem[] = [];
   const photoEls = Array.from(article.querySelectorAll('div[data-testid="tweetPhoto"] img'));
-  const validPhotos = photoEls.filter(img => !isInsideQuoteTweet(img));
+  const validPhotos = photoEls.filter(img => !isInsideQuoteTweet(img) && !isMediaPosterLayer(img));
 
   for (const img of validPhotos.slice(0, 4)) {
     const rawSrc = img.getAttribute('src') || '';

@@ -16,7 +16,7 @@ import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/singl
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetMedia } from '../../src/content/adapter/extractor.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
@@ -757,6 +757,21 @@ test('F11.9: never returns more than 4 media items', () => {
   const tweet = createDomElement(PHOTO_AND_VIDEO_HTML);
   const media = extractTweetMedia(tweet as unknown as Element);
   assert.ok((media?.length ?? 0) <= 4, 'media count must respect the 4-item layout cap');
+});
+
+test('F11.10: a GIF poster layer is not extracted as a photo', () => {
+  // Observed on a live GIF post: the hidden poster sits inside the tweetPhoto
+  // wrapper behind the <video>, so counting it would render the GIF twice.
+  const tweet = createDomElement(GIF_POSTER_LAYER_HTML);
+  const media = extractTweetMedia(tweet as unknown as Element);
+
+  assert.ok(media, 'expected the GIF to be extracted');
+  assert.equal(media!.length, 1, 'a GIF post must yield exactly one item');
+  assert.ok(
+    !media!.some((m) => m.type === 'image'),
+    'the hidden poster layer must not be collected as a photo'
+  );
+  assert.ok(media![0].type === 'gif' || media![0].type === 'video', 'expected a video or gif item');
 });
 
 // -------------------------------------------------------------
