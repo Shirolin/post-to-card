@@ -7,7 +7,7 @@ export interface AuthorInfo {
 
 export interface MediaItem {
   type: 'image' | 'video' | 'gif';
-  url: string; // upgraded to large or 400x400
+  url: string; // upgraded to orig resolution where available
   originalUrl?: string;
   posterUrl?: string;
   alt?: string;
@@ -30,6 +30,8 @@ export interface QuoteTweetData {
   media?: MediaItem[];
   timestamp?: string;
   url?: string;
+  /** Post was deleted, private, or otherwise not renderable. */
+  isUnavailable?: boolean;
 }
 
 export interface TweetData {
@@ -45,6 +47,35 @@ export interface TweetData {
   isThreadPart?: boolean;
   threadIndex?: number;
   threadTotal?: number;
+  /**
+   * Handle of the account that retweeted this post, when the timeline entry is
+   * a retweet rather than an original. The body belongs to that other account.
+   */
+  retweetedBy?: string;
+  /**
+   * Which extraction strategy produced this record. Purely diagnostic: a rising
+   * count of `fallback` here is the early warning that X changed its DOM,
+   * ahead of user reports.
+   */
+  diagnostics?: ExtractionDiagnostics;
+}
+
+export interface ExtractionDiagnostics {
+  /** Which channel produced this record. */
+  source?: 'graphql' | 'dom';
+  /** Operation that answered, e.g. TweetDetail. Never used to identify a request. */
+  operationName?: string;
+  /**
+   * The rotated queryId observed at capture time. Recorded purely so a
+   * rotation is visible in logs; a change here is expected and harmless.
+   */
+  queryId?: string;
+  tweet?: 'testid' | 'role' | 'structural' | 'none';
+  text?: 'testid' | 'fallback' | 'none';
+  media?: 'testid' | 'fallback' | 'none';
+  isUnavailable?: boolean;
+  /** Which social-context signal classified this entry, if any. */
+  social?: 'retweet' | 'reply' | 'pinned' | 'none';
 }
 
 export interface ThreadData {

@@ -6,7 +6,7 @@
  */
 
 import type { ThreadData } from '../../types/tweet';
-import { extractContinuousThread } from './thread';
+import { extractContinuousThread, TWEET_ARTICLE_SELECTOR } from './thread.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../ui/themes';
 
 interface CustomObserver {
@@ -223,10 +223,10 @@ export function injectIntoActionBar(
   const btn = createTriggerButton(() => {
     let article: Element | null = null;
     if (typeof btn.closest === 'function') {
-      article = btn.closest('article[data-testid="tweet"]');
+      article = btn.closest(TWEET_ARTICLE_SELECTOR);
     }
     if (!article && typeof actionBar.closest === 'function') {
-      article = actionBar.closest('article[data-testid="tweet"]');
+      article = actionBar.closest(TWEET_ARTICLE_SELECTOR);
     }
 
     if (article) {
@@ -273,9 +273,12 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
     return 0;
   }
 
-  // 1. Primary selector: group inside tweet article
-  const selector = 'article[data-testid="tweet"] div[role="group"]:not([data-post-to-card-injected="true"])';
-  const actionBars = Array.from(document.querySelectorAll(selector));
+  // 1. Primary selector: the action group of a top-level tweet.
+  //    `div[role="group"]` is a generic container that also occurs inside quoted
+  //    posts, so a group nested in a quote is skipped — otherwise the button
+  //    would appear inside the quoted card and would extract the inner tweet.
+  const selector = `${TWEET_ARTICLE_SELECTOR} div[role="group"]:not([data-post-to-card-injected="true"])`;
+  const actionBars = Array.from(document.querySelectorAll(selector)).filter(isTopLevelActionBar);
 
   let count = 0;
   for (const bar of actionBars) {
@@ -288,9 +291,9 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
   if (count === 0) {
     const actionButtons = Array.from(
       document.querySelectorAll(
-        'article[data-testid="tweet"] button[data-testid="reply"], article[data-testid="tweet"] button[data-testid="like"]'
+        `${TWEET_ARTICLE_SELECTOR} button[data-testid="reply"], ${TWEET_ARTICLE_SELECTOR} button[data-testid="like"]`
       )
-    );
+    ).filter(btn => isTopLevelActionBar(btn));
     for (const btn of actionButtons) {
       let group: Element | null = null;
       if (typeof btn.closest === 'function') {
@@ -309,20 +312,43 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
 }
 
 /**
+ * True when the element belongs to the tweet itself rather than to a quoted post
+ * nested inside it.
+ */
+function isTopLevelActionBar(el: Element): boolean {
+  if (typeof el.closest === 'function') {
+    if (el.closest('div[data-testid="quoteTweet"]')) return false;
+  }
+  // A group inside a nested <article> is a quoted post's own action bar.
+  let node: Element | null = el.parentElement;
+  let depth = 0;
+  while (node) {
+    if ((node.tagName || '').toUpperCase() === 'ARTICLE') {
+      depth++;
+      if (depth > 1) return false;
+    }
+    node = node.parentElement;
+  }
+  return true;
+}
+
+/**
  * Initializes continuous dynamic injection on Twitter/X Web App:
  * 1. Executes immediate initial injection scan.
  * 2. Establishes a 150ms debounced MutationObserver on document.body for virtual scrolling.
  * 3. Hooks popstate and history pushState/replaceState for SPA transitions.
  */
 export function initTwitterInjection(
-  onCardTrigger: (data: ThreadData) => void
+  onCardTrigger: (data: ThreadData, article: Element) => void
 ): { disconnect: () => void; injectAll: () => void; triggerActiveTweet: () => boolean } {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let observer: CustomObserver | null = null;
 
   const handleArticleTrigger = (article: Element) => {
     const threadData = extractContinuousThread(article);
-    onCardTrigger(threadData);
+    // The originating element is passed through so the caller can correlate the
+    // DOM result with any structured response captured for the same tweet.
+    onCardTrigger(threadData, article);
   };
 
   // 1. Initial preference load for button visibility
@@ -354,7 +380,7 @@ export function initTwitterInjection(
     const mouseEvt = e as MouseEvent;
     const target = mouseEvt.target as Element | null;
     if (target && typeof target.closest === 'function') {
-      const article = target.closest('article[data-testid="tweet"]');
+      const article = target.closest(TWEET_ARTICLE_SELECTOR);
       if (article) {
         lastHoveredArticle = article;
       }
@@ -369,11 +395,11 @@ export function initTwitterInjection(
     if (!targetArticle && typeof document !== 'undefined') {
       const activeEl = document.activeElement as HTMLElement | null;
       if (activeEl && typeof activeEl.closest === 'function') {
-        targetArticle = activeEl.closest('article[data-testid="tweet"]');
+        targetArticle = activeEl.closest(TWEET_ARTICLE_SELECTOR);
       }
     }
     if (!targetArticle && typeof document !== 'undefined') {
-      const tweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+      const tweets = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR));
       targetArticle = tweets[0] || null;
     }
 

@@ -8,6 +8,7 @@ import { runTier2 } from './tiers/tier2_boundaries.test.ts';
 import { runTier3 } from './tiers/tier3_interactions.test.ts';
 import { runTier4 } from './tiers/tier4_workloads.test.ts';
 import { runTierI18n } from './tiers/tier_i18n.test.ts';
+import { runTierGraphQL } from './tiers/tier_graphql.test.ts';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -38,6 +39,9 @@ async function main() {
   }
   if (!targetTier || targetTier === 'i18n') {
     tiersToRun.push({ name: 'Tier i18n: Internationalization & Localization', run: runTierI18n });
+  }
+  if (!targetTier || targetTier === 'graphql') {
+    tiersToRun.push({ name: 'Tier GraphQL: Structured Response Parsing', run: runTierGraphQL });
   }
 
   for (const tier of tiersToRun) {

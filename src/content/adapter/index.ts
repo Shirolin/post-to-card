@@ -6,6 +6,7 @@
 
 export * from './emojis';
 export * from './urls';
-export * from './extractor';
-export * from './thread';
+export * from './extractor.ts';
+export * from './thread.ts';
+export * from './social.ts';
 export * from './injection';

@@ -7,8 +7,9 @@
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "build:background": "vite build --mode background",
+    "build:hook": "vite build --mode hook",
     "build:content": "vite build --mode content",
-    "build": "tsc --noEmit && vite build --mode background && vite build --mode content",
+    "build": "tsc --noEmit && vite build --mode background && vite build --mode hook && vite build --mode content",
     "test": "node tests/runner.ts"
   },
   "dependencies": {

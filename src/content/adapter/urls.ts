@@ -16,16 +16,32 @@ export function upgradeAvatarUrl(url: string): string {
 export const getHighResAvatarUrl = upgradeAvatarUrl;
 
 /**
- * Upgrades a Twitter photo URL to large resolution.
- * Supports both query parameter format (?format=...&name=large) and legacy colon suffix (:large).
+ * Upgrades a Twitter photo URL to its highest available resolution.
+ *
+ * `name=orig` is the current high-resolution variant (capped at 4096px by X);
+ * `name=large` only reaches 2048px. WebP sources are additionally rewritten to
+ * JPEG, which is what the community uses to actually obtain original quality.
+ *
+ * Note that `orig` is not infallible: there are reports of it 404ing where
+ * `large` still resolves. Callers that can tolerate a request per candidate
+ * should use `getPhotoUrlCandidates` and probe them in order.
+ *
  * Covers tweet media (`/media/`) and external link-card previews (`/card_img/`).
  */
 export function upgradePhotoUrl(url: string): string {
-  if (!url) return '';
+  return getPhotoUrlCandidates(url)[0] || url;
+}
 
-  // Check legacy colon suffix (e.g. photo.jpg:small -> photo.jpg:large)
+/**
+ * Returns progressively lower-resolution variants of a photo URL, best first.
+ * The export path uses this to fall back when the original is unavailable.
+ */
+export function getPhotoUrlCandidates(url: string): string[] {
+  if (!url) return [];
+
+  // Legacy colon suffix (e.g. photo.jpg:small -> photo.jpg:orig)
   if (url.match(/:(?:thumb|small|medium|large|orig|\d+x\d+)$/)) {
-    return url.replace(/:(?:thumb|small|medium|large|orig|\d+x\d+)$/, ':large');
+    return [url.replace(/:(?:thumb|small|medium|large|orig|\d+x\d+)$/, ':orig')];
   }
 
   try {
@@ -34,14 +50,22 @@ export function upgradePhotoUrl(url: string): string {
       parsed.hostname.includes('twimg.com') &&
       (parsed.pathname.includes('/media/') || parsed.pathname.includes('/card_img/'))
     ) {
-      parsed.searchParams.set('name', 'large');
-      return parsed.toString();
+      const build = (name: string): string => {
+        const next = new URL(parsed.toString());
+        // JPEG source is required for original quality; WebP is recompressed.
+        if (next.searchParams.get('format') === 'webp') {
+          next.searchParams.set('format', 'jpg');
+        }
+        next.searchParams.set('name', name);
+        return next.toString();
+      };
+      return [build('orig'), build('large'), build('medium')];
     }
   } catch {
     // If not a valid standard URL, return original
   }
 
-  return url;
+  return [url];
 }
 
 export const getHighResPhotoUrl = upgradePhotoUrl;

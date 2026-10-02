@@ -1,12 +1,27 @@
 /**
  * Continuous same-author thread detection and assembly for Twitter/X.
  * Scans forward and backward along the DOM timeline to reconstruct continuous threads
- * with strict multi-signal validation (route context, DOM connector lines, self-reply detection,
- * and temporal consistency) to eliminate misjudgments on profile timelines and feeds.
+ * with strict multi-signal validation (route context, thread markers, self-reply detection,
+ * snowflake ID ordering, and temporal consistency) to eliminate misjudgments on profile
+ * timelines and feeds.
  */
 
 import type { TweetData, ThreadData } from '../../types/tweet';
-import { extractTweetData } from './extractor';
+import { extractTweetData } from './extractor.ts';
+import { getReplyingToHandle, getRetweetedBy } from './social.ts';
+
+// Re-exported so existing importers keep a single entry point for these signals.
+export { getReplyingToHandle, getRetweetedBy };
+
+/**
+ * Locates tweet articles, strongest signal first.
+ *
+ * `data-testid` is X's own anchor and is the primary choice. The fallbacks
+ * matter because every data-testid is absent on logged-out pages, where the
+ * whole extension would otherwise silently match nothing.
+ */
+export const TWEET_ARTICLE_SELECTOR =
+  'article[data-testid="tweet"], article[role="article"], [data-testid="cellInnerDiv"] article';
 
 /**
  * Detects whether a tweet article element is an advertisement or sponsored post.
@@ -14,8 +29,13 @@ import { extractTweetData } from './extractor';
 export function isAdOrSponsored(article: Element): boolean {
   if (!article) return false;
 
-  // 1. Placement tracking container
-  if (article.querySelector('[data-testid="placementTracking"]')) {
+  // 1. Placement tracking container. It is commonly an *ancestor* of the
+  // article, so closest() is required; querySelector alone misses those.
+  if (typeof article.closest === 'function') {
+    if (article.closest('[data-testid="placementTracking"]')) {
+      return true;
+    }
+  } else if (article.querySelector('[data-testid="placementTracking"]')) {
     return true;
   }
 
@@ -24,11 +44,15 @@ export function isAdOrSponsored(article: Element): boolean {
     return true;
   }
 
-  // 3. Promoted or sponsored text without valid tweet timestamp link
-  const rawText = article.textContent || '';
-  if (/\b(?:Promoted|赞助)\b/i.test(rawText)) {
-    const hasStatusLink = article.querySelector('a[href*="/status/"]');
-    if (!hasStatusLink || article.querySelector('[data-testid="placementTracking"]')) {
+  // 3. Promoted / sponsored label. This is a localized *string*, so it may only
+  //    corroborate an already-suspicious article: the word also appears in user
+  //    bios, which live in the same article, making it a false-positive source
+  //    on its own.
+  const hasStatusLink = article.querySelector('a[href*="/status/"]');
+  const hasTweetIdentity = article.querySelector('div[data-testid="User-Name"]');
+  if (!hasStatusLink || !hasTweetIdentity) {
+    const rawText = article.textContent || '';
+    if (/\b(?:Promoted|Sponsored)\b|赞助/i.test(rawText)) {
       return true;
     }
   }
@@ -45,64 +69,30 @@ export function isStatusDetailPage(): boolean {
 }
 
 /**
- * Extracts the handle of the user that this tweet is explicitly replying to, if any.
- * Matches patterns like "Replying to @handle", "回复 @handle", "返信先: @handle".
- */
-export function getReplyingToHandle(article: Element): string | null {
-  if (!article) return null;
-
-  const rawText = article.textContent || '';
-  if (!/(?:replying to|回复|返信先)/i.test(rawText)) {
-    return null;
-  }
-
-  const links = Array.from(article.querySelectorAll('a[href^="/"]:not([href*="/status/"])'));
-  for (const link of links) {
-    const text = link.textContent?.trim() || '';
-    if (text.startsWith('@')) {
-      const parentText = link.parentElement?.textContent || '';
-      if (/(?:replying to|回复|返信先)/i.test(parentText)) {
-        return text.toLowerCase();
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Checks if a tweet article possesses explicit native Twitter thread connector lines.
- * Twitter places a 2px-wide vertical bar in/near the avatar column when connected in a thread.
+ * Checks whether a tweet is part of a thread continuation.
+ *
+ * Deliberately avoids inline styles and obfuscated class names: the previous
+ * implementation matched `width: 2px` plus names like `r-11mg6pl`, which X
+ * re-minifies on design refreshes. Only X's own anchors and stable fixture
+ * classes are consulted now.
  */
 export function hasNativeThreadConnector(article: Element, _direction: 'down' | 'up' = 'down'): boolean {
   if (!article) return false;
 
-  // 1. Explicit classes in fixtures or Twitter
-  if (
-    article.classList?.contains('thread-root') ||
-    article.classList?.contains('thread-middle') ||
-    article.classList?.contains('thread-end') ||
-    article.querySelector('.thread-connector-line, [data-testid="thread-connector"]')
-  ) {
-    return true;
-  }
-
-  // 2. Avatar column line detection
-  const avatarEl = article.querySelector('div[data-testid="Tweet-User-Avatar"]');
-  if (avatarEl && avatarEl.parentElement) {
-    const parent = avatarEl.parentElement;
-    const elements = Array.from(parent.querySelectorAll('div'));
-    for (const el of elements) {
-      if (el === avatarEl || avatarEl.contains(el)) continue;
-      const styleAttr = el.getAttribute('style') || '';
-      const className = el.className || '';
-      if (
-        /width:\s*2px/i.test(styleAttr) ||
-        /border-(?:left|right):\s*2px/i.test(styleAttr) ||
-        /\br-11mg6pl\b|\br-14lw9vd\b|\br-16y2uox\b/.test(className)
-      ) {
-        return true;
-      }
+  // 1. X's own thread marker. Its exact semantics are not documented, so this
+  //    counts only as a supporting hint, never as sole proof.
+  if (typeof article.querySelector === 'function') {
+    if (article.querySelector('[data-testid="tweet-thread-indicator"]')) {
+      return true;
+    }
+    // 2. Explicit classes used by this project's fixtures.
+    if (
+      article.classList?.contains('thread-root') ||
+      article.classList?.contains('thread-middle') ||
+      article.classList?.contains('thread-end') ||
+      article.querySelector('.thread-connector-line, [data-testid="thread-connector"]')
+    ) {
+      return true;
     }
   }
 
@@ -113,7 +103,7 @@ export function hasNativeThreadConnector(article: Element, _direction: 'down' | 
  * Checks if article contains a "Show this thread" link.
  */
 export function hasShowThisThread(article: Element): boolean {
-  if (!article) return false;
+  if (!article || typeof article.querySelectorAll !== 'function') return false;
   const links = Array.from(article.querySelectorAll('a[href*="/status/"]'));
   return links.some(l => /(?:show this thread|显示此推文串|このスレッドを表示|afficher ce fil|thread anzeigen|mostrar este hilo)/i.test(l.textContent || ''));
 }
@@ -163,6 +153,21 @@ export function isTemporallyConnected(tweetA: TweetData, tweetB: TweetData, isFo
 }
 
 /**
+ * True when a numeric snowflake ID is strictly ordered the expected way.
+ *
+ * X documents IDs as "roughly time-ordered", so this is only ever used to rule
+ * a candidate OUT, never to prove a thread.
+ */
+export function isSnowflakeOrdered(earlier: string, later: string): boolean {
+  if (!/^\d+$/.test(earlier) || !/^\d+$/.test(later)) return true;
+  try {
+    return BigInt(earlier) < BigInt(later);
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Checks if two adjacent tweets form a genuine thread connection.
  */
 export function isThreadConnectedPair(
@@ -183,20 +188,35 @@ export function isThreadConnectedPair(
     return false;
   }
 
-  // 3. If artB is explicitly replying to someone else, reject
+  // 3. A retweet is not a continuation of the original author's thread, even
+  //    when the reposted body happens to share the author.
+  if (tweetA.retweetedBy || tweetB.retweetedBy) {
+    return false;
+  }
+
+  // 4. If artB is explicitly replying to someone else, reject
   const replyTarget = getReplyingToHandle(artB);
   if (replyTarget && replyTarget !== tweetA.author.handle.toLowerCase()) {
     return false;
   }
 
-  // 4. Temporal continuity check
+  // 5. Temporal continuity check
   if (!isTemporallyConnected(tweetA, tweetB, isForward)) {
     return false;
   }
 
-  // 5. Positive proof of thread connection REQUIRED:
+  // 6. Snowflake IDs are documented as roughly time-ordered, so an ID that runs
+  //    the wrong way proves the pair cannot be consecutive. Used only to veto.
+  if (tweetA.id && tweetB.id) {
+    const ordered = isForward
+      ? isSnowflakeOrdered(tweetA.id, tweetB.id)
+      : isSnowflakeOrdered(tweetB.id, tweetA.id);
+    if (!ordered) return false;
+  }
+
+  // 7. Positive proof of thread connection REQUIRED:
   // Whether in detail page or profile feed, adjacent tweets MUST have positive thread proof
-  // (DOM connector line, verified self-reply, or "show this thread").
+  // (thread marker, verified self-reply, or "show this thread").
   // Never merge unconnected same-author tweets simply because they share a timeline!
   const hasConnectorA = hasNativeThreadConnector(artA, isForward ? 'down' : 'up');
   const hasConnectorB = hasNativeThreadConnector(artB, isForward ? 'up' : 'down');
@@ -204,6 +224,15 @@ export function isThreadConnectedPair(
   const hasShowThread = hasShowThisThread(artA) || hasShowThisThread(artB);
 
   if (hasConnectorA || hasConnectorB || isSelfReply || hasShowThread) {
+    return true;
+  }
+
+  // On a conversation view, DOM order carries the author's own sequencing and
+  // the preceding checks have already excluded ads, cross-author replies,
+  // retweets and ID-order contradictions. That is sufficient proof here; on
+  // feeds and profiles the algorithmic order says nothing about threading, so
+  // still refuse to merge.
+  if (isStatusDetailPage()) {
     return true;
   }
 
@@ -245,10 +274,10 @@ export function extractContinuousThread(
 
   let allArticles: Element[] = [];
   if (container && typeof container.querySelectorAll === 'function') {
-    allArticles = Array.from(container.querySelectorAll('article[data-testid="tweet"]'));
+    allArticles = Array.from(container.querySelectorAll(TWEET_ARTICLE_SELECTOR));
   }
   if (allArticles.length === 0 && typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
-    allArticles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+    allArticles = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR));
   }
 
   const targetIndex = allArticles.indexOf(targetArticle);

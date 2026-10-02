@@ -9,6 +9,8 @@ import type { ThreadData } from '../types/tweet';
 import { initTwitterInjection } from './adapter/injection';
 import { openCardModal } from './container/element';
 import { exportCardFlow } from './engine';
+import { initGraphQLBridge, lookupFromGraphQL } from './graphql/bridge.ts';
+import { extractTweetId } from './adapter/extractor.ts';
 
 function handleCardExport(
   target: HTMLElement,
@@ -20,10 +22,47 @@ function handleCardExport(
   return exportCardFlow(target, scale, chosenAction, undefined, undefined, locale).then(() => {});
 }
 
+/**
+ * Resolves the data for a card, preferring the structured GraphQL channel.
+ *
+ * GraphQL wins when it produced at least one tweet, because thread membership,
+ * reply targets and retweet relationships come straight from X rather than
+ * being inferred from the rendered page. Anything short of that — no payload
+ * captured, unparseable body, or an empty result set — falls through to the DOM
+ * adapter. X swallows failed GraphQL calls, so an empty result is treated as a
+ * miss rather than as a legitimately empty tweet.
+ */
+function resolveThreadData(domThread: ThreadData, article?: Element): ThreadData {
+  const fromGraphQL = lookupFromGraphQL(article ? extractTweetId(article) : undefined);
+
+  if (fromGraphQL.thread) {
+    for (const tweet of fromGraphQL.thread.tweets) {
+      tweet.diagnostics = {
+        ...tweet.diagnostics,
+        source: 'graphql',
+        operationName: fromGraphQL.operationName,
+        queryId: fromGraphQL.queryId,
+      };
+    }
+    return fromGraphQL.thread;
+  }
+
+  for (const tweet of domThread.tweets) {
+    tweet.diagnostics = { ...tweet.diagnostics, source: 'dom' };
+  }
+  return domThread;
+}
+
 function initContentScript(): void {
   try {
     console.log('[Post-to-Card] Content script active on Twitter/X');
-    const controller = initTwitterInjection((threadData: ThreadData) => {
+
+    // Must be installed before the page issues its own GraphQL calls.
+    initGraphQLBridge();
+
+    const controller = initTwitterInjection((domThread: ThreadData, article?: Element) => {
+      const threadData = resolveThreadData(domThread, article);
+
       openCardModal(threadData, async (target: HTMLElement, scale: number, action?: 'copy' | 'download', locale?: Locale) => {
         await handleCardExport(target, scale, action, locale);
       });

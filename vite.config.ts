@@ -25,7 +25,35 @@ function copyManifestPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const isBackground = mode === 'background';
+  const isHook = mode === 'hook';
   const hasPublicDir = existsSync(resolve(__dirname, 'public'));
+
+  // GraphQL interceptor. Runs in the MAIN world so it can observe the page's
+  // own fetch/XHR calls, which are invisible from the isolated content script.
+  if (isHook) {
+    return {
+      publicDir: false,
+      build: {
+        outDir: 'dist',
+        emptyOutDir: false,
+        target: 'esnext',
+        minify: false,
+        lib: {
+          entry: resolve(__dirname, 'src/content/graphql/hook.ts'),
+          name: 'PostToCardGraphQLHook',
+          formats: ['iife'],
+          fileName: () => 'graphql-hook.js',
+        },
+        rollupOptions: {
+          output: {
+            entryFileNames: 'graphql-hook.js',
+            extend: true,
+            inlineDynamicImports: true,
+          },
+        },
+      },
+    };
+  }
 
   if (isBackground) {
     return {

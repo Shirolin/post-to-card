@@ -86,3 +86,36 @@ export const VIDEO_POSTER_HTML = `
   </div>
 </article>
 `;
+
+/**
+ * A tweet that pairs a photo with a GIF side by side, the layout that previously
+ * rendered as the GIF only because video detection short-circuited the photos.
+ */
+export const PHOTO_AND_GIF_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8007"><time datetime="2026-07-01T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/media/screenshot_table.jpg?format=jpg&name=small" alt="Screenshot">
+  </div>
+  <div data-testid="videoPlayer">
+    <video poster="https://pbs.twimg.com/tweet_video_thumb/gif_reaction.jpg"></video>
+  </div>
+</article>
+`;
+
+/** Photo + video variant, to keep the merge behaviour independent of GIF detection. */
+export const PHOTO_AND_VIDEO_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8008"><time datetime="2026-07-01T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/media/photo_beside_video.jpg?format=jpg&name=small" alt="Beside Video">
+  </div>
+  <div data-testid="videoPlayer">
+    <video poster="https://pbs.twimg.com/media/clip_poster.jpg"></video>
+  </div>
+</article>
+`;

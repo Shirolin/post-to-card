@@ -53,11 +53,17 @@ export function restoreUnicodeEmojis(node: Node | null | undefined): string {
 }
 
 /**
- * Strips trailing pic.twitter.com media attachment links automatically appended by Twitter.
+ * Strips the trailing media attachment link X appends to tweets with media.
+ *
+ * Both domains are covered: `pic.twitter.com` is the legacy host and
+ * `pic.x.com` the current one. The scheme is optional because X renders the
+ * link label as a bare host plus path, with no protocol prefix.
  */
 export function stripPicTwitterLink(text: string): string {
   if (!text) return '';
-  return text.replace(/https?:\/\/pic\.twitter\.com\/\w+\s*$/, '').trim();
+  return text
+    .replace(/(?:https?:\/\/)?pic\.(?:twitter|x)\.com\/\S+\s*$/, '')
+    .trim();
 }
 
 /**

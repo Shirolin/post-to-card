@@ -8,6 +8,7 @@
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet';
 import { restoreUnicodeEmojis, cleanTweetText } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
+import { classifySocial, getRetweetedBy } from './social.ts';
 
 export type RichTokenType = 'text' | 'mention' | 'hashtag' | 'cashtag' | 'link' | 'emoji';
 
@@ -49,17 +50,13 @@ export function findQuoteContainer(article: Element): Element | null {
   const byTestId = article.querySelector('div[data-testid="quoteTweet"]');
   if (byTestId) return byTestId;
 
-  // 2. Legacy class name kept for older captures.
-  const byClass = article.querySelector('.quote-box');
-  if (byClass) return byClass;
-
-  // 3. Nested <article> — the quoted post rendered as its own article.
+  // 2. Nested <article> — the quoted post rendered as its own article.
   //    Filter out `article` itself: some DOM shims make querySelector match the
   //    root, and the real DOM never matches the element you query from.
   const nestedArticles = Array.from(article.querySelectorAll('article')).filter(a => a !== article);
   if (nestedArticles.length > 0) return nestedArticles[0];
 
-  // 4. Structural fallback: any descendant that owns a second User-Name plus a
+  // 3. Structural fallback: any descendant that owns a second User-Name plus a
   //    tweetText, while not containing the main post's User-Name.
   const mainUserName = article.querySelector('div[data-testid="User-Name"]');
   const allUserNames = Array.from(article.querySelectorAll('div[data-testid="User-Name"]'));
@@ -83,13 +80,8 @@ export function findQuoteContainer(article: Element): Element | null {
  * Checks if a given DOM element is nested inside a Quote Tweet box.
  */
 function isInsideQuoteTweet(el: Element): boolean {
-  if (typeof el.closest === 'function') {
-    if (
-      el.closest('div[data-testid="quoteTweet"]') ||
-      el.closest('.quote-box')
-    ) {
-      return true;
-    }
+  if (typeof el.closest === 'function' && el.closest('div[data-testid="quoteTweet"]')) {
+    return true;
   }
 
   if (isInsideNestedArticle(el)) return true;
@@ -258,8 +250,14 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
           : ((node as { title?: string }).title || '');
         const text = restoreUnicodeEmojis(node);
 
-        // Skip trailing pic.twitter.com media link
-        if (href.includes('pic.twitter.com') || text.includes('pic.twitter.com')) {
+        // Skip the trailing media permalink. X serves these from both
+        // pic.twitter.com (legacy) and pic.x.com (current); missing the latter
+        // let it fall through to the mention branch below and leak into the
+        // rendered body text. The text-equals-href check catches both domains
+        // without hardcoding either.
+        const isMediaPermalink = /pic\.(?:twitter|x)\.com/.test(href) ||
+          (text && (text === href || text.replace(/^https?:\/\//, '') === href.replace(/^https?:\/\//, '')));
+        if (isMediaPermalink) {
           return;
         }
 
@@ -326,6 +324,11 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
 
 /**
  * Detects if a video container represents an animated GIF.
+ *
+ * X renders the GIF badge as a bare text node "GIF" with no aria-label, and no
+ * data-testid exists for it (there is no `gifBadge` in the DOM). Because "GIF"
+ * is a technical abbreviation it does not vary with the interface language,
+ * which makes it more dependable than the localized labels used elsewhere.
  */
 export function isGifMedia(container: Element): boolean {
   if (!container) return false;
@@ -333,7 +336,6 @@ export function isGifMedia(container: Element): boolean {
   if (aria.toUpperCase().includes('GIF')) return true;
 
   if (typeof container.querySelector === 'function') {
-    if (container.querySelector('[aria-label*="GIF"], [data-testid="gifBadge"]')) return true;
     const spans = container.querySelectorAll('span, div');
     for (const el of Array.from(spans)) {
       if (el.textContent?.trim() === 'GIF') return true;
@@ -375,9 +377,11 @@ export function extractVideoDuration(container: Element): string | undefined {
 export function extractVideoMedia(container: Element): MediaItem | null {
   if (!container) return null;
 
-  // 1. Locate video container, video tag, or player overlay
+  // 1. Locate the video container. The aria-label match is deliberately exact:
+  //    a `*=` substring match also catches external link cards (e.g. a YouTube
+  //    preview) and misreports them as tweet video.
   const videoContainer = container.querySelector(
-    'div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"], div[aria-label*="video" i], video'
+    'div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"], video'
   );
   const videoEl = (container.querySelector('video') || (videoContainer?.tagName === 'VIDEO' ? videoContainer : null)) as HTMLVideoElement | null;
 
@@ -434,9 +438,16 @@ export function extractVideoMedia(container: Element): MediaItem | null {
     }
   }
 
-  // Strategy D: Any preview img inside the target container or article (excluding quote tweets)
-  if (!posterUrl) {
-    const imgs = Array.from(targetContainer.querySelectorAll('img')).filter(img => !isInsideQuoteTweet(img));
+  // Strategy D: Any preview img inside the video's own container.
+  // Scoped to that container and away from tweetPhoto, otherwise a photo
+  // sitting beside the video gets adopted as its poster frame and the tweet
+  // ends up rendering the same image twice.
+  if (!posterUrl && videoContainer) {
+    const imgs = Array.from(videoContainer.querySelectorAll('img')).filter(img => {
+      if (isInsideQuoteTweet(img)) return false;
+      if (typeof img.closest === 'function' && img.closest('div[data-testid="tweetPhoto"]')) return false;
+      return true;
+    });
     for (const img of imgs) {
       const src = (typeof img.getAttribute === 'function' ? img.getAttribute('src') : (img as any).src) || '';
       if (src && !src.includes('profile_images') && !src.includes('/emoji/')) {
@@ -488,9 +499,11 @@ export function extractVideoMedia(container: Element): MediaItem | null {
     }
   }
 
-  // Strategy G: Twitter Open Graph image meta
-  if (!posterUrl && typeof document !== 'undefined' && typeof document.querySelector === 'function') {
-    const ogImg = document.querySelector('meta[property="og:image"]');
+  // Strategy G: Open Graph image. Scoped to the media container so it can only
+  // ever supply this video's own poster; a document-level og:image reflects
+  // whatever page the user happens to be on, not this tweet.
+  if (!posterUrl && targetContainer && typeof targetContainer.querySelector === 'function') {
+    const ogImg = targetContainer.querySelector('meta[property="og:image"]');
     const content = ogImg?.getAttribute('content');
     if (content && !content.includes('profile_images')) {
       posterUrl = content;
@@ -518,17 +531,15 @@ export function extractVideoMedia(container: Element): MediaItem | null {
 }
 
 /**
- * Extracts 1-4 high-res photos and video poster frames for the main tweet.
- * Excludes media belonging to nested quote tweets.
+ * Extracts up to 4 high-res photos plus any video/GIF poster frame for the main
+ * tweet. Excludes media belonging to nested quote tweets.
+ *
+ * A tweet can mix photos and a video (e.g. one image beside a GIF). The two
+ * sources are therefore merged instead of letting the video short-circuit the
+ * photo pass, which previously dropped every photo from mixed-media tweets.
  */
 export function extractTweetMedia(article: Element): MediaItem[] | undefined {
-  // 1. Check for Video / GIF first: if article contains a video, extract dedicated video media
-  const videoMedia = extractVideoMedia(article);
-  if (videoMedia) {
-    return [videoMedia];
-  }
-
-  // 2. Photos
+  // 1. Photos inside tweetPhoto containers
   const items: MediaItem[] = [];
   const photoEls = Array.from(article.querySelectorAll('div[data-testid="tweetPhoto"] img'));
   const validPhotos = photoEls.filter(img => !isInsideQuoteTweet(img));
@@ -550,6 +561,15 @@ export function extractTweetMedia(article: Element): MediaItem[] | undefined {
         alt: img.getAttribute('alt') || undefined,
         aspectRatio,
       });
+    }
+  }
+
+  // 2. Video / GIF, merged in rather than replacing the photos above. The card
+  // renderer caps layouts at 4 items, so a combined set is trimmed as a whole.
+  if (items.length < 4) {
+    const videoMedia = extractVideoMedia(article);
+    if (videoMedia) {
+      items.push(videoMedia);
     }
   }
 
@@ -596,6 +616,21 @@ function extractLinkCardMedia(article: Element): MediaItem | undefined {
 }
 
 /**
+ * Detects an unavailable/deleted post placeholder by structure rather than by
+ * its notice text: a permalink is present but both the identity and body
+ * containers are missing. X treats unavailable posts as absent data rather
+ * than a special text state, and this survives copy changes and localization.
+ */
+function isUnavailableMarker(container: Element): boolean {
+  const hasPermalink = !!container.querySelector('a[href*="/status/"]');
+  const hasIdentity = !!container.querySelector('div[data-testid="User-Name"]');
+  const hasBody = !!container.querySelector('div[data-testid="tweetText"]');
+  if (hasPermalink && !hasIdentity && !hasBody) return true;
+  // Some variants carry no permalink at all but still render no identity.
+  return !hasIdentity && !hasBody && !!container.textContent?.trim();
+}
+
+/**
  * Extracts nested Quote Tweet data (author, text, media, timestamp).
  */
 export function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
@@ -603,13 +638,15 @@ export function extractQuoteTweet(article: Element): QuoteTweetData | undefined 
 
   if (!quoteBox) return undefined;
 
-  // Handle deleted or unavailable quote post tombstone
-  const boxText = quoteBox.textContent || '';
-  if (boxText.includes('This post is unavailable') || boxText.includes('此推文不可用')) {
+  // Handle deleted or unavailable quote post tombstone. Detected structurally
+  // (a permalink with neither identity nor body) rather than by matching the
+  // notice text, which exists in many languages and drifts with X's copy.
+  if (isUnavailableMarker(quoteBox)) {
     return {
       author: { name: '', handle: '', avatarUrl: '' },
-      text: 'This post is unavailable.',
+      text: '',
       timestamp: '',
+      isUnavailable: true,
     };
   }
 
@@ -633,39 +670,39 @@ export function extractQuoteTweet(article: Element): QuoteTweetData | undefined 
   const timeEl = quoteBox.querySelector('time');
   const timestamp = timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '';
 
-  // Media
-  // Media: check video first, then photos
+  // Media: photos first, then any video/GIF. Merged rather than exclusive so a
+  // quote mixing an image with a video keeps both.
   const media: MediaItem[] = [];
-  const quoteVideo = extractVideoMedia(quoteBox);
-  if (quoteVideo) {
-    media.push(quoteVideo);
-  } else {
-    const photoEls = Array.from(quoteBox.querySelectorAll('div[data-testid="tweetPhoto"] img'));
-    for (const img of photoEls.slice(0, 4)) {
-      const src = img.getAttribute('src') || '';
-      if (src) {
-        const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
-        const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
-        const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
-        const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
-          ? Number((naturalWidth / naturalHeight).toFixed(3))
-          : undefined;
+  const photoEls = Array.from(quoteBox.querySelectorAll('div[data-testid="tweetPhoto"] img'));
+  for (const img of photoEls.slice(0, 4)) {
+    const src = img.getAttribute('src') || '';
+    if (src) {
+      const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+      const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+      const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+      const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
+        ? Number((naturalWidth / naturalHeight).toFixed(3))
+        : undefined;
 
-        media.push({
-          type: 'image',
-          url: upgradePhotoUrl(src),
-          originalUrl: src,
-          alt: img.getAttribute('alt') || undefined,
-          aspectRatio,
-        });
-      }
+      media.push({
+        type: 'image',
+        url: upgradePhotoUrl(src),
+        originalUrl: src,
+        alt: img.getAttribute('alt') || undefined,
+        aspectRatio,
+      });
     }
+  }
 
-    // Quoted post may itself only carry an external link card.
-    if (media.length === 0) {
-      const quoteCardMedia = extractLinkCardMedia(quoteBox);
-      if (quoteCardMedia) media.push(quoteCardMedia);
-    }
+  if (media.length < 4) {
+    const quoteVideo = extractVideoMedia(quoteBox);
+    if (quoteVideo) media.push(quoteVideo);
+  }
+
+  // Quoted post may itself only carry an external link card.
+  if (media.length === 0) {
+    const quoteCardMedia = extractLinkCardMedia(quoteBox);
+    if (quoteCardMedia) media.push(quoteCardMedia);
   }
 
   type CompatibleToken = NonNullable<TweetData['richTokens']>[number];
@@ -795,6 +832,7 @@ export function extractTweetData(article: Element): TweetData | null {
   const stats = extractTweetStats(article);
   const media = extractTweetMedia(article);
   const quotePost = extractQuoteTweet(article);
+  const retweetedBy = getRetweetedBy(article);
 
   type CompatibleToken = NonNullable<TweetData['richTokens']>[number];
 
@@ -808,6 +846,15 @@ export function extractTweetData(article: Element): TweetData | null {
     stats,
     media,
     quotePost,
+    retweetedBy: retweetedBy || undefined,
     isThreadPart: false,
+    // Diagnostic only. A rising count of fallback/none values is the early
+    // signal that X changed its DOM, ahead of user reports.
+    diagnostics: {
+      text: validTextEl ? 'testid' : (text ? 'fallback' : 'none'),
+      media: media && media.length > 0 ? 'testid' : 'none',
+      isUnavailable: isUnavailableMarker(article),
+      social: classifySocial(article),
+    },
   };
 }

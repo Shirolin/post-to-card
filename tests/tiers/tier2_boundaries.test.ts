@@ -9,6 +9,8 @@ import { createChromeMock } from '../env/chrome.ts';
 import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
 import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/extractor.ts';
+import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
+import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import type { TweetData } from '../../src/types/tweet.ts';
 import type { CardConfig, RadiusOption, PaddingOption } from '../../src/types/card.ts';
@@ -484,9 +486,149 @@ test('Tier 2.30: external link card preview image is extracted as media', () => 
   const media = extractTweetData(article)?.media;
   assert.ok(media && media.length === 1, 'Link card preview must yield one media item');
   assert.ok(media[0].url.includes('card_img'), 'Link card media must point at the card image');
+  // Assert the resolution intent rather than a literal size token: the highest
+  // available variant is what keeps exports sharp, and its name changes.
   assert.ok(
-    media[0].url.includes('name=large'),
-    'Link card preview must be upgraded to the large variant so exports stay sharp'
+    getPhotoUrlCandidates(media[0].url)[0].includes('name=orig'),
+    'Link card preview must request the highest resolution variant so exports stay sharp'
+  );
+});
+
+// -------------------------------------------------------------
+// Structural detection: retweets, replies, ads, and unavailable posts
+// -------------------------------------------------------------
+test('Tier 2.31: a retweet is identified from socialContext without reading its label', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="socialContext">
+        <span>Alice reposted</span>
+        <a href="/alice"><span>@alice</span></a>
+      </div>
+      <div data-testid="User-Name"><a href="/bob"><span>Bob</span></a></div>
+      <div data-testid="tweetText"><span>original words</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.retweetedBy, 'alice', 'reposting handle must come from the social context link');
+  assert.equal(tweet?.diagnostics?.social, 'retweet');
+});
+
+test('Tier 2.32: a reply target is read structurally from socialContext', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="socialContext">
+        <span>Replying to</span>
+        <a href="/carol"><span>@carol</span></a>
+      </div>
+      <div data-testid="User-Name"><a href="/dave"><span>Dave</span></a></div>
+      <div data-testid="tweetText"><span>a reply</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.retweetedBy, undefined, 'a reply is not a retweet');
+  assert.equal(tweet?.diagnostics?.social, 'reply');
+});
+
+test('Tier 2.33: the word "reply" inside a quoted post does not classify the outer tweet', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/erin"><span>Erin</span></a></div>
+      <div data-testid="tweetText"><span>look at this</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/frank"><span>Frank</span></a></div>
+        <div data-testid="tweetText"><span>回复: please read this</span></div>
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.retweetedBy, undefined);
+  assert.equal(tweet?.diagnostics?.social, 'none', 'a quoted reply must not classify the outer entry');
+});
+
+test('Tier 2.34: pic.x.com media permalinks do not leak into the rendered text', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/gina"><span>Gina</span></a></div>
+      <div data-testid="tweetText">
+        <span>look at this</span>
+        <a href="https://t.co/abc123"><span>pic.x.com/abc123</span></a>
+      </div>
+      <div data-testid="tweetPhoto">
+        <img src="https://pbs.twimg.com/media/a.jpg?format=jpg&name=small" alt="A">
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.ok(!/pic\./.test(tweet?.text || ''), 'media permalink must not appear in the body text');
+  assert.ok(!(tweet?.richTokens || []).some(tk => tk.type === 'mention' && /pic\./.test(tk.value)),
+    'media permalink must not be tokenized as a mention');
+});
+
+test('Tier 2.35: a post with a permalink but no identity or body is flagged unavailable', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <a href="/someone/status/123"><time datetime="2026-01-01T00:00:00.000Z"></time></a>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.diagnostics?.isUnavailable, true);
+});
+
+test('Tier 2.36: an ordinary post is not flagged as unavailable', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/hank"><span>Hank</span></a></div>
+      <div data-testid="tweetText"><span>still here</span></div>
+      <a href="/hank/status/456"><time datetime="2026-01-01T00:00:00.000Z"></time></a>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.diagnostics?.isUnavailable, false);
+});
+
+test('Tier 2.37: photo resolution requests the highest available variant and keeps a fallback chain', () => {
+  const candidates = getPhotoUrlCandidates('https://pbs.twimg.com/media/x.webp?format=webp&name=small');
+  assert.ok(candidates.length >= 2, 'expected a fallback chain');
+  assert.ok(candidates[0].includes('name=orig'), 'first candidate must request the original');
+  assert.ok(candidates[0].includes('format=jpg'), 'webp must be rewritten to jpg for original quality');
+  assert.ok(candidates.some(c => c.includes('name=large')), 'chain must include a smaller fallback');
+});
+
+test('Tier 2.38: extraction degrades gracefully when no data-testid is present', () => {
+  // Logged-out pages carry no data-testid at all, so every testid-based lookup
+  // misses. This must not throw and must report itself as a fallback so the
+  // change is visible in diagnostics rather than failing silently.
+  const article = createDomElement(`
+    <article role="article">
+      <div><a href="/ivy"><span>@ivy</span></a></div>
+      <div><span>no testids here</span></div>
+    </article>
+  `);
+
+  let tweet;
+  assert.doesNotThrow(() => {
+    tweet = extractTweetData(article);
+  }, 'extraction must not throw on a testid-free DOM');
+  assert.ok(tweet, 'a record must still be produced');
+  assert.equal(tweet!.text, '', 'text is unavailable without a testid, but must not throw');
+  assert.equal(tweet!.media, undefined, 'media is unavailable without a testid');
+  assert.equal(tweet!.diagnostics?.text, 'none', 'diagnostics must report the missing anchor');
+});
+
+test('Tier 2.39: the article selector falls back past data-testid', () => {
+  assert.ok(
+    TWEET_ARTICLE_SELECTOR.includes('role="article"'),
+    'a role-based fallback is required because logged-out pages lack data-testid'
+  );
+  assert.ok(
+    TWEET_ARTICLE_SELECTOR.includes('cellInnerDiv'),
+    'a structural fallback is required for layouts without either marker'
   );
 });
 

@@ -22,6 +22,47 @@
 }
 
 /* -------------------------------------------------------------
+   Retweet Attribution
+   The body shown belongs to the original author, so the card states
+   plainly whose words these are instead of implying the visible account
+   wrote them.
+   ------------------------------------------------------------- */
+.retweet-notice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sec);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.retweet-notice svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.retweet-handle {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.quote-card-unavailable {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quote-unavailable-text {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-sec);
+}
+
+/* -------------------------------------------------------------
    Aspect Ratio Rules (Downward Fluid Expansion: min-height floor)
    ------------------------------------------------------------- */
 .post-to-card-target[data-ratio="auto"],

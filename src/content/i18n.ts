@@ -70,6 +70,8 @@ export interface Translations {
   tweetUnit: string;
 
   // Card Content
+  retweetedBy: string;
+  unavailablePost: string;
   verified: string;
   replies: string;
   reposts: string;
@@ -136,6 +138,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     previewSummary: '共 {count} 条推文',
     tweetUnit: '条',
 
+    retweetedBy: '转发自',
+    unavailablePost: '此推文不可用',
     verified: '已认证账号',
     replies: '条回复',
     reposts: '次转推',
@@ -200,6 +204,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     previewSummary: '{count} tweets',
     tweetUnit: 'tweets',
 
+    retweetedBy: 'Retweeted by',
+    unavailablePost: 'This post is unavailable',
     verified: 'Verified',
     replies: 'Replies',
     reposts: 'Reposts',

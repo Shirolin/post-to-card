@@ -16,7 +16,8 @@ import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/singl
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML } from '../fixtures/multi-images.ts';
+import { extractTweetMedia } from '../../src/content/adapter/extractor.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
@@ -155,9 +156,21 @@ test('F2.4: content_scripts matches both twitter.com and x.com', () => {
   assert.ok(matches.some((m: string) => m.includes('x.com')), 'Must match x.com');
 });
 
-test('F2.5: manifest.json specifies run_at document_idle for performance safety', () => {
+test('F2.5: the UI script defers to document_idle and the GraphQL hook runs in the MAIN world', () => {
   const manifest = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'manifest.json'), 'utf8'));
-  assert.equal(manifest.content_scripts?.[0]?.run_at, 'document_idle');
+  const scripts = manifest.content_scripts || [];
+
+  const ui = scripts.find((s: { js?: string[] }) => (s.js || []).includes('content.js'));
+  assert.ok(ui, 'expected a content script for the UI');
+  assert.equal(ui.run_at, 'document_idle', 'the UI script must not block page load');
+
+  // The interceptor must observe the page's own requests, which are invisible
+  // from the isolated content-script world, and must be installed before the
+  // page issues its first GraphQL call.
+  const hook = scripts.find((s: { js?: string[] }) => (s.js || []).includes('graphql-hook.js'));
+  assert.ok(hook, 'expected a content script for the GraphQL hook');
+  assert.equal(hook.world, 'MAIN', 'the GraphQL hook must run in the MAIN world');
+  assert.equal(hook.run_at, 'document_start', 'the hook must be installed before requests are issued');
 });
 
 // -------------------------------------------------------------
@@ -699,6 +712,51 @@ test('F11.4: extracts video poster frame from video component', () => {
 test('F11.5: handles empty or missing media gracefully', () => {
   assert.equal(upgradeAvatarUrl(''), '');
   assert.equal(upgradePhotoUrl(''), '');
+});
+
+// -------------------------------------------------------------
+// F11.6: Mixed photo + video media must not drop either kind.
+// Video detection used to short-circuit the photo pass, so a tweet pairing an
+// image with a GIF rendered as the GIF alone.
+// -------------------------------------------------------------
+test('F11.6: keeps the photo when a tweet also contains a GIF', () => {
+  const tweet = createDomElement(PHOTO_AND_GIF_HTML);
+  const media = extractTweetMedia(tweet as unknown as Element);
+
+  assert.ok(media, 'expected media to be extracted');
+  assert.equal(media.length, 2, 'expected both the photo and the GIF');
+
+  const photo = media.find((m) => m.type === 'image');
+  const gif = media.find((m) => m.type === 'gif' || m.type === 'video');
+  assert.ok(photo, 'expected a photo item');
+  assert.ok(gif, 'expected a gif/video item');
+  assert.match(photo.url, /screenshot_table/, 'photo should be the screenshot');
+  assert.match(gif.url, /gif_reaction/, 'gif should be the reaction clip');
+});
+
+test('F11.7: keeps the photo when a tweet also contains a plain video', () => {
+  const tweet = createDomElement(PHOTO_AND_VIDEO_HTML);
+  const media = extractTweetMedia(tweet as unknown as Element);
+
+  assert.ok(media, 'expected media to be extracted');
+  assert.equal(media.length, 2, 'expected both the photo and the video');
+  assert.ok(media.some((m) => m.type === 'image' && /photo_beside_video/.test(m.url)));
+  assert.ok(media.some((m) => m.type === 'video' && /clip_poster/.test(m.url)));
+});
+
+test('F11.8: a video-only tweet still yields exactly one item', () => {
+  const tweet = createDomElement(VIDEO_POSTER_HTML);
+  const media = extractTweetMedia(tweet as unknown as Element);
+
+  assert.ok(media, 'expected media to be extracted');
+  assert.equal(media.length, 1, 'video-only tweets must not gain phantom items');
+  assert.equal(media[0].type, 'video');
+});
+
+test('F11.9: never returns more than 4 media items', () => {
+  const tweet = createDomElement(PHOTO_AND_VIDEO_HTML);
+  const media = extractTweetMedia(tweet as unknown as Element);
+  assert.ok((media?.length ?? 0) <= 4, 'media count must respect the 4-item layout cap');
 });
 
 // -------------------------------------------------------------

@@ -176,7 +176,15 @@ d:/Project/post-to-card/
 ├── manifest.json                  # Manifest V3 模板/配置
 ├── package.json                   # 核心依赖 (preact, modern-screenshot, qrcode-generator)
 ├── tsconfig.json                  # TypeScript 配置
-├── vite.config.ts                 # 双模式/多入口 Vite 构建管道
+├── vite.config.ts                 # 三模式/多入口 Vite 构建管道
+├── dev/                           # 仅开发用：可视化 UI harness
+│   ├── preview.html
+│   ├── preview.ts                 # 内存夹具 + ?bare=1 + ?a11y=1 焦点陷阱审计
+│   └── vite.harness.config.ts
+├── docs/
+│   ├── detection-audit.md         # 检测逻辑整改清单（P0/P1/P2）
+│   ├── x-graphql-research.md      # GraphQL 拦截方案调研
+│   └── real-dom-sampling-checklist.md  # 真实 DOM 采样清单
 ├── src/
 │   ├── types/                     # 共享类型定义
 │   │   ├── tweet.ts
@@ -186,12 +194,18 @@ d:/Project/post-to-card/
 │   │   ├── index.ts
 │   │   └── proxy.ts               # twimg 跨域图片抓取与 Base64 缓存
 │   ├── content/                   # Content Script (IIFE)
-│   │   ├── index.ts               # 入口与 MutationObserver 注入器
+│   │   ├── index.ts               # 入口、双通道调度
 │   │   ├── adapter/               # Twitter DOM 适配与数据提取
 │   │   │   ├── extractor.ts
 │   │   │   ├── emojis.ts
 │   │   │   ├── thread.ts
+│   │   │   ├── social.ts          # 转发/回复/置顶的结构化判据
+│   │   │   ├── injection.ts
 │   │   │   └── urls.ts
+│   │   ├── graphql/               # 结构化数据通道
+│   │   │   ├── hook.ts            # MAIN world 拦截 fetch/XHR
+│   │   │   ├── bridge.ts          # 隔离 world 接收与缓存
+│   │   │   └── parse.ts           # 响应 → ThreadData
 │   │   ├── container/             # Shadow DOM 自定义元素封装
 │   │   │   └── element.ts
 │   │   ├── ui/                    # Preact 界面与卡片组件
@@ -214,6 +228,45 @@ d:/Project/post-to-card/
 │       ├── tier1_features.test.ts
 │       ├── tier2_boundaries.test.ts
 │       ├── tier3_interactions.test.ts
-│       └── tier4_workloads.test.ts
-└── dist/                          # 构建产物 (manifest.json, background.js, content.js)
+│       ├── tier4_workloads.test.ts
+│       ├── tier_i18n.test.ts
+│       └── tier_graphql.test.ts
+└── dist/                          # 构建产物 (manifest.json, background.js, graphql-hook.js, content.js)
 ```
+
+---
+
+## Data Channels
+
+推文数据有两条独立通道，`src/content/index.ts` 的 `resolveThreadData` 负责调度：
+
+| 通道 | 入口 | 何时使用 |
+|---|---|---|
+| **GraphQL** | `graphql/hook.ts`（MAIN world，`document_start`）拦截页面自己的 `fetch`/`XHR` | 捕获到可解析响应时优先使用 |
+| **DOM** | `adapter/` 全套解析器 | GraphQL 未命中、不可解析或返回空时兜底 |
+
+GraphQL 优先是因为它直接给出 thread 归属、回复目标与转发关系，无需从渲染结果反推。
+**空结果集视为失败而非成功** —— X 会把 GraphQL 请求失败静默吞掉（社区实测：72 个单元全部
+"succeeded" 却零结果），若把空当成功，接口轮换将无法被发现。
+
+### 为什么绝不硬编码 queryId
+
+X 定期轮换 GraphQL 的 queryId（`TweetDetail` 至少有 5 个历史值，`SearchTimeline` 至少 6 个）。
+因此：
+
+- **只按 `operationName` 匹配请求**，queryId 仅写入 `diagnostics` 供轮换监控
+- 社区共识（XActions 开发规范、twitter-web-exporter 实现）均如此；代码里出现 queryId 字面量即为 bug
+- 因为是页内 hook，可直接复用页面已构造好的 `variables`/`features`/`fieldToggles` 与
+  `x-client-transaction-id`，无需自行发请求，也就免疫了 GET→POST 迁移和 feature 清单变更
+
+### 依赖的稳定性分级
+
+| 可靠性 | 信号 |
+|---|---|
+| 强 | `a[href*="/status/"]`、`time[datetime]`、snowflake ID 大小关系、GraphQL 字段路径 |
+| 中 | `data-testid`（X 自己的锚点，但曾被重命名；未登录页完全不存在） |
+| 弱 | `div[data-testid="socialContext"]` 容器本身稳定，**其内部文案随界面语言变化** |
+| 已弃用 | 混淆类名 `r-*`/`css-*`、inline style、界面文案正则 |
+
+`TweetData.diagnostics` 记录每条记录用了哪条通道、哪个 operation、是否走了降级。
+`source` 降为 `dom` 的比例突然升高，即为 X 改版的早期信号。

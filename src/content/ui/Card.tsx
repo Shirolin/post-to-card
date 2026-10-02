@@ -388,6 +388,23 @@ function renderAuthorHeader(author: AuthorInfo, isBlurred: boolean, verifiedTitl
   );
 }
 
+/**
+ * Attribution line for a retweet. The body belongs to the original author, so
+ * the card states plainly whose words these are.
+ */
+function renderRetweetNotice(tweet: TweetData, label: string) {
+  if (!tweet.retweetedBy) return null;
+  return (
+    <div class="retweet-notice">
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">
+        <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 20.12l-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14z" />
+      </svg>
+      <span>{label}</span>
+      <span class="retweet-handle">@{tweet.retweetedBy.replace(/^@/, '')}</span>
+    </div>
+  );
+}
+
 function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTranslation>) {
   if (!stats) return null;
   const replyStr = formatStat(stats.replies);
@@ -449,6 +466,14 @@ function renderQuoteCard(
   const { author, text, richTokens, timestamp, url } = quotePost;
   const timestampText = timestamp ? formatLocaleTimestamp(timestamp, locale) : '';
 
+  if (quotePost.isUnavailable) {
+    return (
+      <div class="quote-card quote-card-unavailable" style={{ borderRadius: mediaRadius }}>
+        <span class="quote-unavailable-text">{t.unavailablePost}</span>
+      </div>
+    );
+  }
+
   return (
     <div class="quote-card" style={{ borderRadius: mediaRadius }}>
       <div class="quote-author">
@@ -503,6 +528,7 @@ function renderSingleTweet(
 ) {
   return (
     <div class="single-tweet-block">
+      {renderRetweetNotice(tweet, t.retweetedBy)}
       {renderAuthorHeader(tweet.author, config.blurAuthor, t.verified)}
       {renderTweetContent(tweet)}
       {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
@@ -553,6 +579,7 @@ function renderThreadTweet(
 
       {/* Right Column: Author Info + Content + Media + Quote */}
       <div class="thread-content-col">
+        {renderRetweetNotice(tweet, t.retweetedBy)}
         {renderAuthorDetails(tweet.author, config.blurAuthor, t.verified)}
         {renderTweetContent(tweet)}
         {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
