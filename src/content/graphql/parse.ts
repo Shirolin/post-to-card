@@ -58,7 +58,13 @@ function parseAuthor(tweet: Json): AuthorInfo {
     str(result?.name) ||
     handle;
 
+  // The avatar moved out of `legacy` too: newer responses carry it under
+  // `avatar.image_url`, while `legacy.profile_image_url_https` is the older
+  // path. Reading only the legacy field left the card on its placeholder even
+  // though name and handle (which come from `core`) still resolved.
+  const avatar = isObject(result?.avatar) ? result.avatar : {};
   const avatarUrl =
+    str(avatar.image_url) ||
     str(result?.profile_image_url_https) ||
     str(result?.avatar_url) ||
     str(legacy.profile_image_url_https) ||
@@ -354,7 +360,15 @@ export function parseTweetDetailResponse(
   let targetTweetIndex = 0;
   if (targetTweetId) {
     const found = tweets.findIndex((tweet) => tweet.id === targetTweetId);
-    if (found >= 0) targetTweetIndex = found;
+    if (found < 0) {
+      // The payload does not contain the requested tweet. This happens when a
+      // response captured earlier is still cached — e.g. the tweet opened in a
+      // detail view before navigating back to the timeline. Falling back to
+      // index 0 would render that other tweet's card, so this is reported as a
+      // miss and the caller routes to the DOM channel instead.
+      return { ...base, parseError: `target tweet ${targetTweetId} not in payload` };
+    }
+    targetTweetIndex = found;
   }
 
   return {

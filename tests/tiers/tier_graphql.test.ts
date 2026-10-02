@@ -18,6 +18,7 @@ import {
   TWEET_DETAIL_TOMBSTONE_JSON,
   TWEET_DETAIL_CURSOR_ONLY_JSON,
   TWEET_DETAIL_VISIBILITY_JSON,
+  TWEET_DETAIL_NEW_USER_SHAPE_JSON,
 } from '../fixtures/graphql.ts';
 
 export interface TestResult {
@@ -138,7 +139,35 @@ test('gql.13: the observed queryId is echoed for drift monitoring', () => {
   assert.equal(parsed.operationName, 'TweetDetail');
 });
 
-test('gql.14: the XHR hook forwards only the arguments the caller supplied', async () => {
+test('gql.14: a cached payload that does not contain the target tweet is a miss', () => {
+  // Regression guard for the stale-cache bug. Opening tweet A's detail view
+  // caches its TweetDetail response; after navigating back to the timeline,
+  // clicking any other tweet B re-queried that same cached payload. Falling
+  // back to index 0 rendered A's card for B. A payload that does not contain
+  // the requested id must be reported as a miss so the DOM channel answers.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1', '9999');
+  assert.equal(parsed.thread, null, 'a payload missing the target tweet must not produce a card');
+  assert.ok(parsed.parseError, 'the miss must be reported so the caller falls back');
+});
+
+test('gql.15: the avatar is read from the newer user shape, not just legacy', () => {
+  // Regression guard. X moved the user object's avatar to `avatar.image_url`
+  // and dropped `legacy.profile_image_url_https`. Name and handle kept working
+  // because they come from `core`, so the only visible symptom was the card
+  // falling back to its placeholder avatar.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_NEW_USER_SHAPE_JSON, 'TweetDetail', 'q1');
+  const author = parsed.thread?.tweets[0].author;
+  assert.ok(author, 'expected an author');
+  assert.equal(author!.name, 'Mark');
+  assert.equal(author!.handle, '@mkdir700');
+  assert.equal(
+    author!.avatarUrl,
+    'https://pbs.twimg.com/profile_images/7001/mark_normal.jpg',
+    'the avatar must come from avatar.image_url when legacy is absent'
+  );
+});
+
+test('gql.16: the XHR hook forwards only the arguments the caller supplied', async () => {
   // Regression guard. Forwarding an explicit undefined for open()'s optional
   // `async` parameter coerces it to false, which turned every X request
   // synchronous and made the page throw when it set xhr.timeout, leaving the

@@ -299,6 +299,58 @@ export const TWEET_DETAIL_TOMBSTONE_JSON = JSON.stringify({
   }
 });
 
+/**
+ * A tweet whose author uses the newer user shape.
+ *
+ * X moved the user object's profile fields out of `legacy`: the avatar now
+ * lives at `avatar.image_url` while `name`/`screen_name` live in `core`. The
+ * older `profile_image_url_https` field is absent here on purpose, so a parser
+ * that only reads the legacy path drops the avatar to a placeholder.
+ */
+export const TWEET_DETAIL_NEW_USER_SHAPE_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-7001',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '7001',
+                      core: {
+                        user_results: {
+                          result: {
+                            core: { screen_name: 'mkdir700', name: 'Mark' },
+                            avatar: {
+                              image_url: 'https://pbs.twimg.com/profile_images/7001/mark_normal.jpg'
+                            },
+                            is_blue_verified: true
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: 'new shape',
+                        created_at: 'Wed Oct 01 14:24:00 +0000 2026'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});
+
 /** A cursor entry that must not be mistaken for a tweet. */
 export const TWEET_DETAIL_CURSOR_ONLY_JSON = JSON.stringify({
   data: {
