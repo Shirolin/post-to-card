@@ -203,7 +203,9 @@
 .post-to-card-target[data-theme="broadsheet"] .author-avatar,
 .post-to-card-target.theme-broadsheet .author-avatar,
 .post-to-card-target[data-theme="brutalist"] .author-avatar,
-.post-to-card-target.theme-brutalist .author-avatar {
+.post-to-card-target.theme-brutalist .author-avatar,
+.post-to-card-target[data-theme="notion-white"] .author-avatar,
+.post-to-card-target.theme-notion-white .author-avatar {
   background: var(--quote-bg, #f1efe7);
 }
 
@@ -261,6 +263,19 @@
 .post-to-card-target.theme-hairline .tweet-text-content {
   font-size: 16px;
   line-height: 1.62;
+}
+
+/* Restored classics: keep the originals' type scale, which was already sans
+   and unremarkable — that restraint is the point of these three. */
+.post-to-card-target[data-theme="linear-dark"] .author-name,
+.post-to-card-target.theme-linear-dark .author-name,
+.post-to-card-target[data-theme="oled-black"] .author-name,
+.post-to-card-target.theme-oled-black .author-name,
+.post-to-card-target[data-theme="notion-white"] .author-name,
+.post-to-card-target.theme-notion-white .author-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 /* Terminal: monospace everywhere, one size, tight leading. The grid is the

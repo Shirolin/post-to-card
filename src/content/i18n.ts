@@ -50,6 +50,9 @@ export interface Translations {
   theme_parchment: string;
   theme_nocturne: string;
   theme_hairline: string;
+  theme_linear_dark: string;
+  theme_oled_black: string;
+  theme_notion_white: string;
   theme_terminal: string;
   theme_broadsheet: string;
   theme_brutalist: string;
@@ -123,6 +126,9 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     theme_parchment: '羊皮纸',
     theme_nocturne: '暗刊',
     theme_hairline: '细线',
+    theme_linear_dark: 'Linear 暗黑',
+    theme_oled_black: '极致纯黑',
+    theme_notion_white: 'Notion 纯白',
     theme_terminal: '终端',
     theme_broadsheet: '报纸栏',
     theme_brutalist: '粗野派',
@@ -191,6 +197,9 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     theme_parchment: 'Parchment',
     theme_nocturne: 'Nocturne',
     theme_hairline: 'Hairline',
+    theme_linear_dark: 'Linear Dark',
+    theme_oled_black: 'OLED Black',
+    theme_notion_white: 'Notion White',
     theme_terminal: 'Terminal',
     theme_broadsheet: 'Broadsheet',
     theme_brutalist: 'Brutalist',

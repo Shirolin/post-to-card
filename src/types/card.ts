@@ -1,28 +1,30 @@
 /**
- * The three primary papers, plus the two phase-2 materials and one deliberately
- * experimental theme that stays off the default picker.
+ * The three primary papers, the three restored classics, the two phase-2
+ * materials, and one deliberately experimental theme kept off the default
+ * picker.
  */
 export type ThemeId =
   | 'parchment'
   | 'nocturne'
   | 'hairline'
+  | 'linear-dark'
+  | 'oled-black'
+  | 'notion-white'
   | 'terminal'
   | 'broadsheet'
   | 'brutalist';
 
 /**
- * Retired gradient presets. They are still accepted as stored values so an
- * existing install migrates instead of silently resetting to the default; see
- * `LEGACY_THEME_ALIASES` in `content/ui/themes.ts` for the mapping.
+ * Retired gradient presets. Still accepted as stored values so an existing
+ * install migrates instead of silently resetting; see `LEGACY_THEME_ALIASES` in
+ * `content/ui/themes.ts`. The high-saturation full-bleed gradients stay retired
+ * on purpose — they are what the paper themes replaced.
  */
 export type LegacyThemeId =
-  | 'linear-dark'
   | 'sunset-glow'
   | 'aurora-purple'
-  | 'notion-clean-white'
-  | 'notion-white'
   | 'cyber-mint'
-  | 'oled-black'
+  | 'notion-clean-white'
   | 'oled';
 
 export type PaddingOption = '16px' | '32px' | '48px';

@@ -675,6 +675,9 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
         padding: config.padding,
         borderRadius: radius.card,
         boxShadow: tokens.shadow,
+        // Classic papers may carry a surface gradient (Linear Dark's near-black
+        // two-stop sheet). Everything else stays flat.
+        ...(tokens.surfaceGradient ? { backgroundImage: tokens.surfaceGradient } : {}),
         // Every theme colour and the type pair come from the token table and are
         // injected here. card.css only consumes them, so there is one place to
         // edit a theme and no second copy to drift out of sync.
@@ -690,7 +693,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
         '--quote-bg': tokens.quoteBackground,
         '--quote-border': tokens.quoteBorder,
         '--qr-fill': tokens.qrFill,
-        '--rule': tokens.rule,
+        '--rule': tokens.rule ?? tokens.border,
         '--border-width': tokens.borderWidth,
         '--font-display': tokens.fontDisplay,
         '--font-body': tokens.fontBody,

@@ -21,6 +21,13 @@ export interface ThemeTokens {
    */
   canvas: string;
   surface: string;
+  /**
+   * Optional surface gradient. The classic Linear Dark paper is a near-black
+   * two-stop sheet rather than a flat colour, so the material is part of the
+   * theme. Kept low-saturation on purpose: a full-bleed aurora or sunset is the
+   * thing these themes replaced, not a thing they reintroduce.
+   */
+  surfaceGradient?: string;
   text: string;
   muted: string;
   /**
@@ -39,8 +46,11 @@ export interface ThemeTokens {
    * The theme's signature rule. This is the one place a theme is allowed a
    * material of its own rather than a tint of `border` — Parchment's cream
    * standfirst rule is the reason it does not read as a quieter Hairline.
+   *
+   * Optional: the restored classic presets predate the signature concept and
+   * carry none, which is what makes them restorations rather than redesigns.
    */
-  rule: string;
+  rule?: string;
   fontDisplay: string;
   fontBody: string;
   /** Card corner, used when the user picks the "follow theme" radius option. */
@@ -183,6 +193,103 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     },
   },
 
+  // ---- Restored classics ----
+  // The three gradient presets worth keeping. Each is re-derived from the same
+  // token contract as the papers: the surface is the classic colour (Linear
+  // keeps its near-black two-stop sheet), and the muted/faint/link steps are
+  // re-tuned so every one clears 4.5:1 — the originals did not, because the old
+  // scheme only ever had two text levels.
+
+  // Linear Dark — near-black sheet with a quiet two-stop gradient. The indigo
+  // accent is kept for text emphasis only; as a link it only reaches 3.7:1, so
+  // links use the lifted tint.
+  'linear-dark': {
+    id: 'linear-dark',
+    name: 'Linear Dark',
+    preview: 'linear-gradient(135deg, #18191c 0%, #0d0e11 100%)',
+    tokens: {
+      canvas: '#050608',
+      surface: '#18191c',
+      surfaceGradient: 'linear-gradient(135deg, #18191c 0%, #0d0e11 100%)',
+      text: '#f3f4f6',
+      muted: '#9ca3af',
+      faint: '#8b93a1',
+      accent: '#5e6ad2',
+      link: '#8b96e8',
+      border: '#2a2c31',
+      divider: '#2a2c31',
+      quoteBackground: '#202227',
+      quoteBorder: '#2a2c31',
+      qrFill: '#f3f4f6',
+      rule: '#3a3d45',
+      fontDisplay: SANS,
+      fontBody: SANS,
+      radius: '12px',
+      mediaRadius: '8px',
+      borderWidth: '1px',
+      shadow: 'none',
+    },
+  },
+
+  // OLED Black — true black, so it stays flat rather than gradient. On a real
+  // OLED panel a gradient off pure black defeats the point of the preset.
+  'oled-black': {
+    id: 'oled-black',
+    name: 'OLED Black',
+    preview: '#000000',
+    tokens: {
+      canvas: '#1a1a1a',
+      surface: '#000000',
+      text: '#ffffff',
+      muted: '#9a9a9a',
+      faint: '#8a8a8a',
+      accent: '#ffffff',
+      link: '#60a5fa',
+      border: '#262626',
+      divider: '#262626',
+      quoteBackground: '#0d0d0d',
+      quoteBorder: '#262626',
+      qrFill: '#ffffff',
+      rule: '#333333',
+      fontDisplay: SANS,
+      fontBody: SANS,
+      radius: '0px',
+      mediaRadius: '0px',
+      borderWidth: '1px',
+      shadow: 'none',
+    },
+  },
+
+  // Notion White — warm off-white, never pure white. The original was #ffffff,
+  // which the brief rules out; this is the same paper at a temperature that does
+  // not glare.
+  'notion-white': {
+    id: 'notion-white',
+    name: 'Notion White',
+    preview: 'linear-gradient(135deg, #eceae4 0%, #fdfdfc 100%)',
+    tokens: {
+      canvas: '#eceae4',
+      surface: '#fdfdfc',
+      text: '#37352f',
+      muted: '#6b7280',
+      faint: '#6e737c',
+      accent: '#2563eb',
+      link: '#1d4ed8',
+      border: '#e9e9e7',
+      divider: '#e5e7eb',
+      quoteBackground: '#f7f6f3',
+      quoteBorder: '#e5e7eb',
+      qrFill: '#111827',
+      rule: '#dcdbd5',
+      fontDisplay: SANS,
+      fontBody: SANS,
+      radius: '8px',
+      mediaRadius: '6px',
+      borderWidth: '1px',
+      shadow: 'none',
+    },
+  },
+
   // 4. Terminal — a phosphor console. Real monospace, one scanline, no paper.
   //    Replaces the retired Hacker Mint without inheriting its gradient.
   terminal: {
@@ -283,18 +390,18 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
 
 /**
  * Retired presets map onto the closest paper rather than resetting the user's
- * choice: dark blue-black and OLED both become Nocturne, warm white and sunset
- * become Parchment, the purple and mint experiments follow their base colour.
+ * choice. Only the high-saturation full-bleed gradients are still retired:
+ * sunset and aurora were the "gradient as a default" look the paper themes
+ * replaced, and Hacker Mint's terminal was rebuilt as the real Terminal theme.
+ * Linear Dark, OLED Black and Notion White are live themes again, so they are
+ * no longer listed here.
  */
 export const LEGACY_THEME_ALIASES: Record<string, ThemeId> = {
-  'linear-dark': 'nocturne',
-  'oled-black': 'nocturne',
-  'oled': 'nocturne',
-  'cyber-mint': 'nocturne',
+  'cyber-mint': 'terminal',
   'aurora-purple': 'nocturne',
-  'notion-clean-white': 'parchment',
-  'notion-white': 'parchment',
   'sunset-glow': 'parchment',
+  'notion-clean-white': 'notion-white',
+  'oled': 'oled-black',
 };
 
 
@@ -307,15 +414,18 @@ export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
 /**
  * Picker order and visibility.
  *
- * The first three are the everyday papers. Terminal and Broadsheet are phase-2
- * materials a user opts into. Brutalist is deliberately last and marked
- * experimental, so the picker can keep a 3px frame with a hard shadow behind the
- * "more" disclosure instead of putting it in front of everyone.
+ * The first six are the everyday rotation: three papers plus the three restored
+ * classics. Terminal and Broadsheet are phase-2 materials. Brutalist is
+ * deliberately last and marked experimental, so the picker keeps a 3px frame
+ * with a hard shadow behind the "more" disclosure.
  */
 export const THEME_ORDER: ThemeId[] = [
   'parchment',
   'nocturne',
   'hairline',
+  'linear-dark',
+  'oled-black',
+  'notion-white',
   'terminal',
   'broadsheet',
   'brutalist',

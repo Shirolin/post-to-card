@@ -1181,18 +1181,21 @@ test('F16.5: inline style injection populates textContent correctly', () => {
 });
 
 // -------------------------------------------------------------
-// F17: Curated Themes (3 primary papers + 2 phase-2 materials + 1 experimental)
+// F17: Curated Themes (3 papers + 3 restored classics + 2 phase-2 + 1 experimental)
 // -------------------------------------------------------------
 const THEME_IDS: ThemeId[] = [
   'parchment',
   'nocturne',
   'hairline',
+  'linear-dark',
+  'oled-black',
+  'notion-white',
   'terminal',
   'broadsheet',
   'brutalist',
 ];
 
-test('F17.1: all six themes ship, and every theme exposes a full token set', () => {
+test('F17.1: all nine themes ship, and every theme exposes a full token set', () => {
   assert.deepEqual(Object.keys(THEMES).sort(), [...THEME_IDS].sort());
   for (const id of THEME_IDS) {
     const tokens = THEMES[id].tokens;
@@ -1209,7 +1212,6 @@ test('F17.1: all six themes ship, and every theme exposes a full token set', () 
       'quoteBackground',
       'quoteBorder',
       'qrFill',
-      'rule',
       'fontDisplay',
       'fontBody',
       'radius',
@@ -1219,6 +1221,7 @@ test('F17.1: all six themes ship, and every theme exposes a full token set', () 
     ] as const) {
       assert.ok(tokens[key], `${id} must define ${key}`);
     }
+    // `rule` is optional: the restored classics carry no signature.
     assert.equal(THEMES[id].id, id);
   }
 });
@@ -1286,13 +1289,27 @@ test('F17.5b: Brutalist is the only experimental theme, and it stays off the def
   assert.deepEqual([...THEME_ORDER].sort(), [...THEME_IDS].sort());
   assert.equal(THEME_ORDER[0], 'parchment');
   assert.equal(THEME_ORDER[THEME_ORDER.length - 1], 'brutalist');
+  // The restored classics sit in the everyday rotation, ahead of the phase-2
+  // materials, so the picker's first screen is the six everyday themes.
+  assert.deepEqual(THEME_ORDER.slice(0, 6), [
+    'parchment',
+    'nocturne',
+    'hairline',
+    'linear-dark',
+    'oled-black',
+    'notion-white',
+  ]);
 });
 
 test('F17.6: retired presets migrate to a live theme instead of resetting', () => {
-  assert.equal(sanitizeTheme('linear-dark'), 'nocturne');
-  assert.equal(sanitizeTheme('notion-clean-white'), 'parchment');
-  assert.equal(sanitizeTheme('oled-black'), 'nocturne');
+  // The high-saturation full-bleed gradients stay retired.
   assert.equal(sanitizeTheme('sunset-glow'), 'parchment');
+  assert.equal(sanitizeTheme('aurora-purple'), 'nocturne');
+  // Hacker Mint's console was rebuilt as the real Terminal theme.
+  assert.equal(sanitizeTheme('cyber-mint'), 'terminal');
+  // Old spellings of the restored classics resolve to the live themes.
+  assert.equal(sanitizeTheme('notion-clean-white'), 'notion-white');
+  assert.equal(sanitizeTheme('oled'), 'oled-black');
   assert.equal(sanitizeTheme('nonsense'), 'parchment');
   assert.equal(sanitizeTheme(undefined), 'parchment');
   for (const alias of Object.keys(LEGACY_THEME_ALIASES)) {
@@ -1300,9 +1317,32 @@ test('F17.6: retired presets migrate to a live theme instead of resetting', () =
   }
 });
 
+test('F17.6b: the restored classics are live themes, not migration targets', () => {
+  // A stored value of these must resolve to itself, not be rewritten to a paper,
+  // or a user who had Linear Dark before the paper migration gets moved twice.
+  for (const id of ['linear-dark', 'oled-black', 'notion-white'] as ThemeId[]) {
+    assert.equal(sanitizeTheme(id), id);
+    assert.ok(!(id in LEGACY_THEME_ALIASES), `${id} must not remain an alias`);
+  }
+  // The high-saturation gradients must NOT be live, or they sneak back in.
+  for (const id of ['sunset-glow', 'aurora-purple', 'cyber-mint']) {
+    assert.ok(!(id in THEMES), `${id} must stay retired`);
+  }
+});
+
+test('F17.6c: only Linear Dark keeps a surface gradient, and it is a quiet one', () => {
+  const withGradient = THEME_IDS.filter((id) => THEMES[id].tokens.surfaceGradient);
+  assert.deepEqual(withGradient, ['linear-dark']);
+  // A full-bleed high-saturation gradient is the thing the papers replaced.
+  const g = THEMES['linear-dark'].tokens.surfaceGradient!;
+  assert.match(g, /#18191c/);
+  assert.match(g, /#0d0e11/);
+});
+
 test('F17.7: every theme name is localised in both locales', () => {
   for (const id of THEME_IDS) {
-    const key = `theme_${id}` as keyof typeof TRANSLATIONS['en-US'];
+    // Must match Controls.tsx's lookup: hyphens become underscores.
+    const key = `theme_${id.replace(/-/g, '_')}` as keyof typeof TRANSLATIONS['en-US'];
     assert.ok(TRANSLATIONS['zh-CN'][key], `zh-CN missing ${key}`);
     assert.ok(TRANSLATIONS['en-US'][key], `en-US missing ${key}`);
   }
