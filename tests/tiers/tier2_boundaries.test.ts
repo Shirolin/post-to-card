@@ -719,6 +719,34 @@ last line</span></div>
   );
 });
 
+test('Tier 2.44: a quoted video renders once, not as a poster plus the video', () => {
+  // Regression guard. The quote's media pass had no poster handling, so a quoted
+  // video kept its poster image AND the video item, and the card drew the same
+  // frame twice — once plain, once with the play badge.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>look at this</span></div>
+      <div role="link" tabindex="0" data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/tweet_video_thumb/quote_frame.jpg" alt="">
+          <video poster="https://pbs.twimg.com/tweet_video_thumb/quote_frame.jpg"></video>
+          <button data-testid="playButton" aria-label="play"></button>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  const media = data?.quotePost?.media;
+  assert.ok(media, 'the quoted video must produce media');
+  assert.equal(media!.length, 1, 'the quoted poster must not render alongside the video item');
+  assert.equal(media![0].type, 'video');
+  assert.equal(data?.media, undefined, "the quoted video must not leak into the main tweet's media");
+});
+
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 2
 // -------------------------------------------------------------

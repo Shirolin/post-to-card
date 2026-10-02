@@ -376,8 +376,14 @@ export function extractVideoDuration(container: Element): string | undefined {
  * Deeply searches an article or container for video elements and extracts
  * the poster frame URL or captures a frame via HTML5 Canvas.
  */
-export function extractVideoMedia(container: Element): MediaItem | null {
+export function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem | null {
   if (!container) return null;
+
+  // A main-tweet scan must not adopt a video that belongs to a nested quote.
+  const firstMatch = <E extends Element>(selector: string): E | undefined =>
+    Array.from(container.querySelectorAll<E>(selector)).find(
+      (el) => !excludeQuoted || !isInsideQuoteTweet(el)
+    );
 
   // 1. Locate the video container. Verified against a live GIF post: the
   //    data-testid variants are no longer rendered, so only the bare <video>
@@ -387,20 +393,20 @@ export function extractVideoMedia(container: Element): MediaItem | null {
   //    the outermost match and reintroduce that same problem. The aria-label
   //    match stays exact, since a `*=` substring match also catches external
   //    link cards such as YouTube previews.
-  const playButton = container.querySelector('button[data-testid="playButton"]');
+  const playButton = firstMatch<Element>('button[data-testid="playButton"]');
   const mediaWrapper = playButton
     ? (typeof playButton.closest === 'function'
         ? playButton.closest('div[data-testid="tweetPhoto"], div[style*="overflow"], div')
         : null)
     : null;
 
-  const videoContainer = container.querySelector(
+  const videoContainer = firstMatch<Element>(
     'div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"], video'
   ) || mediaWrapper;
-  const videoEl = (container.querySelector('video') || (videoContainer?.tagName === 'VIDEO' ? videoContainer : null)) as HTMLVideoElement | null;
+  const videoEl = (firstMatch<HTMLVideoElement>('video') || (videoContainer?.tagName === 'VIDEO' ? videoContainer : null)) as HTMLVideoElement | null;
 
   // Check if any thumbnail specifically belongs to video
-  const videoThumbImg = container.querySelector(
+  const videoThumbImg = firstMatch<Element>(
     'img[src*="video_thumb"], img[src*="ext_tw_video_thumb"], img[src*="tweet_video_thumb"], img[src*="amplify_video_thumb"], img[src*="video_preview"]'
   );
 
@@ -579,60 +585,71 @@ function isMediaPosterLayer(img: Element): boolean {
 }
 
 /**
- * Extracts up to 4 high-res photos plus any video/GIF poster frame for the main
- * tweet. Excludes media belonging to nested quote tweets.
+ * Photos plus the video/GIF item for one container.
  *
- * A tweet can mix photos and a video (e.g. one image beside a GIF). The two
- * sources are therefore merged instead of letting the video short-circuit the
- * photo pass, which previously dropped every photo from mixed-media tweets.
+ * A tweet can mix photos and a video, so the two sources are merged rather than
+ * letting the video short-circuit the photo pass. The video's poster is also an
+ * <img>, so the photo pass can collect the very same asset; listing it twice
+ * renders the frame twice — once plain and once with the play badge — so an
+ * exact match is dropped in favour of the video item, which carries the
+ * duration. `acceptPhoto` lets the main tweet reject the quoted post's photos.
  */
-export function extractTweetMedia(article: Element): MediaItem[] | undefined {
-  // 1. Photos inside tweetPhoto containers
+function collectPhotoAndVideoMedia(
+  container: Element,
+  acceptPhoto: (img: Element) => boolean,
+  excludeQuotedVideo = false
+): MediaItem[] {
   const items: MediaItem[] = [];
-  const photoEls = Array.from(article.querySelectorAll('div[data-testid="tweetPhoto"] img'));
-  const validPhotos = photoEls.filter(img => !isInsideQuoteTweet(img) && !isMediaPosterLayer(img));
+  const photoEls = Array.from(container.querySelectorAll('div[data-testid="tweetPhoto"] img')).filter(acceptPhoto);
 
-  for (const img of validPhotos.slice(0, 4)) {
+  for (const img of photoEls.slice(0, 4)) {
     const rawSrc = img.getAttribute('src') || '';
-    if (rawSrc) {
-      const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
-      const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
-      const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
-      const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
-        ? Number((naturalWidth / naturalHeight).toFixed(3))
-        : undefined;
+    if (!rawSrc) continue;
 
-      items.push({
-        type: 'image',
-        url: upgradePhotoUrl(rawSrc),
-        originalUrl: rawSrc,
-        alt: img.getAttribute('alt') || undefined,
-        aspectRatio,
-      });
-    }
+    const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+    const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+    const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+    const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
+      ? Number((naturalWidth / naturalHeight).toFixed(3))
+      : undefined;
+
+    items.push({
+      type: 'image',
+      url: upgradePhotoUrl(rawSrc),
+      originalUrl: rawSrc,
+      alt: img.getAttribute('alt') || undefined,
+      aspectRatio,
+    });
   }
 
-  // 2. Video / GIF, merged in rather than replacing the photos above. The card
-  // renderer caps layouts at 4 items, so a combined set is trimmed as a whole.
+  // The card renderer caps layouts at 4 items, so a combined set is trimmed whole.
   if (items.length < 4) {
-    const videoMedia = extractVideoMedia(article);
+    const videoMedia = extractVideoMedia(container, excludeQuotedVideo);
     if (videoMedia) {
-      // The video's poster is also an <img> in the tweet, so the photo pass can
-      // collect the very same asset. Listing it twice renders the frame twice —
-      // once plain and once with the play badge — so an exact match is dropped
-      // in favour of the video item, which carries the duration.
       const posterKey = videoMedia.originalUrl || videoMedia.url;
       const duplicateIndex = items.findIndex(
         (item) => item.type === 'image' && (item.originalUrl || item.url) === posterKey
       );
-      if (duplicateIndex >= 0) {
-        items.splice(duplicateIndex, 1);
-      }
+      if (duplicateIndex >= 0) items.splice(duplicateIndex, 1);
       items.push(videoMedia);
     }
   }
 
-  // 3. Link card preview image (external site card, e.g. "来自 nintendo.com").
+  return items;
+}
+
+/**
+ * Extracts up to 4 high-res photos plus any video/GIF poster frame for the main
+ * tweet. Excludes media belonging to nested quote tweets.
+ */
+export function extractTweetMedia(article: Element): MediaItem[] | undefined {
+  const items = collectPhotoAndVideoMedia(
+    article,
+    (img) => !isInsideQuoteTweet(img) && !isMediaPosterLayer(img),
+    true
+  );
+
+  // External site link card (e.g. "来自 nintendo.com") only when nothing else.
   if (items.length === 0) {
     const cardMedia = extractLinkCardMedia(article);
     if (cardMedia) items.push(cardMedia);
@@ -729,34 +746,10 @@ export function extractQuoteTweet(article: Element): QuoteTweetData | undefined 
   const timeEl = quoteBox.querySelector('time');
   const timestamp = timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '';
 
-  // Media: photos first, then any video/GIF. Merged rather than exclusive so a
-  // quote mixing an image with a video keeps both.
-  const media: MediaItem[] = [];
-  const photoEls = Array.from(quoteBox.querySelectorAll('div[data-testid="tweetPhoto"] img'));
-  for (const img of photoEls.slice(0, 4)) {
-    const src = img.getAttribute('src') || '';
-    if (src) {
-      const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
-      const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
-      const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
-      const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
-        ? Number((naturalWidth / naturalHeight).toFixed(3))
-        : undefined;
-
-      media.push({
-        type: 'image',
-        url: upgradePhotoUrl(src),
-        originalUrl: src,
-        alt: img.getAttribute('alt') || undefined,
-        aspectRatio,
-      });
-    }
-  }
-
-  if (media.length < 4) {
-    const quoteVideo = extractVideoMedia(quoteBox);
-    if (quoteVideo) media.push(quoteVideo);
-  }
+  // Media: photos plus any video/GIF, with the video's own poster frame merged
+  // away exactly as for the main tweet. Without this the quoted poster rendered
+  // twice: once as a photo and again as the video item with its play badge.
+  const media = collectPhotoAndVideoMedia(quoteBox, (img) => !isMediaPosterLayer(img));
 
   // Quoted post may itself only carry an external link card.
   if (media.length === 0) {
