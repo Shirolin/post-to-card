@@ -1057,7 +1057,11 @@
   position: relative;
   overflow: hidden;
   display: block;
-  background: rgba(0, 0, 0, 0.2);
+  /* A contained poster leaves letterbox bars; they should be the material's
+     recess, not a hard-coded 20% black that reads as a smudge on warm paper.
+     Same token as the quote panel and the avatar, so every "behind the media"
+     surface on the card is one material decision. */
+  background: var(--quote-bg);
   width: 100%;
 }
 

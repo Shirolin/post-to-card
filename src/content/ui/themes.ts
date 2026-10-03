@@ -238,7 +238,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       rule: '#ded8c6',
       signature: { style: 'rule', height: '2px' },
       quoteStyle: 'filled',
-      rhythm: { gap: '20px', mediaGap: '4px' },
+      rhythm: { gap: '20px', mediaGap: '5px' },
       fontDisplay: SERIF,
       fontBody: SANS,
       radius: '12px',
@@ -314,7 +314,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       rule: '#141413',
       signature: { style: 'hairline', height: '1px' },
       quoteStyle: 'outlined',
-      rhythm: { gap: '16px', mediaGap: '4px' },
+      // Swiss precision: the gutter is as tight as the rules are thin.
+      rhythm: { gap: '16px', mediaGap: '3px' },
       fontDisplay: SANS,
       fontBody: SANS,
       radius: '2px',
@@ -352,7 +353,9 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       rule: '#a8946f',
       signature: { style: 'stitch', height: '2px' },
       quoteStyle: 'filled',
-      rhythm: { gap: '20px', mediaGap: '4px' },
+      // Roomier than the papers: a stitched binding needs air so the dashes of
+      // adjacent frames do not read as one broken line.
+      rhythm: { gap: '20px', mediaGap: '6px' },
       fontDisplay: SANS,
       fontBody: SANS,
       radius: '6px',
@@ -428,7 +431,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       rule: '#2f4032',
       signature: { style: 'scanline', height: '4px' },
       quoteStyle: 'outlined',
-      rhythm: { gap: '14px', mediaGap: '4px' },
+      rhythm: { gap: '14px', mediaGap: '3px' },
       fontDisplay: MONO,
       fontBody: MONO,
       radius: '0px',
@@ -502,7 +505,9 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       rule: '#14140f',
       signature: { style: 'block', height: '3px' },
       quoteStyle: 'outlined',
-      rhythm: { gap: '24px', mediaGap: '4px' },
+      // Loud material, loud gutter: the pictures are boxed hard and pushed
+      // apart, the way the sheet's own 3px edge and offset shadow are.
+      rhythm: { gap: '24px', mediaGap: '8px' },
       fontDisplay: SANS,
       fontBody: SANS,
       radius: '0px',
