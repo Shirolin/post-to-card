@@ -5,7 +5,7 @@ import { CardQrCode } from './qrcode';
 import { resolveRadius, getAspectMinHeight, THEMES } from './themes';
 import { planMediaGrid, applyMediaGridPlan } from './mediaGrid';
 import { threadScope, tweetKey } from './threadScope';
-import { formatLocaleTimestamp, getTranslation } from '../i18n';
+import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
 
 export interface CardProps {
@@ -348,7 +348,7 @@ function renderQuoteCard(
   aspectRatio: AspectRatioOption,
   mediaLayout: MediaLayoutOption,
   showPlayButton: boolean,
-  locale: Locale = 'en-US'
+  locale: Locale
 ) {
   const { author, text, richTokens, timestamp, url } = quotePost;
   const timestampText = timestamp ? formatLocaleTimestamp(timestamp, locale) : '';
@@ -420,7 +420,7 @@ function renderSingleTweet(
       {renderTranslationNotice(tweet)}
       {renderTweetContent(tweet)}
       {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-      {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, config.locale || 'en-US')}
+      {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
     </div>
   );
 }
@@ -475,14 +475,14 @@ function renderThreadTweet(
         {renderTranslationNotice(tweet)}
         {renderTweetContent(tweet)}
         {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-        {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, config.locale || 'en-US')}
+        {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
       </div>
     </div>
   );
 }
 
 export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
-  const t = getTranslation(config.locale || 'en-US');
+  const t = getTranslation(sanitizeLocale(config.locale));
   const thread = normalizeThreadData(data);
   // The same scope the controls panel reads, so the exclude buttons on the card
   // only appear while a tweet may actually be dropped.
@@ -523,7 +523,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
   // Only render the footer when it actually has content, otherwise its top
   // border and padding leave a stray divider at the bottom of the card.
   const footerTimestamp = config.showTimestamp
-    ? formatLocaleTimestamp(mainTweet.timestamp, config.locale || 'en-US')
+    ? formatLocaleTimestamp(mainTweet.timestamp, sanitizeLocale(config.locale))
     : '';
   const hasFooterStats = Boolean(config.showStats && hasRenderableStats(mainTweet.stats));
   const hasFooterLeft = Boolean(footerTimestamp || hasFooterStats);

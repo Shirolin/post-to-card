@@ -2,7 +2,7 @@ import type { JSX } from 'preact';
 import type { ThreadData } from '../../types/tweet';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes';
-import { getTranslation } from '../i18n';
+import { getTranslation, sanitizeLocale } from '../i18n';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup';
 import { threadScope, tweetKey } from './threadScope';
@@ -120,7 +120,7 @@ export function Controls({
   isErrorStatus = false,
   threadData,
 }: ControlsProps): JSX.Element {
-  const t = getTranslation(config.locale || 'en-US');
+  const t = getTranslation(sanitizeLocale(config.locale));
   const [showMore, setShowMore] = useState<boolean>(false);
   const moreId = useId();
 
@@ -387,7 +387,7 @@ export function Controls({
               <Segmented
                 name={t.language}
                 options={['zh-CN', 'en-US'] as const}
-                value={(config.locale || 'zh-CN') as 'zh-CN' | 'en-US'}
+                value={sanitizeLocale(config.locale)}
                 onSelect={(next) => updateConfig({ locale: next })}
                 labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
               />

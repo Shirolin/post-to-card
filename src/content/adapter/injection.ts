@@ -14,10 +14,39 @@ interface CustomObserver {
   disconnect: () => void;
 }
 
-import { getTranslation, detectDefaultLocale } from '../i18n.ts';
+import { getTranslation, sanitizeLocale } from '../i18n.ts';
+import type { Locale } from '../../types/card';
 
 export const HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn';
 export const VISIBILITY_STYLE_ID = 'post-to-card-visibility-style';
+const TRIGGER_SELECTOR = '[data-post-to-card-btn="true"]';
+
+/**
+ * The locale the injected triggers speak.
+ *
+ * A trigger is built once per tweet and stays in the page, so a language chosen
+ * after it was injected has to reach the buttons that already exist. Holding the
+ * locale here rather than passing it through injectAll keeps it next to the
+ * buttons it names, and means a button injected later and a button injected
+ * earlier agree without either knowing about the other.
+ */
+let triggerLocale: Locale | undefined;
+
+/**
+ * Points the injected triggers at a locale, including the ones already on the
+ * page. The label is written onto the element rather than drawn by CSS because
+ * it is also the button's accessible name.
+ */
+export function applyTriggerLocale(locale?: Locale): void {
+  triggerLocale = sanitizeLocale(locale);
+  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+
+  const label = getTranslation(triggerLocale).triggerButtonTitle;
+  for (const btn of Array.from(document.querySelectorAll(TRIGGER_SELECTOR))) {
+    btn.setAttribute('title', label);
+    btn.setAttribute('aria-label', label);
+  }
+}
 
 /**
  * Toggles the visibility of injected action bar trigger buttons across all tweets.
@@ -88,7 +117,7 @@ export const TRIGGER_BUTTON_SVG = `
  * action bar while remaining visually distinct from its native controls.
  */
 export function createTriggerButton(onClick: () => void): HTMLElement {
-  const t = getTranslation(detectDefaultLocale());
+  const t = getTranslation(triggerLocale);
   const globalWithDom = globalThis as unknown as {
     DomElement?: new (tagName: string) => HTMLElement;
   };
@@ -465,10 +494,13 @@ export function initTwitterInjection(
     onCardTrigger(threadData, article);
   };
 
-  // 1. Initial preference load for button visibility
+  // 1. Initial preference load. Visibility hides the triggers; the locale is what
+  //    they say, and it has to come from the saved choice rather than the
+  //    browser, or a user who picked a language sees the page in another one.
   loadUserPreferences()
     .then((prefs) => {
       setInjectedButtonVisibility(prefs.showActionBarButton !== false);
+      applyTriggerLocale(prefs.locale);
     })
     .catch(() => {});
 
@@ -478,8 +510,9 @@ export function initTwitterInjection(
     areaName: string
   ) => {
     if (areaName === 'local' && changes[STORAGE_KEY]?.newValue) {
-      const newConfig = changes[STORAGE_KEY].newValue as { showActionBarButton?: boolean };
+      const newConfig = changes[STORAGE_KEY].newValue as { showActionBarButton?: boolean; locale?: Locale };
       setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
+      applyTriggerLocale(newConfig.locale);
     }
   };
 

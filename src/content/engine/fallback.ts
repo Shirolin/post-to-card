@@ -9,7 +9,7 @@
  */
 
 import type { Locale } from '../../types/card';
-import { getTranslation, detectDefaultLocale } from '../i18n';
+import { getTranslation, sanitizeLocale } from '../i18n';
 
 export type ExportAction = 'copy' | 'download';
 
@@ -161,7 +161,7 @@ export async function exportBlobWithFallback(
   customFilename?: string,
   locale?: Locale
 ): Promise<ExportResult> {
-  const t = getTranslation(locale || detectDefaultLocale());
+  const t = getTranslation(sanitizeLocale(locale));
   const filename = customFilename || `post-to-card-${Date.now()}.png`;
 
   if (action === 'download') {

@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { Locale } from '../../types/card';
-import { getTranslation } from '../i18n';
+import { getTranslation, sanitizeLocale } from '../i18n';
 import { Sparkles, X } from 'lucide-preact';
 
 let activeScrollLocks = 0;
@@ -97,8 +97,8 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
-export function Modal({ isOpen = true, locale = 'en-US', summary, onClose, children }: ModalProps): JSX.Element | null {
-  const t = getTranslation(locale);
+export function Modal({ isOpen = true, locale, summary, onClose, children }: ModalProps): JSX.Element | null {
+  const t = getTranslation(sanitizeLocale(locale));
   const dialogRef = useRef<HTMLDivElement | null>(null);
   // Captured before the dialog steals focus, so it can be restored on close.
   const restoreFocusRef = useRef<HTMLElement | null>(null);

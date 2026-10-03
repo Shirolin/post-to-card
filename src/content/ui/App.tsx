@@ -11,7 +11,7 @@ import { handleRadioKeyDown } from './radioGroup';
 import { threadScope } from './threadScope';
 
 import type { Locale } from '../../types/card';
-import { getTranslation } from '../i18n';
+import { getTranslation, sanitizeLocale } from '../i18n';
 
 const ZOOM_LEVELS = [0.5, 0.75, 1] as const;
 
@@ -31,7 +31,7 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.length - 1);
   const zoom = ZOOM_LEVELS[zoomIndex];
 
-  const t = getTranslation(config.locale || 'en-US');
+  const t = getTranslation(sanitizeLocale(config.locale));
 
   // Load saved preferences on mount
   useEffect(() => {
