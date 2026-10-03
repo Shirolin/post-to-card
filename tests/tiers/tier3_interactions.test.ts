@@ -40,9 +40,11 @@ test('Tier 3.1: all 3 themes render correct CSS class names and root styles', ()
   const themes: ThemeId[] = ['parchment', 'nocturne', 'hairline'];
 
   themes.forEach(theme => {
+    // The theme is an attribute now, not a class: `data-theme` is what card.css
+    // keys on, and the class spelling was removed so the two cannot drift.
     const card = new DomElement('DIV');
-    card.classList.add(`theme-${theme}`);
-    assert.ok(card.classList.contains(`theme-${theme}`), `Card must contain class theme-${theme}`);
+    card.setAttribute('data-theme', theme);
+    assert.equal(card.getAttribute('data-theme'), theme, `Card must carry data-theme="${theme}"`);
   });
 });
 
@@ -151,7 +153,7 @@ test('Tier 3.5: thread containing quote tweet, multiple photos, and emojis build
 // -------------------------------------------------------------
 test('Tier 3.6: author privacy blur active alongside QR code does not blur the QR code', () => {
   const card = new DomElement('DIV');
-  card.className = 'theme-nocturne';
+  card.setAttribute('data-theme', 'nocturne');
 
   const authorBlock = new DomElement('DIV');
   authorBlock.className = 'author-section is-blurred';

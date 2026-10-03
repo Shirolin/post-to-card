@@ -924,6 +924,25 @@ test('F14.5: flags single tweet as isSingle: true', () => {
   assert.equal(EXPECTED_SINGLE_TWEET_DATA.isThreadPart, false);
 });
 
+test('F17.18: a material is named once — the theme is not also emitted as a class', () => {
+  // The card used to carry both `data-theme="x"` and `.theme-x`, and card.css
+  // matched both spellings in every rule. The two were the same specificity in
+  // the same block, so the class decided nothing; it only meant renaming a
+  // material could leave one spelling behind and keep the old styling alive.
+  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+
+  assert.ok(card.includes('data-theme={config.theme}'), 'the theme must be carried by data-theme');
+  assert.ok(
+    !/`theme-\$\{/.test(card),
+    'the theme must not also be emitted as a class, or the two spellings can drift'
+  );
+  assert.ok(
+    !/\.post-to-card-target\.theme-[a-z-]/.test(css),
+    'card.css must not carry a second selector spelling for the theme'
+  );
+});
+
 test('F14.6: thread layout isolates connector line in thread-gutter and text in thread-content-col to prevent line-text intersection', () => {
   const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
@@ -1140,8 +1159,8 @@ test('F16.4: font stack includes cross-platform clean sans-serif fallbacks', () 
 
 test('F16.5: inline style injection populates textContent correctly', () => {
   const style = new DomElement('STYLE');
-  style.textContent = '.theme-nocturne { background: #30302e; }';
-  assert.equal(style.textContent, '.theme-nocturne { background: #30302e; }');
+  style.textContent = '.post-to-card-target { background: #30302e; }';
+  assert.equal(style.textContent, '.post-to-card-target { background: #30302e; }');
 });
 
 // -------------------------------------------------------------

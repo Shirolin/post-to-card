@@ -114,7 +114,7 @@ test('Tier 4.1: [End-to-End Workflow 1] Viral Tweet with 4 photos converted to N
   // Build card DOM inside shadowRoot
   const cardRoot = new DomElement('DIV');
   cardRoot.id = 'post-to-card-export-target';
-  cardRoot.className = `theme-${config.theme}`;
+  cardRoot.setAttribute('data-theme', config.theme);
   cardRoot.style.padding = config.padding;
   cardRoot.style.borderRadius = config.borderRadius;
 
@@ -200,7 +200,7 @@ test('Tier 4.2: [End-to-End Workflow 2] 3-Tweet thread with author blur fails cl
 
   const card = new DomElement('DIV');
   card.id = 'post-to-card-export-target';
-  card.className = `theme-${config.theme}`;
+  card.setAttribute('data-theme', config.theme);
 
   // Author header with blur
   const authorBox = new DomElement('DIV');
@@ -246,7 +246,7 @@ test('Tier 4.3: [End-to-End Workflow 3] Quote tweet rendered in Parchment at sca
   doc.body.appendChild(quoteTweetArticle);
 
   const card = new DomElement('DIV');
-  card.className = 'theme-parchment';
+  card.setAttribute('data-theme', 'parchment');
 
   // Add proxied quote tweet image
   const img = new DomImageElement();
