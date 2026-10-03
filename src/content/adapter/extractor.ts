@@ -44,7 +44,7 @@ function isInsideNestedArticle(el: Element): boolean {
  * a single data-testid.
  */
 export function findQuoteContainer(article: Element): Element | null {
-  if (!article || typeof article.querySelector !== 'function') return null;
+  if (!article) return null;
 
   // 1. Canonical marker used by current X.
   const byTestId = article.querySelector('div[data-testid="quoteTweet"]');
@@ -80,7 +80,7 @@ export function findQuoteContainer(article: Element): Element | null {
  * Checks if a given DOM element is nested inside a Quote Tweet box.
  */
 function isInsideQuoteTweet(el: Element): boolean {
-  if (typeof el.closest === 'function' && el.closest('div[data-testid="quoteTweet"]')) {
+  if (el.closest('div[data-testid="quoteTweet"]')) {
     return true;
   }
 
@@ -88,7 +88,7 @@ function isInsideQuoteTweet(el: Element): boolean {
 
   // Structural fallback: compare against the resolved quote container of the
   // nearest article so media filtering stays in sync with quote extraction.
-  const article = typeof el.closest === 'function' ? el.closest('article') : null;
+  const article = el.closest('article');
   if (article) {
     const quote = findQuoteContainer(article);
     if (quote && quote !== el && quote.contains(el)) return true;
@@ -109,7 +109,7 @@ function extractDisplayName(userNameEl: Element): string {
     let nameParts = '';
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
-      if (child === handleLink || (typeof child.contains === 'function' && child.contains(handleLink))) {
+      if (child === handleLink || child.contains(handleLink)) {
         break;
       }
       nameParts += restoreUnicodeEmojis(child);
@@ -228,9 +228,7 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
       const tagName = (el.tagName || '').toUpperCase();
 
       if (tagName === 'IMG') {
-        const alt = typeof el.getAttribute === 'function'
-          ? el.getAttribute('alt')
-          : (node as { alt?: string }).alt;
+        const alt = el.getAttribute('alt');
         if (alt) {
           tokens.push({ type: 'emoji', value: alt });
         }
@@ -243,12 +241,8 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
       }
 
       if (tagName === 'A') {
-        const href = typeof el.getAttribute === 'function'
-          ? (el.getAttribute('href') || '')
-          : ((node as { href?: string }).href || '');
-        const title = typeof el.getAttribute === 'function'
-          ? (el.getAttribute('title') || '')
-          : ((node as { title?: string }).title || '');
+        const href = el.getAttribute('href') || '';
+        const title = el.getAttribute('title') || '';
         const text = restoreUnicodeEmojis(node);
 
         // Skip the trailing media permalink. X serves these from both
@@ -334,14 +328,11 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
  */
 export function isGifMedia(container: Element): boolean {
   if (!container) return false;
-  const aria = (typeof container.getAttribute === 'function' ? container.getAttribute('aria-label') : '') || '';
+  const aria = container.getAttribute('aria-label') || '';
   if (aria.toUpperCase().includes('GIF')) return true;
 
-  if (typeof container.querySelector === 'function') {
-    const spans = container.querySelectorAll('span, div');
-    for (const el of Array.from(spans)) {
-      if (el.textContent?.trim() === 'GIF') return true;
-    }
+  for (const el of Array.from(container.querySelectorAll('span, div'))) {
+    if (el.textContent?.trim() === 'GIF') return true;
   }
   return false;
 }
@@ -350,7 +341,7 @@ export function isGifMedia(container: Element): boolean {
  * Extracts video duration string (e.g. '0:42', '1:23', '12:05') from video controls.
  */
 export function extractVideoDuration(container: Element): string | undefined {
-  if (!container || typeof container.querySelectorAll !== 'function') return undefined;
+  if (!container) return undefined;
 
   const candidateEls = container.querySelectorAll('time, span, div');
   for (const el of Array.from(candidateEls)) {
@@ -395,9 +386,7 @@ export function extractVideoMedia(container: Element, excludeQuoted = false): Me
   //    link cards such as YouTube previews.
   const playButton = firstMatch<Element>('button[data-testid="playButton"]');
   const mediaWrapper = playButton
-    ? (typeof playButton.closest === 'function'
-        ? playButton.closest('div[data-testid="tweetPhoto"], div[style*="overflow"], div')
-        : null)
+    ? playButton.closest('div[data-testid="tweetPhoto"], div[style*="overflow"], div')
     : null;
 
   const videoContainer = firstMatch<Element>(
@@ -430,7 +419,7 @@ export function extractVideoMedia(container: Element, excludeQuoted = false): Me
 
   // Strategy A: Video element poster attribute
   if (videoEl) {
-    const p = typeof videoEl.getAttribute === 'function' ? videoEl.getAttribute('poster') : (videoEl as any).poster;
+    const p = videoEl.getAttribute('poster');
     if (p && String(p).trim().length > 0) {
       posterUrl = String(p).trim();
     }
@@ -438,7 +427,7 @@ export function extractVideoMedia(container: Element, excludeQuoted = false): Me
 
   // Strategy B: Any video thumbnail or preview img
   if (!posterUrl && videoThumbImg) {
-    const src = (typeof videoThumbImg.getAttribute === 'function' ? videoThumbImg.getAttribute('src') : (videoThumbImg as any).src) || '';
+    const src = videoThumbImg.getAttribute('src') || '';
     if (src && !src.includes('profile_images') && !src.includes('/emoji/')) {
       posterUrl = src;
       const imgEl = videoThumbImg as unknown as { naturalWidth?: number; naturalHeight?: number };
@@ -465,11 +454,11 @@ export function extractVideoMedia(container: Element, excludeQuoted = false): Me
   if (!posterUrl && videoContainer) {
     const imgs = Array.from(videoContainer.querySelectorAll('img')).filter(img => {
       if (isInsideQuoteTweet(img)) return false;
-      if (typeof img.closest === 'function' && img.closest('div[data-testid="tweetPhoto"]')) return false;
+      if (img.closest('div[data-testid="tweetPhoto"]')) return false;
       return true;
     });
     for (const img of imgs) {
-      const src = (typeof img.getAttribute === 'function' ? img.getAttribute('src') : (img as any).src) || '';
+      const src = img.getAttribute('src') || '';
       if (src && !src.includes('profile_images') && !src.includes('/emoji/')) {
         posterUrl = src;
         const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
@@ -487,7 +476,7 @@ export function extractVideoMedia(container: Element, excludeQuoted = false): Me
   if (!posterUrl) {
     const candidateEls = [targetContainer, ...Array.from(targetContainer.querySelectorAll('div, span'))];
     for (const el of candidateEls) {
-      const style = (typeof el.getAttribute === 'function' ? el.getAttribute('style') : (el as any).style?.cssText) || '';
+      const style = el.getAttribute('style') || '';
       const match = style.match(/background(?:-image)?:\s*url\(['"]?(https?:\/\/[^'")]+)['"]?\)/i);
       if (match && !match[1].includes('profile_images') && !match[1].includes('/emoji/')) {
         posterUrl = match[1];
@@ -522,7 +511,7 @@ export function extractVideoMedia(container: Element, excludeQuoted = false): Me
   // Strategy G: Open Graph image. Scoped to the media container so it can only
   // ever supply this video's own poster; a document-level og:image reflects
   // whatever page the user happens to be on, not this tweet.
-  if (!posterUrl && targetContainer && typeof targetContainer.querySelector === 'function') {
+  if (!posterUrl && targetContainer) {
     const ogImg = targetContainer.querySelector('meta[property="og:image"]');
     const content = ogImg?.getAttribute('content');
     if (content && !content.includes('profile_images')) {
@@ -564,18 +553,16 @@ function isMediaPosterLayer(img: Element): boolean {
   const src = img.getAttribute('src') || '';
   if (/(?:amplify|ext_tw|tweet)_video_thumb|video_preview/.test(src)) return true;
 
-  if (typeof img.closest === 'function') {
-    // 2. A <video> in the same tweetPhoto wrapper means this img is its poster.
-    //    `closest('… video')` cannot express this: closest only matches
-    //    ancestors, and an <img>'s ancestors are never a <video>, so the check
-    //    silently never fired and regular video posters were collected as
-    //    photos. The wrapper is located first, then queried for the video.
-    const photoWrapper = img.closest('div[data-testid="tweetPhoto"]');
-    if (photoWrapper && typeof photoWrapper.querySelector === 'function' && photoWrapper.querySelector('video')) {
-      return true;
-    }
-    if (img.closest('div[data-testid="videoPlayer"], div[data-testid="videoComponent"]')) return true;
+  // 2. A <video> in the same tweetPhoto wrapper means this img is its poster.
+  //    `closest('… video')` cannot express this: closest only matches
+  //    ancestors, and an <img>'s ancestors are never a <video>, so the check
+  //    silently never fired and regular video posters were collected as
+  //    photos. The wrapper is located first, then queried for the video.
+  const photoWrapper = img.closest('div[data-testid="tweetPhoto"]');
+  if (photoWrapper && photoWrapper.querySelector('video')) {
+    return true;
   }
+  if (img.closest('div[data-testid="videoPlayer"], div[data-testid="videoComponent"]')) return true;
 
   // 3. A hidden poster layer layered behind the video.
   const style = img.getAttribute('style') || '';
@@ -879,14 +866,14 @@ export function extractTranslationNotice(tweetTextEl: Element | null | undefined
   if (!tweetTextEl) return undefined;
 
   const notice = tweetTextEl.previousElementSibling;
-  if (!notice || typeof notice.querySelector !== 'function') return undefined;
+  if (!notice) return undefined;
 
   // The toggle is what separates this row from any other sibling; a post body is
   // never preceded by an unrelated button.
   if (!notice.querySelector('button')) return undefined;
 
   const label = Array.from(notice.querySelectorAll('span'))
-    .find(span => !(typeof span.closest === 'function' && span.closest('button')))
+    .find(span => !span.closest('button'))
     ?.textContent?.trim();
 
   return label || undefined;

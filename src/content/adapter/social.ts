@@ -12,10 +12,7 @@
 
 /** True when the element sits inside a quoted post. */
 export function isInsideQuote(el: Element): boolean {
-  if (typeof el.closest === 'function') {
-    return Boolean(el.closest('div[data-testid="quoteTweet"]'));
-  }
-  return false;
+  return Boolean(el.closest('div[data-testid="quoteTweet"]'));
 }
 
 /**
@@ -23,7 +20,7 @@ export function isInsideQuote(el: Element): boolean {
  * to a nested quoted post.
  */
 export function getSocialContext(article: Element): Element | null {
-  if (!article || typeof article.querySelector !== 'function') return null;
+  if (!article) return null;
   const found = article.querySelector('div[data-testid="socialContext"]');
   if (!found) return null;
   if (isInsideQuote(found)) return null;
@@ -36,7 +33,7 @@ export function getSocialContext(article: Element): Element | null {
  */
 export function getSocialContextHandles(article: Element): string[] {
   const social = getSocialContext(article);
-  if (!social || typeof social.querySelectorAll !== 'function') return [];
+  if (!social) return [];
 
   const handles: string[] = [];
   for (const link of Array.from(social.querySelectorAll('a[href^="/"]'))) {
@@ -62,7 +59,7 @@ export function getSocialContextHandles(article: Element): string[] {
  */
 export function getRetweetedBy(article: Element): string | null {
   const social = getSocialContext(article);
-  if (!social || typeof social.querySelectorAll !== 'function') return null;
+  if (!social) return null;
 
   // A reply target is not a retweeter. Checked first because both render a
   // profile link inside the same container.
@@ -121,7 +118,6 @@ export function getReplyingToHandle(article: Element): string | null {
   // Last-resort text match, confined to the social context so it cannot match
   // the same word inside a quoted post or a quoted bio.
   const scope: ParentNode = social || article;
-  if (typeof scope.querySelectorAll !== 'function') return null;
   const rawText = (social ? social.textContent : article.textContent) || '';
   if (!/(?:replying to|回复|返信先|replied to|répondre a|respondeu a)/i.test(rawText)) {
     return null;

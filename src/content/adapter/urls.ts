@@ -78,30 +78,22 @@ export function extractVideoPosterUrl(videoElementOrContainer: Element | null | 
 
   const tagName = (videoElementOrContainer.tagName || '').toUpperCase();
   if (tagName === 'VIDEO') {
-    const poster = typeof videoElementOrContainer.getAttribute === 'function'
-      ? videoElementOrContainer.getAttribute('poster')
-      : (videoElementOrContainer as { poster?: string }).poster;
+    const poster = videoElementOrContainer.getAttribute('poster');
     return poster || null;
   }
 
-  if (typeof videoElementOrContainer.querySelector === 'function') {
-    const video = videoElementOrContainer.querySelector('video');
-    if (video) {
-      const poster = typeof video.getAttribute === 'function'
-        ? video.getAttribute('poster')
-        : (video as { poster?: string }).poster;
-      if (poster) return poster;
-    }
+  const video = videoElementOrContainer.querySelector('video');
+  if (video) {
+    const poster = video.getAttribute('poster');
+    if (poster) return poster;
+  }
 
-    const previewImg = videoElementOrContainer.querySelector(
-      'img[src*="video_preview"], img[src*="amplify_video_thumb"], img[src*="ext_tw_video_thumb"], img[src*="/media/"]'
-    );
-    if (previewImg) {
-      const src = typeof previewImg.getAttribute === 'function'
-        ? previewImg.getAttribute('src')
-        : (previewImg as { src?: string }).src;
-      if (src) return src;
-    }
+  const previewImg = videoElementOrContainer.querySelector(
+    'img[src*="video_preview"], img[src*="amplify_video_thumb"], img[src*="ext_tw_video_thumb"], img[src*="/media/"]'
+  );
+  if (previewImg) {
+    const src = previewImg.getAttribute('src');
+    if (src) return src;
   }
 
   return null;

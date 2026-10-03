@@ -47,9 +47,7 @@ export function restoreUnicodeEmojis(node: Node | null | undefined): string {
       const tagName = (el.tagName || '').toUpperCase();
 
       if (tagName === 'IMG') {
-        const alt = typeof el.getAttribute === 'function'
-          ? el.getAttribute('alt')
-          : (child as { alt?: string }).alt;
+        const alt = el.getAttribute('alt');
         if (alt) {
           result += alt;
         }

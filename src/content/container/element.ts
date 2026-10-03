@@ -110,7 +110,7 @@ export function openCardModal(
     }
 
     let styleEl = rawEl.shadow?.querySelector?.('#post-to-card-styles') as HTMLStyleElement | null;
-    if (!styleEl && typeof document.createElement === 'function') {
+    if (!styleEl) {
       styleEl = document.createElement('style');
       styleEl.id = 'post-to-card-styles';
       styleEl.textContent = [modalCss, cardCss].join('\n\n');
@@ -119,7 +119,7 @@ export function openCardModal(
     rawEl.styleElement = styleEl!;
 
     let mount = rawEl.shadow?.querySelector?.('#post-to-card-root') as HTMLDivElement | null;
-    if (!mount && typeof document.createElement === 'function') {
+    if (!mount) {
       mount = document.createElement('div');
       mount.id = 'post-to-card-root';
       rawEl.shadow?.appendChild?.(mount);

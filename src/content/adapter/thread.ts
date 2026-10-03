@@ -39,11 +39,9 @@ export function isAdOrSponsored(article: Element): boolean {
 
   // 1. Placement tracking container. It is commonly an *ancestor* of the
   // article, so closest() is required; querySelector alone misses those.
-  if (typeof article.closest === 'function') {
-    if (article.closest('[data-testid="placementTracking"]')) {
-      return true;
-    }
-  } else if (article.querySelector('[data-testid="placementTracking"]')) {
+  // 1. Placement tracking container. It is commonly an *ancestor* of the
+  // article, so closest() is required; querySelector alone misses those.
+  if (article.closest('[data-testid="placementTracking"]')) {
     return true;
   }
 
@@ -89,19 +87,17 @@ export function hasNativeThreadConnector(article: Element, _direction: 'down' | 
 
   // 1. X's own thread marker. Its exact semantics are not documented, so this
   //    counts only as a supporting hint, never as sole proof.
-  if (typeof article.querySelector === 'function') {
-    if (article.querySelector('[data-testid="tweet-thread-indicator"]')) {
-      return true;
-    }
-    // 2. Explicit classes used by this project's fixtures.
-    if (
-      article.classList?.contains('thread-root') ||
-      article.classList?.contains('thread-middle') ||
-      article.classList?.contains('thread-end') ||
-      article.querySelector('.thread-connector-line, [data-testid="thread-connector"]')
-    ) {
-      return true;
-    }
+  if (article.querySelector('[data-testid="tweet-thread-indicator"]')) {
+    return true;
+  }
+  // 2. Explicit classes used by this project's fixtures.
+  if (
+    article.classList?.contains('thread-root') ||
+    article.classList?.contains('thread-middle') ||
+    article.classList?.contains('thread-end') ||
+    article.querySelector('.thread-connector-line, [data-testid="thread-connector"]')
+  ) {
+    return true;
   }
 
   return false;
@@ -111,7 +107,7 @@ export function hasNativeThreadConnector(article: Element, _direction: 'down' | 
  * Checks if article contains a "Show this thread" link.
  */
 export function hasShowThisThread(article: Element): boolean {
-  if (!article || typeof article.querySelectorAll !== 'function') return false;
+  if (!article) return false;
   const links = Array.from(article.querySelectorAll('a[href*="/status/"]'));
   return links.some(l => /(?:show this thread|显示此推文串|このスレッドを表示|afficher ce fil|thread anzeigen|mostrar este hilo)/i.test(l.textContent || ''));
 }
@@ -272,19 +268,17 @@ export function extractContinuousThread(
   // Find appropriate root container for finding sibling tweets
   let container: ParentNode | null = rootContainer || null;
   if (!container) {
-    if (typeof targetArticle.closest === 'function') {
-      container = targetArticle.closest('#conversation-container, #timeline, [data-testid="primaryColumn"], main');
-    }
+    container = targetArticle.closest('#conversation-container, #timeline, [data-testid="primaryColumn"], main');
     if (!container) {
-      container = targetArticle.ownerDocument || (typeof document !== 'undefined' ? document : null);
+      container = targetArticle.ownerDocument || document;
     }
   }
 
   let allArticles: Element[] = [];
-  if (container && typeof container.querySelectorAll === 'function') {
+  if (container) {
     allArticles = Array.from(container.querySelectorAll(TWEET_ARTICLE_SELECTOR));
   }
-  if (allArticles.length === 0 && typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+  if (allArticles.length === 0) {
     allArticles = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR));
   }
 
