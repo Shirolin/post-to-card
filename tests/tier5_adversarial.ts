@@ -51,6 +51,19 @@ import type { TweetData, ThreadData } from '../src/types/tweet.ts';
 
 const rootDir = process.cwd();
 
+/** Newest modification time anywhere under `dir`, or 0 when it holds nothing. */
+function newestSourceMtime(dir: string): number {
+  let newest = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    const mtime = entry.isDirectory()
+      ? newestSourceMtime(full)
+      : fs.statSync(full).mtimeMs;
+    if (mtime > newest) newest = mtime;
+  }
+  return newest;
+}
+
 console.log('===============================================================');
 console.log('    TIER 5 INDEPENDENT ADVERSARIAL STRESS & FORENSIC SUITE     ');
 console.log('===============================================================\n');
@@ -574,8 +587,15 @@ async function runAdversarialSuite() {
     const modalCss = fs.readFileSync(modalCssPath, 'utf8');
     const cardCss = fs.readFileSync(cardCssPath, 'utf8');
 
-    // Verify :host all: initial
-    assert.match(modalCss, /:host\s*\{[^}]*all:\s*initial/i, 'modal.css must reset :host styles with all: initial');
+    // Verify :host resets inherited host-page styles. The selector is a list --
+    // `:host` is paired with `.ptc-scope`, which the dev harness uses to render
+    // the same panels outside a shadow root -- so the declaration is looked for
+    // in the rule that contains `:host` rather than in the text right after it.
+    assert.match(
+      modalCss,
+      /:host[^{}]*\{[^}]*all:\s*initial/i,
+      'modal.css must reset :host styles with all: initial'
+    );
     assert.match(modalCss, /z-index:\s*2147483647/, 'modal.css must use max z-index');
     assert.match(modalCss, /position:\s*fixed/, 'modal.css must fix to viewport');
 
@@ -786,7 +806,20 @@ async function runAdversarialSuite() {
 
   await challenge('T5.3.8: Auditing compiled dist/content.js for Shadow DOM, Custom Elements, and Style Injection', () => {
     const contentJsPath = path.resolve(rootDir, 'dist/content.js');
-    assert.ok(fs.existsSync(contentJsPath), 'dist/content.js must exist');
+    assert.ok(fs.existsSync(contentJsPath), 'dist/content.js must exist — run the build first');
+
+    // A bundle audit is only worth anything against the current source. Auditing
+    // a stale one passes while saying nothing about what is on disk in src, which
+    // is the failure this suite exists to catch, so the staleness is refused here
+    // rather than discovered later.
+    const newestSource = newestSourceMtime(path.resolve(rootDir, 'src'));
+    const bundleMtime = fs.statSync(contentJsPath).mtimeMs;
+    assert.ok(
+      bundleMtime >= newestSource,
+      `dist/content.js is older than src — run the build before auditing it ` +
+      `(bundle ${new Date(bundleMtime).toISOString()}, newest source ${new Date(newestSource).toISOString()})`
+    );
+
     const contentCode = fs.readFileSync(contentJsPath, 'utf8');
 
     // Must define custom element
@@ -803,11 +836,15 @@ async function runAdversarialSuite() {
   });
 
   // -------------------------------------------------------------
-  // CHALLENGE GROUP 4: Verification of Standard 162 Tests (Tiers 1-4)
+  // CHALLENGE GROUP 4: Verification of the standard suite (Tiers 1-4)
   // -------------------------------------------------------------
   console.log('\n[Group 4] Running Full Test Suite (Tiers 1 to 4) Verification...');
 
-  await challenge('T5.4.1: Standard Tier 1 to 4 test suite executes with 100% pass rate (162/162)', async () => {
+  // The suite's size is not the property worth holding still: this assertion used
+  // to pin an exact count, so every test anyone added broke the adversarial suite
+  // without anything being wrong. What must hold is that the standard suite runs
+  // and nothing in it fails.
+  await challenge('T5.4.1: Standard Tier 1 to 4 test suite executes with a 100% pass rate', async () => {
     const r1 = await runTier1();
     const r2 = await runTier2();
     const r3 = await runTier3();
@@ -817,9 +854,9 @@ async function runAdversarialSuite() {
     const passed = r1.passed + r2.passed + r3.passed + r4.passed;
     const failed = r1.failed + r2.failed + r3.failed + r4.failed;
 
-    assert.equal(total, 162, `Total tests must be exactly 162 (got ${total})`);
-    assert.equal(passed, 162, `Passed tests must be exactly 162 (got ${passed})`);
-    assert.equal(failed, 0, `Failed tests must be 0 (got ${failed})`);
+    assert.ok(total > 0, 'the standard suite must actually run something');
+    assert.equal(failed, 0, `every standard test must pass (${failed} failed of ${total})`);
+    assert.equal(passed, total, `passed must equal run (${passed} of ${total})`);
   });
 
   // =============================================================
