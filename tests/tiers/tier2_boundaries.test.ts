@@ -11,6 +11,7 @@ import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipbo
 import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
+import { isPicMediaLink } from '../../src/content/adapter/emojis.ts';
 import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
 import {
   createTriggerButton,
@@ -1278,6 +1279,52 @@ test('Tier 2.58: a trigger injected after the change agrees with the ones above 
     );
     assert.equal(earlier.getAttribute('title'), getTranslation('zh-CN').triggerButtonTitle);
   });
+});
+
+// -------------------------------------------------------------
+// The media-permalink host, shared by the text stripper and the token pass
+// -------------------------------------------------------------
+
+test('Tier 2.64: a pic link the author wrote mid-post stays in the body', () => {
+  // Regression guard for a real disagreement. The body-text stripper only
+  // removed a pic link at the very end of the text, while the token pass dropped
+  // one anywhere, so a link the author quoted mid-sentence survived in `text`
+  // and vanished from `richTokens` -- one TweetData contradicting itself, and
+  // the card rendering whichever field it reached first.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+      <div data-testid="tweetText">
+        <span>look at </span>
+        <a href="https://pic.x.com/midpost" role="link">pic.x.com/midpost</a>
+        <span> and then the rest</span>
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+
+  // The body keeps it, because the author put it there.
+  assert.ok(
+    tweet?.text.includes('pic.x.com/midpost'),
+    'a pic link inside the sentence is the author text, not the appended tail'
+  );
+  // And the token view agrees: the link is present as a link, not dropped.
+  const tokens = tweet?.richTokens || [];
+  assert.ok(
+    tokens.some((tk) => tk.value.includes('pic.x.com/midpost')),
+    'the token view must not drop what the body text keeps'
+  );
+});
+
+test('Tier 2.65: the host matcher and the tail stripper are the same rule', () => {
+  // Both are fed by `isPicMediaLink`'s pattern, so a new host only has to be
+  // taught once. This pins the two domains that matter.
+  assert.equal(isPicMediaLink('https://pic.twitter.com/abc'), true);
+  assert.equal(isPicMediaLink('pic.x.com/abc'), true);
+  assert.equal(isPicMediaLink('https://t.co/abc'), false);
+  assert.equal(isPicMediaLink(''), false);
+  assert.equal(isPicMediaLink('https://example.com/post'), false);
 });
 
 // -------------------------------------------------------------
