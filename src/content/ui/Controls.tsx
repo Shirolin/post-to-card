@@ -5,6 +5,7 @@ import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIO
 import { getTranslation } from '../i18n';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup';
+import { threadScope, tweetKey } from './threadScope';
 import {
   Languages,
   Palette,
@@ -141,20 +142,20 @@ export function Controls({
     return (t[key] as string) || defaultName;
   };
 
-  const excludedSet = new Set(config.excludedTweetIds || []);
-  const totalTweets = threadData?.tweets.length || 0;
-  const activeCount = (totalTweets > 0 && threadData)
-    ? threadData.tweets.filter((item, idx) => !excludedSet.has(item.id || String(idx))).length
-    : 0;
+  // The same scope the card renders from, so the counts here and the buttons on
+  // the card cannot disagree about what may still be dropped.
+  const { excluded, activeCount, totalCount, canExcludeMore } = threadScope(
+    threadData,
+    config.excludedTweetIds
+  );
+  const totalTweets = totalCount;
 
-  const handleToggleExclude = (tweetKey: string) => {
-    const nextSet = new Set(excludedSet);
-    if (nextSet.has(tweetKey)) {
-      nextSet.delete(tweetKey);
-    } else {
-      if (activeCount > 1) {
-        nextSet.add(tweetKey);
-      }
+  const handleToggleExclude = (key: string) => {
+    const nextSet = new Set(excluded);
+    if (nextSet.has(key)) {
+      nextSet.delete(key);
+    } else if (canExcludeMore) {
+      nextSet.add(key);
     }
     updateConfig({ excludedTweetIds: Array.from(nextSet) });
   };
@@ -164,15 +165,15 @@ export function Controls({
   };
 
   const targetKey = threadData
-    ? (threadData.tweets[threadData.targetTweetIndex ?? 0]?.id || String(threadData.targetTweetIndex ?? 0))
+    ? tweetKey(threadData.tweets[threadData.targetTweetIndex ?? 0], threadData.targetTweetIndex ?? 0)
     : '';
 
   const handleSelectCurrentOnly = () => {
     if (!threadData) return;
     const targetIdx = threadData.targetTweetIndex ?? 0;
-    const key = threadData.tweets[targetIdx]?.id || String(targetIdx);
+    const key = tweetKey(threadData.tweets[targetIdx], targetIdx);
     const toExclude = threadData.tweets
-      .map((item, idx) => item.id || String(idx))
+      .map((item, idx) => tweetKey(item, idx))
       .filter((k) => k !== key);
     updateConfig({ excludedTweetIds: toExclude });
   };
@@ -210,7 +211,7 @@ export function Controls({
                   type="button"
                   class="btn-text-action"
                   onClick={handleSelectCurrentOnly}
-                  disabled={activeCount === 1 && !excludedSet.has(targetKey)}
+                  disabled={!canExcludeMore && !excluded.has(targetKey)}
                 >
                   {t.selectCurrentOnly}
                 </button>
@@ -218,13 +219,13 @@ export function Controls({
             </div>
             <div class="tweet-manager-list" role="group" aria-label={t.manageTweets}>
               {threadData.tweets.map((tweet, idx) => {
-                const key = tweet.id || String(idx);
-                const isExcluded = excludedSet.has(key);
+                const key = tweetKey(tweet, idx);
+                const isExcluded = excluded.has(key);
                 const isTarget = idx === (threadData.targetTweetIndex ?? 0);
                 const trimmedText = tweet.text ? tweet.text.replace(/\s+/g, ' ').trim() : '';
                 const snippet = trimmedText ? trimmedText.slice(0, 30) : t.mediaOnlyTweet;
                 const hasMedia = tweet.media && tweet.media.length > 0;
-                const isOnlyOneActive = activeCount === 1 && !isExcluded;
+                const isOnlyOneActive = !canExcludeMore && !isExcluded;
 
                 return (
                   <button

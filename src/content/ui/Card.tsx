@@ -4,6 +4,7 @@ import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, 
 import { CardQrCode } from './qrcode';
 import { resolveRadius, getAspectMinHeight, THEMES } from './themes';
 import { planMediaGrid, applyMediaGridPlan } from './mediaGrid';
+import { threadScope, tweetKey } from './threadScope';
 import { formatLocaleTimestamp, getTranslation } from '../i18n';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
 
@@ -435,11 +436,14 @@ function renderThreadTweet(
   onExcludeTweet?: (tweetId: string) => void,
   canExclude?: boolean
 ) {
-  const tweetKey = tweet.id;
+  // The button only exists for a post that has an id. A post without one is
+  // keyed by position, which means something different in a different thread,
+  // so it is not offered a button here at all.
+  const tweetId = tweet.id;
   return (
     <div class="thread-item">
       {/* On-card quick exclude button */}
-      {canExclude && onExcludeTweet && tweetKey && (
+      {canExclude && onExcludeTweet && tweetId && (
         <button
           type="button"
           class="thread-exclude-btn"
@@ -447,7 +451,7 @@ function renderThreadTweet(
           aria-label={t.excludeThisTweet}
           onClick={(e) => {
             e.stopPropagation();
-            onExcludeTweet(tweetKey);
+            onExcludeTweet(tweetId);
           }}
           data-html2canvas-ignore="true"
         >
@@ -480,13 +484,14 @@ function renderThreadTweet(
 export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
   const t = getTranslation(config.locale || 'en-US');
   const thread = normalizeThreadData(data);
-  const excludedSet = new Set(config.excludedTweetIds || []);
+  // The same scope the controls panel reads, so the exclude buttons on the card
+  // only appear while a tweet may actually be dropped.
+  const scope = threadScope(thread, config.excludedTweetIds);
 
   // Filter out manually excluded tweets
-  const activeTweets = thread.tweets.filter((tweet, idx) => {
-    const key = tweet.id || String(idx);
-    return !excludedSet.has(key);
-  });
+  const activeTweets = thread.tweets.filter(
+    (tweet, idx) => !scope.excluded.has(tweetKey(tweet, idx))
+  );
 
   // Guarantee at least one tweet is rendered (prefer target tweet or first available)
   const targetIndex = thread.targetTweetIndex ?? 0;
@@ -592,7 +597,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
                 imageFit,
                 mediaLayout,
                 onExcludeTweet,
-                effectiveTweets.length > 1
+                scope.canExcludeMore
               );
             })}
           </div>

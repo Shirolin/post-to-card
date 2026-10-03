@@ -8,6 +8,7 @@ import { Card } from './Card';
 import { Controls } from './Controls';
 import { Modal } from './Modal';
 import { handleRadioKeyDown } from './radioGroup';
+import { threadScope } from './threadScope';
 
 import type { Locale } from '../../types/card';
 import { getTranslation } from '../i18n';
@@ -91,23 +92,24 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     }
   };
 
+  // One scope answers both questions this surface asks: what the card shows,
+  // and whether one more tweet may be dropped. Building the next set from the
+  // returned one drops any key left over from a previous thread.
+  const scope = threadScope(threadData, config.excludedTweetIds);
+
   const handleExcludeTweet = (tweetId: string) => {
-    const currentExcluded = new Set(config.excludedTweetIds || []);
-    if (currentExcluded.has(tweetId)) {
-      currentExcluded.delete(tweetId);
-    } else {
-      const total = threadData.tweets.length;
-      if (currentExcluded.size < total - 1) {
-        currentExcluded.add(tweetId);
-      }
+    const next = new Set(scope.excluded);
+    if (next.has(tweetId)) {
+      next.delete(tweetId);
+    } else if (scope.canExcludeMore) {
+      next.add(tweetId);
     }
-    handleConfigChange({ ...config, excludedTweetIds: Array.from(currentExcluded) });
+    handleConfigChange({ ...config, excludedTweetIds: Array.from(next) });
   };
 
-  const activeTweetCount =
-    threadData.tweets.filter(
-      (tweet, idx) => !(config.excludedTweetIds || []).includes(tweet.id || String(idx))
-    ).length || 1;
+  // The card never renders empty — Card substitutes a fallback tweet — so the
+  // summary never says zero.
+  const activeTweetCount = scope.activeCount || 1;
 
   return (
     <Modal
