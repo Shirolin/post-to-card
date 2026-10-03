@@ -11,8 +11,9 @@ import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipbo
 import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
+import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
-import type { TweetData } from '../../src/types/tweet.ts';
+import type { TweetData, MediaItem } from '../../src/types/tweet.ts';
 import type { CardConfig, RadiusOption, PaddingOption } from '../../src/types/card.ts';
 import type { ExtensionMessage } from '../../src/types/messages.ts';
 
@@ -745,6 +746,128 @@ test('Tier 2.44: a quoted video renders once, not as a poster plus the video', (
   assert.equal(media!.length, 1, 'the quoted poster must not render alongside the video item');
   assert.equal(media![0].type, 'video');
   assert.equal(data?.media, undefined, "the quoted video must not leak into the main tweet's media");
+});
+
+// -------------------------------------------------------------
+// Media grid planning: threshold edges and settled decisions
+// -------------------------------------------------------------
+
+/** A picture of the given shape, with no shape recorded. */
+function picture(ratio?: number): MediaItem {
+  const item: MediaItem = { type: 'image', url: 'https://pbs.twimg.com/media/p.jpg' };
+  if (ratio !== undefined) item.aspectRatio = ratio;
+  return item;
+}
+
+const AUTO_GRID = { aspectRatio: 'auto' as const, mediaLayout: 'grid' as const };
+
+test('Tier 2.45: the 1.2 hero threshold puts each side on its own side of it', () => {
+  // Below 1.2 the first picture is tall or square and takes the left column;
+  // at 1.2 and above it is a banner and takes the whole first row. The edge is
+  // inclusive on the landscape side, so 1.2 itself is top-hero.
+  assert.equal(planMediaGrid([picture(1.19), picture(1.5), picture(1.5)], AUTO_GRID).layout, 'left-hero');
+  assert.equal(planMediaGrid([picture(1.2), picture(1.5), picture(1.5)], AUTO_GRID).layout, 'top-hero');
+});
+
+test('Tier 2.46: the 1.25 wide threshold is inclusive, 0.88 tall is not', () => {
+  // Two pictures only read as "both wide" at 1.25 and up.
+  assert.equal(planMediaGrid([picture(1.24), picture(1.6)], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(1.25), picture(1.25)], AUTO_GRID).layout, 'stacked');
+
+  // The tall pair reads on a tighter threshold, and stays strict: one wide
+  // partner is enough to make the pair a plain two-column grid.
+  assert.equal(planMediaGrid([picture(0.88), picture(0.88)], AUTO_GRID).layout, 'portrait-columns');
+  assert.equal(planMediaGrid([picture(0.88), picture(0.9)], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(0.88), picture(1.6)], AUTO_GRID).layout, 'columns');
+});
+
+test('Tier 2.47: one known shape can call a tall pair, on the looser threshold', () => {
+  // Only one picture has reported its shape so far. A single tall picture is
+  // enough to commit the pair to the portrait layout, and the looser 0.85
+  // threshold is what reflects the uncertainty.
+  assert.equal(planMediaGrid([picture(0.85), picture()], AUTO_GRID).layout, 'portrait-columns');
+  assert.equal(planMediaGrid([picture(0.86), picture()], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(), picture(0.85)], AUTO_GRID).layout, 'portrait-columns');
+  assert.equal(planMediaGrid([picture(1.6), picture()], AUTO_GRID).layout, 'columns');
+});
+
+test('Tier 2.48: a half-known grid leaves its shape to the stylesheet', () => {
+  // Every count-2 combination of shapes is a sum or a harmonic mean of two, so
+  // one shape on its own says nothing. The plan then states a layout and no
+  // ratio, which leaves card.css free to apply the default for that layout.
+  const shapeless = planMediaGrid([picture(), picture()], AUTO_GRID);
+  assert.equal(shapeless.layout, 'columns');
+  assert.equal(shapeless.aspectRatio, undefined);
+
+  // Regression guard. One tall picture is enough to commit the pair to the
+  // portrait layout, and that layout's own default is square. A blanket wide
+  // fallback here stated 1.6 inline, which beat the stylesheet and rendered a
+  // pair of vertical screenshots in a landscape box.
+  const halfTall = planMediaGrid([picture(0.8), picture()], AUTO_GRID);
+  assert.equal(halfTall.layout, 'portrait-columns');
+  assert.equal(halfTall.aspectRatio, undefined, 'the square default must survive');
+
+  // The same for a half-known wide picture, which lands on the plain columns.
+  assert.equal(planMediaGrid([picture(1.4), picture()], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(1.4), picture()], AUTO_GRID).aspectRatio, undefined);
+
+  // Four shapeless pictures cannot be averaged at all, so that one leaves the
+  // shape to the stylesheet too.
+  const quad = planMediaGrid([picture(), picture(), picture(), picture()], AUTO_GRID);
+  assert.equal(quad.layout, 'quad');
+  assert.equal(quad.aspectRatio, undefined, 'four shapeless pictures cannot be averaged');
+
+  // One shape out of four is still an average of one, which says nothing about
+  // the other three.
+  const oneKnown = planMediaGrid([picture(1.5), picture(), picture(), picture()], AUTO_GRID);
+  assert.equal(oneKnown.aspectRatio, undefined);
+
+  // Both known, and the grid does take a shape from them.
+  assert.equal(planMediaGrid([picture(0.46), picture(0.46)], AUTO_GRID).aspectRatio, '0.92');
+});
+
+test('Tier 2.49: only auto mode lets the pictures shape the grid', () => {
+  const items = [picture(0.46), picture(0.46)];
+
+  // A poster ratio or a stacked grid has a shape of its own, which the stylesheet
+  // already states, so the plan must not also state one inline.
+  assert.equal(planMediaGrid(items, { aspectRatio: '3:4', mediaLayout: 'grid' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, { aspectRatio: '16:9', mediaLayout: 'grid' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, { aspectRatio: 'auto', mediaLayout: 'stack' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, AUTO_GRID).aspectRatio, '0.92');
+});
+
+test('Tier 2.50: a settled plan does not change when it is planned again', () => {
+  // The load path re-plans a grid that was planned before the shapes arrived.
+  // Planning twice with the same information has to land on the same answer,
+  // which is the whole point of the two paths sharing one rule.
+  const items = [picture(0.46), picture(0.46), picture(1.4)];
+  const first = planMediaGrid(items, AUTO_GRID);
+  const second = planMediaGrid(items, AUTO_GRID);
+  assert.deepEqual(second, first);
+
+  // The mixed pair is the case that drifted before: one tall and one wide, with
+  // an average wide enough to be called tall. The render rule is the only one.
+  const mixed = [picture(0.7), picture(1.1)];
+  assert.equal(planMediaGrid(mixed, AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid(mixed, AUTO_GRID).layout, planMediaGrid(mixed, AUTO_GRID).layout);
+});
+
+test('Tier 2.51: a re-plan replaces the previous layout instead of adding to it', () => {
+  // A grid planned before the shapes arrived carries the default layout; the
+  // re-plan has to clear it, because card.css matches the layout on both the
+  // class and the data attribute and a stale one wins or loses on specificity.
+  const grid = new DomElement('DIV');
+  grid.setAttribute('data-grid-layout', 'default');
+  grid.classList.add('grid-default');
+
+  applyMediaGridPlan(grid, planMediaGrid([picture(0.46), picture(0.46)], AUTO_GRID));
+
+  assert.equal(grid.getAttribute('data-grid-layout'), 'portrait-columns');
+  assert.ok(grid.classList.contains('grid-portrait-columns'), 'the planned class must be present');
+  assert.ok(!grid.classList.contains('grid-default'), 'the previous layout class must be gone');
+  assert.ok(!grid.classList.contains('grid-columns'), 'no other layout class may linger');
+  assert.equal(grid.style.aspectRatio, '0.92');
 });
 
 // -------------------------------------------------------------

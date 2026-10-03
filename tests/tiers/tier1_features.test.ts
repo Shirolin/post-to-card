@@ -23,8 +23,9 @@ import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme } from '../../src/content/ui/themes.ts';
+import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 
-import type { TweetData, ThreadData, AuthorInfo } from '../../src/types/tweet.ts';
+import type { TweetData, ThreadData, AuthorInfo, MediaItem } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../src/types/card.ts';
 import type { ExtensionMessage, ExtensionResponse } from '../../src/types/messages.ts';
 
@@ -2197,16 +2198,25 @@ test('F28.1: extractor calculates aspectRatio from naturalWidth and naturalHeigh
   assert.ok(extractorContent.includes('aspectRatio'), 'Extractor must calculate and assign aspectRatio');
 });
 
+/** A photo of the given shape, for driving the grid planner. */
+function photo(ratio: number): MediaItem {
+  return { type: 'image', url: `https://pbs.twimg.com/media/p${ratio}.jpg`, aspectRatio: ratio };
+}
+
+const AUTO_GRID = { aspectRatio: 'auto' as const, mediaLayout: 'grid' as const };
+
 test('F28.2: Card renders data-grid-layout="top-hero" for 3 landscape/square images', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  assert.ok(cardContent.includes("gridLayout = isPortrait ? 'left-hero' : 'top-hero'"), 'Must compute top-hero vs left-hero');
-  assert.ok(cardContent.includes('data-grid-layout={gridLayout}'), 'Must bind data-grid-layout attribute');
+  // A wide first picture takes the full width of row 1; a tall one takes the
+  // left column instead.
+  assert.equal(planMediaGrid([photo(1.6), photo(1.5), photo(1.5)], AUTO_GRID).layout, 'top-hero');
+  assert.equal(planMediaGrid([photo(1.5), photo(1.5), photo(1.5)], AUTO_GRID).layout, 'top-hero');
+  assert.equal(planMediaGrid([photo(0.8), photo(1.5), photo(1.5)], AUTO_GRID).layout, 'left-hero');
 });
 
 test('F28.3: Card renders data-grid-layout="stacked" for 2 wide images and "portrait-columns" for dual vertical images', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  assert.ok(cardContent.includes("gridLayout = 'stacked'") || cardContent.includes("gridLayout = bothWide ? 'stacked'"), 'Must compute stacked layout for 2 wide images');
-  assert.ok(cardContent.includes("portrait-columns"), 'Must compute portrait-columns layout for 2 tall portrait images');
+  assert.equal(planMediaGrid([photo(1.6), photo(1.5)], AUTO_GRID).layout, 'stacked');
+  assert.equal(planMediaGrid([photo(0.46), photo(0.46)], AUTO_GRID).layout, 'portrait-columns');
+  assert.equal(planMediaGrid([photo(1.6), photo(0.46)], AUTO_GRID).layout, 'columns');
 });
 
 test('F28.4: card.css defines top-hero, left-hero, 4:3 quad and transparent contain styles', () => {
@@ -2222,33 +2232,22 @@ test('F28.4: card.css defines top-hero, left-hero, 4:3 quad and transparent cont
 });
 
 test('F28.5: Dual portrait images calculate dynamic combined aspect-ratio (r0 + r1) in Auto mode', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  assert.ok(cardContent.includes('bothPortrait'), 'Must check bothPortrait condition');
-  assert.ok(cardContent.includes('dynamicGridRatio = `${combined}`'), 'Must assign dynamicGridRatio string');
-  assert.ok(cardContent.includes('aspectRatio: dynamicGridRatio'), 'Must apply dynamicGridRatio to grid style');
-
-  // Verify mathematical combination formula
-  const r0 = 0.46; // Phone screenshot 9:19.5
-  const r1 = 0.46;
-  const combined = Number(Math.max(0.78, Math.min(1.35, r0 + r1)).toFixed(2));
-  assert.equal(combined, 0.92, 'Combined ratio for two 9:19.5 screenshots should be 0.92');
+  // Two 9:19.5 phone screenshots side by side: the grid is as wide as the two
+  // are tall, so the tall pair fills it without dead space.
+  const plan = planMediaGrid([photo(0.46), photo(0.46)], AUTO_GRID);
+  assert.equal(plan.layout, 'portrait-columns');
+  assert.equal(plan.aspectRatio, '0.92');
 });
 
 test('F28.6: 3-image layout uses left-hero for square/portrait (ratio < 1.2) with 1.6fr:1fr columns and dynamic ratio', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-
-  // Verify threshold < 1.2 for left-hero
-  assert.ok(cardContent.includes('firstRatio < 1.2'), 'Must use 1.2 threshold so square 1.0 comic/illustrations use left-hero');
   assert.ok(cssContent.includes('minmax(0, 1.6fr) minmax(0, 1fr)'), 'Left hero must allocate 1.6fr to 1fr column width');
 
-  // Mathematical formula verification for square comic (ratio 1.0)
-  const firstRatio = 1.0;
-  const rRight = 1.0;
-  const targetFromLeft = 1.625 * firstRatio;
-  const targetFromRight = 1.30 * rRight;
-  const combined = Number(Math.max(1.15, Math.min(1.65, 0.65 * targetFromLeft + 0.35 * targetFromRight)).toFixed(2));
-  assert.equal(combined, 1.51, 'Square comic (1.0) with standard companion images should produce 1.51 grid aspect ratio to eliminate vertical dead space');
+  // Square comic (1.0) with square companions: left-hero, and a grid wide
+  // enough to eliminate the vertical dead space the CSS default would leave.
+  const plan = planMediaGrid([photo(1.0), photo(1.0), photo(1.0)], AUTO_GRID);
+  assert.equal(plan.layout, 'left-hero');
+  assert.equal(plan.aspectRatio, '1.51');
 });
 
 // -------------------------------------------------------------
