@@ -234,84 +234,66 @@
 }
 
 .post-to-card-target[data-theme="parchment"] .author-name,
-.post-to-card-target.theme-parchment .author-name,
 .post-to-card-target[data-theme="parchment"] .quote-name,
-.post-to-card-target.theme-parchment .quote-name,
 .post-to-card-target[data-theme="nocturne"] .author-name,
-.post-to-card-target.theme-nocturne .author-name,
-.post-to-card-target[data-theme="nocturne"] .quote-name,
-.post-to-card-target.theme-nocturne .quote-name {
+.post-to-card-target[data-theme="nocturne"] .quote-name {
   font-weight: 600;
   letter-spacing: 0.005em;
 }
 
-.post-to-card-target[data-theme="parchment"] .author-name,
-.post-to-card-target.theme-parchment .author-name {
+.post-to-card-target[data-theme="parchment"] .author-name {
   font-size: 17.5px;
 }
 
-.post-to-card-target[data-theme="nocturne"] .author-name,
-.post-to-card-target.theme-nocturne .author-name {
+.post-to-card-target[data-theme="nocturne"] .author-name {
   font-size: 18.5px;
 }
 
-.post-to-card-target[data-theme="parchment"] .tweet-text-content,
-.post-to-card-target.theme-parchment .tweet-text-content {
+.post-to-card-target[data-theme="parchment"] .tweet-text-content {
   font-size: 17px;
   line-height: 1.78;
 }
 
 .post-to-card-target[data-theme="hairline"] .author-name,
-.post-to-card-target.theme-hairline .author-name,
-.post-to-card-target[data-theme="hairline"] .quote-name,
-.post-to-card-target.theme-hairline .quote-name {
+.post-to-card-target[data-theme="hairline"] .quote-name {
   font-size: 15.5px;
   font-weight: 500;
   letter-spacing: -0.005em;
 }
 
-.post-to-card-target[data-theme="hairline"] .tweet-text-content,
-.post-to-card-target.theme-hairline .tweet-text-content {
+.post-to-card-target[data-theme="hairline"] .tweet-text-content {
   font-size: 16px;
   line-height: 1.62;
 }
 
 /* Kraft: a utility label. Slightly tighter sans, body at a workmanlike size. */
 .post-to-card-target[data-theme="kraft"] .author-name,
-.post-to-card-target.theme-kraft .author-name,
-.post-to-card-target[data-theme="kraft"] .quote-name,
-.post-to-card-target.theme-kraft .quote-name {
+.post-to-card-target[data-theme="kraft"] .quote-name {
   font-size: 16.5px;
   font-weight: 700;
   letter-spacing: -0.005em;
 }
 
-.post-to-card-target[data-theme="kraft"] .tweet-text-content,
-.post-to-card-target.theme-kraft .tweet-text-content {
+.post-to-card-target[data-theme="kraft"] .tweet-text-content {
   font-size: 16px;
   line-height: 1.66;
 }
 
 /* Cyanotype: a technical drawing. Quiet sans, generous leading, tabular meta. */
 .post-to-card-target[data-theme="cyanotype"] .author-name,
-.post-to-card-target.theme-cyanotype .author-name,
-.post-to-card-target[data-theme="cyanotype"] .quote-name,
-.post-to-card-target.theme-cyanotype .quote-name {
+.post-to-card-target[data-theme="cyanotype"] .quote-name {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.005em;
 }
 
-.post-to-card-target[data-theme="cyanotype"] .tweet-text-content,
-.post-to-card-target.theme-cyanotype .tweet-text-content {
+.post-to-card-target[data-theme="cyanotype"] .tweet-text-content {
   font-size: 16.5px;
   line-height: 1.72;
 }
 
 .post-to-card-target[data-theme="cyanotype"] .card-timestamp,
-.post-to-card-target.theme-cyanotype .card-timestamp,
-.post-to-card-target[data-theme="cyanotype"] .stats-row,
-.post-to-card-target.theme-cyanotype .stats-row {
+.post-to-card-target[data-theme="cyanotype"] .stats-row {
   font-size: 12px;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
@@ -320,49 +302,39 @@
 /* Terminal: monospace everywhere, one size, tight leading. The grid is the
    point, so nothing is allowed to vary its advance width. */
 .post-to-card-target[data-theme="terminal"] .author-name,
-.post-to-card-target.theme-terminal .author-name,
-.post-to-card-target[data-theme="terminal"] .quote-name,
-.post-to-card-target.theme-terminal .quote-name {
+.post-to-card-target[data-theme="terminal"] .quote-name {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0;
 }
 
-.post-to-card-target[data-theme="terminal"] .tweet-text-content,
-.post-to-card-target.theme-terminal .tweet-text-content {
+.post-to-card-target[data-theme="terminal"] .tweet-text-content {
   font-size: 15px;
   line-height: 1.7;
 }
 
 .post-to-card-target[data-theme="terminal"] .card-timestamp,
-.post-to-card-target.theme-terminal .card-timestamp,
-.post-to-card-target[data-theme="terminal"] .stats-row,
-.post-to-card-target.theme-terminal .stats-row {
+.post-to-card-target[data-theme="terminal"] .stats-row {
   font-size: 12px;
   letter-spacing: 0.02em;
 }
 
 /* Broadsheet: serif throughout, large headline, all-caps kickers. */
 .post-to-card-target[data-theme="broadsheet"] .author-name,
-.post-to-card-target.theme-broadsheet .author-name,
-.post-to-card-target[data-theme="broadsheet"] .quote-name,
-.post-to-card-target.theme-broadsheet .quote-name {
+.post-to-card-target[data-theme="broadsheet"] .quote-name {
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
-.post-to-card-target[data-theme="broadsheet"] .tweet-text-content,
-.post-to-card-target.theme-broadsheet .tweet-text-content {
+.post-to-card-target[data-theme="broadsheet"] .tweet-text-content {
   font-family: var(--font-body);
   font-size: 17px;
   line-height: 1.72;
 }
 
 .post-to-card-target[data-theme="broadsheet"] .card-timestamp,
-.post-to-card-target.theme-broadsheet .card-timestamp,
-.post-to-card-target[data-theme="broadsheet"] .stats-row,
-.post-to-card-target.theme-broadsheet .stats-row {
+.post-to-card-target[data-theme="broadsheet"] .stats-row {
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -371,16 +343,13 @@
 
 /* Brutalist: heavy sans, oversized headline, no letter-spacing niceties. */
 .post-to-card-target[data-theme="brutalist"] .author-name,
-.post-to-card-target.theme-brutalist .author-name,
-.post-to-card-target[data-theme="brutalist"] .quote-name,
-.post-to-card-target.theme-brutalist .quote-name {
+.post-to-card-target[data-theme="brutalist"] .quote-name {
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
-.post-to-card-target[data-theme="brutalist"] .tweet-text-content,
-.post-to-card-target.theme-brutalist .tweet-text-content {
+.post-to-card-target[data-theme="brutalist"] .tweet-text-content {
   font-size: 17px;
   line-height: 1.6;
 }
@@ -498,17 +467,13 @@
    figures and rules between the columns.
    ------------------------------------------------------------- */
 .post-to-card-target[data-theme="parchment"] .card-timestamp,
-.post-to-card-target.theme-parchment .card-timestamp,
-.post-to-card-target[data-theme="parchment"] .stats-row,
-.post-to-card-target.theme-parchment .stats-row {
+.post-to-card-target[data-theme="parchment"] .stats-row {
   font-size: 12.5px;
   letter-spacing: 0.01em;
 }
 
 .post-to-card-target[data-theme="nocturne"] .card-timestamp,
-.post-to-card-target.theme-nocturne .card-timestamp,
-.post-to-card-target[data-theme="nocturne"] .stats-row,
-.post-to-card-target.theme-nocturne .stats-row {
+.post-to-card-target[data-theme="nocturne"] .stats-row {
   /* Quieter via size and spacing, never via opacity: `--faint` is already the
      dimmest step, and fading it again drops the stats under 4.5:1. */
   font-size: 12.5px;
@@ -516,22 +481,18 @@
 }
 
 .post-to-card-target[data-theme="hairline"] .card-timestamp,
-.post-to-card-target.theme-hairline .card-timestamp,
-.post-to-card-target[data-theme="hairline"] .stats-row,
-.post-to-card-target.theme-hairline .stats-row {
+.post-to-card-target[data-theme="hairline"] .stats-row {
   font-size: 12px;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
 }
 
-.post-to-card-target[data-theme="hairline"] .stats-row,
-.post-to-card-target.theme-hairline .stats-row {
+.post-to-card-target[data-theme="hairline"] .stats-row {
   gap: 0;
 }
 
-.post-to-card-target[data-theme="hairline"] .stat-item + .stat-item,
-.post-to-card-target.theme-hairline .stat-item + .stat-item {
+.post-to-card-target[data-theme="hairline"] .stat-item + .stat-item {
   margin-left: 14px;
   padding-left: 14px;
   border-left: 1px solid var(--divider);
@@ -539,9 +500,7 @@
 
 /* Kraft: footnote material — small, a touch of tracking, warm ink. */
 .post-to-card-target[data-theme="kraft"] .card-timestamp,
-.post-to-card-target.theme-kraft .card-timestamp,
-.post-to-card-target[data-theme="kraft"] .stats-row,
-.post-to-card-target.theme-kraft .stats-row {
+.post-to-card-target[data-theme="kraft"] .stats-row {
   font-size: 12px;
   letter-spacing: 0.02em;
 }

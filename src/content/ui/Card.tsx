@@ -510,9 +510,13 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
   const tokens = THEMES[config.theme].tokens;
   const minHeightStyle = getAspectMinHeight(config.aspectRatio, 640);
 
+  // The theme is carried by `data-theme` alone. It used to be emitted twice,
+  // once as this class and once as the attribute, and card.css matched both
+  // spellings in every rule. Same specificity, same block, so the class decided
+  // nothing that the attribute did not; it only meant a material could be
+  // renamed in one place and silently keep its old styling in the other.
   const cardClasses = [
     'post-to-card-target',
-    `theme-${config.theme}`,
     `padding-${config.padding}`,
     `radius-${config.borderRadius}`,
     `ratio-${config.aspectRatio.replace(':', '-')}`,
