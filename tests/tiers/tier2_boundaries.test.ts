@@ -4,7 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { DomElement, DomImageElement, DomDocument, createDomElement } from '../env/browser.ts';
+import { DomElement, DomImageElement, DomDocument, DomMutationObserver, createDomElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
 import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
@@ -12,7 +12,15 @@ import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/e
 import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
-import { createTriggerButton, applyTriggerLocale } from '../../src/content/adapter/injection.ts';
+import {
+  createTriggerButton,
+  applyTriggerLocale,
+  injectIntoActionBar,
+  injectAll,
+  setInjectedButtonVisibility,
+  initTwitterInjection,
+  HIDE_ACTION_BUTTON_CLASS,
+} from '../../src/content/adapter/injection.ts';
 import { getTranslation } from '../../src/content/i18n.ts';
 import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
@@ -957,8 +965,6 @@ test('Tier 2.56: a post without an id is keyed by its position, as every surface
 
 // -------------------------------------------------------------
 // The language the injected triggers speak
-// -------------------------------------------------------------
-
 /**
  * Runs `body` against a fake document, which is what the injection code reads.
  * The triggers are injected before preferences resolve, so their label has to be
@@ -976,12 +982,267 @@ function withFakeDocument<T>(body: (doc: DomDocument) => T): T {
   }
 }
 
+// -------------------------------------------------------------
+// Injection: the trigger, the action bar, and the preference listener
+// -------------------------------------------------------------
+
+/** Enough of `window` for the lifecycle manager to install itself on. */
+function fakeWindow(): Record<string, unknown> {
+  const listeners = new Map<string, Set<(e: unknown) => void>>();
+  const push = (type: string) => (e: unknown) => {
+    for (const cb of listeners.get(type) || []) cb(e);
+  };
+  return {
+    location: { pathname: '/ada_builds' },
+    history: {
+      pushState: () => {},
+      replaceState: () => {},
+    },
+    addEventListener: (type: string, cb: (e: unknown) => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(cb);
+    },
+    removeEventListener: (type: string, cb: (e: unknown) => void) => {
+      listeners.get(type)?.delete(cb);
+    },
+    dispatchEvent: push(''),
+    CustomEvent: class {
+      type: string;
+      detail: unknown;
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    },
+    Event: class {
+      type: string;
+      constructor(type: string) {
+        this.type = type;
+      }
+    },
+  };
+}
+
+/**
+ * Runs `body` with every global the injection path reads installed: a document
+ * to inject into, a window to listen on, a chrome to store preferences in, and
+ * an observer for the rescan.
+ *
+ * Awaited rather than returned, because a body that suspends has to keep its
+ * globals for the duration: restoring them the moment the promise is handed back
+ * tears the environment down underneath the code still running.
+ */
+async function withInjectionEnv<T>(
+  body: (ctx: { doc: DomDocument; chrome: ReturnType<typeof createChromeMock> }) => T | Promise<T>
+): Promise<T> {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = {
+    document: scope.document,
+    window: scope.window,
+    chrome: scope.chrome,
+    MutationObserver: scope.MutationObserver,
+    DomElement: scope.DomElement,
+  };
+
+  const doc = new DomDocument();
+  const chrome = createChromeMock();
+  scope.document = doc;
+  scope.window = fakeWindow();
+  scope.chrome = chrome;
+  scope.MutationObserver = DomMutationObserver;
+  scope.DomElement = DomElement;
+
+  try {
+    return await body({ doc, chrome });
+  } finally {
+    for (const key of Object.keys(saved)) {
+      if (saved[key as keyof typeof saved] === undefined) {
+        delete scope[key];
+      } else {
+        scope[key] = saved[key as keyof typeof saved];
+      }
+    }
+  }
+}
+
+/** One tweet with an action bar holding the engagement controls. */
+const TWEET_HTML = `
+  <article data-testid="tweet">
+    <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+    <div role="group">
+      <button data-testid="reply" aria-label="64 replies">64</button>
+      <button data-testid="like" aria-label="8.1K likes">8.1K</button>
+    </div>
+  </article>
+`;
+
+test('Tier 2.59: a tweet gets one trigger, and asking twice does not add another', async () => {
+  // Deduplication is anchored to the tweet, not to the element that was handed
+  // over, because the three lookup strategies the scanner uses resolve to
+  // different elements for the same post. A container-level guard let one tweet
+  // collect several buttons that way.
+  await withInjectionEnv(async ({ doc }) => {
+    const article = createDomElement(TWEET_HTML);
+    doc.body.appendChild(article);
+    const bar = article.querySelector('div[role="group"]') as unknown as Element;
+
+    assert.equal(injectIntoActionBar(bar, () => {}), true, 'the first pass must inject');
+    assert.equal(
+      article.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      1,
+      'exactly one trigger on the tweet'
+    );
+
+    // The article is marked too, so a different element of the same post is refused.
+    assert.equal(injectIntoActionBar(article as unknown as Element, () => {}), false);
+    assert.equal(
+      article.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      1,
+      'the second element of the same post must not produce a second trigger'
+    );
+  });
+});
+
+test('Tier 2.60: a quoted post keeps its own action bar to itself', async () => {
+  // A quoted post renders as a nested article with its own engagement controls.
+  // Injecting there would put the trigger on the quoted card instead of the one
+  // the reader is looking at.
+  await withInjectionEnv(async ({ doc }) => {
+    const article = createDomElement(`
+      <article data-testid="tweet">
+        <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+        <div role="group">
+          <button data-testid="reply">12</button>
+        </div>
+        <div data-testid="quoteTweet">
+          <article>
+            <div data-testid="User-Name"><a href="/grace"><span>Grace</span></a></div>
+            <div role="group">
+              <button data-testid="reply">3</button>
+            </div>
+          </article>
+        </div>
+      </article>
+    `);
+    doc.body.appendChild(article);
+
+    const injected = injectAll(() => {});
+
+    assert.equal(injected, 1, 'only the outer tweet is eligible');
+    const quoteBox = article.querySelector('div[data-testid="quoteTweet"]') as unknown as Element;
+    assert.equal(
+      quoteBox.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      0,
+      'the quoted post must not receive a trigger'
+    );
+  });
+});
+
+test('Tier 2.61: a feed scan attaches at most one trigger per tweet', async () => {
+  // `div[role="group"]` is not specific to the action bar: media players and
+  // quoted posts carry their own. A scan that matched them put the trigger on
+  // the photo block, so more than one candidate per post has to collapse.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`<div data-testid="primaryColumn">${TWEET_HTML}${TWEET_HTML}</div>`)
+    );
+
+    assert.equal(injectAll(() => {}), 2, 'two tweets, two triggers');
+    assert.equal(
+      doc.body.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      2,
+      'the media inner group must not have collected one of its own'
+    );
+  });
+});
+
+test('Tier 2.62: hiding the triggers leaves them in the page', async () => {
+  // They are hidden rather than removed so the deduplication markers and the
+  // scroll state survive a round trip through the preference. Toggling the
+  // preference back has to make them visible again without re-injecting.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(createDomElement(TWEET_HTML));
+    injectAll(() => {});
+
+    const buttons = () => doc.body.querySelectorAll('[data-post-to-card-btn="true"]').length;
+    assert.equal(buttons(), 1);
+
+    setInjectedButtonVisibility(false);
+    assert.ok(
+      doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS),
+      'the root carries the class the stylesheet keys on'
+    );
+    assert.equal(buttons(), 1, 'a hidden trigger is still in the DOM');
+
+    setInjectedButtonVisibility(true);
+    assert.ok(!doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS));
+    assert.equal(buttons(), 1);
+  });
+});
+
+test('Tier 2.63: a preference change reaches triggers that already exist', async () => {
+  // The path that was untestable for want of storage.onChanged: one tab saves a
+  // preference, another tab's triggers have to follow it. Visibility and the
+  // trigger's own language are both applied from the same listener, so a change
+  // to one without the other would mean only half the preference arrived.
+  //
+  // The write lands before the initial read resolves, which is the whole point:
+  // the read is a snapshot taken when the page loaded, and applying it after the
+  // change would put the old value back.
+  await withInjectionEnv(async ({ doc, chrome }) => {
+    doc.body.appendChild(createDomElement(TWEET_HTML));
+
+    const controller = initTwitterInjection(() => {});
+    try {
+      await chrome.storage.local.set({
+        post_to_card_user_prefs: { showActionBarButton: false, locale: 'zh-CN' },
+      });
+
+      // Let the initial preference read come back. It holds the state from
+      // before the write above, and must not undo it.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      assert.ok(
+        doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS),
+        'a stale initial read must not undo the change that arrived after it'
+      );
+      assert.equal(
+        doc.body.querySelector('[data-post-to-card-btn="true"]')?.getAttribute('aria-label'),
+        getTranslation('zh-CN').triggerButtonTitle,
+        'the saved language must reach a trigger injected before it resolved'
+      );
+
+      controller.injectAll();
+
+      await chrome.storage.local.set({
+        post_to_card_user_prefs: { showActionBarButton: true, locale: 'en-US' },
+      });
+
+      assert.ok(
+        !doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS),
+        'a later change must reverse what the first one did'
+      );
+      assert.equal(
+        doc.body.querySelector('[data-post-to-card-btn="true"]')?.getAttribute('aria-label'),
+        getTranslation('en-US').triggerButtonTitle
+      );
+    } finally {
+      controller.disconnect();
+    }
+  });
+});
+
 test('Tier 2.57: a language chosen after the triggers exist reaches them', () => {
   // A trigger is built before the saved preferences have resolved and then stays
   // on the page, so a language picked afterwards has to reach the buttons that
   // are already there. The label is also the button's accessible name, which is
   // why it cannot be left to a title attribute the card never re-reads.
   withFakeDocument((doc) => {
+    // Stated rather than assumed: the locale is module state, so a test that
+    // relied on whatever ran before it would answer a different question
+    // depending on its position in the file.
+    applyTriggerLocale('en-US');
+
     const injected = createTriggerButton(() => {});
     doc.body.appendChild(injected);
     const beforeSwitch = injected.getAttribute('title');

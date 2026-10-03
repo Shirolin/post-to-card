@@ -76,8 +76,52 @@ class ChromeRuntimeMock {
   }
 }
 
+type StorageChange = { oldValue?: any; newValue?: any };
+type StorageChangeListener = (
+  changes: Record<string, StorageChange>,
+  areaName: string
+) => void;
+
 class ChromeStorageAreaMock {
   private store = new Map<string, any>();
+  private readonly areaName: string;
+  private readonly owner: ChromeStorageMock;
+
+  /**
+   * The owning mock, so a write can announce itself the way Chrome does. Kept as
+   * a constructor argument rather than a global because `local` and `sync` are
+   * separate areas and the listener is told which one changed.
+   *
+   * Fields are declared rather than written as constructor parameter properties:
+   * Node strips the types off this file to run it, and it cannot strip that form.
+   */
+  constructor(areaName: string, owner: ChromeStorageMock) {
+    this.areaName = areaName;
+    this.owner = owner;
+  }
+
+  /** Applies a batch and reports only the keys whose value actually moved. */
+  private commit(entries: Record<string, any>, removals: string[] = []): void {
+    const changes: Record<string, StorageChange> = {};
+
+    for (const [key, value] of Object.entries(entries)) {
+      const oldValue = this.store.get(key);
+      if (oldValue === value) continue;
+      this.store.set(key, value);
+      changes[key] = { oldValue, newValue: value };
+    }
+
+    for (const key of removals) {
+      if (!this.store.has(key)) continue;
+      const oldValue = this.store.get(key);
+      this.store.delete(key);
+      changes[key] = { oldValue, newValue: undefined };
+    }
+
+    if (Object.keys(changes).length > 0) {
+      this.owner.dispatch(this.areaName, changes);
+    }
+  }
 
   public get(keys: string | string[] | Record<string, any> | null, callback?: (items: Record<string, any>) => void): Promise<Record<string, any>> {
     return new Promise(resolve => {
@@ -102,9 +146,15 @@ class ChromeStorageAreaMock {
 
   public set(items: Record<string, any>, callback?: () => void): Promise<void> {
     return new Promise(resolve => {
-      Object.entries(items).forEach(([k, v]) => {
-        this.store.set(k, v);
-      });
+      this.commit(items);
+      if (callback) callback();
+      resolve();
+    });
+  }
+
+  public remove(keys: string | string[], callback?: () => void): Promise<void> {
+    return new Promise(resolve => {
+      this.commit({}, Array.isArray(keys) ? keys : [keys]);
       if (callback) callback();
       resolve();
     });
@@ -112,7 +162,7 @@ class ChromeStorageAreaMock {
 
   public clear(callback?: () => void): Promise<void> {
     return new Promise(resolve => {
-      this.store.clear();
+      this.commit({}, Array.from(this.store.keys()));
       if (callback) callback();
       resolve();
     });
@@ -120,8 +170,39 @@ class ChromeStorageAreaMock {
 }
 
 class ChromeStorageMock {
-  public local = new ChromeStorageAreaMock();
-  public sync = new ChromeStorageAreaMock();
+  public local: ChromeStorageAreaMock;
+  public sync: ChromeStorageAreaMock;
+
+  private listeners: StorageChangeListener[] = [];
+
+  public onChanged = {
+    addListener: (cb: StorageChangeListener) => {
+      if (!this.listeners.includes(cb)) this.listeners.push(cb);
+    },
+    removeListener: (cb: StorageChangeListener) => {
+      this.listeners = this.listeners.filter(l => l !== cb);
+    },
+    hasListener: (cb: StorageChangeListener) => this.listeners.includes(cb),
+  };
+
+  constructor() {
+    this.local = new ChromeStorageAreaMock('local', this);
+    this.sync = new ChromeStorageAreaMock('sync', this);
+  }
+
+  /**
+   * Notifies listeners the way Chrome does: per area, with only the moved keys,
+   * and never letting a listener's own failure break the write that triggered it.
+   */
+  dispatch(areaName: string, changes: Record<string, StorageChange>): void {
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(changes, areaName);
+      } catch (err) {
+        console.error('[chrome mock] storage.onChanged listener threw:', err);
+      }
+    }
+  }
 }
 
 class ChromeTabsMock {

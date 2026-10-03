@@ -555,52 +555,15 @@ test('F7.5: observer handles subtree insertions across virtual scroll cellInnerD
 
 // -------------------------------------------------------------
 // F8: SPA Route Navigation Handling
+//
+// F8.1 through F8.5 used to sit here. Each defined a local function, called it,
+// and asserted the flag that same function had just set — they exercised no
+// production code at all, while their names claimed the lifecycle manager's
+// history and route handling was covered. They were removed rather than kept as
+// placeholders, because a test that cannot fail is worse than a missing one: it
+// tells the next reader the area is verified. The navigation wiring itself is
+// still unverified; see Tier 2 for what of it is now executed.
 // -------------------------------------------------------------
-test('F8.1: popstate event listener detects browser history back/forward', () => {
-  let navTriggered = false;
-  const onPopState = () => { navTriggered = true; };
-  onPopState();
-  assert.equal(navTriggered, true);
-});
-
-test('F8.2: pushState interception detects client-side route transitions', () => {
-  let routeChanged = false;
-  const notifyRoute = (url: string) => {
-    assert.ok(url);
-    routeChanged = true;
-  };
-
-  notifyRoute('/jack/status/20');
-  assert.equal(routeChanged, true);
-});
-
-test('F8.3: route navigation triggers immediate injectAll scan', () => {
-  let injectCalled = false;
-  function onRouteNavigation() {
-    injectCalled = true;
-  }
-  onRouteNavigation();
-  assert.equal(injectCalled, true);
-});
-
-test('F8.4: navigation away resets active modal to prevent stale UI state', () => {
-  let modalMounted = true;
-  function handleLocationChange(newPath: string) {
-    if (newPath) modalMounted = false;
-  }
-  handleLocationChange('/home');
-  assert.equal(modalMounted, false);
-});
-
-test('F8.5: status page URL parsing extracts status ID correctly', () => {
-  function extractTweetIdFromUrl(href: string): string | null {
-    const match = href.match(/\/status\/(\d+)/);
-    return match ? match[1] : null;
-  }
-  assert.equal(extractTweetIdFromUrl('/jack/status/20'), '20');
-  assert.equal(extractTweetIdFromUrl('https://x.com/elonmusk/status/1880000000000000000'), '1880000000000000000');
-  assert.equal(extractTweetIdFromUrl('/home'), null);
-});
 
 // -------------------------------------------------------------
 // F9: Native Emoji Restoration

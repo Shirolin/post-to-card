@@ -3,6 +3,19 @@
  * Injects a sleek "✨" trigger button into tweet action bars (`div[role="group"]`),
  * guards against duplicate injections, uses a 150ms debounced MutationObserver
  * to handle virtual scrolling, and hooks SPA route navigation.
+ *
+ * The DOM here is used directly. This file used to guard nearly every call with
+ * `typeof x === 'function'`, reach for a `globalThis.DomElement` fallback, and
+ * skip work it could not do. None of that was true of the product: a content
+ * script has a document, and the classes it looked for on globalThis were only
+ * ever defined by the test shim. What the guards bought was that the functions
+ * could be called from a bare Node process, at the cost of every reader having to
+ * work out which of the branches could actually run.
+ *
+ * Two kinds of check remain, because they are about the environment rather than
+ * about the DOM: whether the extension APIs are present (`chrome`), and the
+ * existence of the custom-element registry, which MV3 can hand us as null inside
+ * an isolated world.
  */
 
 import type { ThreadData } from '../../types/tweet.ts';
@@ -39,7 +52,6 @@ let triggerLocale: Locale | undefined;
  */
 export function applyTriggerLocale(locale?: Locale): void {
   triggerLocale = sanitizeLocale(locale);
-  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
 
   const label = getTranslation(triggerLocale).triggerButtonTitle;
   for (const btn of Array.from(document.querySelectorAll(TRIGGER_SELECTOR))) {
@@ -54,8 +66,6 @@ export function applyTriggerLocale(locale?: Locale): void {
  * but are visually removed with `display: none !important`.
  */
 export function setInjectedButtonVisibility(visible: boolean): void {
-  if (typeof document === 'undefined') return;
-
   if (!document.getElementById(VISIBILITY_STYLE_ID)) {
     const styleEl = document.createElement('style');
     styleEl.id = VISIBILITY_STYLE_ID;
@@ -83,18 +93,14 @@ export function setInjectedButtonVisibility(visible: boolean): void {
       }
     `;
     const target = document.head || document.documentElement || document.body;
-    if (target && typeof target.appendChild === 'function') {
-      target.appendChild(styleEl);
-    }
+    target.appendChild(styleEl);
   }
 
   const root = document.documentElement || document.body;
-  if (root && root.classList) {
-    if (visible) {
-      root.classList.remove(HIDE_ACTION_BUTTON_CLASS);
-    } else {
-      root.classList.add(HIDE_ACTION_BUTTON_CLASS);
-    }
+  if (visible) {
+    root.classList.remove(HIDE_ACTION_BUTTON_CLASS);
+  } else {
+    root.classList.add(HIDE_ACTION_BUTTON_CLASS);
   }
 }
 
@@ -118,92 +124,65 @@ export const TRIGGER_BUTTON_SVG = `
  */
 export function createTriggerButton(onClick: () => void): HTMLElement {
   const t = getTranslation(triggerLocale);
-  const globalWithDom = globalThis as unknown as {
-    DomElement?: new (tagName: string) => HTMLElement;
-  };
-
-  const btn: HTMLElement = (typeof document !== 'undefined' && typeof document.createElement === 'function')
-    ? document.createElement('button')
-    : (globalWithDom.DomElement ? new globalWithDom.DomElement('BUTTON') : ({} as HTMLElement));
-
-  if (typeof btn.setAttribute === 'function') {
-    btn.setAttribute('role', 'button');
-    btn.setAttribute('aria-label', t.triggerButtonTitle);
-    btn.setAttribute('title', t.triggerButtonTitle);
-    btn.setAttribute('data-post-to-card-btn', 'true');
-  }
+  const btn = document.createElement('button');
+  btn.setAttribute('role', 'button');
+  btn.setAttribute('aria-label', t.triggerButtonTitle);
+  btn.setAttribute('title', t.triggerButtonTitle);
+  btn.setAttribute('data-post-to-card-btn', 'true');
 
   // Set crisp SVG vector icon from Lucide icon library without emoji
-  if (typeof (btn as unknown as { innerHTML?: string }).innerHTML !== 'undefined') {
-    (btn as unknown as { innerHTML: string }).innerHTML = TRIGGER_BUTTON_SVG;
-  }
+  btn.innerHTML = TRIGGER_BUTTON_SVG;
 
-  if (btn.style) {
-    btn.style.display = 'inline-flex';
-    btn.style.alignItems = 'center';
-    btn.style.justifyContent = 'center';
-    btn.style.alignSelf = 'center';
-    btn.style.background = 'transparent';
-    btn.style.border = 'none';
-    btn.style.outline = 'none';
-    btn.style.cursor = 'pointer';
-    btn.style.padding = '0';
-    // Matches the hit area X gives its own action buttons in a measured bar:
-    // a 20px tall row with ~34px of pitch, so the target is wide enough to click
-    // while the box itself does not overflow the row vertically.
-    btn.style.width = '34.75px';
-    btn.style.height = '100%';
-    btn.style.minWidth = '34.75px';
-    btn.style.minHeight = '20px';
-    btn.style.flexShrink = '0';
-    btn.style.borderRadius = '9999px';
-    btn.style.lineHeight = '1';
+  btn.style.display = 'inline-flex';
+  btn.style.alignItems = 'center';
+  btn.style.justifyContent = 'center';
+  btn.style.alignSelf = 'center';
+  btn.style.background = 'transparent';
+  btn.style.border = 'none';
+  btn.style.outline = 'none';
+  btn.style.cursor = 'pointer';
+  btn.style.padding = '0';
+  // Matches the hit area X gives its own action buttons in a measured bar:
+  // a 20px tall row with ~34px of pitch, so the target is wide enough to click
+  // while the box itself does not overflow the row vertically.
+  btn.style.width = '34.75px';
+  btn.style.height = '100%';
+  btn.style.minWidth = '34.75px';
+  btn.style.minHeight = '20px';
+  btn.style.flexShrink = '0';
+  btn.style.borderRadius = '9999px';
+  btn.style.lineHeight = '1';
+  btn.style.color = 'rgb(113, 118, 123)';
+  btn.style.margin = 'auto 0';
+  btn.style.verticalAlign = 'middle';
+  btn.style.transition = 'background-color 0.15s ease, color 0.15s ease, transform 0.1s ease';
+  btn.style.userSelect = 'none';
+  btn.style.zIndex = '1';
+
+  btn.addEventListener('click', (e: Event) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onClick();
+  });
+
+  btn.addEventListener('mouseenter', () => {
+    btn.style.backgroundColor = 'rgba(29, 155, 240, 0.1)';
+    btn.style.color = 'rgb(29, 155, 240)';
+  });
+
+  btn.addEventListener('mouseleave', () => {
+    btn.style.backgroundColor = 'transparent';
     btn.style.color = 'rgb(113, 118, 123)';
-    btn.style.margin = 'auto 0';
-    btn.style.verticalAlign = 'middle';
-    btn.style.transition = 'background-color 0.15s ease, color 0.15s ease, transform 0.1s ease';
-    btn.style.userSelect = 'none';
-    btn.style.zIndex = '1';
-  }
+    btn.style.transform = 'scale(1)';
+  });
 
-  if (typeof btn.addEventListener === 'function') {
-    btn.addEventListener('click', (e: Event) => {
-      if (e && typeof e.stopPropagation === 'function') {
-        e.stopPropagation();
-      }
-      if (e && typeof e.preventDefault === 'function') {
-        e.preventDefault();
-      }
-      onClick();
-    });
+  btn.addEventListener('mousedown', () => {
+    btn.style.transform = 'scale(0.92)';
+  });
 
-    btn.addEventListener('mouseenter', () => {
-      if (btn.style) {
-        btn.style.backgroundColor = 'rgba(29, 155, 240, 0.1)';
-        btn.style.color = 'rgb(29, 155, 240)';
-      }
-    });
-
-    btn.addEventListener('mouseleave', () => {
-      if (btn.style) {
-        btn.style.backgroundColor = 'transparent';
-        btn.style.color = 'rgb(113, 118, 123)';
-        btn.style.transform = 'scale(1)';
-      }
-    });
-
-    btn.addEventListener('mousedown', () => {
-      if (btn.style) {
-        btn.style.transform = 'scale(0.92)';
-      }
-    });
-
-    btn.addEventListener('mouseup', () => {
-      if (btn.style) {
-        btn.style.transform = 'scale(1)';
-      }
-    });
-  }
+  btn.addEventListener('mouseup', () => {
+    btn.style.transform = 'scale(1)';
+  });
 
   return btn;
 }
@@ -214,32 +193,21 @@ export function createTriggerButton(onClick: () => void): HTMLElement {
  * and status detail pages (`/status/xxx`).
  */
 export function createActionBarButtonWrapper(): HTMLElement {
-  const globalWithDom = globalThis as unknown as {
-    DomElement?: new (tagName: string) => HTMLElement;
-  };
+  const wrapper = document.createElement('div');
+  wrapper.setAttribute('data-post-to-card-wrapper', 'true');
 
-  const wrapper: HTMLElement = (typeof document !== 'undefined' && typeof document.createElement === 'function')
-    ? document.createElement('div')
-    : (globalWithDom.DomElement ? new globalWithDom.DomElement('DIV') : ({} as HTMLElement));
-
-  if (typeof wrapper.setAttribute === 'function') {
-    wrapper.setAttribute('data-post-to-card-wrapper', 'true');
-  }
-
-  if (wrapper.style) {
-    // Sized from a measured action bar rather than copied from a native class.
-    // The live bar is 20px tall with roughly 34px of horizontal pitch between
-    // items, so the wrapper matches that and stays vertically centred without
-    // inheriting a min-height that would overflow the row.
-    wrapper.style.display = 'inline-flex';
-    wrapper.style.alignItems = 'center';
-    wrapper.style.justifyContent = 'center';
-    wrapper.style.alignSelf = 'center';
-    wrapper.style.height = '100%';
-    wrapper.style.maxHeight = '100%';
-    wrapper.style.margin = 'auto 0';
-    wrapper.style.flexShrink = '0';
-  }
+  // Sized from a measured action bar rather than copied from a native class.
+  // The live bar is 20px tall with roughly 34px of horizontal pitch between
+  // items, so the wrapper matches that and stays vertically centred without
+  // inheriting a min-height that would overflow the row.
+  wrapper.style.display = 'inline-flex';
+  wrapper.style.alignItems = 'center';
+  wrapper.style.justifyContent = 'center';
+  wrapper.style.alignSelf = 'center';
+  wrapper.style.height = '100%';
+  wrapper.style.maxHeight = '100%';
+  wrapper.style.margin = 'auto 0';
+  wrapper.style.flexShrink = '0';
 
   return wrapper;
 }
@@ -260,21 +228,19 @@ export function injectIntoActionBar(
 ): boolean {
   if (!actionBar) return false;
 
-  const article = typeof actionBar.closest === 'function'
-    ? actionBar.closest(TWEET_ARTICLE_SELECTOR)
-    : null;
+  const article = actionBar.closest(TWEET_ARTICLE_SELECTOR);
 
   // Deduplication guard, checked on the container and on its tweet.
   if (
     actionBar.getAttribute('data-post-to-card-injected') === 'true' ||
-    (typeof actionBar.querySelector === 'function' && actionBar.querySelector('[data-post-to-card-btn="true"]'))
+    actionBar.querySelector('[data-post-to-card-btn="true"]')
   ) {
     return false;
   }
   if (article) {
     if (
       article.getAttribute('data-post-to-card-injected') === 'true' ||
-      (typeof article.querySelector === 'function' && article.querySelector('[data-post-to-card-btn="true"]'))
+      article.querySelector('[data-post-to-card-btn="true"]')
     ) {
       return false;
     }
@@ -284,19 +250,12 @@ export function injectIntoActionBar(
   if (article) article.setAttribute('data-post-to-card-injected', 'true');
 
   const btn = createTriggerButton(() => {
-    const target = article || (typeof btn.closest === 'function' ? btn.closest(TWEET_ARTICLE_SELECTOR) : null);
+    const target = article || btn.closest(TWEET_ARTICLE_SELECTOR);
 
     if (target) {
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-        try {
-          const evt = typeof CustomEvent === 'function'
-            ? new CustomEvent('post-to-card:trigger', { detail: { article: target } })
-            : { type: 'post-to-card:trigger', detail: { article: target } };
-          window.dispatchEvent(evt as Event);
-        } catch {
-          // Ignore environment differences
-        }
-      }
+      window.dispatchEvent(
+        new CustomEvent('post-to-card:trigger', { detail: { article: target } })
+      );
 
       if (onTrigger) {
         onTrigger(target);
@@ -317,9 +276,7 @@ export function injectIntoActionBar(
   // one: keeping it out of the engagement group stops it reading as a fifth
   // metric, and the bar is a single space-between flex row with no separators
   // to align against.
-  if (typeof actionBar.appendChild === 'function') {
-    actionBar.appendChild(wrapper);
-  }
+  actionBar.appendChild(wrapper);
   return true;
 }
 
@@ -327,10 +284,6 @@ export function injectIntoActionBar(
  * Scans document for un-injected tweet action bars and injects trigger buttons.
  */
 export function injectAll(onTrigger?: (article: Element) => void): number {
-  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') {
-    return 0;
-  }
-
   // 1. Primary selector: the action group of a top-level tweet.
   //
   //    `div[role="group"]` is a generic container that is not specific to the
@@ -357,10 +310,7 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
       )
     ).filter(btn => isTopLevelActionBar(btn));
     for (const btn of actionButtons) {
-      let group: Element | null = null;
-      if (typeof btn.closest === 'function') {
-        group = btn.closest('div[role="group"]');
-      }
+      let group: Element | null = btn.closest('div[role="group"]');
       if (!group && btn.parentElement) {
         group = btn.parentElement.parentElement || btn.parentElement;
       }
@@ -393,9 +343,7 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
       if (controls.length === 0) continue;
 
       // Group the controls and attach to the common container they live in.
-      const row = typeof controls[0].closest === 'function'
-        ? controls[0].closest('div[role="group"]') || controls[0].parentElement?.parentElement
-        : null;
+      const row = controls[0].closest('div[role="group"]') || controls[0].parentElement?.parentElement;
       const target = row || controls[0].parentElement;
       if (target && injectIntoActionBar(target, onTrigger)) {
         count++;
@@ -415,13 +363,12 @@ export function injectAll(onTrigger?: (article: Element) => void): number {
  * candidates are grouped by owning tweet and only the qualifying one is kept.
  */
 function findActionBars(selector: string): Element[] {
-  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return [];
+  if (!document.querySelectorAll) return [];
 
   const candidates = Array.from(document.querySelectorAll(selector)).filter(isTopLevelActionBar);
   const byArticle = new Map<Element, Element>();
 
   for (const candidate of candidates) {
-    if (typeof candidate.closest !== 'function') continue;
     const article = candidate.closest(TWEET_ARTICLE_SELECTOR);
     if (!article) continue;
 
@@ -442,7 +389,6 @@ function findActionBars(selector: string): Element[] {
  * distinguishes the action bar from a media player or quote container.
  */
 export function isActionBar(el: Element): boolean {
-  if (typeof el.querySelector !== 'function') return false;
   if (
     el.querySelector('button[data-testid="reply"], button[data-testid="retweet"], button[data-testid="unretweet"], button[data-testid="like"], button[data-testid="unlike"]')
   ) {
@@ -450,7 +396,7 @@ export function isActionBar(el: Element): boolean {
   }
   // The engagement controls are always present on a live bar; the aria-label
   // aggregates their counts and is used when the testids are absent.
-  const label = typeof el.getAttribute === 'function' ? el.getAttribute('aria-label') || '' : '';
+  const label = el.getAttribute('aria-label') || '';
   return /\d/.test(label) && /回复|Reply|转帖|Repost|Retweet|喜欢|Like/i.test(label);
 }
 
@@ -459,9 +405,7 @@ export function isActionBar(el: Element): boolean {
  * nested inside it.
  */
 function isTopLevelActionBar(el: Element): boolean {
-  if (typeof el.closest === 'function') {
-    if (el.closest('div[data-testid="quoteTweet"]')) return false;
-  }
+  if (el.closest('div[data-testid="quoteTweet"]')) return false;
   // A group inside a nested <article> is a quoted post's own action bar.
   let node: Element | null = el.parentElement;
   let depth = 0;
@@ -497,8 +441,17 @@ export function initTwitterInjection(
   // 1. Initial preference load. Visibility hides the triggers; the locale is what
   //    they say, and it has to come from the saved choice rather than the
   //    browser, or a user who picked a language sees the page in another one.
+  //
+  //    The read is asynchronous, so it can come back after something has already
+  //    written a newer preference -- opening the card and changing a setting is
+  //    enough. Applying this snapshot then would undo that change, which reads to
+  //    the user as a setting that reverted itself. So a value that arrived by
+  //    change wins, and this snapshot only applies while nothing has.
+  let preferenceChangedSinceLoad = false;
+
   loadUserPreferences()
     .then((prefs) => {
+      if (preferenceChangedSinceLoad) return;
       setInjectedButtonVisibility(prefs.showActionBarButton !== false);
       applyTriggerLocale(prefs.locale);
     })
@@ -510,13 +463,14 @@ export function initTwitterInjection(
     areaName: string
   ) => {
     if (areaName === 'local' && changes[STORAGE_KEY]?.newValue) {
+      preferenceChangedSinceLoad = true;
       const newConfig = changes[STORAGE_KEY].newValue as { showActionBarButton?: boolean; locale?: Locale };
       setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
       applyTriggerLocale(newConfig.locale);
     }
   };
 
-  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  if (chrome.storage?.onChanged) {
     chrome.storage.onChanged.addListener(handleStorageChange as unknown as (changes: object, area: string) => void);
   }
 
@@ -526,7 +480,7 @@ export function initTwitterInjection(
   const handleMouseOver = (e: Event) => {
     const mouseEvt = e as MouseEvent;
     const target = mouseEvt.target as Element | null;
-    if (target && typeof target.closest === 'function') {
+    if (target) {
       const article = target.closest(TWEET_ARTICLE_SELECTOR);
       if (article) {
         lastHoveredArticle = article;
@@ -539,13 +493,13 @@ export function initTwitterInjection(
     if (lastHoveredArticle && (lastHoveredArticle as { isConnected?: boolean }).isConnected !== false) {
       targetArticle = lastHoveredArticle;
     }
-    if (!targetArticle && typeof document !== 'undefined') {
+    if (!targetArticle) {
       const activeEl = document.activeElement as HTMLElement | null;
-      if (activeEl && typeof activeEl.closest === 'function') {
+      if (activeEl) {
         targetArticle = activeEl.closest(TWEET_ARTICLE_SELECTOR);
       }
     }
-    if (!targetArticle && typeof document !== 'undefined') {
+    if (!targetArticle) {
       const tweets = Array.from(document.querySelectorAll(TWEET_ARTICLE_SELECTOR));
       targetArticle = tweets[0] || null;
     }
@@ -559,7 +513,7 @@ export function initTwitterInjection(
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.altKey && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
-      const activeEl = typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+      const activeEl = document.activeElement as HTMLElement | null;
       if (activeEl) {
         const tag = activeEl.tagName?.toLowerCase();
         if (tag === 'input' || tag === 'textarea' || activeEl.isContentEditable) {
@@ -568,18 +522,14 @@ export function initTwitterInjection(
       }
 
       if (triggerActiveTweet()) {
-        if (typeof e.preventDefault === 'function') e.preventDefault();
-        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
       }
     }
   };
 
-  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-    document.addEventListener('mouseover', handleMouseOver);
-  }
-  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    window.addEventListener('keydown', handleKeyDown as EventListener);
-  }
+  document.addEventListener('mouseover', handleMouseOver);
+  window.addEventListener('keydown', handleKeyDown as EventListener);
 
   const scheduleScan = () => {
     if (debounceTimer !== null) {
@@ -595,16 +545,8 @@ export function initTwitterInjection(
   injectAll(handleArticleTrigger);
 
   // MutationObserver setup
-  const globalWithObserver = globalThis as unknown as {
-    DomMutationObserver?: new (cb: MutationCallback) => CustomObserver;
-  };
-
-  const MutationObserverCtor = (typeof MutationObserver !== 'undefined')
-    ? MutationObserver
-    : globalWithObserver.DomMutationObserver;
-
-  if (MutationObserverCtor && typeof document !== 'undefined' && document.body) {
-    observer = new MutationObserverCtor(() => {
+  if (document.body) {
+    observer = new MutationObserver(() => {
       scheduleScan();
     });
 
@@ -666,15 +608,11 @@ export function initTwitterInjection(
         observer.disconnect();
         observer = null;
       }
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('popstate', handleNavigation);
-        window.removeEventListener('locationchange', handleNavigation as EventListener);
-        window.removeEventListener('keydown', handleKeyDown as EventListener);
-      }
-      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
-        document.removeEventListener('mouseover', handleMouseOver);
-      }
-      if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      window.removeEventListener('popstate', handleNavigation);
+      window.removeEventListener('locationchange', handleNavigation as EventListener);
+      window.removeEventListener('keydown', handleKeyDown as EventListener);
+      document.removeEventListener('mouseover', handleMouseOver);
+      if (chrome.storage?.onChanged) {
         chrome.storage.onChanged.removeListener(handleStorageChange as unknown as (changes: object, area: string) => void);
       }
       if (unhookHistory) {
