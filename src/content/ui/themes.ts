@@ -43,6 +43,39 @@ export interface ThemeTokens {
   quoteBorder: string;
   qrFill: string;
   /**
+   * The ink a photo is mounted with. Every other edge on the card is the
+   * card's own `border`, which is tuned to sit quietly against the sheet and is
+   * therefore too faint to frame a picture (Parchment's border is only ~1.3:1
+   * on its own surface). This is one step darker than `border`, so the media
+   * reads as mounted on the material rather than pasted onto it. Its weight
+   * follows the card's `borderWidth`, so a heavy material frames heavily too.
+   */
+  mediaBorder: string;
+  /**
+   * How the material binds a picture to itself, the way it declares a
+   * signature. Every stock takes a plain rule at the card's own edge weight;
+   * Kraft alone stitches its pictures, dashed like its envelope seam.
+   */
+  mediaFrame: MediaFrameStyle;
+  /**
+   * A print keyline: a hairline set just inside the card's edge, drawn in
+   * `mediaBorder`. It is the certificate/nameplate detail that tells the eye
+   * the sheet was composed on a press rather than filled edge to edge. Off on
+   * the materials that are surfaces rather than printed sheets (the darks and
+   * the brutalist block).
+   */
+  keyline: boolean;
+  /**
+   * A material's own surface texture, layered behind the content as a second
+   * background image over the flat `surface`. Only the process materials carry
+   * one — a CRT refresh pattern on Terminal, a blueprint grid on Cyanotype —
+   * because a texture is what tells those two apart from a plain dark tint.
+   * The papers stay clean: paper grain at card scale is noise, not material.
+   * Value is a CSS `background-image` (or `none`), so a new texture is a table
+   * entry rather than a hand-written rule.
+   */
+  texture: string;
+  /**
    * The theme's signature rule. This is the one place a theme is allowed a
    * material of its own rather than a tint of `border`. Drawn by card.css from
    * the style name, so a new material is one table entry rather than a new
@@ -97,6 +130,18 @@ export interface SignatureSpec {
   height: string;
 }
 
+/**
+ * The material's mounting style for photos, posters and avatars.
+ *
+ * `rule` is the plain mounting line every stock gets by default, drawn at the
+ * card's own edge weight. `stitch` is Kraft's binding: the same line, dashed,
+ * the way its envelope seam is. Only these two are distinct in geometry — the
+ * frame weight is already carried by `borderWidth`, so there is deliberately no
+ * separate "hairline" or "heavy" value for a material that would resolve to the
+ * same pixels.
+ */
+export type MediaFrameStyle = 'rule' | 'stitch';
+
 export type QuoteStyle = 'filled' | 'outlined';
 
 /**
@@ -148,6 +193,19 @@ const SERIF =
 const MONO =
   '"Cascadia Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Noto Sans Mono CJK SC", "Sarasa Mono SC", monospace';
 
+/**
+ * Surface textures for the two process materials. Self-contained repeating
+ * gradients, so they need no `background-size` beside them and survive the
+ * export clone as plain computed `background-image`. Both are kept under 6%
+ * alpha: the texture must be felt at arm's length, never read as a pattern
+ * competing with the body text.
+ */
+const CRT_TEXTURE =
+  'repeating-linear-gradient(to bottom, rgba(94, 224, 138, 0.05) 0, rgba(94, 224, 138, 0.05) 1px, transparent 1px, transparent 3px)';
+
+const BLUEPRINT_TEXTURE =
+  'repeating-linear-gradient(to right, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 26px), repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 26px)';
+
 export const THEMES: Record<ThemeId, ThemeDefinition> = {
   // 1. Parchment — warm ivory paper, editorial serif, for quotes and long posts.
   //    Signature: a full-width cream standfirst rule. It started as a short
@@ -173,6 +231,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#ebe9df',
       quoteBorder: '#d5cfba',
       qrFill: '#141413',
+      mediaBorder: '#c7bfa8',
+      mediaFrame: 'rule',
+      keyline: true,
+      texture: 'none',
       rule: '#ded8c6',
       signature: { style: 'rule', height: '2px' },
       quoteStyle: 'filled',
@@ -205,6 +267,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#252523',
       quoteBorder: '#4a4844',
       qrFill: '#f5f4ed',
+      mediaBorder: '#57554f',
+      mediaFrame: 'rule',
+      keyline: false,
+      texture: 'none',
       rule: '#4a4844',
       signature: { style: 'tick-rule', height: '2px' },
       quoteStyle: 'filled',
@@ -241,6 +307,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#f3f1ea',
       quoteBorder: '#141413',
       qrFill: '#141413',
+      mediaBorder: '#141413',
+      mediaFrame: 'rule',
+      keyline: true,
+      texture: 'none',
       rule: '#141413',
       signature: { style: 'hairline', height: '1px' },
       quoteStyle: 'outlined',
@@ -275,6 +345,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#e2d6c0',
       quoteBorder: '#a8946f',
       qrFill: '#2b2117',
+      mediaBorder: '#8f7a53',
+      mediaFrame: 'stitch',
+      keyline: true,
+      texture: 'none',
       rule: '#a8946f',
       signature: { style: 'stitch', height: '2px' },
       quoteStyle: 'filled',
@@ -308,6 +382,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#0e2438',
       quoteBorder: '#2c5175',
       qrFill: '#e8f1f8',
+      mediaBorder: '#3f6d99',
+      mediaFrame: 'rule',
+      keyline: false,
+      texture: BLUEPRINT_TEXTURE,
       rule: '#3d6a94',
       signature: { style: 'registration', height: '1px' },
       quoteStyle: 'filled',
@@ -341,6 +419,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#1a231b',
       quoteBorder: '#344635',
       qrFill: '#d8f5d0',
+      mediaBorder: '#3b4d3e',
+      mediaFrame: 'rule',
+      keyline: false,
+      texture: CRT_TEXTURE,
       // The scanline is drawn with this, so it must read as a screen line, not
       // as a border. Lifted to 1.56:1 — the old 1.25:1 was invisible.
       rule: '#2f4032',
@@ -376,6 +458,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#f2f0e8',
       quoteBorder: '#1a1a17',
       qrFill: '#1a1a17',
+      mediaBorder: '#1a1a17',
+      mediaFrame: 'rule',
+      keyline: true,
+      texture: 'none',
       rule: '#1a1a17',
       signature: { style: 'double', height: '5px' },
       quoteStyle: 'outlined',
@@ -409,6 +495,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBackground: '#eae6d4',
       quoteBorder: '#14140f',
       qrFill: '#14140f',
+      mediaBorder: '#14140f',
+      mediaFrame: 'rule',
+      keyline: false,
+      texture: 'none',
       rule: '#14140f',
       signature: { style: 'block', height: '3px' },
       quoteStyle: 'outlined',

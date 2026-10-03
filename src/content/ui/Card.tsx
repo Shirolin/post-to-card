@@ -673,6 +673,8 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       data-media-layout={mediaLayout}
       data-signature={tokens.signature.style}
       data-quote-style={tokens.quoteStyle}
+      data-media-frame={tokens.mediaFrame}
+      data-keyline={tokens.keyline ? 'on' : undefined}
       style={{
         padding: config.padding,
         borderRadius: radius.card,
@@ -692,6 +694,9 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
         '--quote-bg': tokens.quoteBackground,
         '--quote-border': tokens.quoteBorder,
         '--qr-fill': tokens.qrFill,
+        '--media-border': tokens.mediaBorder,
+        '--card-radius': radius.card,
+        '--surface-texture': tokens.texture,
         '--rule': tokens.rule,
         '--border-width': tokens.borderWidth,
         '--signature-height': tokens.signature.height,

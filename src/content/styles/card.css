@@ -191,11 +191,33 @@
    injected here.
    ------------------------------------------------------------- */
 .post-to-card-target {
-  background: var(--surface, #faf9f5);
+  /* The flat sheet colour, then the material's own texture on top (a no-op for
+     the papers, a CRT band or blueprint grid for the process materials). The
+     texture is a plain `background-image`, so it survives the export clone and
+     needs no pseudo-element of its own. */
+  background-color: var(--surface, #faf9f5);
+  background-image: var(--surface-texture, none);
   border-style: solid;
   border-width: var(--border-width, 1px);
   border-color: var(--border-color, #e8e6dc);
   color: var(--text, #141413);
+}
+
+/* A print keyline, the certificate/nameplate detail: a hairline set inside the
+   sheet's edge, in the same ink the pictures are mounted with. A pseudo-element
+   border rather than `outline`, because the export clones computed styles and
+   only a real box is guaranteed to survive into the PNG. The inset corners stay
+   concentric with the card via `--card-radius`, clamped so a square material
+   never feeds a negative radius. The card's padding (16–48px) keeps every piece
+   of content clear of a line inset only 7px. */
+.post-to-card-target[data-keyline="on"]::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border: 1px solid var(--media-border);
+  border-radius: max(0px, calc(var(--card-radius, 0px) - 7px));
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* A light avatar placeholder cannot be a white glow; it reads as the
@@ -557,6 +579,11 @@
   position: relative;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.06);
+  /* A mounting ring in the same ink as the media frame, so the portrait is
+     set into the sheet rather than floating on it. It scales with the card's
+     edge weight, staying a hairline on the papers and reading as a heavy
+     outline on Brutalist. */
+  box-shadow: 0 0 0 calc(var(--border-width, 1px) + 1px) var(--media-border, var(--border-color));
 }
 
 .author-avatar img,
@@ -682,7 +709,29 @@
   min-width: 0;
   min-height: 0;
   display: block;
+  /* Explicit, not inherited from modal.css's global reset: the mounting border
+     below must not add to the track size and get clipped by the grid's
+     overflow. Keeps the frame inside the box on every path, including the
+     export clone. */
+  box-sizing: border-box;
   transition: max-height 0.2s cubic-bezier(0.16, 1, 0.3, 1), object-fit 0.15s ease;
+}
+
+/* Media is mounted, not pasted. A photo, video poster or GIF carries the
+   material's own mounting ink (`--media-border`), one step darker than the
+   card `border`, which is tuned to sit quietly against the sheet and is too
+   faint to frame a picture. The weight follows the card's edge token, so a
+   heavy material frames heavily and a hairline material stays hairline. */
+.media-item {
+  border: var(--border-width, 1px) solid var(--media-border, var(--border-color));
+}
+
+/* A material's own binding, keyed on `data-media-frame` the way the signature
+   is keyed on `data-signature`. The default (`rule`) is the border above; the
+   one non-default binding is Kraft's stitch, so a new material is a token entry
+   rather than another block of hand-written frame CSS. */
+.post-to-card-target[data-media-frame="stitch"] .media-item {
+  border-style: dashed;
 }
 
 /* Fit Modes (Contain vs Cover) */
@@ -1333,7 +1382,11 @@
   gap: 16px;
   padding-top: 14px;
   margin-top: auto;
-  border-top: 1px solid var(--divider, rgba(255, 255, 255, 0.1));
+  /* The foot rule is the head rule's echo: drawn in the material's own line
+     ink rather than the near-invisible divider, so the column is framed top and
+     bottom by the same hand. On the papers it stays a whisper; on Terminal it
+     is what keeps the footer from floating in the dark. */
+  border-top: 1px solid var(--rule, var(--divider, rgba(255, 255, 255, 0.1)));
 }
 
 .card-footer-left {
