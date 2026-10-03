@@ -1,16 +1,17 @@
 /**
- * Eight materials: the three papers (Parchment, Nocturne, Hairline), three
- * non-paper stocks (Kraft, Cyanotype, Terminal), a phase-2 broadsheet, and one
- * deliberately experimental theme kept off the default picker.
+ * Eight objects a post can live on: a gallery wall label, a darkroom contact
+ * print, a risograph zine, a sumi scroll, a clay-toned soft card, a terminal
+ * window, a thermal receipt, and one deliberately loud experimental theme kept
+ * off the default picker.
  */
 export type ThemeId =
-  | 'parchment'
-  | 'nocturne'
-  | 'hairline'
-  | 'kraft'
-  | 'cyanotype'
+  | 'gallery'
+  | 'darkroom'
+  | 'riso'
+  | 'sumi'
+  | 'clay'
   | 'terminal'
-  | 'broadsheet'
+  | 'receipt'
   | 'brutalist';
 
 /**
@@ -28,7 +29,14 @@ export type LegacyThemeId =
   | 'oled-black'
   | 'oled'
   | 'notion-white'
-  | 'notion-clean-white';
+  | 'notion-clean-white'
+  // The previous material set, retired by the card redesign.
+  | 'parchment'
+  | 'nocturne'
+  | 'hairline'
+  | 'kraft'
+  | 'cyanotype'
+  | 'broadsheet';
 
 export type PaddingOption = '16px' | '32px' | '48px';
 /** `'theme'` defers the corner to the active theme's own `radius` token. */

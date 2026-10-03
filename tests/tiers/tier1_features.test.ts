@@ -350,7 +350,7 @@ test('F5.3: content script does not use eval or innerHTML injection of unescaped
 test('F5.4: local storage preferences stored without remote sync', async () => {
   const chromeMock = createChromeMock();
   const config: CardConfig = {
-    theme: 'nocturne',
+    theme: 'darkroom',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -960,23 +960,33 @@ test('F17.19: the type scale is a material token, not a block of CSS per materia
   }
 });
 
-test('F17.18: a material is named once — the theme is not also emitted as a class', () => {
-  // The card used to carry both `data-theme="x"` and `.theme-x`, and card.css
-  // matched both spellings in every rule. The two were the same specificity in
-  // the same block, so the class decided nothing; it only meant renaming a
-  // material could leave one spelling behind and keep the old styling alive.
+test('F17.18: every card-root option is named once, by its data attribute', () => {
+  // Each option used to be emitted twice, as a class and as a data attribute,
+  // and card.css matched both spellings in every rule. Same element, same
+  // specificity, same block, so the class decided nothing; it only meant an
+  // option could be renamed in one place and keep its old styling in the other.
+  //
+  // `fit-` and `media-layout-` are not in this list on purpose: card.css keys
+  // their child rules on the class, on the media grid rather than the card root.
   const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
 
-  assert.ok(card.includes('data-theme={config.theme}'), 'the theme must be carried by data-theme');
-  assert.ok(
-    !/`theme-\$\{/.test(card),
-    'the theme must not also be emitted as a class, or the two spellings can drift'
-  );
-  assert.ok(
-    !/\.post-to-card-target\.theme-[a-z-]/.test(css),
-    'card.css must not carry a second selector spelling for the theme'
-  );
+  for (const option of ['theme', 'padding', 'radius', 'ratio']) {
+    assert.ok(
+      new RegExp(`data-${option}=`).test(card),
+      `${option} must be carried by its data attribute`
+    );
+  }
+  for (const emitted of ['theme-', 'padding-', 'radius-', 'ratio-']) {
+    assert.ok(
+      !new RegExp('`' + emitted + '\\$\\{').test(card),
+      `${emitted} must not also be emitted as a class, or the two spellings can drift`
+    );
+    assert.ok(
+      !new RegExp('\\.post-to-card-target\\.' + emitted).test(css),
+      `card.css must not carry a second selector spelling for ${emitted}`
+    );
+  }
 });
 
 test('F14.6: thread layout isolates connector line in thread-gutter and text in thread-content-col to prevent line-text intersection', () => {
@@ -1203,13 +1213,13 @@ test('F16.5: inline style injection populates textContent correctly', () => {
 // F17: Curated Themes (3 papers + 3 non-paper stocks + 1 phase-2 + 1 experimental)
 // -------------------------------------------------------------
 const THEME_IDS: ThemeId[] = [
-  'parchment',
-  'nocturne',
-  'hairline',
-  'kraft',
-  'cyanotype',
+  'gallery',
+  'darkroom',
+  'riso',
+  'sumi',
+  'clay',
   'terminal',
-  'broadsheet',
+  'receipt',
   'brutalist',
 ];
 
@@ -1249,13 +1259,13 @@ test('F17.1b: every material names its signature, quote treatment and rhythm', (
   // classics ended up as flat colour. The contract is total now.
   const signatureStyles = new Set([
     'rule',
-    'hairline',
     'tick-rule',
-    'scanline',
-    'double',
-    'block',
-    'stitch',
+    'perforation',
+    'titlebar',
+    'seal',
     'registration',
+    'pill',
+    'block',
   ]);
   for (const id of THEME_IDS) {
     const { signature, quoteStyle, rhythm } = THEMES[id].tokens;
@@ -1306,63 +1316,67 @@ test('F17.3: the value ramp is monotone from text to faint on every theme', () =
   }
 });
 
-test('F17.4: serif, sans and mono faces are each used where the material calls for it', () => {
-  assert.match(THEMES.parchment.tokens.fontDisplay, /Georgia/);
-  assert.match(THEMES.nocturne.tokens.fontDisplay, /Georgia/);
-  assert.ok(!/Georgia|Times|Songti|SimSun/i.test(THEMES.hairline.tokens.fontDisplay));
-  // Terminal is a console: body and display must both be monospace.
+test('F17.4: each material sets its letterforms for the object it is', () => {
+  // The gallery label is a neo-grotesque, the sumi byline a Kai face over a Song
+  // body, the receipt a typewriter, the terminal a console, the darkroom a
+  // condensed face for frame numbers. None of them share a display stack.
+  assert.match(THEMES.gallery.tokens.fontDisplay, /Helvetica/);
+  assert.match(THEMES.darkroom.tokens.fontDisplay, /Bahnschrift|Condensed|Narrow/);
+  assert.match(THEMES.riso.tokens.fontDisplay, /Arial Black/);
+  assert.match(THEMES.sumi.tokens.fontDisplay, /Kaiti|KaiTi/i);
+  assert.match(THEMES.sumi.tokens.fontBody, /Songti|SimSun/);
+  assert.match(THEMES.clay.tokens.fontDisplay, /Rounded|Nunito|Yuanti/);
+  // Terminal and receipt both set body and display in a fixed-pitch face.
   assert.match(THEMES.terminal.tokens.fontDisplay, /monospace/);
   assert.match(THEMES.terminal.tokens.fontBody, /monospace/);
-  // Broadsheet sets the body in the display serif, the way newsprint does.
-  assert.equal(THEMES.broadsheet.tokens.fontBody, THEMES.broadsheet.tokens.fontDisplay);
+  assert.match(THEMES.receipt.tokens.fontBody, /Courier/);
+  assert.equal(THEMES.receipt.tokens.fontBody, THEMES.receipt.tokens.fontDisplay);
+  const displays = THEME_IDS.map((id) => THEMES[id].tokens.fontDisplay);
+  assert.ok(new Set(displays).size >= 7, 'display faces must be distinct across materials');
 });
-
-test('F17.5: the three primary papers share one accent, so the brand colour never forks', () => {
-  const primary: ThemeId[] = ['parchment', 'nocturne', 'hairline'];
-  const accents = primary.map((id) => THEMES[id].tokens.accent);
-  assert.equal(new Set(accents).size, 1);
-  assert.equal(accents[0], '#c96442');
-  // The phase-2 materials are allowed their own ink, but each must still be
-  // exactly one accent — a theme may not carry two competing highlights.
+test('F17.5: every material states exactly one accent, and no two share it', () => {
+  // The receipt prints in one ink, so its accent is its text colour and is the
+  // single allowed exception to "an accent is distinct from the ink".
+  const accents = THEME_IDS.map((id) => THEMES[id].tokens.accent);
   for (const id of THEME_IDS) {
     assert.ok(THEMES[id].tokens.accent, `${id} must define an accent`);
   }
+  assert.equal(new Set(accents).size, THEME_IDS.length, 'accents must not be shared between materials');
 });
-
 test('F17.5b: Brutalist is the only experimental theme, and it stays off the default picker', () => {
   assert.deepEqual([...EXPERIMENTAL_THEMES], ['brutalist']);
-  assert.equal(DEFAULT_CARD_CONFIG.theme, 'parchment');
+  assert.equal(DEFAULT_CARD_CONFIG.theme, 'gallery');
   assert.ok(!EXPERIMENTAL_THEMES.has(DEFAULT_CARD_CONFIG.theme));
   // Every theme must be reachable from the ordered picker list.
   assert.deepEqual([...THEME_ORDER].sort(), [...THEME_IDS].sort());
-  assert.equal(THEME_ORDER[0], 'parchment');
+  assert.equal(THEME_ORDER[0], 'gallery');
   assert.equal(THEME_ORDER[THEME_ORDER.length - 1], 'brutalist');
   // The non-paper stocks sit in the everyday rotation, ahead of the phase-2
   // materials, so the picker's first screen is the six everyday materials.
   assert.deepEqual(THEME_ORDER.slice(0, 6), [
-    'parchment',
-    'nocturne',
-    'hairline',
-    'kraft',
-    'cyanotype',
+    'gallery',
+    'darkroom',
+    'riso',
+    'sumi',
+    'clay',
     'terminal',
   ]);
 });
 
 test('F17.6: retired presets migrate to a live theme instead of resetting', () => {
   // The high-saturation full-bleed gradients stay retired.
-  assert.equal(sanitizeTheme('sunset-glow'), 'parchment');
-  assert.equal(sanitizeTheme('aurora-purple'), 'nocturne');
+  assert.equal(sanitizeTheme('sunset-glow'), 'gallery');
+  assert.equal(sanitizeTheme('aurora-purple'), 'darkroom');
   // Hacker Mint's console was rebuilt as the real Terminal theme.
   assert.equal(sanitizeTheme('cyber-mint'), 'terminal');
   // The retired classics resolve to the material that absorbed them.
-  assert.equal(sanitizeTheme('linear-dark'), 'nocturne');
-  assert.equal(sanitizeTheme('oled-black'), 'cyanotype');
-  assert.equal(sanitizeTheme('oled'), 'cyanotype');
-  assert.equal(sanitizeTheme('notion-white'), 'parchment');
-  assert.equal(sanitizeTheme('notion-clean-white'), 'parchment');
-  assert.equal(sanitizeTheme('nonsense'), 'parchment');
-  assert.equal(sanitizeTheme(undefined), 'parchment');
+  assert.equal(sanitizeTheme('linear-dark'), 'darkroom');
+  assert.equal(sanitizeTheme('oled-black'), 'darkroom');
+  assert.equal(sanitizeTheme('oled'), 'darkroom');
+  assert.equal(sanitizeTheme('notion-white'), 'gallery');
+  assert.equal(sanitizeTheme('notion-clean-white'), 'gallery');
+  assert.equal(sanitizeTheme('nonsense'), 'gallery');
+  assert.equal(sanitizeTheme(undefined), 'gallery');
   for (const alias of Object.keys(LEGACY_THEME_ALIASES)) {
     assert.ok(THEMES[sanitizeTheme(alias)], `legacy id ${alias} must resolve to a live theme`);
   }
@@ -1548,16 +1562,16 @@ test('F17.16: the media gutter is a material decision, not one repeated value', 
   // Lock the actual design intent per material rather than a relative ordering,
   // which any uniform value would satisfy. Each entry states why that gutter.
   const EXPECTED_GUTTERS: Record<string, number> = {
-    // Precision rules, precision gutters.
-    hairline: 3,
+    // A console and a till slip pack their pictures tight.
     terminal: 3,
-    // The papers sit in the middle.
-    parchment: 5,
-    nocturne: 4,
-    cyanotype: 4,
-    broadsheet: 4,
-    // Two stitch frames side by side read as one broken dashed line at 4px.
-    kraft: 6,
+    receipt: 4,
+    // Riso prints its pictures with a hairline between them.
+    riso: 4,
+    // A contact sheet keeps frames close; the gallery mat gives each its own room.
+    darkroom: 5,
+    sumi: 5,
+    gallery: 6,
+    clay: 6,
     // The pictures are boxed hard and pushed apart, like the 3px sheet edge.
     brutalist: 8,
   };
@@ -1688,9 +1702,9 @@ test('F18.4: invalid border radius option falls back to 12px', () => {
 });
 
 test('F18.5: inner media items synchronize rounding with card border radius', () => {
-  assert.deepEqual(resolveRadius('0px', 'parchment'), { card: '0px', media: '0px' });
-  assert.deepEqual(resolveRadius('12px', 'parchment'), { card: '12px', media: '8px' });
-  assert.deepEqual(resolveRadius('20px', 'parchment'), { card: '20px', media: '14px' });
+  assert.deepEqual(resolveRadius('0px', 'gallery'), { card: '0px', media: '0px' });
+  assert.deepEqual(resolveRadius('12px', 'gallery'), { card: '12px', media: '8px' });
+  assert.deepEqual(resolveRadius('20px', 'gallery'), { card: '20px', media: '14px' });
 });
 
 test('F18.6: follow-theme defers the corner to the theme, and inner never exceeds the card', () => {
@@ -1706,12 +1720,19 @@ test('F18.6: follow-theme defers the corner to the theme, and inner never exceed
       `${id} media corner ${media} must not exceed card corner ${card}`
     );
   }
-  // The three primary papers must not all round alike, or the option does nothing.
-  const papers: ThemeId[] = ['parchment', 'nocturne', 'hairline'];
-  assert.equal(new Set(papers.map((id) => resolveRadius('theme', id).card)).size, 3);
-  // Hairline and the phase-2 materials read as square or near-square.
-  for (const id of ['hairline', 'terminal', 'broadsheet', 'brutalist'] as ThemeId[]) {
-    assert.ok(parseFloat(resolveRadius('theme', id).card) <= 4, `${id} should be near-square`);
+  // The corner is a material decision: it must actually vary, or the
+  // follow-theme option does nothing.
+  const corners = THEME_IDS.map((id) => resolveRadius('theme', id).card);
+  assert.ok(new Set(corners).size >= 6, `corners must vary by material, got ${JSON.stringify(corners)}`);
+  // Hard materials read square; the soft card is the roundest.
+  for (const id of ['riso', 'receipt', 'brutalist'] as ThemeId[]) {
+    assert.ok(parseFloat(resolveRadius('theme', id).card) <= 2, `${id} should be near-square`);
+  }
+  for (const id of THEME_IDS) {
+    assert.ok(
+      parseFloat(resolveRadius('theme', id).card) <= parseFloat(resolveRadius('theme', 'clay').card),
+      `clay must be the roundest material, but ${id} is rounder`
+    );
   }
 });
 
@@ -1805,7 +1826,7 @@ test('F20.5: offline generation functions without internet or external CDN', () 
 // -------------------------------------------------------------
 test('F21.1: toggling showQrCode hides or displays QR element in DOM', () => {
   const config: CardConfig = {
-    theme: 'parchment',
+    theme: 'gallery',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -1838,7 +1859,7 @@ test('F21.4: toggling showWatermark hides brand watermark', () => {
 
 test('F21.5: controls state updates reactively without full card remount', () => {
   let state: CardConfig = {
-    theme: 'parchment',
+    theme: 'gallery',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -1851,7 +1872,7 @@ test('F21.5: controls state updates reactively without full card remount', () =>
 
   state = { ...state, showWatermark: false };
   assert.equal(state.showWatermark, false);
-  assert.equal(state.theme, 'parchment');
+  assert.equal(state.theme, 'gallery');
 });
 
 // -------------------------------------------------------------

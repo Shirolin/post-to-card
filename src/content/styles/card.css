@@ -36,7 +36,7 @@
   color: var(--text-sec);
   padding-bottom: 10px;
   margin-bottom: 12px;
-  border-bottom: 1px solid var(--divider);
+  border-bottom: 1px var(--rule-style, solid) var(--divider);
 }
 
 .retweet-notice svg {
@@ -82,20 +82,17 @@
 /* -------------------------------------------------------------
    Aspect Ratio Rules (Downward Fluid Expansion: min-height floor)
    ------------------------------------------------------------- */
-.post-to-card-target[data-ratio="auto"],
-.post-to-card-target.ratio-auto {
+.post-to-card-target[data-ratio="auto"] {
   min-height: unset;
   height: auto;
 }
 
-.post-to-card-target[data-ratio="3:4"],
-.post-to-card-target.ratio-3-4 {
+.post-to-card-target[data-ratio="3:4"] {
   min-height: 853px;
   height: auto;
 }
 
-.post-to-card-target[data-ratio="16:9"],
-.post-to-card-target.ratio-16-9 {
+.post-to-card-target[data-ratio="16:9"] {
   min-height: 360px;
   height: auto;
 }
@@ -114,20 +111,17 @@
    internal breathing is the theme's `--rhythm-gap`, so a material keeps its
    character at every padding tier.
    ------------------------------------------------------------- */
-.post-to-card-target[data-padding="16px"],
-.post-to-card-target.padding-16px {
+.post-to-card-target[data-padding="16px"] {
   padding: 16px;
   gap: 14px;
 }
 
-.post-to-card-target[data-padding="32px"],
-.post-to-card-target.padding-32px {
+.post-to-card-target[data-padding="32px"] {
   padding: 32px;
   gap: 20px;
 }
 
-.post-to-card-target[data-padding="48px"],
-.post-to-card-target.padding-48px {
+.post-to-card-target[data-padding="48px"] {
   padding: 48px;
   gap: 26px;
 }
@@ -135,42 +129,30 @@
 /* -------------------------------------------------------------
    Border Radius Options
    ------------------------------------------------------------- */
-.post-to-card-target[data-radius="0px"],
-.post-to-card-target.radius-0px {
+.post-to-card-target[data-radius="0px"] {
   border-radius: 0px;
 }
 .post-to-card-target[data-radius="0px"] .media-grid,
 .post-to-card-target[data-radius="0px"] .media-item,
-.post-to-card-target[data-radius="0px"] .quote-card,
-.post-to-card-target.radius-0px .media-grid,
-.post-to-card-target.radius-0px .media-item,
-.post-to-card-target.radius-0px .quote-card {
+.post-to-card-target[data-radius="0px"] .quote-card {
   border-radius: 0px;
 }
 
-.post-to-card-target[data-radius="12px"],
-.post-to-card-target.radius-12px {
+.post-to-card-target[data-radius="12px"] {
   border-radius: 12px;
 }
 .post-to-card-target[data-radius="12px"] .media-grid,
 .post-to-card-target[data-radius="12px"] .media-item,
-.post-to-card-target[data-radius="12px"] .quote-card,
-.post-to-card-target.radius-12px .media-grid,
-.post-to-card-target.radius-12px .media-item,
-.post-to-card-target.radius-12px .quote-card {
+.post-to-card-target[data-radius="12px"] .quote-card {
   border-radius: 8px;
 }
 
-.post-to-card-target[data-radius="20px"],
-.post-to-card-target.radius-20px {
+.post-to-card-target[data-radius="20px"] {
   border-radius: 20px;
 }
 .post-to-card-target[data-radius="20px"] .media-grid,
 .post-to-card-target[data-radius="20px"] .media-item,
-.post-to-card-target[data-radius="20px"] .quote-card,
-.post-to-card-target.radius-20px .media-grid,
-.post-to-card-target.radius-20px .media-item,
-.post-to-card-target.radius-20px .quote-card {
+.post-to-card-target[data-radius="20px"] .quote-card {
   border-radius: 14px;
 }
 
@@ -295,18 +277,17 @@
   top: 0;
 }
 
-/* A plain bar: Parchment's standfirst rule, Hairline's ink hairline, and
-   Brutalist's thick rule are the same decision at three weights. */
+/* A plain bar: the gallery label's ink rule and the sticker's thick rule are the
+   same decision at two weights. */
 .post-to-card-target[data-signature="rule"] .post-to-card-body-content::before,
-.post-to-card-target[data-signature="hairline"] .post-to-card-body-content::before,
 .post-to-card-target[data-signature="block"] .post-to-card-body-content::before {
   height: var(--signature-height, 1px);
   background: var(--rule);
 }
 
-/* Nocturne: a masthead — one accent tick riding a full hairline. The tick is
-   `::after`, sitting above the neutral hairline so the two read as a section
-   flag. */
+/* Gallery, Darkroom: a section flag — one accent tick riding a full hairline.
+   The tick is `::after`, sitting above the neutral hairline so the two read as
+   one mark. */
 .post-to-card-target[data-signature="tick-rule"] .post-to-card-body-content::before {
   top: var(--signature-height, 2px);
   height: 1px;
@@ -322,56 +303,71 @@
   background: var(--accent);
 }
 
-/* Kraft: a stitched binding — dashes rather than a solid rule. */
-.post-to-card-target[data-signature="stitch"] .post-to-card-body-content::before {
-  height: var(--signature-height, 2px);
-  background: repeating-linear-gradient(
-    to right,
-    var(--rule) 0,
-    var(--rule) 7px,
-    transparent 7px,
-    transparent 13px
-  );
+/* Receipt: the perforation a till slip is torn along — a row of small dots, not
+   a line. */
+.post-to-card-target[data-signature="perforation"] .post-to-card-body-content::before {
+  height: var(--signature-height, 4px);
+  background-image: radial-gradient(circle at 50% 50%, var(--rule) 1.5px, transparent 2px);
+  background-size: 10px 100%;
+  background-repeat: repeat-x;
 }
 
-/* Cyanotype: a registration mark — a thin line with a small filled square at
-   its left, the way a blueprint carries its own alignment cue. */
+/* Terminal: window chrome — three traffic dots in the title bar. Drawn from the
+   sheet's own inks (accent, secondary text, rule) so no stock red/amber/green
+   leaks onto the card as a second palette. */
+.post-to-card-target[data-signature="titlebar"] .post-to-card-body-content::before {
+  right: auto;
+  width: 54px;
+  height: var(--signature-height, 10px);
+  background:
+    radial-gradient(circle at 5px 50%, var(--accent) 4.5px, transparent 5px),
+    radial-gradient(circle at 21px 50%, var(--text-sec) 4.5px, transparent 5px),
+    radial-gradient(circle at 37px 50%, var(--rule) 4.5px, transparent 5px);
+}
+
+/* Sumi: a seal stamped at the end of a ruled line, the way a scroll is signed. */
+.post-to-card-target[data-signature="seal"] .post-to-card-body-content::before {
+  top: calc(var(--signature-height, 16px) / 2);
+  height: 1px;
+  background: var(--rule);
+}
+
+.post-to-card-target[data-signature="seal"] .post-to-card-body-content::after {
+  left: auto;
+  right: 0;
+  top: 0;
+  width: var(--signature-height, 16px);
+  height: var(--signature-height, 16px);
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* Riso: a registration mark — a line carrying two overlapping discs, one in
+   each ink, deliberately a few pixels off, the way a two-colour print misses. */
 .post-to-card-target[data-signature="registration"] .post-to-card-body-content::before {
-  height: var(--signature-height, 1px);
+  height: var(--signature-height, 2px);
   background: var(--rule);
 }
 
 .post-to-card-target[data-signature="registration"] .post-to-card-body-content::after {
   left: 0;
   right: auto;
-  top: 0;
-  width: 7px;
-  height: 7px;
+  top: calc(var(--signature-height, 2px) / 2 - 5px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 6px 0 0 0 var(--rule);
+}
+
+/* Clay: a short rounded bar, pressed in like the rest of the card. */
+.post-to-card-target[data-signature="pill"] .post-to-card-body-content::before {
+  right: auto;
+  width: 44px;
+  height: var(--signature-height, 6px);
+  border-radius: 999px;
   background: var(--accent);
 }
-
-/* Terminal: a phosphor scanline. Repeating-linear-gradient rather than a single
-   line, so it reads as a CRT refresh band instead of a border. Kept faint and
-   short — a full-height scanline over body text is unreadable at 12px. */
-.post-to-card-target[data-signature="scanline"] .post-to-card-body-content::before {
-  height: var(--signature-height, 4px);
-  background: repeating-linear-gradient(
-    to bottom,
-    var(--rule) 0,
-    var(--rule) 1px,
-    transparent 1px,
-    transparent 2px
-  );
-}
-
-/* Broadsheet: a masthead double rule, the way a paper separates its flag from
-   the column furniture. Two hairlines with a 3px gap. */
-.post-to-card-target[data-signature="double"] .post-to-card-body-content::before {
-  height: var(--signature-height, 5px);
-  border-top: 2px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-}
-
 /* Footnote and data treatment live with the type tokens: size, tracking, case
    and figures are the material's `type` fields, applied by the base rules for
    `.card-timestamp` and `.stats-row`, and the ruled strip Hairline draws is
@@ -390,7 +386,7 @@
 .author-avatar {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: var(--avatar-radius, 50%);
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
@@ -403,7 +399,7 @@
      set into the sheet rather than floating on it. It scales with the card's
      edge weight, staying a hairline on the papers and reading as a heavy
      outline on Brutalist. */
-  box-shadow: 0 0 0 calc(var(--border-width, 1px) + 1px) var(--media-border, var(--border-color));
+  box-shadow: var(--avatar-shadow, none);
 }
 
 .author-avatar img,
@@ -411,7 +407,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 50%;
+  border-radius: var(--avatar-radius, 50%);
   display: block;
 }
 
@@ -551,14 +547,6 @@
   border: var(--border-width, 1px) solid var(--media-border, var(--border-color));
 }
 
-/* A material's own binding, keyed on `data-media-frame` the way the signature
-   is keyed on `data-signature`. The default (`rule`) is the border above; the
-   one non-default binding is Kraft's stitch, so a new material is a token entry
-   rather than another block of hand-written frame CSS. */
-.post-to-card-target[data-media-frame="stitch"] .media-item {
-  border-style: dashed;
-}
-
 /* Fit Modes (Contain vs Cover) */
 .media-fit-contain,
 .media-item.fit-contain,
@@ -586,6 +574,19 @@
   box-shadow: none;
 }
 
+/* A passe-partout: the picture sits inside a thick mount in the material's own
+   mat colour, the way a print is hung behind glass. Declared after the fit
+   rules and one class deeper, because those reset `background` and would
+   otherwise paint the mount transparent. The padding is inside the box (the
+   item is border-box), so the frame never grows the grid track. */
+.post-to-card-target[data-media-frame="mat"] .media-grid .media-item {
+  padding: 10px;
+  background: var(--mat);
+}
+
+.post-to-card-target[data-media-frame="mat"] .media-grid .media-video-item {
+  background: var(--mat);
+}
 /* ---------------- Single Image (Count = 1) ---------------- */
 .media-grid[data-count="1"] {
   grid-template-columns: 1fr;
@@ -596,14 +597,12 @@
   max-height: 520px;
   height: auto;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="1"] .media-item,
-.post-to-card-target.ratio-auto .media-grid[data-count="1"] .media-item {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="1"] .media-item {
   max-height: 520px;
 }
 
 /* Single Image in 3:4 Poster Ratio: expand dynamically to fill vertical canvas & eliminate dead space */
-.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"],
-.post-to-card-target.ratio-3-4 .media-grid[data-count="1"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
@@ -611,24 +610,20 @@
   min-height: 380px;
   margin-top: 14px;
 }
-.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] .media-item,
-.post-to-card-target.ratio-3-4 .media-grid[data-count="1"] .media-item {
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] .media-item {
   max-height: 580px;
   height: 100%;
   width: 100%;
 }
 
 /* Single Image in 16:9 Landscape Ratio: compact constraint to maintain tight landscape frame */
-.post-to-card-target[data-ratio="16:9"] .post-to-card-body-content,
-.post-to-card-target.ratio-16-9 .post-to-card-body-content {
+.post-to-card-target[data-ratio="16:9"] .post-to-card-body-content {
   gap: 10px;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"],
-.post-to-card-target.ratio-16-9 .media-grid[data-count="1"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"] {
   margin-top: 8px;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"] .media-item,
-.post-to-card-target.ratio-16-9 .media-grid[data-count="1"] .media-item {
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"] .media-item {
   max-height: 200px;
   height: auto;
 }
@@ -657,13 +652,9 @@
   aspect-ratio: 1 / 1;
 }
 .post-to-card-target[data-ratio="auto"] .media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="portrait-columns"],
-.post-to-card-target.ratio-auto .media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="portrait-columns"],
 .post-to-card-target[data-ratio="auto"] .media-grid.media-layout-grid[data-count="2"][data-grid-layout="portrait-columns"],
-.post-to-card-target.ratio-auto .media-grid.media-layout-grid[data-count="2"][data-grid-layout="portrait-columns"],
 .post-to-card-target[data-ratio="auto"] .media-grid:not(.media-layout-stack)[data-count="2"].grid-portrait-columns,
-.post-to-card-target.ratio-auto .media-grid:not(.media-layout-stack)[data-count="2"].grid-portrait-columns,
-.post-to-card-target[data-ratio="auto"] .media-grid.media-layout-grid[data-count="2"].grid-portrait-columns,
-.post-to-card-target.ratio-auto .media-grid.media-layout-grid[data-count="2"].grid-portrait-columns {
+.post-to-card-target[data-ratio="auto"] .media-grid.media-layout-grid[data-count="2"].grid-portrait-columns {
   aspect-ratio: 1 / 1;
   max-height: 640px;
 }
@@ -682,17 +673,13 @@
 }
 /* 2 images in 3:4: richer vertical aspect ratio */
 .post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="2"],
-.post-to-card-target.ratio-3-4 .media-grid:not(.media-layout-stack)[data-count="2"],
-.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="2"],
-.post-to-card-target.ratio-3-4 .media-grid.media-layout-grid[data-count="2"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="2"] {
   aspect-ratio: 4 / 3;
   min-height: 280px;
 }
 /* 2 images in 16:9: sleeker horizontal grid */
 .post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="2"],
-.post-to-card-target.ratio-16-9 .media-grid:not(.media-layout-stack)[data-count="2"],
-.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="2"],
-.post-to-card-target.ratio-16-9 .media-grid.media-layout-grid[data-count="2"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="2"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
@@ -733,9 +720,7 @@
   grid-row: 2;
 }
 .post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="top-hero"],
-.post-to-card-target.ratio-auto .media-grid[data-count="3"][data-grid-layout="top-hero"],
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-top-hero,
-.post-to-card-target.ratio-auto .media-grid[data-count="3"].grid-top-hero {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-top-hero {
   aspect-ratio: 16 / 15;
   max-height: 640px;
 }
@@ -750,9 +735,7 @@
   aspect-ratio: 4 / 3;
 }
 .post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="left-hero"],
-.post-to-card-target.ratio-auto .media-grid[data-count="3"][data-grid-layout="left-hero"],
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-left-hero,
-.post-to-card-target.ratio-auto .media-grid[data-count="3"].grid-left-hero {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-left-hero {
   aspect-ratio: 4 / 3;
   max-height: 640px;
 }
@@ -792,16 +775,12 @@
   object-fit: contain;
 }
 .post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="3"],
-.post-to-card-target.ratio-3-4 .media-grid:not(.media-layout-stack)[data-count="3"],
-.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="3"],
-.post-to-card-target.ratio-3-4 .media-grid.media-layout-grid[data-count="3"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="3"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
 }
 .post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="3"],
-.post-to-card-target.ratio-16-9 .media-grid:not(.media-layout-stack)[data-count="3"],
-.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="3"],
-.post-to-card-target.ratio-16-9 .media-grid.media-layout-grid[data-count="3"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="3"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
@@ -827,16 +806,12 @@
   object-fit: contain;
 }
 .post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="4"],
-.post-to-card-target.ratio-3-4 .media-grid:not(.media-layout-stack)[data-count="4"],
-.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="4"],
-.post-to-card-target.ratio-3-4 .media-grid.media-layout-grid[data-count="4"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="4"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
 }
 .post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="4"],
-.post-to-card-target.ratio-16-9 .media-grid:not(.media-layout-stack)[data-count="4"],
-.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="4"],
-.post-to-card-target.ratio-16-9 .media-grid.media-layout-grid[data-count="4"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="4"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
@@ -875,8 +850,7 @@
 .media-grid.media-layout-stack .media-item.fit-cover {
   object-fit: cover;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="4"],
-.post-to-card-target.ratio-16-9 .media-grid[data-count="4"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="4"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
@@ -985,7 +959,7 @@
   margin-top: calc(var(--rhythm-gap, 16px) * 0.6);
   padding: 12px 14px 13px;
   background: var(--quote-bg, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--quote-border, rgba(255, 255, 255, 0.1));
+  border: var(--border-width, 1px) solid var(--quote-border, rgba(255, 255, 255, 0.1));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -998,7 +972,7 @@
    declares which treatment it wants and one tint never has to serve both. */
 .post-to-card-target[data-quote-style="outlined"] .quote-card {
   background: transparent;
-  border: var(--border-width, 1px) solid var(--quote-border);
+  border: var(--border-width, 1px) var(--rule-style, solid) var(--quote-border);
 }
 
 .quote-author {
@@ -1012,7 +986,7 @@
 .quote-avatar {
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--avatar-radius, 50%);
   object-fit: cover;
   flex-shrink: 0;
   /* Same mounting ring as the byline avatar, one step thinner: at 20px a full
@@ -1222,7 +1196,7 @@
      ink rather than the near-invisible divider, so the column is framed top and
      bottom by the same hand. On the papers it stays a whisper; on Terminal it
      is what keeps the footer from floating in the dark. */
-  border-top: 1px solid var(--rule, var(--divider, rgba(255, 255, 255, 0.1)));
+  border-top: 1px var(--rule-style, solid) var(--rule, var(--divider, rgba(255, 255, 255, 0.1)));
 }
 
 .card-footer-left {
@@ -1260,6 +1234,19 @@
   gap: 5px;
 }
 
+/* Clay sets each count as a small pressed pill, in the secondary ink: the faint
+   footnote step does not clear contrast on the recess the chip is drawn on. */
+.post-to-card-target[data-stat-chip="on"] .stats-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.post-to-card-target[data-stat-chip="on"] .stat-item {
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  background: var(--quote-bg);
+  color: var(--text-sec);
+}
 .stat-icon {
   width: 15px;
   height: 15px;

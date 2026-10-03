@@ -100,7 +100,7 @@ test('Tier 4.1: [End-to-End Workflow 1] Viral Tweet with 4 photos converted to N
 
   // 6. User chooses configuration: Nocturne + 32px padding + 12px radius + QR code
   const config: CardConfig = {
-    theme: 'nocturne',
+    theme: 'darkroom',
     padding: '32px',
     borderRadius: '12px',
     aspectRatio: 'auto',
@@ -183,7 +183,7 @@ test('Tier 4.2: [End-to-End Workflow 2] 3-Tweet thread with author blur fails cl
 
   // 3. User chooses Nocturne + 3:4 Poster Ratio + Author Privacy Blur
   const config: CardConfig = {
-    theme: 'nocturne',
+    theme: 'darkroom',
     padding: '48px',
     borderRadius: '20px',
     aspectRatio: '3:4',
@@ -246,7 +246,7 @@ test('Tier 4.3: [End-to-End Workflow 3] Quote tweet rendered in Parchment at sca
   doc.body.appendChild(quoteTweetArticle);
 
   const card = new DomElement('DIV');
-  card.setAttribute('data-theme', 'parchment');
+  card.setAttribute('data-theme', 'gallery');
 
   // Add proxied quote tweet image
   const img = new DomImageElement();

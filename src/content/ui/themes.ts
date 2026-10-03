@@ -3,35 +3,30 @@ import { detectDefaultLocale, sanitizeLocale } from '../i18n.ts';
 export { sanitizeLocale };
 
 /**
- * A theme is a sheet of paper, not a background gradient.
+ * A theme is an object a post can live on, not a colour skin.
  *
  * `canvas` is the mat the card sits on (preview stage), `surface` is the sheet
  * itself. `text`/`muted`/`faint` are a three-step value ramp: body, secondary
- * copy, and time/footnote meta. `accent` is the only chromatic colour; `link`
+ * copy, and time/footnote meta. `accent` is the only chromatic highlight; `link`
  * exists because the accent alone does not clear text contrast on every
  * surface. `fontDisplay`/`fontBody` are the theme's type pair.
  *
- * A theme is also its *signature* and its *breathing*: the material owns the
- * one decorative rule at the head of the body and the vertical rhythm of the
- * column. Those used to be hand-written per theme in card.css, which is how
- * six materials ended up with a fingerprint and three ended up as flat colour.
- * They are tokens now, so "switching theme" changes material, letterforms and
- * breathing together.
+ * Each object also owns the small devices that make it that object: the mark at
+ * the head of the body (`signature`), how pictures are mounted (`mediaFrame`),
+ * the shape of avatars, the line style of its rules, and its vertical rhythm.
+ * They are all tokens, so "switching theme" changes material, letterforms,
+ * furniture and breathing together, and card.css never has to name a material.
  */
 /**
  * The material's letterforms.
  *
- * Type was the last part of a material still written by hand in card.css, one
- * block per theme, and it had the failure the colour tokens were introduced to
- * fix: adding a material meant remembering three separate rule blocks, and a
- * missed one silently inherited another material's type rather than failing.
- * The values live here now and card.css only consumes them, so a material is a
- * table entry the compiler checks rather than three edits a reader has to notice.
+ * The values live here and card.css only consumes them, so a material is a
+ * table entry the compiler checks rather than a block of per-theme rules a
+ * reader has to remember to write.
  *
  * The quoted post's byline is its own size on purpose. It is a nested author and
- * should not compete with the one the card is about, so the two papers that
- * predate the other six keep it small; it shares the display weight and tracking
- * because those carry the material's voice.
+ * should not compete with the one the card is about; it shares the display
+ * weight and tracking because those carry the material's voice.
  */
 export interface TypeScale {
   /** Byline size, weight and tracking, for the author name and the kicker. */
@@ -46,15 +41,11 @@ export interface TypeScale {
   /** Timestamp and stats: size and tracking. */
   metaSize: string;
   metaTracking: string;
-  /** All-caps meta, as Broadsheet sets its kickers. */
+  /** Upper-cased meta, as a printed receipt sets its totals. */
   metaUppercase: boolean;
   /** Tabular figures, so counts line up as a data strip. */
   metaTabular: boolean;
-  /**
-   * Rules between the stat columns, as Hairline sets its data strip. The
-   * alternative to a token here is one hand-written rule naming one material,
-   * which is the pattern this table exists to replace.
-   */
+  /** Rules between the stat columns, as a darkroom data strip is ruled. */
   metaDivider: boolean;
 }
 
@@ -62,11 +53,10 @@ export interface ThemeTokens {
   /** The material's letterforms. See `TypeScale`. */
   type: TypeScale;
   /**
-   * The mat the sheet is mounted on, used by the preview stage. The brief's
-   * original values were within 5% luminance of `surface`, which made a light
-   * card read as a slightly-off patch rather than a sheet lying on a board, so
-   * the two light mats are pulled down until the paper actually has an edge.
-   * The exported PNG is unaffected — this never reaches the export target.
+   * The mat the sheet is mounted on, used by the preview stage. Kept at least
+   * 1.15:1 off `surface` so the card reads as an object lying on a board rather
+   * than a slightly-off patch. The exported PNG is unaffected — this never
+   * reaches the export target.
    */
   canvas: string;
   surface: string;
@@ -87,59 +77,56 @@ export interface ThemeTokens {
   /**
    * The ink a photo is mounted with. Every other edge on the card is the
    * card's own `border`, which is tuned to sit quietly against the sheet and is
-   * therefore too faint to frame a picture (Parchment's border is only ~1.3:1
-   * on its own surface). This is one step darker than `border`, so the media
-   * reads as mounted on the material rather than pasted onto it. Its weight
-   * follows the card's `borderWidth`, so a heavy material frames heavily too.
+   * too faint to frame a picture. Its weight follows the card's `borderWidth`.
    */
   mediaBorder: string;
   /**
-   * How the material binds a picture to itself, the way it declares a
-   * signature. Every stock takes a plain rule at the card's own edge weight;
-   * Kraft alone stitches its pictures, dashed like its envelope seam.
+   * How the material binds a picture to itself. `rule` is a plain line at the
+   * card's edge weight; `mat` sets the picture inside a thick passe-partout in
+   * the `mat` colour, the way a print is mounted behind glass.
    */
   mediaFrame: MediaFrameStyle;
+  /** The colour of the mount when `mediaFrame` is `mat`. */
+  mat: string;
   /**
    * A print keyline: a hairline set just inside the card's edge, drawn in
-   * `mediaBorder`. It is the certificate/nameplate detail that tells the eye
-   * the sheet was composed on a press rather than filled edge to edge. Off on
-   * the materials that are surfaces rather than printed sheets (the darks and
-   * the brutalist block).
+   * `mediaBorder`. It tells the eye the sheet was composed on a press rather
+   * than filled edge to edge. Off on the materials that are surfaces rather
+   * than printed sheets.
    */
   keyline: boolean;
   /**
    * A material's own surface texture, layered behind the content as a second
-   * background image over the flat `surface`. Only the process materials carry
-   * one — a CRT refresh pattern on Terminal, a blueprint grid on Cyanotype —
-   * because a texture is what tells those two apart from a plain dark tint.
-   * The papers stay clean: paper grain at card scale is noise, not material.
-   * Value is a CSS `background-image` (or `none`), so a new texture is a table
-   * entry rather than a hand-written rule.
+   * background image over the flat `surface`. Only the terminal carries one — a
+   * CRT refresh pattern — because a texture is what tells it apart from a plain
+   * dark tint. A value is a CSS `background-image` (or `none`).
    */
   texture: string;
-  /**
-   * The theme's signature rule. This is the one place a theme is allowed a
-   * material of its own rather than a tint of `border`. Drawn by card.css from
-   * the style name, so a new material is one table entry rather than a new
-   * block of hand-written pseudo-element CSS.
-   */
+  /** The ink of every drawn line: the signature, the footer rule, the thread. */
   rule: string;
+  /** `solid`, `dashed` or `dotted`; a receipt's rules are torn along a dash. */
+  ruleStyle: RuleStyle;
   signature: SignatureSpec;
   /**
-   * How the quote tweet reads against the sheet. Paper and dark panels take a
-   * filled recess; ruled materials (Hairline, Broadsheet, Terminal, Brutalist)
-   * take an outline, because a fill that clears 1.15:1 on warm paper is a
-   * smudge on a black rule grid. One tint cannot serve both materials.
+   * How the quote tweet reads against the sheet. Soft materials take a filled
+   * recess; ruled materials take an outline, because a fill that clears 1.15:1
+   * on warm paper is a smudge on a black rule grid.
    */
   quoteStyle: QuoteStyle;
+  /** Stat counts drawn as small rounded chips rather than a bare row. */
+  statChip: boolean;
   rhythm: Rhythm;
   fontDisplay: string;
   fontBody: string;
+  /** Avatar corner: a circle, a seal-like rounded square, or a hard square. */
+  avatarRadius: string;
+  /** Full `box-shadow` for the byline avatar: a ring, a misregistered offset. */
+  avatarShadow: string;
   /** Card corner, used when the user picks the "follow theme" radius option. */
   radius: string;
   /** Media and quote corners, one step tighter than the card's. */
   mediaRadius: string;
-  /** Card edge weight: 1px for the papers, heavier for the brutalist material. */
+  /** Card edge weight: 0 for soft materials, heavier for the brutalist one. */
   borderWidth: string;
   /**
    * Card shadow. Kept inside the card's own box (inset offsets) because the
@@ -150,47 +137,40 @@ export interface ThemeTokens {
 }
 
 /**
- * The material's fingerprint, drawn at the head of the body column.
+ * The mark drawn at the head of the body column, one per material, each the
+ * kind of furniture its object actually has.
  *
- * `height` is the rule's own thickness (and drives the body's top padding so
- * the rule never sits on the first line). The ink is always the theme's `rule`;
- * the one signature that needs a second colour (Nocturne's accent tick) gets it
- * from `--accent` in card.css rather than from a per-theme override.
+ * `height` is the mark's own thickness (and drives the body's top padding so it
+ * never sits on the first line). The ink is the theme's `rule`; a mark that
+ * needs a second colour borrows `--accent` in card.css rather than carrying a
+ * per-theme override.
  */
 export type SignatureStyle =
   | 'rule'
-  | 'hairline'
   | 'tick-rule'
-  | 'scanline'
-  | 'double'
-  | 'block'
-  | 'stitch'
-  | 'registration';
+  | 'perforation'
+  | 'titlebar'
+  | 'seal'
+  | 'registration'
+  | 'pill'
+  | 'block';
 
 export interface SignatureSpec {
   style: SignatureStyle;
   height: string;
 }
 
-/**
- * The material's mounting style for photos, posters and avatars.
- *
- * `rule` is the plain mounting line every stock gets by default, drawn at the
- * card's own edge weight. `stitch` is Kraft's binding: the same line, dashed,
- * the way its envelope seam is. Only these two are distinct in geometry — the
- * frame weight is already carried by `borderWidth`, so there is deliberately no
- * separate "hairline" or "heavy" value for a material that would resolve to the
- * same pixels.
- */
-export type MediaFrameStyle = 'rule' | 'stitch';
+export type MediaFrameStyle = 'rule' | 'mat';
+
+export type RuleStyle = 'solid' | 'dashed' | 'dotted';
 
 export type QuoteStyle = 'filled' | 'outlined';
 
 /**
  * Vertical breathing. `gap` is the space between content blocks (byline, body,
  * media, quote); `mediaGap` is the grid gutter. Kept separate from the user's
- * padding so a material can be tight (Terminal, Hairline) or generous
- * (Brutalist, Parchment) at any of the three padding tiers.
+ * padding so a material can be tight or generous at any of the three padding
+ * tiers.
  */
 export interface Rhythm {
   gap: string;
@@ -200,7 +180,7 @@ export interface Rhythm {
 export interface ThemeDefinition {
   id: ThemeId;
   name: string;
-  /** Swatch background for the picker. Two-tone so light papers stay apart. */
+  /** Swatch background for the picker. Two-tone so light sheets stay apart. */
   preview: string;
   tokens: ThemeTokens;
 }
@@ -226,6 +206,42 @@ const SERIF =
   'Georgia, "Times New Roman", "Songti SC", "Source Han Serif SC", "Noto Serif SC", SimSun, "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif';
 
 /**
+ * Neo-grotesque for the gallery label: Helvetica where it exists (macOS), Arial
+ * on Windows, which is the same shape of letter at a different weight.
+ */
+const GROTESK =
+  '"Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Hiragino Sans", sans-serif';
+
+/**
+ * A condensed face for the darkroom's frame numbers. Bahnschrift ships with
+ * Windows, DIN Alternate and Avenir Next Condensed with macOS.
+ */
+const CONDENSED =
+  '"Bahnschrift", "DIN Alternate", "Avenir Next Condensed", "Arial Narrow", "PingFang SC", "Microsoft YaHei", sans-serif';
+
+/**
+ * Heavy grotesque for the zine. Arial Black is on both Windows and macOS; a
+ * CJK title falls through to the platform's heavy weight of the same family.
+ */
+const HEAVY =
+  '"Arial Black", "Archivo Black", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif';
+
+/**
+ * A brush-cut Kai face for sumi bylines. Latin goes to Georgia first so a
+ * Latin handle does not inherit a Kai face's awkward letterforms.
+ */
+const KAI =
+  'Georgia, "Kaiti SC", "STKaiti", "KaiTi", "BiauKai", "AR PL UKai CN", "Songti SC", SimSun, serif';
+
+/** Rounded sans for the soft card; Yuanti is the rounded Chinese face on macOS. */
+const ROUNDED =
+  '"SF Pro Rounded", "Nunito", "Varela Round", "Yuanti SC", "Hiragino Maru Gothic ProN", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif';
+
+/** Typewriter for the receipt: Courier is what a thermal printer imitates. */
+const TYPEWRITER =
+  '"Courier New", Courier, "Cascadia Mono", Consolas, "Noto Sans Mono CJK SC", "Sarasa Mono SC", "Microsoft YaHei", monospace';
+
+/**
  * Monospace stack. Cascadia and SF Mono are the faces Windows Terminal and
  * macOS Terminal actually install, so the theme reads as a console rather than
  * as a generic font at the wrong weight. CJK falls back to a monospaced CJK
@@ -236,281 +252,295 @@ const MONO =
   '"Cascadia Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Noto Sans Mono CJK SC", "Sarasa Mono SC", monospace';
 
 /**
- * Surface textures for the two process materials. Self-contained repeating
- * gradients, so they need no `background-size` beside them and survive the
- * export clone as plain computed `background-image`. Both are kept under 6%
- * alpha: the texture must be felt at arm's length, never read as a pattern
- * competing with the body text.
+ * Surface texture for the terminal. A self-contained repeating gradient, so it
+ * needs no `background-size` beside it and survives the export clone as a plain
+ * computed `background-image`. Kept under 6% alpha: the texture must be felt at
+ * arm's length, never read as a pattern competing with the body text.
  */
 const CRT_TEXTURE =
   'repeating-linear-gradient(to bottom, rgba(94, 224, 138, 0.05) 0, rgba(94, 224, 138, 0.05) 1px, transparent 1px, transparent 3px)';
 
-const BLUEPRINT_TEXTURE =
-  'repeating-linear-gradient(to right, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 26px), repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 26px)';
-
 export const THEMES: Record<ThemeId, ThemeDefinition> = {
-  // 1. Parchment — warm ivory paper, editorial serif, for quotes and long posts.
-  //    Signature: a full-width cream standfirst rule. It started as a short
-  //    terracotta tick, which read as a stray red mark; a full-width rule reads
-  //    as a decision the layout made, and leaves the accent to mean one thing:
-  //    emphasis in text.
-  parchment: {
-    id: 'parchment',
-    name: 'Parchment',
-    preview: 'linear-gradient(135deg, #e4e0d2 0%, #faf9f5 100%)',
+  // 1. Gallery — the wall label beside a framed work. A neutral off-white sheet,
+  //    one Klein-blue tick over a black hairline, and pictures mounted behind a
+  //    thick mat. The quiet default: the post is the exhibit, the card gets out
+  //    of the way.
+  gallery: {
+    id: 'gallery',
+    name: 'Gallery',
+    preview: 'linear-gradient(135deg, #d6d7d3 0%, #f7f7f4 62%, #1b3bd6 62%, #1b3bd6 100%)',
     tokens: {
       type: {
-        displaySize: '17.5px',
+        displaySize: '17px',
         displayWeight: '600',
-        displayTracking: '0.005em',
-        quoteSize: '13px',
+        displayTracking: '-0.01em',
+        quoteSize: '14px',
         bodySize: '17px',
-        bodyLeading: '1.78',
+        bodyLeading: '1.68',
         metaSize: '12.5px',
         metaTracking: '0.01em',
         metaUppercase: false,
-        metaTabular: false,
+        metaTabular: true,
         metaDivider: false,
       },
-      canvas: '#e4e0d2',
-      surface: '#faf9f5',
-      text: '#141413',
-      muted: '#5e5d59',
-      faint: '#74726b',
-      accent: '#c96442',
-      link: '#ad5330',
-      border: '#ded9c8',
-      divider: '#e8e6dc',
-      // A filled recess pulled to 1.16:1 off the sheet, with a border that
-      // actually draws the panel edge (the old tint was 1.09:1 — invisible).
-      quoteBackground: '#ebe9df',
-      quoteBorder: '#d5cfba',
-      qrFill: '#141413',
-      mediaBorder: '#c7bfa8',
-      mediaFrame: 'rule',
-      keyline: true,
+      canvas: '#d6d7d3',
+      surface: '#f7f7f4',
+      text: '#101011',
+      muted: '#55575b',
+      faint: '#696b70',
+      accent: '#1b3bd6',
+      link: '#1b3bd6',
+      border: '#d4d5d0',
+      divider: '#dedfda',
+      quoteBackground: '#ebebe7',
+      quoteBorder: '#b4b5b0',
+      qrFill: '#101011',
+      mediaBorder: '#c4c5c0',
+      mediaFrame: 'mat',
+      mat: '#fdfdfb',
+      keyline: false,
       texture: 'none',
-      rule: '#ded8c6',
-      signature: { style: 'rule', height: '2px' },
-      quoteStyle: 'filled',
-      rhythm: { gap: '20px', mediaGap: '5px' },
-      fontDisplay: SERIF,
+      rule: '#101011',
+      ruleStyle: 'solid',
+      signature: { style: 'tick-rule', height: '2px' },
+      quoteStyle: 'outlined',
+      statChip: false,
+      rhythm: { gap: '22px', mediaGap: '6px' },
+      fontDisplay: GROTESK,
       fontBody: SANS,
-      radius: '12px',
-      mediaRadius: '8px',
+      avatarRadius: '50%',
+      avatarShadow: 'none',
+      radius: '4px',
+      mediaRadius: '2px',
       borderWidth: '1px',
       shadow: 'none',
     },
   },
 
-  // 2. Nocturne — warm charcoal, magazine cover, for video and image-led posts.
-  //    Signature: a masthead — one terracotta tick over a hairline.
-  nocturne: {
-    id: 'nocturne',
-    name: 'Nocturne',
-    preview: 'linear-gradient(135deg, #1a1918 0%, #30302e 100%)',
+  // 2. Darkroom — a contact print under the safelight. Near-black stock, frame
+  //    numbers set in a condensed face, a black mat with a thin edge around each
+  //    picture, and the one amber the room is lit with.
+  darkroom: {
+    id: 'darkroom',
+    name: 'Darkroom',
+    preview: 'linear-gradient(135deg, #050506 0%, #1b1b1e 60%, #ffb02e 60%, #ffb02e 100%)',
     tokens: {
       type: {
-        displaySize: '18.5px',
+        displaySize: '19px',
         displayWeight: '600',
-        displayTracking: '0.005em',
-        quoteSize: '13px',
+        displayTracking: '0.02em',
+        quoteSize: '14.5px',
         bodySize: '16.5px',
         bodyLeading: '1.7',
         metaSize: '12.5px',
-        metaTracking: '0.015em',
-        metaUppercase: false,
-        metaTabular: false,
-        metaDivider: false,
-      },
-      canvas: '#1a1918',
-      surface: '#30302e',
-      text: '#f5f4ed',
-      muted: '#b0aea5',
-      faint: '#9a988f',
-      accent: '#c96442',
-      link: '#dd8462',
-      border: '#4a4844',
-      divider: '#45443f',
-      quoteBackground: '#252523',
-      quoteBorder: '#4a4844',
-      qrFill: '#f5f4ed',
-      mediaBorder: '#57554f',
-      mediaFrame: 'rule',
-      keyline: false,
-      texture: 'none',
-      rule: '#4a4844',
-      signature: { style: 'tick-rule', height: '2px' },
-      quoteStyle: 'filled',
-      rhythm: { gap: '20px', mediaGap: '4px' },
-      fontDisplay: SERIF,
-      fontBody: SANS,
-      radius: '10px',
-      mediaRadius: '6px',
-      borderWidth: '1px',
-      shadow: 'none',
-    },
-  },
-
-  // 3. Hairline — Swiss grid: hairline rules, light sans, no shadow.
-  //    Signature: one full-width ink hairline. Outlined quote: a fill would be
-  //    a grey patch on a black rule grid.
-  hairline: {
-    id: 'hairline',
-    name: 'Hairline',
-    preview:
-      'linear-gradient(180deg, #faf9f5 0%, #faf9f5 58%, #141413 58%, #141413 100%)',
-    tokens: {
-      type: {
-        displaySize: '15.5px',
-        displayWeight: '500',
-        displayTracking: '-0.005em',
-        quoteSize: '15.5px',
-        bodySize: '16px',
-        bodyLeading: '1.62',
-        metaSize: '12px',
-        metaTracking: '0.04em',
+        metaTracking: '0.08em',
         metaUppercase: false,
         metaTabular: true,
         metaDivider: true,
       },
-      canvas: '#dedcd4',
-      surface: '#faf9f5',
-      text: '#141413',
-      muted: '#5e5d59',
-      faint: '#74726b',
-      accent: '#c96442',
-      // Same deeper terracotta as Parchment: the bare accent only reaches
-      // 3.7:1 on this surface, which is too low for body-size link text.
-      link: '#ad5330',
-      border: '#141413',
-      divider: '#141413',
-      quoteBackground: '#f3f1ea',
-      quoteBorder: '#141413',
-      qrFill: '#141413',
-      mediaBorder: '#141413',
-      mediaFrame: 'rule',
-      keyline: true,
+      canvas: '#050506',
+      surface: '#1b1b1e',
+      text: '#ededf0',
+      muted: '#a6a6ae',
+      faint: '#8e8e97',
+      accent: '#ffb02e',
+      link: '#ffc45e',
+      border: '#303035',
+      divider: '#303035',
+      quoteBackground: '#2c2c30',
+      quoteBorder: '#404046',
+      qrFill: '#ededf0',
+      mediaBorder: '#44444b',
+      mediaFrame: 'mat',
+      mat: '#060607',
+      keyline: false,
       texture: 'none',
-      rule: '#141413',
-      signature: { style: 'hairline', height: '1px' },
-      quoteStyle: 'outlined',
-      // Swiss precision: the gutter is as tight as the rules are thin.
-      rhythm: { gap: '16px', mediaGap: '3px' },
-      fontDisplay: SANS,
+      rule: '#404046',
+      ruleStyle: 'solid',
+      signature: { style: 'tick-rule', height: '2px' },
+      quoteStyle: 'filled',
+      statChip: false,
+      rhythm: { gap: '20px', mediaGap: '5px' },
+      fontDisplay: CONDENSED,
       fontBody: SANS,
-      radius: '2px',
-      mediaRadius: '0px',
+      avatarRadius: '50%',
+      avatarShadow: '0 0 0 2px #1b1b1e, 0 0 0 3.5px #ffb02e',
+      radius: '8px',
+      mediaRadius: '3px',
       borderWidth: '1px',
       shadow: 'none',
     },
   },
 
-  // 4. Kraft — a manila envelope. Warm tan stock, brown ink, a stitched
-  //    binding at the head. Its own material, not a tint of Parchment.
-  kraft: {
-    id: 'kraft',
-    name: 'Kraft',
-    preview: 'linear-gradient(135deg, #b9a681 0%, #d3c3a2 100%)',
+  // 3. Riso — a two-ink zine page. Text printed in blue ink, a fluorescent pink
+  //    second ink for the quote wash and the avatar's misregistered offset, a
+  //    heavy grotesque, a 2px ink edge.
+  riso: {
+    id: 'riso',
+    name: 'Riso',
+    preview: 'linear-gradient(135deg, #f2f3ee 0%, #f2f3ee 50%, #17238a 50%, #17238a 78%, #ff3d8b 78%, #ff3d8b 100%)',
     tokens: {
       type: {
-        displaySize: '16.5px',
-        displayWeight: '700',
-        displayTracking: '-0.005em',
-        quoteSize: '16.5px',
+        displaySize: '17px',
+        displayWeight: '900',
+        displayTracking: '-0.01em',
+        quoteSize: '15px',
         bodySize: '16px',
-        bodyLeading: '1.66',
+        bodyLeading: '1.62',
         metaSize: '12px',
-        metaTracking: '0.02em',
+        metaTracking: '0.03em',
+        metaUppercase: false,
+        metaTabular: true,
+        metaDivider: true,
+      },
+      canvas: '#d3d6cf',
+      surface: '#f2f3ee',
+      text: '#17238a',
+      muted: '#3a49a6',
+      faint: '#4f5db4',
+      accent: '#ff3d8b',
+      // The fluorescent pink is a print ink, not a text colour: on paper it is
+      // 3:1. Links take the same hue pulled down to a readable value.
+      link: '#c4155e',
+      border: '#17238a',
+      divider: '#17238a',
+      quoteBackground: '#f8d2e1',
+      quoteBorder: '#17238a',
+      qrFill: '#17238a',
+      mediaBorder: '#17238a',
+      mediaFrame: 'rule',
+      mat: '#f2f3ee',
+      keyline: false,
+      texture: 'none',
+      rule: '#17238a',
+      ruleStyle: 'solid',
+      signature: { style: 'registration', height: '2px' },
+      quoteStyle: 'filled',
+      statChip: false,
+      rhythm: { gap: '18px', mediaGap: '4px' },
+      fontDisplay: HEAVY,
+      fontBody: SANS,
+      avatarRadius: '50%',
+      avatarShadow: '4px 4px 0 #ff3d8b',
+      radius: '0px',
+      mediaRadius: '0px',
+      borderWidth: '2px',
+      shadow: 'none',
+    },
+  },
+
+  // 4. Sumi — a scroll. Cool celadon paper, ink, a Kai-style byline, generous
+  //    leading for Chinese text, a square avatar like a seal, and one vermilion
+  //    seal stamped at the head. The Chinese-first material.
+  sumi: {
+    id: 'sumi',
+    name: 'Sumi',
+    preview: 'linear-gradient(135deg, #bcc6bb 0%, #e4e9e3 58%, #b4281d 58%, #b4281d 100%)',
+    tokens: {
+      type: {
+        displaySize: '19px',
+        displayWeight: '400',
+        displayTracking: '0.06em',
+        quoteSize: '15px',
+        bodySize: '17px',
+        bodyLeading: '1.95',
+        metaSize: '12.5px',
+        metaTracking: '0.05em',
         metaUppercase: false,
         metaTabular: false,
         metaDivider: false,
       },
-      canvas: '#b9a681',
-      surface: '#d3c3a2',
-      text: '#2b2117',
-      muted: '#584832',
-      faint: '#5a4c33',
-      accent: '#8a4b1f',
-      link: '#6f3913',
-      border: '#a8946f',
-      divider: '#b09d78',
-      // A lighter panel — the recess on kraft stock reads as a raised label,
-      // and it keeps body text at 10.97:1 and meta at 5.81:1.
-      quoteBackground: '#e2d6c0',
-      quoteBorder: '#a8946f',
-      qrFill: '#2b2117',
-      mediaBorder: '#8f7a53',
-      mediaFrame: 'stitch',
+      canvas: '#bcc6bb',
+      surface: '#e4e9e3',
+      text: '#161f1a',
+      muted: '#46524b',
+      faint: '#59655e',
+      accent: '#b4281d',
+      link: '#a3241a',
+      border: '#b7c2b5',
+      divider: '#c8d1c6',
+      quoteBackground: '#cbd5ca',
+      quoteBorder: '#a9b6a7',
+      qrFill: '#161f1a',
+      mediaBorder: '#7f8d7e',
+      mediaFrame: 'rule',
+      mat: '#e4e9e3',
       keyline: true,
       texture: 'none',
-      rule: '#a8946f',
-      signature: { style: 'stitch', height: '2px' },
+      rule: '#7f8d7e',
+      ruleStyle: 'solid',
+      signature: { style: 'seal', height: '16px' },
       quoteStyle: 'filled',
-      // Roomier than the papers: a stitched binding needs air so the dashes of
-      // adjacent frames do not read as one broken line.
-      rhythm: { gap: '20px', mediaGap: '6px' },
-      fontDisplay: SANS,
-      fontBody: SANS,
-      radius: '6px',
-      mediaRadius: '4px',
+      statChip: false,
+      rhythm: { gap: '22px', mediaGap: '5px' },
+      fontDisplay: KAI,
+      fontBody: SERIF,
+      avatarRadius: '5px',
+      avatarShadow: '0 0 0 1px #7f8d7e',
+      radius: '3px',
+      mediaRadius: '2px',
       borderWidth: '1px',
       shadow: 'none',
     },
   },
 
-  // 5. Cyanotype — a blueprint. Deep prussian blue, white line-work, a
-  //    registration mark at the head. The one true cold material in the set,
-  //    and it earns it by being a process rather than a "tech blue" skin.
-  cyanotype: {
-    id: 'cyanotype',
-    name: 'Cyanotype',
-    preview: 'linear-gradient(135deg, #0d1c2c 0%, #14304d 100%)',
+  // 5. Clay — a soft, pressed card. Powder-blue stock with no edge line, large
+  //    corners, an embossed inset, stats as little pill chips, and a tangerine
+  //    bar. Friendly rather than formal.
+  clay: {
+    id: 'clay',
+    name: 'Clay',
+    preview: 'linear-gradient(135deg, #9fb9d6 0%, #d8e6f4 60%, #ff6a2b 60%, #ff6a2b 100%)',
     tokens: {
       type: {
-        displaySize: '16px',
+        displaySize: '18px',
         displayWeight: '700',
-        displayTracking: '0.005em',
-        quoteSize: '16px',
+        displayTracking: '0',
+        quoteSize: '14.5px',
         bodySize: '16.5px',
-        bodyLeading: '1.72',
-        metaSize: '12px',
-        metaTracking: '0.04em',
+        bodyLeading: '1.68',
+        metaSize: '12.5px',
+        metaTracking: '0.01em',
         metaUppercase: false,
         metaTabular: true,
         metaDivider: false,
       },
-      canvas: '#0d1c2c',
-      surface: '#14304d',
-      text: '#e8f1f8',
-      muted: '#9fb8cc',
-      faint: '#8aa6bd',
-      accent: '#ffffff',
-      link: '#9fd8ff',
-      border: '#2c5175',
-      divider: '#2c5175',
-      quoteBackground: '#0e2438',
-      quoteBorder: '#2c5175',
-      qrFill: '#e8f1f8',
-      mediaBorder: '#3f6d99',
+      canvas: '#9fb9d6',
+      surface: '#d8e6f4',
+      text: '#0d2540',
+      muted: '#365273',
+      faint: '#4a6586',
+      accent: '#ff6a2b',
+      link: '#a63a0b',
+      border: '#c3d6ea',
+      divider: '#bfd4ea',
+      quoteBackground: '#bfd4ea',
+      quoteBorder: '#bfd4ea',
+      qrFill: '#0d2540',
+      mediaBorder: '#a9c0d9',
       mediaFrame: 'rule',
+      mat: '#e6f0f9',
       keyline: false,
-      texture: BLUEPRINT_TEXTURE,
-      rule: '#3d6a94',
-      signature: { style: 'registration', height: '1px' },
+      texture: 'none',
+      rule: '#a9c0d9',
+      ruleStyle: 'solid',
+      signature: { style: 'pill', height: '6px' },
       quoteStyle: 'filled',
-      rhythm: { gap: '20px', mediaGap: '4px' },
-      fontDisplay: SANS,
-      fontBody: SANS,
-      radius: '0px',
-      mediaRadius: '0px',
-      borderWidth: '1px',
-      shadow: 'none',
+      statChip: true,
+      rhythm: { gap: '20px', mediaGap: '6px' },
+      fontDisplay: ROUNDED,
+      fontBody: ROUNDED,
+      avatarRadius: '50%',
+      avatarShadow: '0 0 0 3px #eef5fb',
+      radius: '28px',
+      mediaRadius: '18px',
+      borderWidth: '0px',
+      shadow: 'inset 0 -6px 0 0 rgba(13, 37, 64, 0.07), inset 0 2px 0 0 rgba(255, 255, 255, 0.65)',
     },
   },
 
-  // 6. Terminal — a phosphor console. Real monospace, one scanline, no paper.
-  //    Signature: a CRT refresh band, faint enough to sit over a text column.
+  // 6. Terminal — a phosphor console in a window. Real monospace, three dots in
+  //    a title bar, a faint CRT scan texture, a hard-cornered square avatar.
   terminal: {
     id: 'terminal',
     name: 'Terminal',
@@ -544,151 +574,167 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       qrFill: '#d8f5d0',
       mediaBorder: '#3b4d3e',
       mediaFrame: 'rule',
+      mat: '#0f140f',
       keyline: false,
       texture: CRT_TEXTURE,
-      // The scanline is drawn with this, so it must read as a screen line, not
-      // as a border. Lifted to 1.56:1 — the old 1.25:1 was invisible.
+      // Drawn as the window furniture, so it must read as a line, not a border.
       rule: '#2f4032',
-      signature: { style: 'scanline', height: '4px' },
+      ruleStyle: 'solid',
+      signature: { style: 'titlebar', height: '10px' },
       quoteStyle: 'outlined',
+      statChip: false,
       rhythm: { gap: '14px', mediaGap: '3px' },
       fontDisplay: MONO,
       fontBody: MONO,
-      radius: '0px',
-      mediaRadius: '0px',
+      avatarRadius: '2px',
+      avatarShadow: '0 0 0 1px #3b4d3e',
+      radius: '10px',
+      mediaRadius: '3px',
       borderWidth: '1px',
       shadow: 'none',
     },
   },
 
-  // 7. Broadsheet — multi-column newspaper: masthead, all-caps kickers, ruled
-  //    columns. Signature: the double rule a paper sets under its flag.
-  broadsheet: {
-    id: 'broadsheet',
-    name: 'Broadsheet',
-    preview:
-      'linear-gradient(180deg, #fbfaf6 0%, #fbfaf6 62%, #1a1a17 62%, #1a1a17 100%)',
+  // 7. Receipt — a thermal till slip. Grey-white paper, typewriter type, rules
+  //    torn along a dash, a row of perforation dots at the head, a square
+  //    avatar, stats set as upper-case totals.
+  receipt: {
+    id: 'receipt',
+    name: 'Receipt',
+    preview: 'linear-gradient(135deg, #c9c9c3 0%, #f5f5f1 58%, #1c1c1b 58%, #1c1c1b 100%)',
     tokens: {
       type: {
-        displaySize: '19px',
+        displaySize: '15.5px',
         displayWeight: '700',
-        displayTracking: '-0.01em',
-        quoteSize: '19px',
-        bodySize: '17px',
-        bodyLeading: '1.72',
+        displayTracking: '0.02em',
+        quoteSize: '14px',
+        bodySize: '14.5px',
+        bodyLeading: '1.75',
         metaSize: '11.5px',
         metaTracking: '0.08em',
         metaUppercase: true,
         metaTabular: true,
         metaDivider: false,
       },
-      canvas: '#e6e3d8',
-      surface: '#fbfaf6',
-      text: '#1a1a17',
-      muted: '#57564f',
-      faint: '#6d6c64',
-      accent: '#a8382a',
-      link: '#8f2f23',
-      border: '#1a1a17',
-      divider: '#1a1a17',
-      quoteBackground: '#f2f0e8',
-      quoteBorder: '#1a1a17',
-      qrFill: '#1a1a17',
-      mediaBorder: '#1a1a17',
+      canvas: '#c9c9c3',
+      surface: '#f5f5f1',
+      text: '#1c1c1b',
+      muted: '#464644',
+      faint: '#5f5f5b',
+      // Thermal print is one ink: the accent is the ink itself.
+      accent: '#1c1c1b',
+      link: '#1c1c1b',
+      border: '#dadad4',
+      divider: '#8a8a85',
+      quoteBackground: '#ecece7',
+      quoteBorder: '#6b6b66',
+      qrFill: '#1c1c1b',
+      mediaBorder: '#1c1c1b',
       mediaFrame: 'rule',
-      keyline: true,
+      mat: '#f5f5f1',
+      keyline: false,
       texture: 'none',
-      rule: '#1a1a17',
-      signature: { style: 'double', height: '5px' },
+      rule: '#7c7c77',
+      ruleStyle: 'dashed',
+      signature: { style: 'perforation', height: '4px' },
       quoteStyle: 'outlined',
-      rhythm: { gap: '18px', mediaGap: '4px' },
-      fontDisplay: SERIF,
-      fontBody: SERIF,
-      radius: '0px',
+      statChip: false,
+      rhythm: { gap: '16px', mediaGap: '4px' },
+      fontDisplay: TYPEWRITER,
+      fontBody: TYPEWRITER,
+      avatarRadius: '0px',
+      avatarShadow: 'none',
+      radius: '2px',
       mediaRadius: '0px',
       borderWidth: '1px',
       shadow: 'none',
     },
   },
 
-  // 8. Brutalist — thick rules and a hard offset shadow. Deliberately loud, so
-  //    it is not part of the default rotation (see DEFAULT_CARD_CONFIG).
+  // 8. Brutalist — a sticker slapped on a wall. Signal yellow, 3px black edge, a
+  //    hard offset band, a Times-weight headline against a plain sans body, and a
+  //    violet link. Deliberately loud, so it is not part of the default rotation.
   brutalist: {
     id: 'brutalist',
     name: 'Brutalist',
     preview:
-      'linear-gradient(135deg, #f4f1e4 0%, #f4f1e4 46%, #14140f 46%, #14140f 100%)',
+      'linear-gradient(135deg, #ffe64a 0%, #ffe64a 46%, #111110 46%, #111110 100%)',
     tokens: {
       type: {
-        displaySize: '20px',
+        displaySize: '22px',
         displayWeight: '800',
         displayTracking: '-0.02em',
-        quoteSize: '20px',
+        quoteSize: '18px',
         bodySize: '17px',
-        bodyLeading: '1.6',
-        // Brutalist had no meta rule, so it inherited the base. Stated rather
-        // than inherited now, because that is the difference between a material
-        // that chose its meta and one that never got around to it.
+        bodyLeading: '1.55',
         metaSize: '13px',
         metaTracking: '0',
         metaUppercase: false,
         metaTabular: false,
         metaDivider: false,
       },
-      canvas: '#d8d4c4',
-      surface: '#f4f1e4',
-      text: '#14140f',
-      muted: '#4f4d43',
-      faint: '#63615a',
-      accent: '#e0523a',
-      link: '#b83a24',
-      border: '#14140f',
-      divider: '#14140f',
-      quoteBackground: '#eae6d4',
-      quoteBorder: '#14140f',
-      qrFill: '#14140f',
-      mediaBorder: '#14140f',
+      canvas: '#141413',
+      surface: '#ffe64a',
+      text: '#111110',
+      muted: '#3b3813',
+      faint: '#524e1a',
+      accent: '#5a14d8',
+      link: '#5a14d8',
+      border: '#111110',
+      divider: '#111110',
+      quoteBackground: '#fff8c9',
+      quoteBorder: '#111110',
+      qrFill: '#111110',
+      mediaBorder: '#111110',
       mediaFrame: 'rule',
+      mat: '#fff8c9',
       keyline: false,
       texture: 'none',
-      rule: '#14140f',
-      signature: { style: 'block', height: '3px' },
-      quoteStyle: 'outlined',
+      rule: '#111110',
+      ruleStyle: 'solid',
+      signature: { style: 'block', height: '4px' },
+      quoteStyle: 'filled',
+      statChip: false,
       // Loud material, loud gutter: the pictures are boxed hard and pushed
-      // apart, the way the sheet's own 3px edge and offset shadow are.
+      // apart, the way the sheet's own 3px edge and offset band are.
       rhythm: { gap: '24px', mediaGap: '8px' },
-      fontDisplay: SANS,
+      fontDisplay: SERIF,
       fontBody: SANS,
+      avatarRadius: '0px',
+      avatarShadow: '4px 4px 0 #111110',
       radius: '0px',
       mediaRadius: '0px',
       borderWidth: '3px',
       // Inset, not outset: the export captures the element's border box, so an
       // outer shadow is cropped straight out of the PNG. Negative offsets put
-      // the hard band on the bottom-right, so the sheet reads as a block cast
-      // down-right rather than a recessed panel.
-      shadow: 'inset -20px -20px 0 0 #14140f',
+      // the hard band on the bottom-right.
+      shadow: 'inset -12px -12px 0 0 #111110',
     },
   },
 };
 
 /**
  * Retired presets map onto the closest live material rather than resetting the
- * user's choice. The three gradient classics are retired here: their restrained
- * surfaces were absorbed by Nocturne (dark UI), Cyanotype (pure dark) and
- * Parchment (warm white), and keeping them alongside the materials is what made
- * the picker read as "skins" again. The high-saturation full-bleed gradients
- * stay retired on purpose — they are what the papers replaced.
+ * user's choice. This covers the old gradient skins and the previous material
+ * set: each keeps its light/dark character and its place in the rotation.
  */
 export const LEGACY_THEME_ALIASES: Record<string, ThemeId> = {
-  'sunset-glow': 'parchment',
-  'aurora-purple': 'nocturne',
+  'sunset-glow': 'gallery',
+  'aurora-purple': 'darkroom',
   'cyber-mint': 'terminal',
   // Retired classics.
-  'linear-dark': 'nocturne',
-  'oled-black': 'cyanotype',
-  'oled': 'cyanotype',
-  'notion-white': 'parchment',
-  'notion-clean-white': 'parchment',
+  'linear-dark': 'darkroom',
+  'oled-black': 'darkroom',
+  'oled': 'darkroom',
+  'notion-white': 'gallery',
+  'notion-clean-white': 'gallery',
+  // The previous material set.
+  parchment: 'gallery',
+  nocturne: 'darkroom',
+  hairline: 'riso',
+  kraft: 'sumi',
+  cyanotype: 'clay',
+  broadsheet: 'receipt',
 };
 
 export const PADDING_OPTIONS: PaddingOption[] = ['16px', '32px', '48px'];
@@ -700,27 +746,26 @@ export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
 /**
  * Picker order and visibility.
  *
- * The first six are the everyday rotation: the three papers plus the three
- * materials that are not a variant of paper (Kraft, Cyanotype, Terminal).
- * Broadsheet is a phase-2 material and Brutalist is deliberately last and
- * marked experimental, so the picker keeps its 3px frame and hard shadow behind
- * the "more" disclosure.
+ * The first six are the everyday rotation, light and dark mixed so the picker's
+ * first screen shows range. Receipt is a niche material and Brutalist is
+ * deliberately last and marked experimental, so its 3px frame and hard band stay
+ * behind the "more" disclosure.
  */
 export const THEME_ORDER: ThemeId[] = [
-  'parchment',
-  'nocturne',
-  'hairline',
-  'kraft',
-  'cyanotype',
+  'gallery',
+  'darkroom',
+  'riso',
+  'sumi',
+  'clay',
   'terminal',
-  'broadsheet',
+  'receipt',
   'brutalist',
 ];
 
 export const EXPERIMENTAL_THEMES: ReadonlySet<ThemeId> = new Set<ThemeId>(['brutalist']);
 
 export const DEFAULT_CARD_CONFIG: CardConfig = {
-  theme: 'parchment',
+  theme: 'gallery',
   padding: '32px',
   borderRadius: 'theme',
   aspectRatio: 'auto',

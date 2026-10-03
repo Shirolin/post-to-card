@@ -56,9 +56,9 @@ async function runAll() {
 
   await check('ThemeId covers the 3 curated paper themes', () => {
     const themes: ThemeId[] = [
-      'parchment',
-      'nocturne',
-      'hairline',
+      'gallery',
+      'darkroom',
+      'riso',
     ];
     assert.equal(themes.length, 3);
   });
@@ -80,7 +80,7 @@ async function runAll() {
 
   await check('CardConfig covers all 5 toggles and configuration dimensions from R2', () => {
     const config: CardConfig = {
-      theme: 'parchment',
+      theme: 'gallery',
       padding: '32px',
       borderRadius: '12px',
       aspectRatio: 'auto',
@@ -351,7 +351,7 @@ async function runAll() {
 
     const sampleState: ConsumerState = {
       config: {
-        theme: 'nocturne',
+        theme: 'darkroom',
         padding: '48px',
         borderRadius: '20px',
         aspectRatio: '16:9',
@@ -383,7 +383,7 @@ async function runAll() {
       },
     };
 
-    assert.equal(sampleState.config.theme, 'nocturne');
+    assert.equal(sampleState.config.theme, 'darkroom');
     assert.equal(sampleState.config.borderRadius, '20px');
     assert.equal(sampleState.config.blurAuthor, true);
   });

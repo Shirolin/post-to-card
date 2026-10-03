@@ -258,7 +258,7 @@ const params = new URLSearchParams(location.search);
 
 /**
  * Optional overrides so a single card state can be inspected without clicking
- * through the panel: ?theme=hairline&ratio=3:4&padding=48px&radius=20px
+ * through the panel: ?theme=riso&ratio=3:4&padding=48px&radius=20px
  *
  * The theme goes through the same sanitizer as stored preferences, so a retired
  * id in a bookmarked URL still resolves to its replacement paper.

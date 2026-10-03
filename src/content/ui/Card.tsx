@@ -95,7 +95,6 @@ function renderMediaGrid(
   if (!media || media.length === 0) return null;
   const items = media.slice(0, 4);
   const count = items.length;
-  const ratioClass = `ratio-${aspectRatio.replace(':', '-')}`;
   const fitClass = `fit-${imageFit}`;
   const layoutClass = `media-layout-${mediaLayout}`;
 
@@ -107,7 +106,7 @@ function renderMediaGrid(
 
   return (
     <div
-      class={`media-grid media-count-${count} ${ratioClass} ${fitClass} ${layoutClass} ${plan.layoutClass}`}
+      class={`media-grid media-count-${count} ${fitClass} ${layoutClass} ${plan.layoutClass}`}
       data-count={count}
       data-ratio={aspectRatio}
       data-fit={imageFit}
@@ -126,7 +125,7 @@ function renderMediaGrid(
           return (
             <div
               key={idx}
-              class={`media-item media-video-item ${fitClass} ${ratioClass} ${layoutClass}`}
+              class={`media-item media-video-item ${fitClass} ${layoutClass}`}
               data-fit={imageFit}
               data-layout={mediaLayout}
               data-media-type={m.type}
@@ -138,7 +137,7 @@ function renderMediaGrid(
               <img
                 src={m.url}
                 alt={m.alt || `${altPrefix} ${idx + 1}`}
-                class={`media-video-poster ${fitClass} ${ratioClass}`}
+                class={`media-video-poster ${fitClass}`}
                 data-fit={imageFit}
                 loading="eager"
                 onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => {
@@ -182,7 +181,7 @@ function renderMediaGrid(
             key={idx}
             src={m.url}
             alt={m.alt || `${altPrefix} ${idx + 1}`}
-            class={`media-item ${fitClass} ${ratioClass} ${layoutClass}`}
+            class={`media-item ${fitClass} ${layoutClass}`}
             data-fit={imageFit}
             data-layout={mediaLayout}
             style={{ borderRadius: itemRadius }}
@@ -510,16 +509,16 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
   const tokens = THEMES[config.theme].tokens;
   const minHeightStyle = getAspectMinHeight(config.aspectRatio, 640);
 
-  // The theme is carried by `data-theme` alone. It used to be emitted twice,
-  // once as this class and once as the attribute, and card.css matched both
-  // spellings in every rule. Same specificity, same block, so the class decided
-  // nothing that the attribute did not; it only meant a material could be
-  // renamed in one place and silently keep its old styling in the other.
+  // Every option is carried by its data attribute alone. Each one used to be
+  // emitted twice, as a class here and as an attribute below, and card.css
+  // matched both spellings in every rule. Same element, same specificity, same
+  // block, so the class decided nothing the attribute did not -- it only meant
+  // an option could be renamed in one place and silently keep its old styling
+  // in the other. `fit-` and `media-layout-` still travel as classes because
+  // card.css keys their child rules on them; those are on the media grid, not
+  // on the card root.
   const cardClasses = [
     'post-to-card-target',
-    `padding-${config.padding}`,
-    `radius-${config.borderRadius}`,
-    `ratio-${config.aspectRatio.replace(':', '-')}`,
     `fit-${imageFit}`,
     `media-layout-${mediaLayout}`,
   ].join(' ');
@@ -551,6 +550,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       data-media-frame={tokens.mediaFrame}
       data-meta-divider={tokens.type.metaDivider ? 'on' : undefined}
       data-keyline={tokens.keyline ? 'on' : undefined}
+      data-stat-chip={tokens.statChip ? 'on' : undefined}
       style={{
         padding: config.padding,
         borderRadius: radius.card,
@@ -571,6 +571,10 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
         '--quote-border': tokens.quoteBorder,
         '--qr-fill': tokens.qrFill,
         '--media-border': tokens.mediaBorder,
+        '--mat': tokens.mat,
+        '--rule-style': tokens.ruleStyle,
+        '--avatar-radius': tokens.avatarRadius,
+        '--avatar-shadow': tokens.avatarShadow,
         '--card-radius': radius.card,
         '--surface-texture': tokens.texture,
         '--rule': tokens.rule,

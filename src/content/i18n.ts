@@ -47,13 +47,13 @@ export interface Translations {
   videoPlayButton: string;
 
   // Themes
-  theme_parchment: string;
-  theme_nocturne: string;
-  theme_hairline: string;
-  theme_kraft: string;
-  theme_cyanotype: string;
+  theme_gallery: string;
+  theme_darkroom: string;
+  theme_riso: string;
+  theme_sumi: string;
+  theme_clay: string;
   theme_terminal: string;
-  theme_broadsheet: string;
+  theme_receipt: string;
   theme_brutalist: string;
 
   // Export Actions & Status
@@ -122,13 +122,13 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     tweetActionButton: '推文卡片按钮',
     videoPlayButton: '视频播放按钮',
 
-    theme_parchment: '羊皮纸',
-    theme_nocturne: '暗刊',
-    theme_hairline: '细线',
-    theme_kraft: '牛皮纸',
-    theme_cyanotype: '蓝晒图',
+    theme_gallery: '画廊',
+    theme_darkroom: '暗房',
+    theme_riso: '孔版',
+    theme_sumi: '水墨',
+    theme_clay: '软陶',
     theme_terminal: '终端',
-    theme_broadsheet: '报纸栏',
+    theme_receipt: '小票',
     theme_brutalist: '粗野派',
 
     copyImage: '复制图片',
@@ -192,13 +192,13 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     tweetActionButton: 'Tweet Card Button',
     videoPlayButton: 'Video Play Button',
 
-    theme_parchment: 'Parchment',
-    theme_nocturne: 'Nocturne',
-    theme_hairline: 'Hairline',
-    theme_kraft: 'Kraft',
-    theme_cyanotype: 'Cyanotype',
+    theme_gallery: 'Gallery',
+    theme_darkroom: 'Darkroom',
+    theme_riso: 'Riso',
+    theme_sumi: 'Sumi',
+    theme_clay: 'Clay',
     theme_terminal: 'Terminal',
-    theme_broadsheet: 'Broadsheet',
+    theme_receipt: 'Receipt',
     theme_brutalist: 'Brutalist',
 
     copyImage: 'Copy Image',

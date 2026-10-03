@@ -37,7 +37,7 @@ function test(name: string, fn: TestFn) {
 // Interaction 1: Combinatorial Matrix of Themes, Padding, Radius, and Ratios
 // -------------------------------------------------------------
 test('Tier 3.1: all 3 themes render correct CSS class names and root styles', () => {
-  const themes: ThemeId[] = ['parchment', 'nocturne', 'hairline'];
+  const themes: ThemeId[] = ['gallery', 'darkroom', 'riso'];
 
   themes.forEach(theme => {
     // The theme is an attribute now, not a class: `data-theme` is what card.css
@@ -81,7 +81,7 @@ test('Tier 3.3: 3 radius options apply to card container and propagate to media 
 });
 
 test('Tier 3.4: full combinatorial matrix (3 Themes x 3 Padding x 3 Radius) generates 27 distinct valid configurations', () => {
-  const themes: ThemeId[] = ['parchment', 'nocturne', 'hairline'];
+  const themes: ThemeId[] = ['gallery', 'darkroom', 'riso'];
   const paddings: PaddingOption[] = ['16px', '32px', '48px'];
   const radii: RadiusOption[] = ['0px', '12px', '20px'];
 
@@ -153,7 +153,7 @@ test('Tier 3.5: thread containing quote tweet, multiple photos, and emojis build
 // -------------------------------------------------------------
 test('Tier 3.6: author privacy blur active alongside QR code does not blur the QR code', () => {
   const card = new DomElement('DIV');
-  card.setAttribute('data-theme', 'nocturne');
+  card.setAttribute('data-theme', 'darkroom');
 
   const authorBlock = new DomElement('DIV');
   authorBlock.className = 'author-section is-blurred';
@@ -247,7 +247,7 @@ test('Tier 3.10: user preference updates saved to storage and restored on subseq
 
   // User selects the Nocturne theme and 48px padding
   const customConfig: CardConfig = {
-    theme: 'nocturne',
+    theme: 'darkroom',
     padding: '48px',
     borderRadius: '20px',
     aspectRatio: '3:4',
@@ -264,7 +264,7 @@ test('Tier 3.10: user preference updates saved to storage and restored on subseq
   const restored = await chromeMock.storage.local.get('card_settings');
   const activeConfig = restored.card_settings as CardConfig;
 
-  assert.equal(activeConfig.theme, 'nocturne');
+  assert.equal(activeConfig.theme, 'darkroom');
   assert.equal(activeConfig.padding, '48px');
   assert.equal(activeConfig.borderRadius, '20px');
   assert.equal(activeConfig.aspectRatio, '3:4');

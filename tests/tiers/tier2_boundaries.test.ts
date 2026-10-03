@@ -259,7 +259,7 @@ test('Tier 2.14: massive viral stats (1.2M, 50.4M, 1.1B) format without wrapping
 // -------------------------------------------------------------
 test('Tier 2.15: 0px border-radius with 48px padding creates crisp brutalist card', () => {
   const config: CardConfig = {
-    theme: 'nocturne',
+    theme: 'darkroom',
     padding: '48px',
     borderRadius: '0px',
     aspectRatio: 'auto',
@@ -275,7 +275,7 @@ test('Tier 2.15: 0px border-radius with 48px padding creates crisp brutalist car
 
 test('Tier 2.16: 20px soft border-radius with 16px compact padding renders cleanly', () => {
   const config: CardConfig = {
-    theme: 'parchment',
+    theme: 'gallery',
     padding: '16px',
     borderRadius: '20px',
     aspectRatio: '16:9',
