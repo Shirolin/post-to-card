@@ -158,6 +158,11 @@ test('gql.15: the avatar is read from the newer user shape, not just legacy', ()
   // and dropped `legacy.profile_image_url_https`. Name and handle kept working
   // because they come from `core`, so the only visible symptom was the card
   // falling back to its placeholder avatar.
+  //
+  // The payload carries `_normal`, which is 48px, and the DOM channel upscales
+  // it. This channel is the one content/index.ts prefers, so the assertion is
+  // on the upscaled URL: reading the field and serving it at full size are two
+  // separate mistakes, and only the first was caught before.
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_NEW_USER_SHAPE_JSON, 'TweetDetail', 'q1');
   const author = parsed.thread?.tweets[0].author;
   assert.ok(author, 'expected an author');
@@ -165,8 +170,8 @@ test('gql.15: the avatar is read from the newer user shape, not just legacy', ()
   assert.equal(author!.handle, '@mkdir700');
   assert.equal(
     author!.avatarUrl,
-    'https://pbs.twimg.com/profile_images/7001/mark_normal.jpg',
-    'the avatar must come from avatar.image_url when legacy is absent'
+    'https://pbs.twimg.com/profile_images/7001/mark_400x400.jpg',
+    'the avatar must come from avatar.image_url when legacy is absent, at full size'
   );
 });
 
