@@ -13,25 +13,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { DomDocument, DomElement, DomImageElement } from './env/browser.ts';
+import { DomDocument, DomElement, DomImageElement, createDomElement } from './env/browser.ts';
 import { createChromeMock } from './env/chrome.ts';
 import { MockCanvasElement, mockDomToBlob } from './env/canvas.ts';
-import { MockClipboard, MockClipboardItem, DownloadTracker } from './env/clipboard.ts';
+import { MockClipboard, MockClipboardItem } from './env/clipboard.ts';
 
 // Export engine & CORS protection (direct TS imports)
 import {
   fetchImageAsBase64,
-  sanitizeTweetImagesForExport,
   replaceCardImagesWithBase64,
   FALLBACK_PLACEHOLDER_DATA_URL,
 } from '../src/content/engine/export.ts';
 
 // Clipboard & Fallback engine (direct TS imports)
-import {
-  downloadBlobAsPng,
-  copyBlobToClipboard,
-  exportBlobWithFallback,
-} from '../src/content/engine/fallback.ts';
+import { exportBlobWithFallback } from '../src/content/engine/fallback.ts';
 
 // Background proxy & SSRF shield (direct TS imports)
 import {
@@ -50,6 +45,31 @@ import { runTier4 } from './tiers/tier4_workloads.test.ts';
 import type { TweetData, ThreadData } from '../src/types/tweet.ts';
 
 const rootDir = process.cwd();
+
+/**
+ * Runs `body` with a fake document installed and returns the download anchors
+ * it left in that document.
+ *
+ * A download is observed where it happens: as the `<a download>` the fallback
+ * path appends and clicks. The shipped code used to publish a tracker on
+ * globalThis purely so this file could see that, which meant the extension
+ * carried test scaffolding for anyone who installed it.
+ *
+ * The anchors are read back before the path's cleanup timer fires, so they are
+ * still in the body when this returns.
+ */
+async function captureDownloads(body: () => Promise<void>): Promise<HTMLAnchorElement[]> {
+  const scope = globalThis as { document?: unknown };
+  const previous = scope.document;
+  const doc = new DomDocument();
+  scope.document = doc;
+  try {
+    await body();
+    return Array.from(doc.body.querySelectorAll<HTMLAnchorElement>('a[download]'));
+  } finally {
+    scope.document = previous;
+  }
+}
 
 /** Newest modification time anywhere under `dir`, or 0 when it holds nothing. */
 function newestSourceMtime(dir: string): number {
@@ -241,7 +261,13 @@ async function runAdversarialSuite() {
     }
   });
 
-  await challenge('T5.1.5: Deep immutability of frozen TweetData and ThreadData objects', async () => {
+  await challenge('T5.1.5: Export preparation leaves the data model and the live card as it found them', async () => {
+    // The card is rasterized from the DOM, not from the TweetData, so preparing
+    // an export rewrites image sources on the live element. Two things must
+    // survive that: the model the caller handed over, and the element itself
+    // afterwards -- the modal stays open behind the export and is still showing
+    // when it finishes. A frozen model is used so any write to it throws rather
+    // than passing unnoticed.
     const chromeMock = createChromeMock();
     chromeMock.runtime.onMessage.addListener((msg: any, _s, sendResponse) => {
       sendResponse({ success: true, dataUrl: `data:image/jpeg;base64,safe_${msg.url}` });
@@ -263,14 +289,33 @@ async function runAdversarialSuite() {
       ]) as any,
     });
 
+    const card = createDomElement('<div><img src="https://pbs.twimg.com/avatar.jpg" alt="a"></div>');
+    const img = card.querySelector('img') as DomImageElement;
+
     const originalChrome = (globalThis as any).chrome;
     (globalThis as any).chrome = chromeMock;
 
     try {
-      const sanitized = await sanitizeTweetImagesForExport(rawTweet);
-      assert.notEqual(sanitized, rawTweet, 'Must return a deep-cloned copy');
+      const restore = await replaceCardImagesWithBase64(card as unknown as HTMLElement);
+
       assert.equal(rawTweet.author.avatarUrl, 'https://pbs.twimg.com/avatar.jpg');
-      assert.ok(sanitized.author.avatarUrl.startsWith('data:image/jpeg;base64,safe_'));
+      assert.equal(
+        rawTweet.media![0].url,
+        'https://pbs.twimg.com/pic.jpg',
+        'the model must not be rewritten on the way to the canvas'
+      );
+      assert.ok(
+        img.getAttribute('src')?.startsWith('data:image/jpeg;base64,safe_'),
+        'the live card must be swapped for the duration of the export'
+      );
+
+      restore();
+
+      assert.equal(
+        img.getAttribute('src'),
+        'https://pbs.twimg.com/avatar.jpg',
+        'the card behind the modal must be whole again once the export finishes'
+      );
     } finally {
       (globalThis as any).chrome = originalChrome;
     }
@@ -342,20 +387,21 @@ async function runAdversarialSuite() {
     Object.defineProperty(globalThis.navigator, 'clipboard', { value: mockClipboard, configurable: true, writable: true });
     Object.defineProperty(globalThis, 'ClipboardItem', { value: MockClipboardItem, configurable: true, writable: true });
 
-    const tracker = new DownloadTracker();
-    (globalThis as any).currentDownloadTracker = tracker;
-
     const blob = new Blob(['png_retina_data'], { type: 'image/png' });
 
     const originalWarn = console.warn;
     console.warn = () => {};
     try {
-      const result = await exportBlobWithFallback(blob, 'copy', 'unfocused-test.png');
-      assert.equal(result.success, true);
-      assert.equal(result.method, 'download');
-      assert.equal(result.filename, 'unfocused-test.png');
-      assert.equal(tracker.downloads.length, 1);
-      assert.equal(tracker.downloads[0].filename, 'unfocused-test.png');
+      let result: Awaited<ReturnType<typeof exportBlobWithFallback>> | undefined;
+      const anchors = await captureDownloads(async () => {
+        result = await exportBlobWithFallback(blob, 'copy', 'unfocused-test.png');
+      });
+
+      assert.equal(result!.success, true);
+      assert.equal(result!.method, 'download');
+      assert.equal(result!.filename, 'unfocused-test.png');
+      assert.equal(anchors.length, 1, 'the card must actually have been offered as a download');
+      assert.equal(anchors[0].getAttribute('download'), 'unfocused-test.png');
     } finally {
       console.warn = originalWarn;
       if (originalClipboardDesc) {
@@ -364,7 +410,6 @@ async function runAdversarialSuite() {
         delete (globalThis.navigator as any).clipboard;
       }
       delete (globalThis as any).ClipboardItem;
-      delete (globalThis as any).currentDownloadTracker;
     }
   });
 
@@ -376,18 +421,19 @@ async function runAdversarialSuite() {
     Object.defineProperty(globalThis.navigator, 'clipboard', { value: mockClipboard, configurable: true, writable: true });
     Object.defineProperty(globalThis, 'ClipboardItem', { value: MockClipboardItem, configurable: true, writable: true });
 
-    const tracker = new DownloadTracker();
-    (globalThis as any).currentDownloadTracker = tracker;
-
     const blob = new Blob(['png_retina_data'], { type: 'image/png' });
 
     const originalWarn = console.warn;
     console.warn = () => {};
     try {
-      const result = await exportBlobWithFallback(blob, 'copy', 'gesture-expired-test.png');
-      assert.equal(result.success, true);
-      assert.equal(result.method, 'download');
-      assert.equal(tracker.downloads.length, 1);
+      let result: Awaited<ReturnType<typeof exportBlobWithFallback>> | undefined;
+      const anchors = await captureDownloads(async () => {
+        result = await exportBlobWithFallback(blob, 'copy', 'gesture-expired-test.png');
+      });
+
+      assert.equal(result!.success, true);
+      assert.equal(result!.method, 'download');
+      assert.equal(anchors.length, 1);
     } finally {
       console.warn = originalWarn;
       if (originalClipboardDesc) {
@@ -396,7 +442,6 @@ async function runAdversarialSuite() {
         delete (globalThis.navigator as any).clipboard;
       }
       delete (globalThis as any).ClipboardItem;
-      delete (globalThis as any).currentDownloadTracker;
     }
   });
 
@@ -408,18 +453,19 @@ async function runAdversarialSuite() {
     Object.defineProperty(globalThis.navigator, 'clipboard', { value: mockClipboard, configurable: true, writable: true });
     Object.defineProperty(globalThis, 'ClipboardItem', { value: MockClipboardItem, configurable: true, writable: true });
 
-    const tracker = new DownloadTracker();
-    (globalThis as any).currentDownloadTracker = tracker;
-
     const blob = new Blob(['png_retina_data'], { type: 'image/png' });
 
     const originalWarn = console.warn;
     console.warn = () => {};
     try {
-      const result = await exportBlobWithFallback(blob, 'copy', 'permission-denied-test.png');
-      assert.equal(result.success, true);
-      assert.equal(result.method, 'download');
-      assert.equal(tracker.downloads.length, 1);
+      let result: Awaited<ReturnType<typeof exportBlobWithFallback>> | undefined;
+      const anchors = await captureDownloads(async () => {
+        result = await exportBlobWithFallback(blob, 'copy', 'permission-denied-test.png');
+      });
+
+      assert.equal(result!.success, true);
+      assert.equal(result!.method, 'download');
+      assert.equal(anchors.length, 1);
     } finally {
       console.warn = originalWarn;
       if (originalClipboardDesc) {
@@ -428,7 +474,6 @@ async function runAdversarialSuite() {
         delete (globalThis.navigator as any).clipboard;
       }
       delete (globalThis as any).ClipboardItem;
-      delete (globalThis as any).currentDownloadTracker;
     }
   });
 
@@ -437,24 +482,24 @@ async function runAdversarialSuite() {
     delete (globalThis.navigator as any).clipboard;
     delete (globalThis as any).ClipboardItem;
 
-    const tracker = new DownloadTracker();
-    (globalThis as any).currentDownloadTracker = tracker;
-
     const blob = new Blob(['png_retina_data'], { type: 'image/png' });
 
     const originalWarn = console.warn;
     console.warn = () => {};
     try {
-      const result = await exportBlobWithFallback(blob, 'copy', 'missing-api-test.png');
-      assert.equal(result.success, true);
-      assert.equal(result.method, 'download');
-      assert.equal(tracker.downloads.length, 1);
+      let result: Awaited<ReturnType<typeof exportBlobWithFallback>> | undefined;
+      const anchors = await captureDownloads(async () => {
+        result = await exportBlobWithFallback(blob, 'copy', 'missing-api-test.png');
+      });
+
+      assert.equal(result!.success, true);
+      assert.equal(result!.method, 'download');
+      assert.equal(anchors.length, 1);
     } finally {
       console.warn = originalWarn;
       if (originalClipboardDesc) {
         Object.defineProperty(globalThis.navigator, 'clipboard', originalClipboardDesc);
       }
-      delete (globalThis as any).currentDownloadTracker;
     }
   });
 
@@ -508,25 +553,26 @@ async function runAdversarialSuite() {
     Object.defineProperty(globalThis.navigator, 'clipboard', { value: mockClipboard, configurable: true, writable: true });
     Object.defineProperty(globalThis, 'ClipboardItem', { value: MockClipboardItem, configurable: true, writable: true });
 
-    const tracker = new DownloadTracker();
-    (globalThis as any).currentDownloadTracker = tracker;
-
     const blob = new Blob(['png_data'], { type: 'image/png' });
 
     const originalWarn = console.warn;
     console.warn = () => {}; // Mute expected warnings during 50-burst test
     try {
-      const promises = Array.from({ length: 50 }, (_, i) =>
-        exportBlobWithFallback(blob, 'copy', `burst-${i}.png`)
-      );
+      let results: Awaited<ReturnType<typeof exportBlobWithFallback>>[] = [];
+      const anchors = await captureDownloads(async () => {
+        results = await Promise.all(
+          Array.from({ length: 50 }, (_, i) =>
+            exportBlobWithFallback(blob, 'copy', `burst-${i}.png`)
+          )
+        );
+      });
 
-      const results = await Promise.all(promises);
       assert.equal(results.length, 50);
       results.forEach((r) => {
         assert.equal(r.success, true);
         assert.equal(r.method, 'download');
       });
-      assert.equal(tracker.downloads.length, 50);
+      assert.equal(anchors.length, 50, 'every one of the 50 must have reached the document');
       assert.equal(unhandledRejectionsCount, 0, 'Zero unhandled rejections during high-frequency burst');
     } finally {
       console.warn = originalWarn;
@@ -536,7 +582,6 @@ async function runAdversarialSuite() {
         delete (globalThis.navigator as any).clipboard;
       }
       delete (globalThis as any).ClipboardItem;
-      delete (globalThis as any).currentDownloadTracker;
     }
   });
 
