@@ -220,21 +220,6 @@
   z-index: 0;
 }
 
-/* A light avatar placeholder cannot be a white glow; it reads as the
-   quote panel instead so a transparent avatar still has an edge. */
-.post-to-card-target[data-theme="parchment"] .author-avatar,
-.post-to-card-target.theme-parchment .author-avatar,
-.post-to-card-target[data-theme="hairline"] .author-avatar,
-.post-to-card-target.theme-hairline .author-avatar,
-.post-to-card-target[data-theme="broadsheet"] .author-avatar,
-.post-to-card-target.theme-broadsheet .author-avatar,
-.post-to-card-target[data-theme="brutalist"] .author-avatar,
-.post-to-card-target.theme-brutalist .author-avatar,
-.post-to-card-target[data-theme="kraft"] .author-avatar,
-.post-to-card-target.theme-kraft .author-avatar {
-  background: var(--quote-bg, #f1efe7);
-}
-
 /* -------------------------------------------------------------
    Type scale is part of the theme: the paper and the letterforms
    move together, which is what makes the switch read as a change of
@@ -578,7 +563,11 @@
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.06);
+  /* The recess colour, one per theme, so a transparent or slow-loading avatar
+     has an edge that belongs to the sheet. The light papers used to take this
+     from `--quote-bg` while the darks took a hard-coded white wash — the same
+     "recess" idea implemented twice. One token serves both now. */
+  background: var(--quote-bg);
   /* A mounting ring in the same ink as the media frame, so the portrait is
      set into the sheet rather than floating on it. It scales with the card's
      edge weight, staying a hairline on the papers and reading as a heavy
@@ -698,7 +687,12 @@
   gap: var(--media-gap, 4px);
   width: 100%;
   overflow: hidden;
-  margin-top: 12px;
+  /* Media sits a touch further from the copy than two text blocks sit from each
+     other, but that extra air is the theme's, not a magic 12px: it is derived
+     from `--rhythm-gap`, so a tight material (Terminal) stays tight and a
+     generous one (Brutalist) breathes. The flex column already contributes one
+     `--rhythm-gap`; this adds the fractional remainder on top of it. */
+  margin-top: calc(var(--rhythm-gap, 16px) * 0.6);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1029,7 +1023,9 @@
   aspect-ratio: unset !important;
   min-height: unset !important;
   max-height: unset !important;
-  margin-top: 12px;
+  /* Matches the grid's material-derived top step, so switching between grid and
+     stack does not change the space above the media. */
+  margin-top: calc(var(--rhythm-gap, 16px) * 0.6);
 }
 
 .media-grid.media-layout-stack .media-item,
@@ -1148,7 +1144,10 @@
    ------------------------------------------------------------- */
 .quote-card {
   position: relative;
-  margin-top: 12px;
+  /* Same material-derived step as the media grid: the quote is a block in the
+     same column, so it takes the same fractional `--rhythm-gap` rather than a
+     hard-coded 12px that ignored the theme. */
+  margin-top: calc(var(--rhythm-gap, 16px) * 0.6);
   padding: 12px 14px 13px;
   background: var(--quote-bg, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--quote-border, rgba(255, 255, 255, 0.1));
@@ -1181,6 +1180,10 @@
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
+  /* Same mounting ring as the byline avatar, one step thinner: at 20px a full
+     card-weight ring would close over the portrait. The nested author reads as
+     set into the recess, not floating on it. */
+  box-shadow: 0 0 0 1px var(--media-border, var(--border-color));
 }
 
 .quote-name {
