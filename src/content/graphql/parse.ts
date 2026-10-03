@@ -4,9 +4,14 @@
  * Field paths follow the current response shape. The `legacy` object is still
  * required for tweets even though it is being removed for user objects, so
  * author fields accept both the legacy and the newer shape.
+ *
+ * Asset URLs are the same assets the DOM channel reads, so they go through the
+ * same rules: `urls.ts` owns what an X media URL looks like, and this channel is
+ * the second caller of it rather than a second implementation of it.
  */
 
 import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet';
+import { upgradeAvatarUrl } from '../adapter/urls.ts';
 
 type Json = Record<string, unknown>;
 
@@ -132,7 +137,7 @@ function parseAuthor(tweet: Json): AuthorInfo {
   // path. Reading only the legacy field left the card on its placeholder even
   // though name and handle (which come from `core`) still resolved.
   const avatar = isObject(result?.avatar) ? result.avatar : {};
-  const avatarUrl =
+  const rawAvatarUrl =
     str(avatar.image_url) ||
     str(result?.profile_image_url_https) ||
     str(result?.avatar_url) ||
@@ -143,7 +148,12 @@ function parseAuthor(tweet: Json): AuthorInfo {
   return {
     name,
     handle: handle ? (handle.startsWith('@') ? handle : `@${handle}`) : '',
-    avatarUrl,
+    // X serves profile images at _normal or _bigger, and this channel used to
+    // take whatever the payload carried. The DOM channel upscales them, and
+    // content/index.ts prefers GraphQL whenever it has tweets, so a card built
+    // from a payload showed a 48px avatar stretched over its recess -- on the
+    // sheet and in the exported PNG. One rule, both channels.
+    avatarUrl: upgradeAvatarUrl(rawAvatarUrl),
     verified: isObject(result?.verification) || Boolean(result?.is_blue_verified),
   };
 }
