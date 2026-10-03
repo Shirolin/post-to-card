@@ -220,8 +220,9 @@ function parseMedia(tweet: Json): MediaItem[] | undefined {
     const height = typeof info.height === 'number' ? info.height : 0;
 
     if (type === 'photo' || !type) {
-      // `orig` is the highest variant X serves; WebP is recompressed, so JPEG
-      // is requested explicitly for original quality.
+      // `format=jpg&name=orig` is stated rather than derived: the GraphQL payload
+      // can carry a WebP source, and `upgradePhotoUrl` only rewrites the format
+      // when one is already named, so it would leave a WebP original in place.
       const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}format=jpg&name=orig`;
       items.push({
         type: 'image',
@@ -250,6 +251,7 @@ function parseMedia(tweet: Json): MediaItem[] | undefined {
 
       const durationMillis = typeof videoInfo.duration_millis === 'number' ? videoInfo.duration_millis : 0;
       const totalSeconds = Math.floor(durationMillis / 1000);
+      // Same reasoning as the photo above: the format is stated, not derived.
       const poster = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}format=jpg&name=orig`;
 
       items.push({

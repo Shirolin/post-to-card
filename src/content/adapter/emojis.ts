@@ -63,11 +63,27 @@ export function restoreUnicodeEmojis(node: Node | null | undefined): string {
 }
 
 /**
+ * True when a string names a pic.x.com / pic.twitter.com media link.
+ *
+ * This is the one place that decides what the host looks like. Two callers ask
+ * it: the body text strips such a link when X appended it, and the token pass
+ * drops the anchor so it does not fall through to the mention branch. They used
+ * to carry their own patterns and disagreed about position -- the text stripper
+ * only matched at the end of the body, the token pass matched anywhere -- so a
+ * link the author quoted mid-post survived in `text` and vanished from
+ * `richTokens`.
+ */
+export function isPicMediaLink(value: string): boolean {
+  return /pic\.(?:twitter|x)\.com/.test(value || '');
+}
+
+/**
  * Strips the trailing media attachment link X appends to tweets with media.
  *
  * Both domains are covered: `pic.twitter.com` is the legacy host and
  * `pic.x.com` the current one. The scheme is optional because X renders the
- * link label as a bare host plus path, with no protocol prefix.
+ * link label as a bare host plus path, with no protocol prefix. Only a trailing
+ * link is stripped: a pic link the author wrote mid-sentence is their own text.
  */
 export function stripPicTwitterLink(text: string): string {
   if (!text) return '';

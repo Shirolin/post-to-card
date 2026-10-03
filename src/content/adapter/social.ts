@@ -97,9 +97,17 @@ function getArticleAuthorHandle(article: Element): string | null {
  * in the same subtree; this check is therefore textual but confined to the
  * small notice container rather than the whole article.
  */
+/**
+ * The wording X uses to introduce a reply notice, in every interface language
+ * the card has seen. One list, because two copies of it already disagreed: the
+ * notice check knew the Dutch phrase and the handle fallback did not, so a
+ * Dutch reply was reported as a reply by the diagnostics and then not treated
+ * as one when the thread was assembled.
+ */
+const REPLY_NOTICE = /replying to|replied to|回复|返信先|répondre a|respondeu a|antwoord op/i;
+
 function isReplyNotice(social: Element): boolean {
-  const text = social.textContent || '';
-  return /replying to|replied to|回复|返信先|répondre a|respondeu a|antwoord op/i.test(text);
+  return REPLY_NOTICE.test(social.textContent || '');
 }
 
 /**
@@ -119,7 +127,7 @@ export function getReplyingToHandle(article: Element): string | null {
   // the same word inside a quoted post or a quoted bio.
   const scope: ParentNode = social || article;
   const rawText = (social ? social.textContent : article.textContent) || '';
-  if (!/(?:replying to|回复|返信先|replied to|répondre a|respondeu a)/i.test(rawText)) {
+  if (!REPLY_NOTICE.test(rawText)) {
     return null;
   }
 

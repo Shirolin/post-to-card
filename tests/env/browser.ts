@@ -627,9 +627,19 @@ function querySelectorAllInternal(root: DomNode, selector: string): DomElement[]
   return currentNodes;
 }
 
+/**
+ * Visits every descendant of `node`, never `node` itself.
+ *
+ * A real `querySelectorAll` searches the subtree below the element it is called
+ * on and never matches that element, so starting at the node made the shim
+ * answer a question the browser does not. Production code was written around
+ * that: `findQuoteContainer` filters the queried article out of its own results,
+ * with a comment naming this shim as the reason. Fixing it here is what lets
+ * that workaround go.
+ */
 function walkTree(node: DomNode, visitor: (node: DomNode) => void): void {
-  visitor(node);
   for (const child of node.childNodes) {
+    visitor(child);
     walkTree(child, visitor);
   }
 }

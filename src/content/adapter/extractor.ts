@@ -6,7 +6,7 @@
  */
 
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet.ts';
-import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace } from './emojis.ts';
+import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
 
@@ -51,10 +51,8 @@ export function findQuoteContainer(article: Element): Element | null {
   if (byTestId) return byTestId;
 
   // 2. Nested <article> — the quoted post rendered as its own article.
-  //    Filter out `article` itself: some DOM shims make querySelector match the
-  //    root, and the real DOM never matches the element you query from.
-  const nestedArticles = Array.from(article.querySelectorAll('article')).filter(a => a !== article);
-  if (nestedArticles.length > 0) return nestedArticles[0];
+  const nestedArticle = article.querySelector('article');
+  if (nestedArticle) return nestedArticle;
 
   // 3. Structural fallback: any descendant that owns a second User-Name plus a
   //    tweetText, while not containing the main post's User-Name.
@@ -209,6 +207,23 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
   const tokens: RichToken[] = [];
   const children = (tweetTextEl as { childNodes?: ArrayLike<Node> }).childNodes || [];
 
+  /**
+   * True when `node` is the last thing in the body, ignoring empty text.
+   *
+   * X appends the media permalink at the very end of the text. A pic link the
+   * author wrote mid-sentence is their own text and belongs in the card, so the
+   * position is what separates the two -- which is exactly what the body-text
+   * stripper already keys on, and what this pass used not to.
+   */
+  function isTrailingNode(node: Node): boolean {
+    for (let i = children.length - 1; i >= 0; i--) {
+      const sibling = children[i];
+      if (sibling === node) return true;
+      if ((sibling.textContent || '').trim() !== '') return false;
+    }
+    return false;
+  }
+
   function processNode(node: Node | null | undefined) {
     if (!node) return;
 
@@ -245,15 +260,12 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
         const title = el.getAttribute('title') || '';
         const text = restoreUnicodeEmojis(node);
 
-        // Skip the trailing media permalink. X serves these from both
-        // pic.twitter.com (legacy) and pic.x.com (current); missing the latter
-        // let it fall through to the mention branch below and leak into the
-        // rendered body text. Match the pic host in either the href or the
-        // visible label — a bare "text equals href" test also swallowed genuine
-        // self-labelled links (e.g. a URL whose label is the URL itself).
-        const isMediaPermalink = /pic\.(?:twitter|x)\.com/.test(href) ||
-          /pic\.(?:twitter|x)\.com/.test(text);
-        if (isMediaPermalink) {
+        // Drop the media permalink X appends, and only that one: the host has to
+        // match and the anchor has to be the last thing in the body. The host
+        // rule lives in `isPicMediaLink` so this pass and the body-text stripper
+        // cannot disagree about it; the position rule is why they used to
+        // disagree, and it is now the same in both.
+        if ((isPicMediaLink(href) || isPicMediaLink(text)) && isTrailingNode(el)) {
           return;
         }
 
