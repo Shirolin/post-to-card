@@ -924,6 +924,42 @@ test('F14.5: flags single tweet as isSingle: true', () => {
   assert.equal(EXPECTED_SINGLE_TWEET_DATA.isThreadPart, false);
 });
 
+test('F17.19: the type scale is a material token, not a block of CSS per material', () => {
+  // Type was the last part of a material still written by hand, one block per
+  // theme. Adding a material meant remembering three rule blocks and a missed
+  // one silently inherited another's letterforms. The values live in the token
+  // table now, so the failure mode is a compile error rather than a look nobody
+  // thought to check.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+
+  // No rule names a material at all any more, for type or anything else.
+  assert.ok(
+    !/\[data-theme=/.test(css),
+    'card.css must not name a material; every material difference is a token'
+  );
+
+  // Every type value the CSS applies has to come from a token.
+  for (const prop of ['--type-display-size', '--type-body-size', '--type-meta-size']) {
+    assert.ok(card.includes(`'${prop}'`), `${prop} must be injected by Card.tsx`);
+    assert.ok(css.includes(`var(${prop}`), `${prop} must be consumed by card.css`);
+  }
+
+  // The completeness the interface buys: every material states all of it, so a
+  // new one cannot be half-filled.
+  for (const id of THEME_IDS) {
+    const type = THEMES[id].tokens.type;
+    assert.ok(type, `${id} must carry a type scale`);
+    for (const field of [
+      'displaySize', 'displayWeight', 'displayTracking', 'quoteSize',
+      'bodySize', 'bodyLeading', 'metaSize', 'metaTracking',
+      'metaUppercase', 'metaTabular', 'metaDivider',
+    ] as const) {
+      assert.notEqual(type[field], undefined, `${id}.type.${field} must be stated`);
+    }
+  }
+});
+
 test('F17.18: a material is named once — the theme is not also emitted as a class', () => {
   // The card used to carry both `data-theme="x"` and `.theme-x`, and card.css
   // matched both spellings in every rule. The two were the same specificity in
