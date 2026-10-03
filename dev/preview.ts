@@ -278,6 +278,36 @@ if (offParts.has('stats')) harnessConfig.showStats = false;
 if (offParts.has('time') || offParts.has('timestamp')) harnessConfig.showTimestamp = false;
 if (offParts.has('wm') || offParts.has('watermark')) harnessConfig.showWatermark = false;
 
+/**
+ * A single image in each of the three grid shapes, so a material's media
+ * rhythm can be reviewed without a live thread. ?grid=3 is the left/right hero
+ * case where a wrong corner or gutter is most obvious.
+ */
+const gridThreadData = (count: 2 | 3 | 4): ThreadData => {
+  const pool = [photo1, photo2, photo3, photo1];
+  const ratios = [1.6, 0.806, 1.538, 1.6];
+  return {
+    author,
+    isSingle: true,
+    targetTweetIndex: 0,
+    tweets: [
+      {
+        id: `grid-${count}`,
+        url: `https://x.com/ada_builds/status/grid${count}`,
+        author,
+        timestamp: '2026-09-14T10:05:00.000Z',
+        text: `${count} images, one post — the grid is where a material's gutter and corner show.`,
+        stats: { replies: '64', reposts: '902', likes: '8.1K', views: '301K' },
+        media: Array.from({ length: count }, (_, i) => ({
+          type: 'image' as const,
+          url: pool[i],
+          aspectRatio: ratios[i],
+        })),
+      },
+    ],
+  };
+};
+
 // ?quote=1 swaps in a single post that quotes another, so the quote card's
 // presentation can be reviewed on its own. ?translated=1 swaps in a post X is
 // showing translated, to review the "translated from" notice.
@@ -290,7 +320,9 @@ const activeThreadData =
         ? videoThreadData
         : params.get('cjk') === '1'
           ? cjkThreadData
-          : threadData;
+          : params.get('grid')
+            ? gridThreadData(Math.min(4, Math.max(2, Number(params.get('grid')))) as 2 | 3 | 4)
+            : threadData;
 
 /**
  * ?a11y=1 runs a scripted focus-trap check against the live modal and writes

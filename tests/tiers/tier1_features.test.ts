@@ -1181,21 +1181,20 @@ test('F16.5: inline style injection populates textContent correctly', () => {
 });
 
 // -------------------------------------------------------------
-// F17: Curated Themes (3 papers + 3 restored classics + 2 phase-2 + 1 experimental)
+// F17: Curated Themes (3 papers + 3 non-paper stocks + 1 phase-2 + 1 experimental)
 // -------------------------------------------------------------
 const THEME_IDS: ThemeId[] = [
   'parchment',
   'nocturne',
   'hairline',
-  'linear-dark',
-  'oled-black',
-  'notion-white',
+  'kraft',
+  'cyanotype',
   'terminal',
   'broadsheet',
   'brutalist',
 ];
 
-test('F17.1: all nine themes ship, and every theme exposes a full token set', () => {
+test('F17.1: all eight themes ship, and every theme exposes a full token set', () => {
   assert.deepEqual(Object.keys(THEMES).sort(), [...THEME_IDS].sort());
   for (const id of THEME_IDS) {
     const tokens = THEMES[id].tokens;
@@ -1212,6 +1211,7 @@ test('F17.1: all nine themes ship, and every theme exposes a full token set', ()
       'quoteBackground',
       'quoteBorder',
       'qrFill',
+      'rule',
       'fontDisplay',
       'fontBody',
       'radius',
@@ -1221,8 +1221,37 @@ test('F17.1: all nine themes ship, and every theme exposes a full token set', ()
     ] as const) {
       assert.ok(tokens[key], `${id} must define ${key}`);
     }
-    // `rule` is optional: the restored classics carry no signature.
     assert.equal(THEMES[id].id, id);
+  }
+});
+
+test('F17.1b: every material names its signature, quote treatment and rhythm', () => {
+  // A theme used to be able to omit its signature, which is how the restored
+  // classics ended up as flat colour. The contract is total now.
+  const signatureStyles = new Set([
+    'rule',
+    'hairline',
+    'tick-rule',
+    'scanline',
+    'double',
+    'block',
+    'stitch',
+    'registration',
+  ]);
+  for (const id of THEME_IDS) {
+    const { signature, quoteStyle, rhythm } = THEMES[id].tokens;
+    assert.ok(signatureStyles.has(signature.style), `${id} signature style ${signature.style}`);
+    assert.ok(/^\d/.test(signature.height), `${id} signature height must be a length`);
+    assert.ok(quoteStyle === 'filled' || quoteStyle === 'outlined', `${id} quoteStyle`);
+    assert.ok(/^\d/.test(rhythm.gap), `${id} rhythm.gap must be a length`);
+    assert.ok(/^\d/.test(rhythm.mediaGap), `${id} rhythm.mediaGap must be a length`);
+    // A signature is style + height only. A per-theme colour is how the
+    // masthead hairline got painted in the accent by mistake.
+    assert.deepEqual(
+      Object.keys(signature).sort(),
+      ['height', 'style'],
+      `${id} signature must carry no extra fields`
+    );
   }
 });
 
@@ -1289,15 +1318,15 @@ test('F17.5b: Brutalist is the only experimental theme, and it stays off the def
   assert.deepEqual([...THEME_ORDER].sort(), [...THEME_IDS].sort());
   assert.equal(THEME_ORDER[0], 'parchment');
   assert.equal(THEME_ORDER[THEME_ORDER.length - 1], 'brutalist');
-  // The restored classics sit in the everyday rotation, ahead of the phase-2
-  // materials, so the picker's first screen is the six everyday themes.
+  // The non-paper stocks sit in the everyday rotation, ahead of the phase-2
+  // materials, so the picker's first screen is the six everyday materials.
   assert.deepEqual(THEME_ORDER.slice(0, 6), [
     'parchment',
     'nocturne',
     'hairline',
-    'linear-dark',
-    'oled-black',
-    'notion-white',
+    'kraft',
+    'cyanotype',
+    'terminal',
   ]);
 });
 
@@ -1307,9 +1336,12 @@ test('F17.6: retired presets migrate to a live theme instead of resetting', () =
   assert.equal(sanitizeTheme('aurora-purple'), 'nocturne');
   // Hacker Mint's console was rebuilt as the real Terminal theme.
   assert.equal(sanitizeTheme('cyber-mint'), 'terminal');
-  // Old spellings of the restored classics resolve to the live themes.
-  assert.equal(sanitizeTheme('notion-clean-white'), 'notion-white');
-  assert.equal(sanitizeTheme('oled'), 'oled-black');
+  // The retired classics resolve to the material that absorbed them.
+  assert.equal(sanitizeTheme('linear-dark'), 'nocturne');
+  assert.equal(sanitizeTheme('oled-black'), 'cyanotype');
+  assert.equal(sanitizeTheme('oled'), 'cyanotype');
+  assert.equal(sanitizeTheme('notion-white'), 'parchment');
+  assert.equal(sanitizeTheme('notion-clean-white'), 'parchment');
   assert.equal(sanitizeTheme('nonsense'), 'parchment');
   assert.equal(sanitizeTheme(undefined), 'parchment');
   for (const alias of Object.keys(LEGACY_THEME_ALIASES)) {
@@ -1317,26 +1349,23 @@ test('F17.6: retired presets migrate to a live theme instead of resetting', () =
   }
 });
 
-test('F17.6b: the restored classics are live themes, not migration targets', () => {
-  // A stored value of these must resolve to itself, not be rewritten to a paper,
-  // or a user who had Linear Dark before the paper migration gets moved twice.
-  for (const id of ['linear-dark', 'oled-black', 'notion-white'] as ThemeId[]) {
-    assert.equal(sanitizeTheme(id), id);
-    assert.ok(!(id in LEGACY_THEME_ALIASES), `${id} must not remain an alias`);
+test('F17.6b: the retired classics are migration targets, not live themes', () => {
+  // The three gradient classics were absorbed by the materials; a stored value
+  // must resolve forward, and their ids must not be live or they sneak back.
+  for (const id of ['linear-dark', 'oled-black', 'notion-white']) {
+    assert.ok(!(id in THEMES), `${id} must stay retired`);
+    assert.ok(id in LEGACY_THEME_ALIASES, `${id} must be an alias`);
   }
-  // The high-saturation gradients must NOT be live, or they sneak back in.
   for (const id of ['sunset-glow', 'aurora-purple', 'cyber-mint']) {
     assert.ok(!(id in THEMES), `${id} must stay retired`);
   }
 });
 
-test('F17.6c: only Linear Dark keeps a surface gradient, and it is a quiet one', () => {
-  const withGradient = THEME_IDS.filter((id) => THEMES[id].tokens.surfaceGradient);
-  assert.deepEqual(withGradient, ['linear-dark']);
-  // A full-bleed high-saturation gradient is the thing the papers replaced.
-  const g = THEMES['linear-dark'].tokens.surfaceGradient!;
-  assert.match(g, /#18191c/);
-  assert.match(g, /#0d0e11/);
+test('F17.6c: no theme ships a surface gradient any more', () => {
+  // Linear Dark was the only gradient surface; with it retired, every material
+  // is a flat colour, which is what makes the picker read as paper, not skins.
+  const withGradient = THEME_IDS.filter((id) => (THEMES[id].tokens as any).surfaceGradient);
+  assert.deepEqual(withGradient, []);
 });
 
 test('F17.7: every theme name is localised in both locales', () => {
@@ -1421,6 +1450,116 @@ test('F17.9: body, handle, footnote and link all clear 4.5:1 on their own paper'
       );
     }
   }
+});
+
+test('F17.11: a filled quote panel is actually visible, and its text still reads', () => {
+  // The old quote tints sat 1.06–1.12:1 off the sheet — the panel was there in
+  // the DOM and invisible on the card. This locks both halves: the fill has to
+  // separate from the sheet, and the quoted text has to stay legible on it.
+  const srgb = (channel: number): number => {
+    const s = channel / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string): number => {
+    const n = parseInt(hex.slice(1), 16);
+    return 0.2126 * srgb((n >> 16) & 255) + 0.7152 * srgb((n >> 8) & 255) + 0.0722 * srgb(n & 255);
+  };
+  const contrast = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  for (const id of THEME_IDS) {
+    const { quoteStyle, quoteBackground, quoteBorder, surface, text, muted } = THEMES[id].tokens;
+    if (quoteStyle === 'filled') {
+      const sep = contrast(quoteBackground, surface);
+      assert.ok(sep >= 1.15, `${id} quote fill sits only ${sep.toFixed(3)}:1 off the sheet`);
+      assert.ok(contrast(text, quoteBackground) >= 4.5, `${id} quote body unreadable on the panel`);
+      assert.ok(contrast(muted, quoteBackground) >= 4.5, `${id} quote meta unreadable on the panel`);
+    } else {
+      // Outlined materials: no fill, and the border has to draw the frame.
+      assert.ok(
+        contrast(quoteBorder, surface) >= 1.4,
+        `${id} outlined quote border only ${contrast(quoteBorder, surface).toFixed(3)}:1`
+      );
+    }
+  }
+});
+
+test('F17.12: the watermark is footnote ink, never a fade', () => {
+  // `opacity: 0.55` dropped the mark to 2.1–3.0:1 on every sheet, below the
+  // floor the rest of the card holds, and contradicted the rule that quieter is
+  // a size decision. It must consume `--faint` and carry no opacity.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const block = css.slice(css.indexOf('.card-watermark {'));
+  const rule = block.slice(0, block.indexOf('}')).replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(rule.includes('var(--faint'), 'watermark must print in the footnote ink');
+  assert.ok(!/opacity\s*:/.test(rule), 'watermark must not fade itself below the contrast floor');
+});
+
+test('F17.13: qrFill reaches the QR, and the quote honours the theme radius', () => {
+  // Two tokens that were injected but never consumed: the QR drew in the body
+  // ink on Notion (not its token), and the quote media corner was a hard-coded
+  // 8px that overrode every square material.
+  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(
+    /CardQrCode url=\{[^}]+\} fillColor=\{tokens\.qrFill\}/.test(card),
+    'the QR must be filled from the qrFill token'
+  );
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const rule = css.slice(css.indexOf('.post-to-card-target .quote-card .media-grid'));
+  const body = rule.slice(0, rule.indexOf('}'));
+  assert.ok(
+    body.includes('var(--media-radius'),
+    'quote media must follow the resolved theme radius, not a hard-coded corner'
+  );
+});
+
+test('F17.14: the thread layout breathes with the material, and its connector is drawn', () => {
+  // Two spots the rhythm rollout missed: the thread column kept a hard-coded
+  // 10px gap (so a material's breathing vanished once a post became a thread),
+  // and the connector drew in `--divider`, which on Terminal is 1.22:1 — the
+  // line was there but invisible.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const col = css.slice(css.indexOf('.thread-content-col {'));
+  assert.ok(
+    col.slice(0, col.indexOf('}')).includes('var(--rhythm-gap'),
+    'thread column must breathe with the material rhythm'
+  );
+  const single = css.slice(css.indexOf('.single-tweet-block {'));
+  assert.ok(
+    single.slice(0, single.indexOf('}')).includes('var(--rhythm-gap'),
+    'single-tweet block must breathe with the material rhythm'
+  );
+  const connector = css.slice(css.indexOf('.thread-connector-line {'));
+  assert.ok(
+    connector.slice(0, connector.indexOf('}')).includes('var(--rule'),
+    'connector must draw in the material line ink, not the near-invisible divider'
+  );
+});
+
+test('F17.15: the masthead tick is the accent, but its hairline stays neutral ink', () => {
+  // Regression: feeding the tick's colour through one shared `--signature-color`
+  // painted Nocturne's whole masthead hairline terracotta. The signature has a
+  // single ink now (`--rule`); only the tick borrows `--accent`.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const tickRule = css.slice(css.indexOf('[data-signature="tick-rule"]'));
+  const hairlineRule = tickRule.slice(0, tickRule.indexOf('}'));
+  assert.ok(
+    hairlineRule.includes('background: var(--rule)'),
+    'masthead hairline must be neutral ink'
+  );
+  const tickBlock = tickRule.slice(tickRule.indexOf('::after'));
+  assert.ok(
+    tickBlock.slice(0, tickBlock.indexOf('}')).includes('background: var(--accent)'),
+    'masthead tick must be the accent'
+  );
+  // The token contract no longer carries a per-signature colour to drift.
+  const themes = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
+  assert.ok(
+    !/signature:\s*\{[^}]*color:/.test(themes),
+    'signature specs must not carry a colour; ink is always `rule`'
+  );
 });
 
 // -------------------------------------------------------------
@@ -1744,6 +1883,23 @@ test('F24.4: filters out data-export-ignore controls from final render', async (
     return node.getAttribute('data-export-ignore') !== 'true';
   }
   assert.equal(filterNode(control), false);
+});
+
+test('F24.4b: the real export filter honours the attribute the card actually emits', () => {
+  // The card marks its UI-only bits with `data-html2canvas-ignore`, but the
+  // filter used to test only `data-export-ignore` — so the on-card exclude
+  // button was silently baked into the PNG. Assert against the real source so a
+  // future rename on either side fails here instead of shipping.
+  const src = fs.readFileSync(path.resolve(__dirname, '../../src/content/engine/export.ts'), 'utf-8');
+  assert.ok(
+    src.includes("getAttribute('data-html2canvas-ignore')"),
+    'export filter must recognise the attribute the card emits'
+  );
+  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(
+    card.includes('data-html2canvas-ignore="true"'),
+    'the on-card exclude button must stay marked ignore'
+  );
 });
 
 test('F24.5: export uses transparent background so rounded corners render cleanly', () => {

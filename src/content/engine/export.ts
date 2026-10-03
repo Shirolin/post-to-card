@@ -183,7 +183,14 @@ export async function renderCardToBlob(
 
     const filter = (node: Node): boolean => {
       if (node instanceof HTMLElement) {
-        if (node.getAttribute('data-export-ignore') === 'true' || node.dataset?.exportIgnore === 'true') {
+        // `data-html2canvas-ignore` is the attribute the card actually emits
+        // (the html2canvas convention). `data-export-ignore` is kept as an
+        // alias so either spelling works.
+        if (
+          node.getAttribute('data-html2canvas-ignore') === 'true' ||
+          node.getAttribute('data-export-ignore') === 'true' ||
+          node.dataset?.exportIgnore === 'true'
+        ) {
           return false;
         }
       }

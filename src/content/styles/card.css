@@ -105,11 +105,14 @@
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 /* -------------------------------------------------------------
    Padding Options
+
+   The card's own gap separates the body column from the footer. The body's
+   internal breathing is the theme's `--rhythm-gap`, so a material keeps its
+   character at every padding tier.
    ------------------------------------------------------------- */
 .post-to-card-target[data-padding="16px"],
 .post-to-card-target.padding-16px {
@@ -183,8 +186,9 @@
    themes.ts and never reached the rendered card, because CSS was still using
    its own stale hex. One source, or the two disagree.
 
-   `--canvas` is the mat the card sits on (preview stage), not the card itself,
-   so the sheet keeps its own edge.
+   The mat the sheet sits on is the theme's `canvas` token, applied by App.tsx
+   to the preview stage — it is not a property of the card, so it is not
+   injected here.
    ------------------------------------------------------------- */
 .post-to-card-target {
   background: var(--surface, #faf9f5);
@@ -204,8 +208,8 @@
 .post-to-card-target.theme-broadsheet .author-avatar,
 .post-to-card-target[data-theme="brutalist"] .author-avatar,
 .post-to-card-target.theme-brutalist .author-avatar,
-.post-to-card-target[data-theme="notion-white"] .author-avatar,
-.post-to-card-target.theme-notion-white .author-avatar {
+.post-to-card-target[data-theme="kraft"] .author-avatar,
+.post-to-card-target.theme-kraft .author-avatar {
   background: var(--quote-bg, #f1efe7);
 }
 
@@ -265,17 +269,45 @@
   line-height: 1.62;
 }
 
-/* Restored classics: keep the originals' type scale, which was already sans
-   and unremarkable — that restraint is the point of these three. */
-.post-to-card-target[data-theme="linear-dark"] .author-name,
-.post-to-card-target.theme-linear-dark .author-name,
-.post-to-card-target[data-theme="oled-black"] .author-name,
-.post-to-card-target.theme-oled-black .author-name,
-.post-to-card-target[data-theme="notion-white"] .author-name,
-.post-to-card-target.theme-notion-white .author-name {
+/* Kraft: a utility label. Slightly tighter sans, body at a workmanlike size. */
+.post-to-card-target[data-theme="kraft"] .author-name,
+.post-to-card-target.theme-kraft .author-name,
+.post-to-card-target[data-theme="kraft"] .quote-name,
+.post-to-card-target.theme-kraft .quote-name {
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+
+.post-to-card-target[data-theme="kraft"] .tweet-text-content,
+.post-to-card-target.theme-kraft .tweet-text-content {
+  font-size: 16px;
+  line-height: 1.66;
+}
+
+/* Cyanotype: a technical drawing. Quiet sans, generous leading, tabular meta. */
+.post-to-card-target[data-theme="cyanotype"] .author-name,
+.post-to-card-target.theme-cyanotype .author-name,
+.post-to-card-target[data-theme="cyanotype"] .quote-name,
+.post-to-card-target.theme-cyanotype .quote-name {
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: 0.005em;
+}
+
+.post-to-card-target[data-theme="cyanotype"] .tweet-text-content,
+.post-to-card-target.theme-cyanotype .tweet-text-content {
+  font-size: 16.5px;
+  line-height: 1.72;
+}
+
+.post-to-card-target[data-theme="cyanotype"] .card-timestamp,
+.post-to-card-target.theme-cyanotype .card-timestamp,
+.post-to-card-target[data-theme="cyanotype"] .stats-row,
+.post-to-card-target.theme-cyanotype .stats-row {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Terminal: monospace everywhere, one size, tight leading. The grid is the
@@ -347,98 +379,93 @@
 }
 
 /* -------------------------------------------------------------
-   One signature rule per theme.
+   One signature rule per material, driven by `data-signature`.
 
-   Positioned rather than a flex child, so it can sit inside the
-   card's padding without being pushed around by the body's gap.
+   Every theme names its signature style in the token table; this is the one
+   place the style becomes geometry. A new material is a table entry, not
+   another block of hand-written pseudo-element CSS, and no material can be
+   left as flat colour by omission.
+
+   Positioned rather than a flex child, so it sits inside the card's padding
+   without being pushed around by the body's gap.
    ------------------------------------------------------------- */
 .post-to-card-body-content {
   position: relative;
+  /* The rule's own thickness plus its breathing room, so it never sits on the
+     first line of the body. */
+  padding-top: calc(var(--signature-height, 0px) + 16px);
+  gap: var(--rhythm-gap, 16px);
 }
 
-/* Parchment: a full-width cream standfirst rule.
-
-   This started life as a short terracotta tick, which is what the accent is
-   for elsewhere — but as an isolated dash above the byline it read as a stray
-   red mark with nothing anchoring it. A full-width rule reads as a decision the
-   layout made, and it leaves the accent to mean one thing: emphasis in text. */
-.post-to-card-target[data-theme="parchment"] .post-to-card-body-content,
-.post-to-card-target.theme-parchment .post-to-card-body-content {
-  padding-top: 18px;
-}
-
-.post-to-card-target[data-theme="parchment"] .post-to-card-body-content::before,
-.post-to-card-target.theme-parchment .post-to-card-body-content::before {
+.post-to-card-target[data-signature] .post-to-card-body-content::before,
+.post-to-card-target[data-signature] .post-to-card-body-content::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
-  height: 2px;
+}
+
+/* A plain bar: Parchment's standfirst rule, Hairline's ink hairline, and
+   Brutalist's thick rule are the same decision at three weights. */
+.post-to-card-target[data-signature="rule"] .post-to-card-body-content::before,
+.post-to-card-target[data-signature="hairline"] .post-to-card-body-content::before,
+.post-to-card-target[data-signature="block"] .post-to-card-body-content::before {
+  height: var(--signature-height, 1px);
   background: var(--rule);
 }
 
-/* Nocturne: a masthead — hairline across the top, one terracotta tick. */
-.post-to-card-target[data-theme="nocturne"] .post-to-card-body-content,
-.post-to-card-target.theme-nocturne .post-to-card-body-content {
-  padding-top: 17px;
+/* Nocturne: a masthead — one accent tick riding a full hairline. The tick is
+   `::after`, sitting above the neutral hairline so the two read as a section
+   flag. */
+.post-to-card-target[data-signature="tick-rule"] .post-to-card-body-content::before {
+  top: var(--signature-height, 2px);
+  height: 1px;
+  background: var(--rule);
 }
 
-.post-to-card-target[data-theme="nocturne"] .post-to-card-body-content::before,
-.post-to-card-target.theme-nocturne .post-to-card-body-content::before {
-  content: "";
-  position: absolute;
+.post-to-card-target[data-signature="tick-rule"] .post-to-card-body-content::after {
   left: 0;
+  right: auto;
   top: 0;
   width: 40px;
-  height: 2px;
+  height: var(--signature-height, 2px);
   background: var(--accent);
 }
 
-.post-to-card-target[data-theme="nocturne"] .post-to-card-body-content::after,
-.post-to-card-target.theme-nocturne .post-to-card-body-content::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 2px;
-  height: 1px;
+/* Kraft: a stitched binding — dashes rather than a solid rule. */
+.post-to-card-target[data-signature="stitch"] .post-to-card-body-content::before {
+  height: var(--signature-height, 2px);
+  background: repeating-linear-gradient(
+    to right,
+    var(--rule) 0,
+    var(--rule) 7px,
+    transparent 7px,
+    transparent 13px
+  );
+}
+
+/* Cyanotype: a registration mark — a thin line with a small filled square at
+   its left, the way a blueprint carries its own alignment cue. */
+.post-to-card-target[data-signature="registration"] .post-to-card-body-content::before {
+  height: var(--signature-height, 1px);
   background: var(--rule);
 }
 
-/* Hairline: one full-width hairline, no tick. */
-.post-to-card-target[data-theme="hairline"] .post-to-card-body-content,
-.post-to-card-target.theme-hairline .post-to-card-body-content {
-  padding-top: 18px;
-}
-
-.post-to-card-target[data-theme="hairline"] .post-to-card-body-content::before,
-.post-to-card-target.theme-hairline .post-to-card-body-content::before {
-  content: "";
-  position: absolute;
+.post-to-card-target[data-signature="registration"] .post-to-card-body-content::after {
   left: 0;
-  right: 0;
+  right: auto;
   top: 0;
-  height: 1px;
-  background: var(--rule);
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
 }
 
 /* Terminal: a phosphor scanline. Repeating-linear-gradient rather than a single
    line, so it reads as a CRT refresh band instead of a border. Kept faint and
    short — a full-height scanline over body text is unreadable at 12px. */
-.post-to-card-target[data-theme="terminal"] .post-to-card-body-content,
-.post-to-card-target.theme-terminal .post-to-card-body-content {
-  padding-top: 20px;
-}
-
-.post-to-card-target[data-theme="terminal"] .post-to-card-body-content::before,
-.post-to-card-target.theme-terminal .post-to-card-body-content::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 4px;
+.post-to-card-target[data-signature="scanline"] .post-to-card-body-content::before {
+  height: var(--signature-height, 4px);
   background: repeating-linear-gradient(
     to bottom,
     var(--rule) 0,
@@ -448,40 +475,12 @@
   );
 }
 
-/* Broadsheet: a masthead — a double rule, the way a paper separates its flag
-   from the column furniture. Two hairlines with a 3px gap. */
-.post-to-card-target[data-theme="broadsheet"] .post-to-card-body-content,
-.post-to-card-target.theme-broadsheet .post-to-card-body-content {
-  padding-top: 20px;
-}
-
-.post-to-card-target[data-theme="broadsheet"] .post-to-card-body-content::before,
-.post-to-card-target.theme-broadsheet .post-to-card-body-content::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 5px;
+/* Broadsheet: a masthead double rule, the way a paper separates its flag from
+   the column furniture. Two hairlines with a 3px gap. */
+.post-to-card-target[data-signature="double"] .post-to-card-body-content::before {
+  height: var(--signature-height, 5px);
   border-top: 2px solid var(--rule);
   border-bottom: 1px solid var(--rule);
-}
-
-/* Brutalist: one thick rule, matching the frame's 3px. */
-.post-to-card-target[data-theme="brutalist"] .post-to-card-body-content,
-.post-to-card-target.theme-brutalist .post-to-card-body-content {
-  padding-top: 22px;
-}
-
-.post-to-card-target[data-theme="brutalist"] .post-to-card-body-content::before,
-.post-to-card-target.theme-brutalist .post-to-card-body-content::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 3px;
-  background: var(--rule);
 }
 
 /* -------------------------------------------------------------
@@ -529,6 +528,15 @@
   margin-left: 14px;
   padding-left: 14px;
   border-left: 1px solid var(--divider);
+}
+
+/* Kraft: footnote material — small, a touch of tracking, warm ink. */
+.post-to-card-target[data-theme="kraft"] .card-timestamp,
+.post-to-card-target.theme-kraft .card-timestamp,
+.post-to-card-target[data-theme="kraft"] .stats-row,
+.post-to-card-target.theme-kraft .stats-row {
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }
 
 /* -------------------------------------------------------------
@@ -660,7 +668,7 @@
    ------------------------------------------------------------- */
 .media-grid {
   display: grid;
-  gap: 4px;
+  gap: var(--media-gap, 4px);
   width: 100%;
   overflow: hidden;
   margin-top: 12px;
@@ -965,6 +973,8 @@
 .post-to-card-target[data-media-layout="stack"] .media-grid {
   display: flex !important;
   flex-direction: column !important;
+  /* Stacked full-width images need more air than a grid gutter, so this stays a
+     fixed step rather than the theme's `--media-gap` (the grid gutter). */
   gap: 12px !important;
   width: 100% !important;
   aspect-ratio: unset !important;
@@ -1099,6 +1109,15 @@
   overflow: hidden;
 }
 
+/* Outlined materials (Hairline, Broadsheet, Terminal, Brutalist) draw the quote
+   as a rule-framed block rather than a filled recess: on a black rule grid a
+   fill that clears 1.15:1 on warm paper reads as a grey smudge, so the material
+   declares which treatment it wants and one tint never has to serve both. */
+.post-to-card-target[data-quote-style="outlined"] .quote-card {
+  background: transparent;
+  border: var(--border-width, 1px) solid var(--quote-border);
+}
+
 .quote-author {
   display: flex;
   align-items: center;
@@ -1172,18 +1191,13 @@
   white-space: pre-wrap;
 }
 
-/* Keep quoted media inside the box's own radius instead of the card radius.
-   Specificity must match `.post-to-card-target[data-radius=...] .media-grid`
-   so this later rule wins the tie. */
+/* Keep quoted media inside the box's own radius. `--media-radius` is set by
+   Card.tsx from the resolved radius (theme's mediaRadius, or the explicit
+   tier), so a square material no longer gets a rounded photo pasted inside it
+   by a hard-coded value. */
 .post-to-card-target .quote-card .media-grid {
   margin-top: 3px;
-  border-radius: 8px;
-}
-
-/* Honour an explicit square-corner choice inside the quote box too. */
-.post-to-card-target[data-radius="0px"] .quote-card .media-grid,
-.post-to-card-target.radius-0px .quote-card .media-grid {
-  border-radius: 0;
+  border-radius: var(--media-radius, 8px);
 }
 
 /* -------------------------------------------------------------
@@ -1192,7 +1206,7 @@
 .single-tweet-block {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--rhythm-gap, 14px);
 }
 
 /* -------------------------------------------------------------
@@ -1267,7 +1281,9 @@
   width: 2px;
   flex: 1 1 auto;
   min-height: 16px;
-  background: var(--divider, rgba(255, 255, 255, 0.18));
+  /* The material's line ink, not `--divider`: a connector is a drawn thread,
+     and on Terminal the divider step (1.22:1) made it disappear entirely. */
+  background: var(--rule, var(--divider, rgba(255, 255, 255, 0.18)));
   margin-top: 6px;
   margin-bottom: 6px;
   border-radius: 1px;
@@ -1278,7 +1294,7 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  gap: 10px;
+  gap: var(--rhythm-gap, 10px);
   padding-bottom: 24px;
 }
 
@@ -1382,9 +1398,13 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 500;
-  color: var(--text-sec, #9ca3af);
-  opacity: 0.55;
+  letter-spacing: 0.02em;
+  /* Footnote ink, not a fade. The old `opacity: 0.55` dropped the mark to
+     2.1–3.0:1 on every sheet — below the floor the rest of the card holds —
+     and stacking a fade on the dimmest ramp step contradicted the rule that
+     "quieter" is a size decision. */
+  color: var(--faint, var(--text-sec, #9ca3af));
   user-select: none;
 }

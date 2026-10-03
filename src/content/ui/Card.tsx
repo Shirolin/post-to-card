@@ -671,17 +671,16 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       data-ratio={config.aspectRatio}
       data-fit={imageFit}
       data-media-layout={mediaLayout}
+      data-signature={tokens.signature.style}
+      data-quote-style={tokens.quoteStyle}
       style={{
         padding: config.padding,
         borderRadius: radius.card,
         boxShadow: tokens.shadow,
-        // Classic papers may carry a surface gradient (Linear Dark's near-black
-        // two-stop sheet). Everything else stays flat.
-        ...(tokens.surfaceGradient ? { backgroundImage: tokens.surfaceGradient } : {}),
-        // Every theme colour and the type pair come from the token table and are
-        // injected here. card.css only consumes them, so there is one place to
-        // edit a theme and no second copy to drift out of sync.
-        '--canvas': tokens.canvas,
+        // Every theme colour, the type pair, the signature geometry and the
+        // rhythm come from the token table and are injected here. card.css only
+        // consumes them, so there is one place to edit a theme and no second
+        // copy to drift out of sync.
         '--surface': tokens.surface,
         '--text': tokens.text,
         '--text-sec': tokens.muted,
@@ -693,8 +692,12 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
         '--quote-bg': tokens.quoteBackground,
         '--quote-border': tokens.quoteBorder,
         '--qr-fill': tokens.qrFill,
-        '--rule': tokens.rule ?? tokens.border,
+        '--rule': tokens.rule,
         '--border-width': tokens.borderWidth,
+        '--signature-height': tokens.signature.height,
+        '--rhythm-gap': tokens.rhythm.gap,
+        '--media-gap': tokens.rhythm.mediaGap,
+        '--media-radius': mediaRadius,
         '--font-display': tokens.fontDisplay,
         '--font-body': tokens.fontBody,
         minHeight: minHeightStyle === 'auto' ? 'unset' : minHeightStyle,
@@ -746,7 +749,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
                 </div>
               )}
               {config.showQrCode && mainTweet.url && (
-                <CardQrCode url={mainTweet.url} />
+                <CardQrCode url={mainTweet.url} fillColor={tokens.qrFill} />
               )}
             </div>
           )}

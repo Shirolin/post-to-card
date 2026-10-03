@@ -107,7 +107,7 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - **F14 (Thread Connector)**: 3-tweet same-author chaining, sponsored ad interception, third-party reply exclusion, thread index/total calculation, single tweet flag.
 - **F15 (Shadow DOM Container)**: Custom element registration, open shadowRoot attachment, InvalidStateError on double attach, singleton guard, unmount cleanup.
 - **F16 (Inline Style Isolation)**: ShadowRoot style tag, :host all: initial, zero host CSS leakage, font stack fallbacks, textContent injection.
-- **F17 (Curated Themes, P0 + P2)**: 9 套主题 token 表（羊皮纸 / 暗刊 / 细线 + 恢复的 Linear 暗黑 / 极致纯黑 / Notion 纯白 + 终端 / 报纸栏 / 粗野派）、纯白禁令、无渐变面、明度阶单调性、衬线/无衬/等宽字族、强调色、退役主题 id 迁移、双语主题名、正文/副文/脚注/链接 4.5:1 对比度底线、垫底与卡面分离度、禁止硬编码品牌蓝、实验性主题不进默认转盘。
+- **F17 (Curated Themes, P0 + P2)**: 8 套材质主题 token 表（羊皮纸 / 暗刊 / 细线 + 牛皮纸 / 蓝晒图 / 终端 + 报纸栏 / 粗野派），每套带签名装饰线与呼吸节奏；引号推文按材质分填充/描边两种呈现。纯白禁令、无渐变面、明度阶单调性、衬线/无衬/等宽字族、强调色、退役主题 id 迁移（Linear 暗黑→暗刊、极致纯黑→蓝晒图、Notion 纯白→羊皮纸）、双语主题名、正文/副文/脚注/链接 4.5:1 对比度底线、引号面板可见性、水印走脚注墨色、qrFill 与引号圆角接线、垫底与卡面分离度、禁止硬编码品牌蓝、实验性主题不进默认转盘。
 - **F18 (Padding & Radius)**: 16px/32px/48px padding, follow-theme plus 0px/12px/20px radius, padding fallback, radius fallback, media corner synchronization, per-theme corner deferral.
 - **F19 (Fluid Expansion)**: Auto ratio unconstrained, 3:4 ratio 853px min-height, 16:9 ratio 360px min-height, downward expansion without clipping, overflow: visible.
 - **F20 (Offline QR Code)**: Vector SVG generation, UTM/tracking parameter stripping, crispEdges shape rendering, long URL support, 100% offline.

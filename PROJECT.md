@@ -14,7 +14,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
    - 挂载自定义元素 `<post-to-card-container>`，采用 open ShadowRoot。
    - 注入经 Vite `?inline` 编译后的纯净 CSS 样式，切断继承链，保证与宿主 CSS 100% 隔离。
    - 基于 Preact 渲染现代化配置弹窗与卡片：
-     - 3 套主推纸张主题 (羊皮纸 Parchment / 暗刊 Nocturne / 细线 Hairline) + 恢复的 3 套经典 (Linear Dark / OLED Black / Notion White) + 二期 3 套 (终端 Terminal / 报纸栏 Broadsheet / 粗野派 Brutalist)：每套由纸面色、边线、字对、强调色与一条签名装饰线定义，取代早期 6 套渐变皮肤。旧主题 id 经 `sanitizeTheme` 映射迁移。认证徽标用纸面墨色而非 Twitter 蓝——卡面上只允许一个强调色。所有主题色值只有 `themes.ts` 一处来源，由 `Card.tsx` 注入 CSS 自定义属性。
+     - 8 套材质主题（Parchment / Nocturne / Hairline 三套纸张 + Kraft / Cyanotype / Terminal 三套非纸材料 + 二期 Broadsheet / 实验性 Brutalist）：每套由纸面色、边线、字对、强调色、签名装饰线与呼吸节奏共同定义，取代早期 6 套渐变皮肤。旧主题 id 经 `sanitizeTheme` 映射迁移（Linear Dark→Nocturne、OLED Black→Cyanotype、Notion White→Parchment）。认证徽标用纸面墨色而非 Twitter 蓝——卡面上只允许一个强调色。所有主题色值只有 `themes.ts` 一处来源，由 `Card.tsx` 注入 CSS 自定义属性；签名装饰与字阶也由 token 表驱动，`card.css` 只做一次 style→伪元素映射。引号推文按材质分「填充型 / 描边型」两种呈现。
      - 3 档内边距 (16/32/48px)、3 档圆角 (0/12/20px)。
      - Auto 及 3:4 / 16:9 画幅（弹性下限法则 `min-height` + `height: auto`，向下平滑延展，绝不截断长文本）。
      - 离线矢量 SVG 二维码生成 (`qrcode-generator`)。
@@ -50,7 +50,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F14 | Continuous Thread Connector | 追溯同作者连续推文，剔除广告与他人回复，构建长推文串联时间线 | M3 | ORIGINAL_REQUEST §R1 |
 | F15 | Custom Element & Shadow DOM | 注册 `<post-to-card-container>`，open ShadowRoot 挂载 | M4 | ORIGINAL_REQUEST §R2 |
 | F16 | Inline CSS Style Isolation | 通过 Vite ?inline 注入编译后 CSS，100% 隔离 Twitter 宿主样式 | M4 | ORIGINAL_REQUEST §R2 |
-| F17 | Curated Themes | 3 套主推纸张（羊皮纸 / 暗刊 / 细线）+ 3 套恢复的经典（Linear 暗黑 / 极致纯黑 / Notion 纯白）+ 2 套二期材料（终端 / 报纸栏）+ 1 套实验性（粗野派，默认关闭）；token 表为唯一来源 | M4 / P2 | ORIGINAL_REQUEST §R2 |
+| F17 | Curated Themes | 8 套材质主题（羊皮纸 / 暗刊 / 细线 / 牛皮纸 / 蓝晒图 / 终端 / 报纸栏）+ 1 套实验性（粗野派，默认关闭）；每套含签名装饰线与呼吸节奏，token 表为唯一来源 | M4 / P2 | ORIGINAL_REQUEST §R2 |
 | F18 | Padding & Border Radius Options | 3 档内边距 (16/32/48px) 与 4 档圆角（跟随主题 / 0/12/20px） | M4 | ORIGINAL_REQUEST §R2 |
 | F19 | Downward Expanding Poster Layouts | Auto 及 3:4 / 16:9 画幅弹性下限 min-height，长文本平滑向下延展绝不截断 | M4 | ORIGINAL_REQUEST §R2 |
 | F20 | Offline QR Code Generator | 纯本地 qrcode-generator 生成推文链接矢量 SVG 二维码 | M4 | ORIGINAL_REQUEST §R2 |
@@ -74,7 +74,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | M1 | Project Setup & Clean Vite Packaging | package.json, tsconfig, vite multi-entry build, manifest.json, 类型定义 | none | DONE |
 | M2 | Background Service Worker & Image Proxy | Background 脚本、CORS 图片抓取与 Base64 转换、本地内存缓存 | M1 | DONE |
 | M3 | Twitter/X Platform Adapter & Extractor | 注入按钮、防抖 MutationObserver、推文与 Thread 连续提取、Emoji/URL 升级 | M1 | DONE |
-| M4 | Shadow DOM & Preact Card Modal | `<post-to-card-container>`, Preact 视图、6 主题、内边距圆角、防截断画幅、离线二维码与控制开关 | M1 | DONE |
+| M4 | Shadow DOM & Preact Card Modal | `<post-to-card-container>`, Preact 视图、8 材质主题、内边距圆角、防截断画幅、离线二维码与控制开关 | M1 | DONE |
 | M5 | Export Engine & End-to-End Integration | modern-screenshot 视口渲染、Base64 桥接、剪贴板复制及降级下载、通过 100% E2E 测试 | M2, M3, M4, M-TEST | DONE |
 | M6 | Adversarial Hardening & Forensic Victory Audit | Tier 5 盲区对抗性压力测试、代码审查与 Forensic Auditor 最终门禁审计 | M5 | DONE |
 
@@ -139,7 +139,7 @@ export interface ThreadData {
 
 ### 2. Card Customization Configuration (`src/types/card.ts`)
 ```typescript
-export type ThemeId = 'parchment' | 'nocturne' | 'hairline' | 'linear-dark' | 'oled-black' | 'notion-white' | 'terminal' | 'broadsheet' | 'brutalist';
+export type ThemeId = 'parchment' | 'nocturne' | 'hairline' | 'kraft' | 'cyanotype' | 'terminal' | 'broadsheet' | 'brutalist';
 export type PaddingOption = '16px' | '32px' | '48px';
 export type RadiusOption = 'theme' | '0px' | '12px' | '20px';
 export type AspectRatioOption = 'auto' | '3:4' | '16:9';

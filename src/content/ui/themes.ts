@@ -10,6 +10,13 @@ export { sanitizeLocale };
  * copy, and time/footnote meta. `accent` is the only chromatic colour; `link`
  * exists because the accent alone does not clear text contrast on every
  * surface. `fontDisplay`/`fontBody` are the theme's type pair.
+ *
+ * A theme is also its *signature* and its *breathing*: the material owns the
+ * one decorative rule at the head of the body and the vertical rhythm of the
+ * column. Those used to be hand-written per theme in card.css, which is how
+ * six materials ended up with a fingerprint and three ended up as flat colour.
+ * They are tokens now, so "switching theme" changes material, letterforms and
+ * breathing together.
  */
 export interface ThemeTokens {
   /**
@@ -21,13 +28,6 @@ export interface ThemeTokens {
    */
   canvas: string;
   surface: string;
-  /**
-   * Optional surface gradient. The classic Linear Dark paper is a near-black
-   * two-stop sheet rather than a flat colour, so the material is part of the
-   * theme. Kept low-saturation on purpose: a full-bleed aurora or sunset is the
-   * thing these themes replaced, not a thing they reintroduce.
-   */
-  surfaceGradient?: string;
   text: string;
   muted: string;
   /**
@@ -44,13 +44,20 @@ export interface ThemeTokens {
   qrFill: string;
   /**
    * The theme's signature rule. This is the one place a theme is allowed a
-   * material of its own rather than a tint of `border` — Parchment's cream
-   * standfirst rule is the reason it does not read as a quieter Hairline.
-   *
-   * Optional: the restored classic presets predate the signature concept and
-   * carry none, which is what makes them restorations rather than redesigns.
+   * material of its own rather than a tint of `border`. Drawn by card.css from
+   * the style name, so a new material is one table entry rather than a new
+   * block of hand-written pseudo-element CSS.
    */
-  rule?: string;
+  rule: string;
+  signature: SignatureSpec;
+  /**
+   * How the quote tweet reads against the sheet. Paper and dark panels take a
+   * filled recess; ruled materials (Hairline, Broadsheet, Terminal, Brutalist)
+   * take an outline, because a fill that clears 1.15:1 on warm paper is a
+   * smudge on a black rule grid. One tint cannot serve both materials.
+   */
+  quoteStyle: QuoteStyle;
+  rhythm: Rhythm;
   fontDisplay: string;
   fontBody: string;
   /** Card corner, used when the user picks the "follow theme" radius option. */
@@ -65,6 +72,42 @@ export interface ThemeTokens {
    * cropped straight out of the PNG.
    */
   shadow: string;
+}
+
+/**
+ * The material's fingerprint, drawn at the head of the body column.
+ *
+ * `height` is the rule's own thickness (and drives the body's top padding so
+ * the rule never sits on the first line). The ink is always the theme's `rule`;
+ * the one signature that needs a second colour (Nocturne's accent tick) gets it
+ * from `--accent` in card.css rather than from a per-theme override.
+ */
+export type SignatureStyle =
+  | 'rule'
+  | 'hairline'
+  | 'tick-rule'
+  | 'scanline'
+  | 'double'
+  | 'block'
+  | 'stitch'
+  | 'registration';
+
+export interface SignatureSpec {
+  style: SignatureStyle;
+  height: string;
+}
+
+export type QuoteStyle = 'filled' | 'outlined';
+
+/**
+ * Vertical breathing. `gap` is the space between content blocks (byline, body,
+ * media, quote); `mediaGap` is the grid gutter. Kept separate from the user's
+ * padding so a material can be tight (Terminal, Hairline) or generous
+ * (Brutalist, Parchment) at any of the three padding tiers.
+ */
+export interface Rhythm {
+  gap: string;
+  mediaGap: string;
 }
 
 export interface ThemeDefinition {
@@ -107,6 +150,10 @@ const MONO =
 
 export const THEMES: Record<ThemeId, ThemeDefinition> = {
   // 1. Parchment — warm ivory paper, editorial serif, for quotes and long posts.
+  //    Signature: a full-width cream standfirst rule. It started as a short
+  //    terracotta tick, which read as a stray red mark; a full-width rule reads
+  //    as a decision the layout made, and leaves the accent to mean one thing:
+  //    emphasis in text.
   parchment: {
     id: 'parchment',
     name: 'Parchment',
@@ -119,12 +166,17 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       faint: '#74726b',
       accent: '#c96442',
       link: '#ad5330',
-      border: '#e8e6dc',
+      border: '#ded9c8',
       divider: '#e8e6dc',
-      quoteBackground: '#f1efe7',
-      quoteBorder: '#e8e6dc',
+      // A filled recess pulled to 1.16:1 off the sheet, with a border that
+      // actually draws the panel edge (the old tint was 1.09:1 — invisible).
+      quoteBackground: '#ebe9df',
+      quoteBorder: '#d5cfba',
       qrFill: '#141413',
       rule: '#ded8c6',
+      signature: { style: 'rule', height: '2px' },
+      quoteStyle: 'filled',
+      rhythm: { gap: '20px', mediaGap: '4px' },
       fontDisplay: SERIF,
       fontBody: SANS,
       radius: '12px',
@@ -135,6 +187,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   },
 
   // 2. Nocturne — warm charcoal, magazine cover, for video and image-led posts.
+  //    Signature: a masthead — one terracotta tick over a hairline.
   nocturne: {
     id: 'nocturne',
     name: 'Nocturne',
@@ -147,12 +200,15 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       faint: '#9a988f',
       accent: '#c96442',
       link: '#dd8462',
-      border: '#3f3e3a',
+      border: '#4a4844',
       divider: '#45443f',
-      quoteBackground: '#282826',
-      quoteBorder: '#3f3e3a',
+      quoteBackground: '#252523',
+      quoteBorder: '#4a4844',
       qrFill: '#f5f4ed',
       rule: '#4a4844',
+      signature: { style: 'tick-rule', height: '2px' },
+      quoteStyle: 'filled',
+      rhythm: { gap: '20px', mediaGap: '4px' },
       fontDisplay: SERIF,
       fontBody: SANS,
       radius: '10px',
@@ -163,6 +219,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   },
 
   // 3. Hairline — Swiss grid: hairline rules, light sans, no shadow.
+  //    Signature: one full-width ink hairline. Outlined quote: a fill would be
+  //    a grey patch on a black rule grid.
   hairline: {
     id: 'hairline',
     name: 'Hairline',
@@ -181,9 +239,12 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       border: '#141413',
       divider: '#141413',
       quoteBackground: '#f3f1ea',
-      quoteBorder: '#d7d4c9',
+      quoteBorder: '#141413',
       qrFill: '#141413',
       rule: '#141413',
+      signature: { style: 'hairline', height: '1px' },
+      quoteStyle: 'outlined',
+      rhythm: { gap: '16px', mediaGap: '4px' },
       fontDisplay: SANS,
       fontBody: SANS,
       radius: '2px',
@@ -193,64 +254,64 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     },
   },
 
-  // ---- Restored classics ----
-  // The three gradient presets worth keeping. Each is re-derived from the same
-  // token contract as the papers: the surface is the classic colour (Linear
-  // keeps its near-black two-stop sheet), and the muted/faint/link steps are
-  // re-tuned so every one clears 4.5:1 — the originals did not, because the old
-  // scheme only ever had two text levels.
-
-  // Linear Dark — near-black sheet with a quiet two-stop gradient. The indigo
-  // accent is kept for text emphasis only; as a link it only reaches 3.7:1, so
-  // links use the lifted tint.
-  'linear-dark': {
-    id: 'linear-dark',
-    name: 'Linear Dark',
-    preview: 'linear-gradient(135deg, #18191c 0%, #0d0e11 100%)',
+  // 4. Kraft — a manila envelope. Warm tan stock, brown ink, a stitched
+  //    binding at the head. Its own material, not a tint of Parchment.
+  kraft: {
+    id: 'kraft',
+    name: 'Kraft',
+    preview: 'linear-gradient(135deg, #b9a681 0%, #d3c3a2 100%)',
     tokens: {
-      canvas: '#050608',
-      surface: '#18191c',
-      surfaceGradient: 'linear-gradient(135deg, #18191c 0%, #0d0e11 100%)',
-      text: '#f3f4f6',
-      muted: '#9ca3af',
-      faint: '#8b93a1',
-      accent: '#5e6ad2',
-      link: '#8b96e8',
-      border: '#2a2c31',
-      divider: '#2a2c31',
-      quoteBackground: '#202227',
-      quoteBorder: '#2a2c31',
-      qrFill: '#f3f4f6',
-      rule: '#3a3d45',
+      canvas: '#b9a681',
+      surface: '#d3c3a2',
+      text: '#2b2117',
+      muted: '#584832',
+      faint: '#5a4c33',
+      accent: '#8a4b1f',
+      link: '#6f3913',
+      border: '#a8946f',
+      divider: '#b09d78',
+      // A lighter panel — the recess on kraft stock reads as a raised label,
+      // and it keeps body text at 10.97:1 and meta at 5.81:1.
+      quoteBackground: '#e2d6c0',
+      quoteBorder: '#a8946f',
+      qrFill: '#2b2117',
+      rule: '#a8946f',
+      signature: { style: 'stitch', height: '2px' },
+      quoteStyle: 'filled',
+      rhythm: { gap: '20px', mediaGap: '4px' },
       fontDisplay: SANS,
       fontBody: SANS,
-      radius: '12px',
-      mediaRadius: '8px',
+      radius: '6px',
+      mediaRadius: '4px',
       borderWidth: '1px',
       shadow: 'none',
     },
   },
 
-  // OLED Black — true black, so it stays flat rather than gradient. On a real
-  // OLED panel a gradient off pure black defeats the point of the preset.
-  'oled-black': {
-    id: 'oled-black',
-    name: 'OLED Black',
-    preview: '#000000',
+  // 5. Cyanotype — a blueprint. Deep prussian blue, white line-work, a
+  //    registration mark at the head. The one true cold material in the set,
+  //    and it earns it by being a process rather than a "tech blue" skin.
+  cyanotype: {
+    id: 'cyanotype',
+    name: 'Cyanotype',
+    preview: 'linear-gradient(135deg, #0d1c2c 0%, #14304d 100%)',
     tokens: {
-      canvas: '#1a1a1a',
-      surface: '#000000',
-      text: '#ffffff',
-      muted: '#9a9a9a',
-      faint: '#8a8a8a',
+      canvas: '#0d1c2c',
+      surface: '#14304d',
+      text: '#e8f1f8',
+      muted: '#9fb8cc',
+      faint: '#8aa6bd',
       accent: '#ffffff',
-      link: '#60a5fa',
-      border: '#262626',
-      divider: '#262626',
-      quoteBackground: '#0d0d0d',
-      quoteBorder: '#262626',
-      qrFill: '#ffffff',
-      rule: '#333333',
+      link: '#9fd8ff',
+      border: '#2c5175',
+      divider: '#2c5175',
+      quoteBackground: '#0e2438',
+      quoteBorder: '#2c5175',
+      qrFill: '#e8f1f8',
+      rule: '#3d6a94',
+      signature: { style: 'registration', height: '1px' },
+      quoteStyle: 'filled',
+      rhythm: { gap: '20px', mediaGap: '4px' },
       fontDisplay: SANS,
       fontBody: SANS,
       radius: '0px',
@@ -260,38 +321,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     },
   },
 
-  // Notion White — warm off-white, never pure white. The original was #ffffff,
-  // which the brief rules out; this is the same paper at a temperature that does
-  // not glare.
-  'notion-white': {
-    id: 'notion-white',
-    name: 'Notion White',
-    preview: 'linear-gradient(135deg, #eceae4 0%, #fdfdfc 100%)',
-    tokens: {
-      canvas: '#eceae4',
-      surface: '#fdfdfc',
-      text: '#37352f',
-      muted: '#6b7280',
-      faint: '#6e737c',
-      accent: '#2563eb',
-      link: '#1d4ed8',
-      border: '#e9e9e7',
-      divider: '#e5e7eb',
-      quoteBackground: '#f7f6f3',
-      quoteBorder: '#e5e7eb',
-      qrFill: '#111827',
-      rule: '#dcdbd5',
-      fontDisplay: SANS,
-      fontBody: SANS,
-      radius: '8px',
-      mediaRadius: '6px',
-      borderWidth: '1px',
-      shadow: 'none',
-    },
-  },
-
-  // 4. Terminal — a phosphor console. Real monospace, one scanline, no paper.
-  //    Replaces the retired Hacker Mint without inheriting its gradient.
+  // 6. Terminal — a phosphor console. Real monospace, one scanline, no paper.
+  //    Signature: a CRT refresh band, faint enough to sit over a text column.
   terminal: {
     id: 'terminal',
     name: 'Terminal',
@@ -308,11 +339,14 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       border: '#2b382d',
       divider: '#232e25',
       quoteBackground: '#1a231b',
-      quoteBorder: '#2b382d',
+      quoteBorder: '#344635',
       qrFill: '#d8f5d0',
       // The scanline is drawn with this, so it must read as a screen line, not
-      // as a border: one step off the surface rather than near-black.
-      rule: '#243026',
+      // as a border. Lifted to 1.56:1 — the old 1.25:1 was invisible.
+      rule: '#2f4032',
+      signature: { style: 'scanline', height: '4px' },
+      quoteStyle: 'outlined',
+      rhythm: { gap: '14px', mediaGap: '4px' },
       fontDisplay: MONO,
       fontBody: MONO,
       radius: '0px',
@@ -322,9 +356,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     },
   },
 
-  // 5. Broadsheet — multi-column newspaper: masthead, all-caps kickers, ruled
-  //    columns. For contested posts, where the layout should look like a paper
-  //    of record rather than a social card.
+  // 7. Broadsheet — multi-column newspaper: masthead, all-caps kickers, ruled
+  //    columns. Signature: the double rule a paper sets under its flag.
   broadsheet: {
     id: 'broadsheet',
     name: 'Broadsheet',
@@ -341,9 +374,12 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       border: '#1a1a17',
       divider: '#1a1a17',
       quoteBackground: '#f2f0e8',
-      quoteBorder: '#c9c6b8',
+      quoteBorder: '#1a1a17',
       qrFill: '#1a1a17',
       rule: '#1a1a17',
+      signature: { style: 'double', height: '5px' },
+      quoteStyle: 'outlined',
+      rhythm: { gap: '18px', mediaGap: '4px' },
       fontDisplay: SERIF,
       fontBody: SERIF,
       radius: '0px',
@@ -353,7 +389,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     },
   },
 
-  // 6. Brutalist — thick rules and a hard offset shadow. Deliberately loud, so
+  // 8. Brutalist — thick rules and a hard offset shadow. Deliberately loud, so
   //    it is not part of the default rotation (see DEFAULT_CARD_CONFIG).
   brutalist: {
     id: 'brutalist',
@@ -374,6 +410,9 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteBorder: '#14140f',
       qrFill: '#14140f',
       rule: '#14140f',
+      signature: { style: 'block', height: '3px' },
+      quoteStyle: 'outlined',
+      rhythm: { gap: '24px', mediaGap: '4px' },
       fontDisplay: SANS,
       fontBody: SANS,
       radius: '0px',
@@ -389,21 +428,24 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
 };
 
 /**
- * Retired presets map onto the closest paper rather than resetting the user's
- * choice. Only the high-saturation full-bleed gradients are still retired:
- * sunset and aurora were the "gradient as a default" look the paper themes
- * replaced, and Hacker Mint's terminal was rebuilt as the real Terminal theme.
- * Linear Dark, OLED Black and Notion White are live themes again, so they are
- * no longer listed here.
+ * Retired presets map onto the closest live material rather than resetting the
+ * user's choice. The three gradient classics are retired here: their restrained
+ * surfaces were absorbed by Nocturne (dark UI), Cyanotype (pure dark) and
+ * Parchment (warm white), and keeping them alongside the materials is what made
+ * the picker read as "skins" again. The high-saturation full-bleed gradients
+ * stay retired on purpose — they are what the papers replaced.
  */
 export const LEGACY_THEME_ALIASES: Record<string, ThemeId> = {
-  'cyber-mint': 'terminal',
-  'aurora-purple': 'nocturne',
   'sunset-glow': 'parchment',
-  'notion-clean-white': 'notion-white',
-  'oled': 'oled-black',
+  'aurora-purple': 'nocturne',
+  'cyber-mint': 'terminal',
+  // Retired classics.
+  'linear-dark': 'nocturne',
+  'oled-black': 'cyanotype',
+  'oled': 'cyanotype',
+  'notion-white': 'parchment',
+  'notion-clean-white': 'parchment',
 };
-
 
 export const PADDING_OPTIONS: PaddingOption[] = ['16px', '32px', '48px'];
 export const RADIUS_OPTIONS: RadiusOption[] = ['theme', '0px', '12px', '20px'];
@@ -414,18 +456,18 @@ export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
 /**
  * Picker order and visibility.
  *
- * The first six are the everyday rotation: three papers plus the three restored
- * classics. Terminal and Broadsheet are phase-2 materials. Brutalist is
- * deliberately last and marked experimental, so the picker keeps a 3px frame
- * with a hard shadow behind the "more" disclosure.
+ * The first six are the everyday rotation: the three papers plus the three
+ * materials that are not a variant of paper (Kraft, Cyanotype, Terminal).
+ * Broadsheet is a phase-2 material and Brutalist is deliberately last and
+ * marked experimental, so the picker keeps its 3px frame and hard shadow behind
+ * the "more" disclosure.
  */
 export const THEME_ORDER: ThemeId[] = [
   'parchment',
   'nocturne',
   'hairline',
-  'linear-dark',
-  'oled-black',
-  'notion-white',
+  'kraft',
+  'cyanotype',
   'terminal',
   'broadsheet',
   'brutalist',
@@ -460,8 +502,8 @@ export function sanitizePadding(val: string): PaddingOption {
 
 /**
  * Resolves any stored theme value to a live theme. Accepts the current ids and
- * the retired gradient presets, so upgrading keeps the user's paper instead of
- * dropping them on the default.
+ * the retired presets, so upgrading keeps the user's paper instead of dropping
+ * them on the default.
  */
 export function sanitizeTheme(val?: string | null): ThemeId {
   if (val && val in THEMES) {
