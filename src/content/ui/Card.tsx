@@ -3,6 +3,7 @@ import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '.
 import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card';
 import { CardQrCode } from './qrcode';
 import { resolveRadius, getAspectMinHeight, THEMES } from './themes';
+import { planMediaGrid, applyMediaGridPlan } from './mediaGrid';
 import { formatLocaleTimestamp, getTranslation } from '../i18n';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
 
@@ -80,62 +81,6 @@ function renderTweetContent(tweet: TweetData) {
   return <div class="tweet-text-content">{tweet.text}</div>;
 }
 
-export function calculateDynamicGridRatio(
-  count: number,
-  gridLayout: string,
-  items: MediaItem[]
-): number | undefined {
-  if (count === 3) {
-    const r0 = items[0]?.aspectRatio;
-    if (gridLayout === 'left-hero') {
-      if (r0 === undefined) return 1.30;
-      const r1 = items[1]?.aspectRatio;
-      const r2 = items[2]?.aspectRatio;
-      const rRight = (r1 !== undefined && r2 !== undefined) ? (r1 + r2) / 2 : (r1 ?? r2 ?? 1.0);
-      // Left cell aspect ratio in 1.6fr:1fr columns is 0.615 * R_grid.
-      // Target R_grid to let r0 fill left column: 1.625 * r0.
-      // Balanced with right column target (0.77 * R_grid ~ rRight): 1.30 * rRight.
-      const targetFromLeft = 1.625 * r0;
-      const targetFromRight = 1.30 * rRight;
-      const combined = (r1 !== undefined || r2 !== undefined)
-        ? 0.65 * targetFromLeft + 0.35 * targetFromRight
-        : targetFromLeft;
-      return Number(Math.max(1.15, Math.min(1.65, combined)).toFixed(2));
-    } else {
-      // Top-hero: Row 1 is 1.4fr out of 2.4fr (0.583 H).
-      // Row 1 cell aspect ratio is R_grid / 0.583 = 1.714 * R_grid.
-      // Target R_grid to let r0 fill Row 1: 0.583 * r0.
-      const r0Val = r0 ?? 1.6;
-      const combined = 0.583 * r0Val;
-      return Number(Math.max(1.00, Math.min(1.40, combined)).toFixed(2));
-    }
-  }
-
-  if (count === 2) {
-    const r0 = items[0]?.aspectRatio;
-    const r1 = items[1]?.aspectRatio;
-    if (r0 === undefined || r1 === undefined) return 1.60;
-    if (gridLayout === 'stacked') {
-      return Number(Math.max(0.75, Math.min(1.45, (r0 * r1) / (r0 + r1))).toFixed(2));
-    } else if (gridLayout === 'portrait-columns') {
-      return Number(Math.max(0.78, Math.min(1.65, r0 + r1)).toFixed(2));
-    } else {
-      // Dual columns side-by-side: natural aspect ratio is r0 + r1
-      return Number(Math.max(1.20, Math.min(2.10, r0 + r1)).toFixed(2));
-    }
-  }
-
-  if (count === 4) {
-    const ratios = items.map(i => i.aspectRatio).filter((r): r is number => r !== undefined);
-    if (ratios.length >= 2) {
-      const avg = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-      return Number(Math.max(0.85, Math.min(1.85, avg)).toFixed(2));
-    }
-  }
-
-  return undefined;
-}
-
 function renderMediaGrid(
   media: MediaItem[] | undefined,
   mediaRadius: string,
@@ -153,64 +98,23 @@ function renderMediaGrid(
   const fitClass = `fit-${imageFit}`;
   const layoutClass = `media-layout-${mediaLayout}`;
 
-  let gridLayout = 'default';
-  let dynamicGridRatio: string | undefined;
-
-  if (count === 3) {
-    // 阈值 1.2：首图为竖图、正方形图（1.0，如漫画、插画）或接近正方形图（< 1.2）时采用 Twitter 标准「左一右二」Left-Hero；
-    // 仅当首图为明确的横幅宽图（>= 1.2，如 16:9 全景、横向照片）时才采用「上一下二」Top-Hero
-    const firstRatio = items[0]?.aspectRatio;
-    const isPortrait = (firstRatio !== undefined) ? (firstRatio < 1.2) : true;
-    gridLayout = isPortrait ? 'left-hero' : 'top-hero';
-    if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
-      const combined = calculateDynamicGridRatio(count, gridLayout, items);
-      if (combined) {
-        dynamicGridRatio = `${combined}`;
-      }
-    }
-  } else if (count === 2) {
-    const r0 = items[0]?.aspectRatio;
-    const r1 = items[1]?.aspectRatio;
-    const bothWide = (r0 !== undefined && r1 !== undefined) ? (r0 >= 1.25 && r1 >= 1.25) : false;
-    const bothPortrait = (r0 !== undefined && r1 !== undefined)
-      ? (r0 <= 0.88 && r1 <= 0.88)
-      : ((r0 !== undefined && r0 <= 0.85) || (r1 !== undefined && r1 <= 0.85));
-
-    if (bothWide) {
-      gridLayout = 'stacked';
-    } else if (bothPortrait) {
-      gridLayout = 'portrait-columns';
-    } else {
-      gridLayout = 'columns';
-    }
-    if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
-      const combined = calculateDynamicGridRatio(count, gridLayout, items);
-      if (combined) {
-        dynamicGridRatio = `${combined}`;
-      }
-    }
-  } else if (count === 4) {
-    gridLayout = 'quad';
-    if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
-      const combined = calculateDynamicGridRatio(count, gridLayout, items);
-      if (combined) {
-        dynamicGridRatio = `${combined}`;
-      }
-    }
-  }
-  const gridLayoutClass = `grid-${gridLayout}`;
+  // One plan, made from whatever shapes are known now. The images re-plan
+  // through the same module when their real shapes arrive, so a grid can only
+  // settle differently if the pictures told it something new.
+  const gridOptions = { aspectRatio, mediaLayout };
+  const plan = planMediaGrid(items, gridOptions);
 
   return (
     <div
-      class={`media-grid media-count-${count} ${ratioClass} ${fitClass} ${layoutClass} ${gridLayoutClass}`}
+      class={`media-grid media-count-${count} ${ratioClass} ${fitClass} ${layoutClass} ${plan.layoutClass}`}
       data-count={count}
       data-ratio={aspectRatio}
       data-fit={imageFit}
       data-layout={mediaLayout}
-      data-grid-layout={gridLayout}
+      data-grid-layout={plan.layout}
       style={{
         borderRadius: mediaRadius,
-        aspectRatio: dynamicGridRatio,
+        aspectRatio: plan.aspectRatio,
       }}
     >
       {items.map((m, idx) => {
@@ -284,54 +188,16 @@ function renderMediaGrid(
             loading="eager"
             onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => {
               const imgEl = e.currentTarget;
-              if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight && !m.aspectRatio) {
-                m.aspectRatio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
-                const grid = imgEl.closest ? (imgEl.closest('.media-grid') as HTMLElement) : null;
-                if (grid) {
-                  if (count === 2) {
-                    const r0 = items[0]?.aspectRatio;
-                    const r1 = items[1]?.aspectRatio;
-                    if (r0 !== undefined && r1 !== undefined) {
-                      const bothWide = r0 >= 1.25 && r1 >= 1.25;
-                      const bothPortrait = (r0 <= 0.88 && r1 <= 0.88) || ((r0 + r1) / 2 <= 0.88);
-                      let newLayout = 'columns';
-                      if (bothWide) newLayout = 'stacked';
-                      else if (bothPortrait) newLayout = 'portrait-columns';
-
-                      grid.setAttribute('data-grid-layout', newLayout);
-                      grid.classList.remove('grid-columns', 'grid-stacked', 'grid-portrait-columns');
-                      grid.classList.add(`grid-${newLayout}`);
-
-                      if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
-                        const combined = calculateDynamicGridRatio(count, newLayout, items);
-                        if (combined) {
-                          grid.style.aspectRatio = `${combined}`;
-                        }
-                      }
-                    }
-                  } else if (count === 3) {
-                    const r0 = items[0]?.aspectRatio;
-                    if (r0 !== undefined) {
-                      const isPortrait = r0 < 1.2;
-                      const newLayout = isPortrait ? 'left-hero' : 'top-hero';
-                      grid.setAttribute('data-grid-layout', newLayout);
-                      grid.classList.remove('grid-top-hero', 'grid-left-hero');
-                      grid.classList.add(`grid-${newLayout}`);
-
-                      if (aspectRatio === 'auto' && mediaLayout !== 'stack') {
-                        const combined = calculateDynamicGridRatio(count, newLayout, items);
-                        if (combined) {
-                          grid.style.aspectRatio = `${combined}`;
-                        }
-                      }
-                    }
-                  } else if (count === 4 && aspectRatio === 'auto' && mediaLayout !== 'stack') {
-                    const combined = calculateDynamicGridRatio(count, 'quad', items);
-                    if (combined) {
-                      grid.style.aspectRatio = `${combined}`;
-                    }
-                  }
-                }
+              if (!imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight || m.aspectRatio) {
+                return;
+              }
+              // This picture's shape was unknown when the grid was planned, so
+              // the plan gets to see it now. Re-planning is what keeps a grid
+              // from settling on a layout its pictures do not fit.
+              m.aspectRatio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
+              const grid = imgEl.closest ? (imgEl.closest('.media-grid') as HTMLElement) : null;
+              if (grid) {
+                applyMediaGridPlan(grid, planMediaGrid(items, gridOptions));
               }
             }}
           />
