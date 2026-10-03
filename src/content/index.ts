@@ -4,22 +4,21 @@
  * Fully integrates Twitter adapter, Shadow DOM container, and export engine.
  */
 
-import type { Locale } from '../types/card.ts';
 import type { ThreadData } from '../types/tweet.ts';
 import { initTwitterInjection } from './adapter/injection.ts';
 import { openCardModal } from './container/element.ts';
-import { exportCardFlow } from './engine/index.ts';
+import { exportCard, type ExportAction, type ExportOutcome } from './engine/index.ts';
 import { initGraphQLBridge, lookupFromGraphQL, applyDomTranslation } from './graphql/bridge.ts';
 import { extractTweetId } from './adapter/extractor.ts';
 
+// The outcome travels back to the modal untouched. It used to be discarded
+// here, which is how a card the clipboard had refused came to be announced as
+// copied.
 function handleCardExport(
   target: HTMLElement,
-  scale: number,
-  action?: 'copy' | 'download',
-  locale?: Locale
-): Promise<void> {
-  const chosenAction: 'copy' | 'download' = action || 'copy';
-  return exportCardFlow(target, scale, chosenAction, undefined, undefined, locale).then(() => {});
+  action: ExportAction
+): Promise<ExportOutcome> {
+  return exportCard(target, { action });
 }
 
 /**
@@ -66,9 +65,7 @@ function initContentScript(): void {
     const controller = initTwitterInjection((domThread: ThreadData, article?: Element) => {
       const threadData = resolveThreadData(domThread, article);
 
-      openCardModal(threadData, async (target: HTMLElement, scale: number, action?: 'copy' | 'download', locale?: Locale) => {
-        await handleCardExport(target, scale, action, locale);
-      });
+      openCardModal(threadData, handleCardExport);
     });
 
     // Supplementary scans for dynamic SPA feed hydration

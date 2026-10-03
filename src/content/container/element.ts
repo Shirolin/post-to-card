@@ -78,11 +78,11 @@ try {
 
 let activeContainer: PostToCardContainer | null = null;
 
-import type { Locale } from '../../types/card.ts';
+import type { ExportAction, ExportOutcome } from '../engine/index.ts';
 
 export function openCardModal(
   threadData: ThreadData,
-  onExport?: (target: HTMLElement, scale: number, action?: 'copy' | 'download', locale?: Locale) => Promise<void>
+  onExport?: (target: HTMLElement, action: ExportAction) => Promise<ExportOutcome>
 ): PostToCardContainer {
   // Singleton guard: check if a container element already exists in document
   let container = document.querySelector('post-to-card-container') as PostToCardContainer | null;

@@ -8,7 +8,6 @@
  */
 
 import { domToBlob } from 'modern-screenshot';
-import type { TweetData, ThreadData } from '../../types/tweet.ts';
 
 export const FALLBACK_PLACEHOLDER_DATA_URL =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%23333333"/></svg>';
@@ -63,72 +62,6 @@ export async function fetchImageAsBase64(
 }
 
 /**
- * Recursively deep-clones a TweetData or ThreadData object and replaces all remote
- * image URLs (avatar, photo media, quote tweet media) with Base64 Data URLs,
- * preserving original object immutability.
- */
-export async function sanitizeTweetImagesForExport<T extends TweetData | ThreadData>(data: T): Promise<T> {
-  const cloned: T = JSON.parse(JSON.stringify(data));
-
-  if ('tweets' in cloned && Array.isArray((cloned as ThreadData).tweets)) {
-    const thread = cloned as ThreadData;
-    if (thread.author && thread.author.avatarUrl) {
-      thread.author.avatarUrl = await fetchImageAsBase64(thread.author.avatarUrl);
-    }
-    for (const tweet of thread.tweets) {
-      if (tweet.author && tweet.author.avatarUrl) {
-        tweet.author.avatarUrl = await fetchImageAsBase64(tweet.author.avatarUrl);
-      }
-      if (tweet.media) {
-        for (const item of tweet.media) {
-          if (item.url) {
-            item.url = await fetchImageAsBase64(item.url);
-          }
-        }
-      }
-      if (tweet.quotePost) {
-        if (tweet.quotePost.author && tweet.quotePost.author.avatarUrl) {
-          tweet.quotePost.author.avatarUrl = await fetchImageAsBase64(tweet.quotePost.author.avatarUrl);
-        }
-        if (tweet.quotePost.media) {
-          for (const item of tweet.quotePost.media) {
-            if (item.url) {
-              item.url = await fetchImageAsBase64(item.url);
-            }
-          }
-        }
-      }
-    }
-    return cloned;
-  }
-
-  const tweet = cloned as TweetData;
-  if (tweet.author && tweet.author.avatarUrl) {
-    tweet.author.avatarUrl = await fetchImageAsBase64(tweet.author.avatarUrl);
-  }
-  if (tweet.media) {
-    for (const item of tweet.media) {
-      if (item.url) {
-        item.url = await fetchImageAsBase64(item.url);
-      }
-    }
-  }
-  if (tweet.quotePost) {
-    if (tweet.quotePost.author && tweet.quotePost.author.avatarUrl) {
-      tweet.quotePost.author.avatarUrl = await fetchImageAsBase64(tweet.quotePost.author.avatarUrl);
-    }
-    if (tweet.quotePost.media) {
-      for (const item of tweet.quotePost.media) {
-        if (item.url) {
-          item.url = await fetchImageAsBase64(item.url);
-        }
-      }
-    }
-  }
-  return cloned;
-}
-
-/**
  * Traverses an element's subtree and temporarily substitutes remote image src attributes
  * with Base64 Data URLs so the HTML5 canvas remains origin-clean during modern-screenshot export.
  * Returns a restoration function to revert the DOM once snapshotting completes.
@@ -170,6 +103,14 @@ export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Pro
 /**
  * Renders the target card DOM node to a high-resolution PNG Blob.
  * Ensures the canvas remains 100% origin-clean without SecurityError.
+ *
+ * Two rewrites keep the canvas origin-clean and they do different jobs. The src
+ * attributes on the live card are replaced first, which is what covers the
+ * pictures the card is made of. The `fetchFn` below then covers anything the
+ * rasterizer discovers on its own -- an image it meets inside the clone it
+ * builds, such as a background it has to resolve -- which the first pass never
+ * saw. A third implementation used to rewrite the TweetData model instead of
+ * either; nothing reached it, because the card is rasterized from the DOM.
  */
 export async function renderCardToBlob(
   cardElement: HTMLElement,

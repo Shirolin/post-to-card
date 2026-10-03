@@ -9,8 +9,8 @@ import { Controls } from './Controls.tsx';
 import { Modal } from './Modal.tsx';
 import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadScope } from './threadScope.ts';
+import type { ExportAction, ExportOutcome } from '../engine/index.ts';
 
-import type { Locale } from '../../types/card.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 
 const ZOOM_LEVELS = [0.5, 0.75, 1] as const;
@@ -18,7 +18,7 @@ const ZOOM_LEVELS = [0.5, 0.75, 1] as const;
 export interface AppProps {
   threadData: ThreadData;
   onClose: () => void;
-  onExport?: (target: HTMLElement, scale: number, action: 'copy' | 'download', locale?: Locale) => Promise<void>;
+  onExport?: (target: HTMLElement, action: ExportAction) => Promise<ExportOutcome>;
 }
 
 export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
@@ -63,7 +63,7 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     return document.querySelector('#post-to-card-export-target') as HTMLElement | null;
   };
 
-  const handleExport = async (action: 'copy' | 'download') => {
+  const handleExport = async (action: ExportAction) => {
     const target = getExportTarget();
     if (!target) {
       setStatusMessage(t.targetNotFound);
@@ -76,10 +76,24 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     setIsErrorStatus(false);
 
     try {
+      // The message follows the outcome, not the button that was pressed. A
+      // clipboard that refuses is not a failure the user caused, but it is also
+      // not a copy -- so it gets its own wording rather than "copied".
       if (onExport) {
-        await onExport(target, 2, action, config.locale);
+        const outcome = await onExport(target, action);
+        setIsErrorStatus(!outcome.success);
+        if (!outcome.success) {
+          setStatusMessage(
+            outcome.error ? `${t.exportFailed}: ${outcome.error}` : t.exportFailed
+          );
+        } else if (outcome.method === 'clipboard') {
+          setStatusMessage(t.copiedSuccess);
+        } else {
+          setStatusMessage(
+            action === 'copy' ? t.clipboardFallbackNotice : t.downloadSuccess
+          );
+        }
       }
-      setStatusMessage(action === 'copy' ? t.copiedSuccess : t.downloadSuccess);
       setTimeout(() => setStatusMessage(''), 2500);
     } catch (err: unknown) {
       console.error('[Post-to-Card] Export error:', err);
