@@ -549,6 +549,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       data-signature={tokens.signature.style}
       data-quote-style={tokens.quoteStyle}
       data-media-frame={tokens.mediaFrame}
+      data-meta-divider={tokens.type.metaDivider ? 'on' : undefined}
       data-keyline={tokens.keyline ? 'on' : undefined}
       style={{
         padding: config.padding,
@@ -580,6 +581,19 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
         '--media-radius': mediaRadius,
         '--font-display': tokens.fontDisplay,
         '--font-body': tokens.fontBody,
+        // The material's letterforms. card.css applies each of these to the
+        // one element it names, so a new material is a table entry the compiler
+        // checks rather than three rule blocks a reader has to notice.
+        '--type-display-size': tokens.type.displaySize,
+        '--type-display-weight': tokens.type.displayWeight,
+        '--type-display-tracking': tokens.type.displayTracking,
+        '--type-quote-size': tokens.type.quoteSize,
+        '--type-body-size': tokens.type.bodySize,
+        '--type-body-leading': tokens.type.bodyLeading,
+        '--type-meta-size': tokens.type.metaSize,
+        '--type-meta-tracking': tokens.type.metaTracking,
+        '--type-meta-transform': tokens.type.metaUppercase ? 'uppercase' : 'none',
+        '--type-meta-numeric': tokens.type.metaTabular ? 'tabular-nums' : 'normal',
         minHeight: minHeightStyle === 'auto' ? 'unset' : minHeightStyle,
         height: 'auto',
         overflow: 'visible',

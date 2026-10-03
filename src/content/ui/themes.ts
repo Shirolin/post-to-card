@@ -18,7 +18,49 @@ export { sanitizeLocale };
  * They are tokens now, so "switching theme" changes material, letterforms and
  * breathing together.
  */
+/**
+ * The material's letterforms.
+ *
+ * Type was the last part of a material still written by hand in card.css, one
+ * block per theme, and it had the failure the colour tokens were introduced to
+ * fix: adding a material meant remembering three separate rule blocks, and a
+ * missed one silently inherited another material's type rather than failing.
+ * The values live here now and card.css only consumes them, so a material is a
+ * table entry the compiler checks rather than three edits a reader has to notice.
+ *
+ * The quoted post's byline is its own size on purpose. It is a nested author and
+ * should not compete with the one the card is about, so the two papers that
+ * predate the other six keep it small; it shares the display weight and tracking
+ * because those carry the material's voice.
+ */
+export interface TypeScale {
+  /** Byline size, weight and tracking, for the author name and the kicker. */
+  displaySize: string;
+  displayWeight: string;
+  displayTracking: string;
+  /** The quoted post's byline size. Weight and tracking follow the display. */
+  quoteSize: string;
+  /** Post body size and line-height. */
+  bodySize: string;
+  bodyLeading: string;
+  /** Timestamp and stats: size and tracking. */
+  metaSize: string;
+  metaTracking: string;
+  /** All-caps meta, as Broadsheet sets its kickers. */
+  metaUppercase: boolean;
+  /** Tabular figures, so counts line up as a data strip. */
+  metaTabular: boolean;
+  /**
+   * Rules between the stat columns, as Hairline sets its data strip. The
+   * alternative to a token here is one hand-written rule naming one material,
+   * which is the pattern this table exists to replace.
+   */
+  metaDivider: boolean;
+}
+
 export interface ThemeTokens {
+  /** The material's letterforms. See `TypeScale`. */
+  type: TypeScale;
   /**
    * The mat the sheet is mounted on, used by the preview stage. The brief's
    * original values were within 5% luminance of `surface`, which made a light
@@ -217,6 +259,19 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     name: 'Parchment',
     preview: 'linear-gradient(135deg, #e4e0d2 0%, #faf9f5 100%)',
     tokens: {
+      type: {
+        displaySize: '17.5px',
+        displayWeight: '600',
+        displayTracking: '0.005em',
+        quoteSize: '13px',
+        bodySize: '17px',
+        bodyLeading: '1.78',
+        metaSize: '12.5px',
+        metaTracking: '0.01em',
+        metaUppercase: false,
+        metaTabular: false,
+        metaDivider: false,
+      },
       canvas: '#e4e0d2',
       surface: '#faf9f5',
       text: '#141413',
@@ -255,6 +310,19 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     name: 'Nocturne',
     preview: 'linear-gradient(135deg, #1a1918 0%, #30302e 100%)',
     tokens: {
+      type: {
+        displaySize: '18.5px',
+        displayWeight: '600',
+        displayTracking: '0.005em',
+        quoteSize: '13px',
+        bodySize: '16.5px',
+        bodyLeading: '1.7',
+        metaSize: '12.5px',
+        metaTracking: '0.015em',
+        metaUppercase: false,
+        metaTabular: false,
+        metaDivider: false,
+      },
       canvas: '#1a1918',
       surface: '#30302e',
       text: '#f5f4ed',
@@ -293,6 +361,19 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     preview:
       'linear-gradient(180deg, #faf9f5 0%, #faf9f5 58%, #141413 58%, #141413 100%)',
     tokens: {
+      type: {
+        displaySize: '15.5px',
+        displayWeight: '500',
+        displayTracking: '-0.005em',
+        quoteSize: '15.5px',
+        bodySize: '16px',
+        bodyLeading: '1.62',
+        metaSize: '12px',
+        metaTracking: '0.04em',
+        metaUppercase: false,
+        metaTabular: true,
+        metaDivider: true,
+      },
       canvas: '#dedcd4',
       surface: '#faf9f5',
       text: '#141413',
@@ -332,6 +413,19 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     name: 'Kraft',
     preview: 'linear-gradient(135deg, #b9a681 0%, #d3c3a2 100%)',
     tokens: {
+      type: {
+        displaySize: '16.5px',
+        displayWeight: '700',
+        displayTracking: '-0.005em',
+        quoteSize: '16.5px',
+        bodySize: '16px',
+        bodyLeading: '1.66',
+        metaSize: '12px',
+        metaTracking: '0.02em',
+        metaUppercase: false,
+        metaTabular: false,
+        metaDivider: false,
+      },
       canvas: '#b9a681',
       surface: '#d3c3a2',
       text: '#2b2117',
@@ -373,6 +467,19 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     name: 'Cyanotype',
     preview: 'linear-gradient(135deg, #0d1c2c 0%, #14304d 100%)',
     tokens: {
+      type: {
+        displaySize: '16px',
+        displayWeight: '700',
+        displayTracking: '0.005em',
+        quoteSize: '16px',
+        bodySize: '16.5px',
+        bodyLeading: '1.72',
+        metaSize: '12px',
+        metaTracking: '0.04em',
+        metaUppercase: false,
+        metaTabular: true,
+        metaDivider: false,
+      },
       canvas: '#0d1c2c',
       surface: '#14304d',
       text: '#e8f1f8',
@@ -409,6 +516,19 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     name: 'Terminal',
     preview: 'linear-gradient(135deg, #0b0e0b 0%, #141a14 100%)',
     tokens: {
+      type: {
+        displaySize: '16px',
+        displayWeight: '600',
+        displayTracking: '0',
+        quoteSize: '16px',
+        bodySize: '15px',
+        bodyLeading: '1.7',
+        metaSize: '12px',
+        metaTracking: '0.02em',
+        metaUppercase: false,
+        metaTabular: false,
+        metaDivider: false,
+      },
       canvas: '#080a08',
       surface: '#161d16',
       text: '#d8f5d0',
@@ -449,6 +569,19 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     preview:
       'linear-gradient(180deg, #fbfaf6 0%, #fbfaf6 62%, #1a1a17 62%, #1a1a17 100%)',
     tokens: {
+      type: {
+        displaySize: '19px',
+        displayWeight: '700',
+        displayTracking: '-0.01em',
+        quoteSize: '19px',
+        bodySize: '17px',
+        bodyLeading: '1.72',
+        metaSize: '11.5px',
+        metaTracking: '0.08em',
+        metaUppercase: true,
+        metaTabular: true,
+        metaDivider: false,
+      },
       canvas: '#e6e3d8',
       surface: '#fbfaf6',
       text: '#1a1a17',
@@ -486,6 +619,22 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     preview:
       'linear-gradient(135deg, #f4f1e4 0%, #f4f1e4 46%, #14140f 46%, #14140f 100%)',
     tokens: {
+      type: {
+        displaySize: '20px',
+        displayWeight: '800',
+        displayTracking: '-0.02em',
+        quoteSize: '20px',
+        bodySize: '17px',
+        bodyLeading: '1.6',
+        // Brutalist had no meta rule, so it inherited the base. Stated rather
+        // than inherited now, because that is the difference between a material
+        // that chose its meta and one that never got around to it.
+        metaSize: '13px',
+        metaTracking: '0',
+        metaUppercase: false,
+        metaTabular: false,
+        metaDivider: false,
+      },
       canvas: '#d8d4c4',
       surface: '#f4f1e4',
       text: '#14140f',

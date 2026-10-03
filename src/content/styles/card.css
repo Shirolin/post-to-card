@@ -221,137 +221,50 @@
 }
 
 /* -------------------------------------------------------------
-   Type scale is part of the theme: the paper and the letterforms
+   Type scale is part of the material: the paper and the letterforms
    move together, which is what makes the switch read as a change of
    material rather than a repaint.
 
-   Every theme supplies `--font-display`, so the family is applied
-   once here and each theme below only chooses size and weight.
+   The values are the material's `type` tokens, injected on the card
+   root by Card.tsx and consumed here. Nothing in this section names a
+   material. That is the point: type used to be a hand-written block
+   per theme, so adding one meant remembering three rule blocks and a
+   missed one silently inherited another material's letterforms. A
+   missing value is now a compile error.
    ------------------------------------------------------------- */
 .author-name,
 .quote-name {
   font-family: var(--font-display);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
 }
 
-.post-to-card-target[data-theme="parchment"] .author-name,
-.post-to-card-target[data-theme="parchment"] .quote-name,
-.post-to-card-target[data-theme="nocturne"] .author-name,
-.post-to-card-target[data-theme="nocturne"] .quote-name {
-  font-weight: 600;
-  letter-spacing: 0.005em;
+.author-name {
+  font-size: var(--type-display-size);
 }
 
-.post-to-card-target[data-theme="parchment"] .author-name {
-  font-size: 17.5px;
+/* The quoted post's byline is a nested author, so it is set smaller than the
+   one the card is about. It shares the display weight and tracking, which carry
+   the material's voice, and takes a size of its own. */
+.quote-name {
+  font-size: var(--type-quote-size);
 }
 
-.post-to-card-target[data-theme="nocturne"] .author-name {
-  font-size: 18.5px;
+/* -------------------------------------------------------------
+   One data strip per material, keyed on `data-meta-divider`.
+
+   Hairline draws its stats as a ruled strip rather than a spaced row. The
+   alternative is a rule naming one material, which is the pattern the type
+   tokens just replaced.
+   ------------------------------------------------------------- */
+.post-to-card-target[data-meta-divider="on"] .stats-row {
+  gap: 0;
 }
 
-.post-to-card-target[data-theme="parchment"] .tweet-text-content {
-  font-size: 17px;
-  line-height: 1.78;
-}
-
-.post-to-card-target[data-theme="hairline"] .author-name,
-.post-to-card-target[data-theme="hairline"] .quote-name {
-  font-size: 15.5px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-}
-
-.post-to-card-target[data-theme="hairline"] .tweet-text-content {
-  font-size: 16px;
-  line-height: 1.62;
-}
-
-/* Kraft: a utility label. Slightly tighter sans, body at a workmanlike size. */
-.post-to-card-target[data-theme="kraft"] .author-name,
-.post-to-card-target[data-theme="kraft"] .quote-name {
-  font-size: 16.5px;
-  font-weight: 700;
-  letter-spacing: -0.005em;
-}
-
-.post-to-card-target[data-theme="kraft"] .tweet-text-content {
-  font-size: 16px;
-  line-height: 1.66;
-}
-
-/* Cyanotype: a technical drawing. Quiet sans, generous leading, tabular meta. */
-.post-to-card-target[data-theme="cyanotype"] .author-name,
-.post-to-card-target[data-theme="cyanotype"] .quote-name {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.005em;
-}
-
-.post-to-card-target[data-theme="cyanotype"] .tweet-text-content {
-  font-size: 16.5px;
-  line-height: 1.72;
-}
-
-.post-to-card-target[data-theme="cyanotype"] .card-timestamp,
-.post-to-card-target[data-theme="cyanotype"] .stats-row {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Terminal: monospace everywhere, one size, tight leading. The grid is the
-   point, so nothing is allowed to vary its advance width. */
-.post-to-card-target[data-theme="terminal"] .author-name,
-.post-to-card-target[data-theme="terminal"] .quote-name {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0;
-}
-
-.post-to-card-target[data-theme="terminal"] .tweet-text-content {
-  font-size: 15px;
-  line-height: 1.7;
-}
-
-.post-to-card-target[data-theme="terminal"] .card-timestamp,
-.post-to-card-target[data-theme="terminal"] .stats-row {
-  font-size: 12px;
-  letter-spacing: 0.02em;
-}
-
-/* Broadsheet: serif throughout, large headline, all-caps kickers. */
-.post-to-card-target[data-theme="broadsheet"] .author-name,
-.post-to-card-target[data-theme="broadsheet"] .quote-name {
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.post-to-card-target[data-theme="broadsheet"] .tweet-text-content {
-  font-family: var(--font-body);
-  font-size: 17px;
-  line-height: 1.72;
-}
-
-.post-to-card-target[data-theme="broadsheet"] .card-timestamp,
-.post-to-card-target[data-theme="broadsheet"] .stats-row {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Brutalist: heavy sans, oversized headline, no letter-spacing niceties. */
-.post-to-card-target[data-theme="brutalist"] .author-name,
-.post-to-card-target[data-theme="brutalist"] .quote-name {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.post-to-card-target[data-theme="brutalist"] .tweet-text-content {
-  font-size: 17px;
-  line-height: 1.6;
+.post-to-card-target[data-meta-divider="on"] .stat-item + .stat-item {
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid var(--divider);
 }
 
 /* -------------------------------------------------------------
@@ -459,51 +372,10 @@
   border-bottom: 1px solid var(--rule);
 }
 
-/* -------------------------------------------------------------
-   Footnote & data treatment.
-
-   Parchment sets the footer as a footnote; Nocturne steps it down
-   again; Hairline turns it into a labelled data strip with tabular
-   figures and rules between the columns.
-   ------------------------------------------------------------- */
-.post-to-card-target[data-theme="parchment"] .card-timestamp,
-.post-to-card-target[data-theme="parchment"] .stats-row {
-  font-size: 12.5px;
-  letter-spacing: 0.01em;
-}
-
-.post-to-card-target[data-theme="nocturne"] .card-timestamp,
-.post-to-card-target[data-theme="nocturne"] .stats-row {
-  /* Quieter via size and spacing, never via opacity: `--faint` is already the
-     dimmest step, and fading it again drops the stats under 4.5:1. */
-  font-size: 12.5px;
-  letter-spacing: 0.015em;
-}
-
-.post-to-card-target[data-theme="hairline"] .card-timestamp,
-.post-to-card-target[data-theme="hairline"] .stats-row {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-}
-
-.post-to-card-target[data-theme="hairline"] .stats-row {
-  gap: 0;
-}
-
-.post-to-card-target[data-theme="hairline"] .stat-item + .stat-item {
-  margin-left: 14px;
-  padding-left: 14px;
-  border-left: 1px solid var(--divider);
-}
-
-/* Kraft: footnote material — small, a touch of tracking, warm ink. */
-.post-to-card-target[data-theme="kraft"] .card-timestamp,
-.post-to-card-target[data-theme="kraft"] .stats-row {
-  font-size: 12px;
-  letter-spacing: 0.02em;
-}
+/* Footnote and data treatment live with the type tokens: size, tracking, case
+   and figures are the material's `type` fields, applied by the base rules for
+   `.card-timestamp` and `.stats-row`, and the ruled strip Hairline draws is
+   keyed on `data-meta-divider`. Nothing here names a material. */
 
 /* -------------------------------------------------------------
    Author Header & Profile Information
@@ -556,9 +428,9 @@
   gap: 4px;
 }
 
+/* Size, weight and tracking come from the material's type tokens; what is left
+   here is how the name behaves as a line of text. */
 .author-name {
-  font-size: 16px;
-  font-weight: 700;
   line-height: 1.3;
   color: inherit;
   white-space: nowrap;
@@ -616,8 +488,8 @@
    Tweet Text & Rich Content
    ------------------------------------------------------------- */
 .tweet-text-content {
-  font-size: 16.5px;
-  line-height: 1.7;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-leading);
   overflow-wrap: anywhere;
   text-wrap: pretty;
   white-space: pre-wrap;
@@ -1150,8 +1022,6 @@
 }
 
 .quote-name {
-  font-size: 13px;
-  font-weight: 700;
   color: inherit;
   white-space: nowrap;
   overflow: hidden;
@@ -1364,7 +1234,10 @@
 }
 
 .card-timestamp {
-  font-size: 13px;
+  font-size: var(--type-meta-size);
+  letter-spacing: var(--type-meta-tracking);
+  text-transform: var(--type-meta-transform);
+  font-variant-numeric: var(--type-meta-numeric);
   color: var(--faint, var(--text-sec, #9ca3af));
   line-height: 1.4;
 }
@@ -1375,7 +1248,10 @@
   align-items: center;
   gap: 16px;
   color: var(--faint, var(--text-sec, #9ca3af));
-  font-size: 13px;
+  font-size: var(--type-meta-size);
+  letter-spacing: var(--type-meta-tracking);
+  text-transform: var(--type-meta-transform);
+  font-variant-numeric: var(--type-meta-numeric);
 }
 
 .stat-item {
