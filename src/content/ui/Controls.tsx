@@ -1,11 +1,11 @@
 import type { JSX } from 'preact';
-import type { ThreadData } from '../../types/tweet';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes';
-import { getTranslation, sanitizeLocale } from '../i18n';
+import type { ThreadData } from '../../types/tweet.ts';
+import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes.ts';
+import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
-import { handleRadioKeyDown } from './radioGroup';
-import { threadScope, tweetKey } from './threadScope';
+import { handleRadioKeyDown } from './radioGroup.ts';
+import { threadScope, tweetKey } from './threadScope.ts';
 import {
   Languages,
   Palette,

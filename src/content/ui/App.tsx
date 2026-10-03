@@ -1,17 +1,17 @@
 import type { JSX } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
-import type { ThreadData } from '../../types/tweet';
-import type { CardConfig } from '../../types/card';
-import { DEFAULT_CARD_CONFIG, THEMES, loadUserPreferences, saveUserPreferences } from './themes';
-import { setInjectedButtonVisibility } from '../adapter/injection';
-import { Card } from './Card';
-import { Controls } from './Controls';
-import { Modal } from './Modal';
-import { handleRadioKeyDown } from './radioGroup';
-import { threadScope } from './threadScope';
+import type { ThreadData } from '../../types/tweet.ts';
+import type { CardConfig } from '../../types/card.ts';
+import { DEFAULT_CARD_CONFIG, THEMES, loadUserPreferences, saveUserPreferences } from './themes.ts';
+import { setInjectedButtonVisibility } from '../adapter/injection.ts';
+import { Card } from './Card.tsx';
+import { Controls } from './Controls.tsx';
+import { Modal } from './Modal.tsx';
+import { handleRadioKeyDown } from './radioGroup.ts';
+import { threadScope } from './threadScope.ts';
 
-import type { Locale } from '../../types/card';
-import { getTranslation, sanitizeLocale } from '../i18n';
+import type { Locale } from '../../types/card.ts';
+import { getTranslation, sanitizeLocale } from '../i18n.ts';
 
 const ZOOM_LEVELS = [0.5, 0.75, 1] as const;
 

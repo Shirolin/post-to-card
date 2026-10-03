@@ -5,7 +5,7 @@
  * to handle virtual scrolling, and hooks SPA route navigation.
  */
 
-import type { ThreadData } from '../../types/tweet';
+import type { ThreadData } from '../../types/tweet.ts';
 import { extractContinuousThread, TWEET_ARTICLE_SELECTOR } from './thread.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../ui/themes.ts';
 
@@ -15,7 +15,7 @@ interface CustomObserver {
 }
 
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
-import type { Locale } from '../../types/card';
+import type { Locale } from '../../types/card.ts';
 
 export const HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn';
 export const VISIBILITY_STYLE_ID = 'post-to-card-visibility-style';

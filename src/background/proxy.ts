@@ -1,4 +1,4 @@
-import type { ExtensionResponse } from '../types/messages';
+import type { ExtensionResponse } from '../types/messages.ts';
 
 /**
  * Cache entry holding converted Base64 data and MIME type.

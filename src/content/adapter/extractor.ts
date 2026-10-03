@@ -5,7 +5,7 @@
  * multi-image grids (1-4 images), video poster frames, nested quote tweets, and engagement stats.
  */
 
-import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet';
+import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet.ts';
 import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';

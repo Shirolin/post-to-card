@@ -1,6 +1,6 @@
 import { render, h } from 'preact';
-import type { ThreadData } from '../../types/tweet';
-import { App } from '../ui/App';
+import type { ThreadData } from '../../types/tweet.ts';
+import { App } from '../ui/App.tsx';
 import modalCss from '../styles/modal.css?inline';
 import cardCss from '../styles/card.css?inline';
 
@@ -78,7 +78,7 @@ try {
 
 let activeContainer: PostToCardContainer | null = null;
 
-import type { Locale } from '../../types/card';
+import type { Locale } from '../../types/card.ts';
 
 export function openCardModal(
   threadData: ThreadData,

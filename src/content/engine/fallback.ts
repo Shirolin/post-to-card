@@ -8,8 +8,8 @@
  * 3. Provides clean UI toast notifications for user feedback.
  */
 
-import type { Locale } from '../../types/card';
-import { getTranslation, sanitizeLocale } from '../i18n';
+import type { Locale } from '../../types/card.ts';
+import { getTranslation, sanitizeLocale } from '../i18n.ts';
 
 export type ExportAction = 'copy' | 'download';
 

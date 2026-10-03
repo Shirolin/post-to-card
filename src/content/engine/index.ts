@@ -2,12 +2,12 @@
  * Export Engine Barrel and High-Level Workflow Orchestrator.
  */
 
-import type { Locale } from '../../types/card';
-import { renderCardToBlob, type RenderOptions } from './export';
-import { exportBlobWithFallback, type ExportAction, type ExportResult } from './fallback';
+import type { Locale } from '../../types/card.ts';
+import { renderCardToBlob, type RenderOptions } from './export.ts';
+import { exportBlobWithFallback, type ExportAction, type ExportResult } from './fallback.ts';
 
-export * from './export';
-export * from './fallback';
+export * from './export.ts';
+export * from './fallback.ts';
 
 /**
  * Orchestrates the end-to-end card export flow:

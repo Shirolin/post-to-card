@@ -4,11 +4,11 @@
  * Fully integrates Twitter adapter, Shadow DOM container, and export engine.
  */
 
-import type { Locale } from '../types/card';
-import type { ThreadData } from '../types/tweet';
-import { initTwitterInjection } from './adapter/injection';
-import { openCardModal } from './container/element';
-import { exportCardFlow } from './engine';
+import type { Locale } from '../types/card.ts';
+import type { ThreadData } from '../types/tweet.ts';
+import { initTwitterInjection } from './adapter/injection.ts';
+import { openCardModal } from './container/element.ts';
+import { exportCardFlow } from './engine/index.ts';
 import { initGraphQLBridge, lookupFromGraphQL, applyDomTranslation } from './graphql/bridge.ts';
 import { extractTweetId } from './adapter/extractor.ts';
 

@@ -18,8 +18,8 @@
  * so the rule behind them is written once.
  */
 
-import type { MediaItem } from '../../types/tweet';
-import type { AspectRatioOption, MediaLayoutOption } from '../../types/card';
+import type { MediaItem } from '../../types/tweet.ts';
+import type { AspectRatioOption, MediaLayoutOption } from '../../types/card.ts';
 
 /** The arrangements card.css knows how to draw. */
 export type GridLayout =

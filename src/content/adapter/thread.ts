@@ -6,7 +6,7 @@
  * timelines and feeds.
  */
 
-import type { TweetData, ThreadData } from '../../types/tweet';
+import type { TweetData, ThreadData } from '../../types/tweet.ts';
 import { extractTweetData } from './extractor.ts';
 import { getReplyingToHandle, getRetweetedBy } from './social.ts';
 

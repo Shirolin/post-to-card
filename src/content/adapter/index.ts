@@ -4,9 +4,9 @@
  * thread assembly, and action bar button injection.
  */
 
-export * from './emojis';
-export * from './urls';
+export * from './emojis.ts';
+export * from './urls.ts';
 export * from './extractor.ts';
 export * from './thread.ts';
 export * from './social.ts';
-export * from './injection';
+export * from './injection.ts';

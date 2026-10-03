@@ -1,11 +1,11 @@
 import type { JSX } from 'preact';
-import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet';
-import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card';
-import { CardQrCode } from './qrcode';
-import { resolveRadius, getAspectMinHeight, THEMES } from './themes';
-import { planMediaGrid, applyMediaGridPlan } from './mediaGrid';
-import { threadScope, tweetKey } from './threadScope';
-import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n';
+import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet.ts';
+import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card.ts';
+import { CardQrCode } from './qrcode.ts';
+import { resolveRadius, getAspectMinHeight, THEMES } from './themes.ts';
+import { planMediaGrid, applyMediaGridPlan } from './mediaGrid.ts';
+import { threadScope, tweetKey } from './threadScope.ts';
+import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
 
 export interface CardProps {

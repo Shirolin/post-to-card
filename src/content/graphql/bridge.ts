@@ -6,7 +6,7 @@
  * screen. A miss is not an error: the caller falls back to the DOM adapter.
  */
 
-import type { ThreadData } from '../../types/tweet';
+import type { ThreadData } from '../../types/tweet.ts';
 import { parseTweetDetailResponse, type ParsedGraphQL } from './parse.ts';
 
 const MESSAGE_SOURCE = 'post-to-card-graphql';

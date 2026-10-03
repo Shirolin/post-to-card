@@ -1,5 +1,5 @@
-import { handleFetchImageBase64 } from './proxy';
-import type { ExtensionMessage, ExtensionResponse } from '../types/messages';
+import { handleFetchImageBase64 } from './proxy.ts';
+import type { ExtensionMessage, ExtensionResponse } from '../types/messages.ts';
 
 console.log('[Post-to-Card] Background Service Worker initialized.');
 

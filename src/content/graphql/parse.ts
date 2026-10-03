@@ -10,7 +10,7 @@
  * the second caller of it rather than a second implementation of it.
  */
 
-import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet';
+import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet.ts';
 import { upgradeAvatarUrl } from '../adapter/urls.ts';
 
 type Json = Record<string, unknown>;

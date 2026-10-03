@@ -1,4 +1,4 @@
-import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig } from '../../types/card';
+import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig } from '../../types/card.ts';
 import { detectDefaultLocale, sanitizeLocale } from '../i18n.ts';
 export { sanitizeLocale };
 

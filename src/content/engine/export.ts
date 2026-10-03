@@ -8,7 +8,7 @@
  */
 
 import { domToBlob } from 'modern-screenshot';
-import type { TweetData, ThreadData } from '../../types/tweet';
+import type { TweetData, ThreadData } from '../../types/tweet.ts';
 
 export const FALLBACK_PLACEHOLDER_DATA_URL =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%23333333"/></svg>';

@@ -21,7 +21,7 @@
  * are two different decisions about two different surfaces.
  */
 
-import type { ThreadData, TweetData } from '../../types/tweet';
+import type { ThreadData, TweetData } from '../../types/tweet.ts';
 
 /**
  * A tweet's key within its thread.

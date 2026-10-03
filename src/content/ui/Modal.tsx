@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
-import type { Locale } from '../../types/card';
-import { getTranslation, sanitizeLocale } from '../i18n';
+import type { Locale } from '../../types/card.ts';
+import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { Sparkles, X } from 'lucide-preact';
 
 let activeScrollLocks = 0;
