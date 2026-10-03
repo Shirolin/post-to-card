@@ -1515,6 +1515,81 @@ test('F17.13: qrFill reaches the QR, and the quote honours the theme radius', ()
   );
 });
 
+test('F17.16: the media gutter is a material decision, not one repeated value', () => {
+  // `--media-gap` was documented as the gutter a material sets tight or generous,
+  // and all eight themes shipped 4px, so the token decided nothing. The check
+  // locks the *reason it existed*: the gutter must actually vary, and a tight
+  // material must stay tighter than a loud one.
+  const gutters = THEME_IDS.map((id) => parseFloat(THEMES[id].tokens.rhythm.mediaGap));
+  assert.ok(
+    new Set(gutters).size >= 3,
+    `media gutter must vary by material, got ${JSON.stringify(gutters)}`
+  );
+  const gutterOf = (id: string): number => gutters[THEME_IDS.indexOf(id)];
+  // Lock the actual design intent per material rather than a relative ordering,
+  // which any uniform value would satisfy. Each entry states why that gutter.
+  const EXPECTED_GUTTERS: Record<string, number> = {
+    // Precision rules, precision gutters.
+    hairline: 3,
+    terminal: 3,
+    // The papers sit in the middle.
+    parchment: 5,
+    nocturne: 4,
+    cyanotype: 4,
+    broadsheet: 4,
+    // Two stitch frames side by side read as one broken dashed line at 4px.
+    kraft: 6,
+    // The pictures are boxed hard and pushed apart, like the 3px sheet edge.
+    brutalist: 8,
+  };
+  for (const id of THEME_IDS) {
+    assert.equal(
+      gutterOf(id),
+      EXPECTED_GUTTERS[id],
+      `${id} gutter is ${gutterOf(id)}px, expected ${EXPECTED_GUTTERS[id]}px`
+    );
+  }
+  // Guard the shape of the set too, so deleting a theme cannot quietly pass.
+  assert.ok(
+    new Set(Object.values(EXPECTED_GUTTERS)).size >= 3,
+    'the gutters themselves must express at least three distinct spacings'
+  );
+  // The gutter still has to reach the grid: a token nothing consumes is how the
+  // value drifted into eight copies in the first place.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const grid = css.slice(css.indexOf('.media-grid {'));
+  assert.ok(
+    grid.slice(0, grid.indexOf('}')).includes('var(--media-gap'),
+    'the media grid must consume --media-gap, not a literal'
+  );
+});
+
+test('F17.17: every surface behind the media is the material recess, not a black wash', () => {
+  // A contained video leaves letterbox bars, and they used to get a hard-coded
+  // rgba(0,0,0,0.2) while photos sat transparent — a smudge on warm paper, and
+  // a second implementation of the recess the quote panel and avatar already
+  // take from the token.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const video = css.slice(css.indexOf('.media-item.media-video-item {'));
+  const body = video.slice(0, video.indexOf('}')).replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(
+    body.includes('var(--quote-bg'),
+    'the video recess must come from the material token'
+  );
+  assert.ok(
+    !/rgba\(0,\s*0,\s*0/.test(body),
+    'the video container must not press a hard-coded black behind the poster'
+  );
+  // The avatar recess is the same idea, so it must read from the same token
+  // rather than a white wash that only suits the darks.
+  const avatar = css.slice(css.indexOf('.author-avatar {'));
+  const avatarBody = avatar.slice(0, avatar.indexOf('}')).replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(
+    avatarBody.includes('var(--quote-bg'),
+    'the avatar recess must come from the material token'
+  );
+});
+
 test('F17.14: the thread layout breathes with the material, and its connector is drawn', () => {
   // Two spots the rhythm rollout missed: the thread column kept a hard-coded
   // 10px gap (so a material's breathing vanished once a post became a thread),
