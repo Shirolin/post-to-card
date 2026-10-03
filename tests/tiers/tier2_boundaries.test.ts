@@ -4,7 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { DomElement, DomImageElement, createDomElement } from '../env/browser.ts';
+import { DomElement, DomImageElement, DomDocument, createDomElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
 import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
@@ -12,6 +12,8 @@ import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/e
 import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
+import { createTriggerButton, applyTriggerLocale } from '../../src/content/adapter/injection.ts';
+import { getTranslation } from '../../src/content/i18n.ts';
 import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
@@ -951,6 +953,70 @@ test('Tier 2.56: a post without an id is keyed by its position, as every surface
   const scope = threadScope(withoutIds, ['1']);
   assert.deepEqual(Array.from(scope.excluded), ['1']);
   assert.equal(scope.activeCount, 2);
+});
+
+// -------------------------------------------------------------
+// The language the injected triggers speak
+// -------------------------------------------------------------
+
+/**
+ * Runs `body` against a fake document, which is what the injection code reads.
+ * The triggers are injected before preferences resolve, so their label has to be
+ * correctable after the fact, and that can only be observed against a document.
+ */
+function withFakeDocument<T>(body: (doc: DomDocument) => T): T {
+  const scope = globalThis as { document?: unknown };
+  const previous = scope.document;
+  const doc = new DomDocument();
+  scope.document = doc;
+  try {
+    return body(doc);
+  } finally {
+    scope.document = previous;
+  }
+}
+
+test('Tier 2.57: a language chosen after the triggers exist reaches them', () => {
+  // A trigger is built before the saved preferences have resolved and then stays
+  // on the page, so a language picked afterwards has to reach the buttons that
+  // are already there. The label is also the button's accessible name, which is
+  // why it cannot be left to a title attribute the card never re-reads.
+  withFakeDocument((doc) => {
+    const injected = createTriggerButton(() => {});
+    doc.body.appendChild(injected);
+    const beforeSwitch = injected.getAttribute('title');
+    assert.ok(beforeSwitch, 'a trigger must carry a label from the moment it exists');
+
+    applyTriggerLocale('zh-CN');
+
+    const expected = getTranslation('zh-CN').triggerButtonTitle;
+    assert.notEqual(expected, beforeSwitch, 'the two dictionaries must differ for this to prove anything');
+    assert.equal(injected.getAttribute('title'), expected, 'the label must follow the saved language');
+    assert.equal(injected.getAttribute('aria-label'), expected, 'the accessible name follows too');
+  });
+});
+
+test('Tier 2.58: a trigger injected after the change agrees with the ones above it', () => {
+  // The locale is held in the module rather than passed down, because that is
+  // how it reaches buttons injected earlier. That is only safe while the factory
+  // and the applier read the same place: otherwise a tweet that scrolls in later
+  // would say something different from the tweets already on screen.
+  withFakeDocument((doc) => {
+    applyTriggerLocale('en-US');
+    const earlier = createTriggerButton(() => {});
+    doc.body.appendChild(earlier);
+
+    applyTriggerLocale('zh-CN');
+    const later = createTriggerButton(() => {});
+    doc.body.appendChild(later);
+
+    assert.equal(
+      later.getAttribute('title'),
+      earlier.getAttribute('title'),
+      'both triggers must carry the same label'
+    );
+    assert.equal(earlier.getAttribute('title'), getTranslation('zh-CN').triggerButtonTitle);
+  });
 });
 
 // -------------------------------------------------------------
