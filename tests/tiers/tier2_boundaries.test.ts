@@ -12,8 +12,9 @@ import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/e
 import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
+import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
-import type { TweetData, MediaItem } from '../../src/types/tweet.ts';
+import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig, RadiusOption, PaddingOption } from '../../src/types/card.ts';
 import type { ExtensionMessage } from '../../src/types/messages.ts';
 
@@ -868,6 +869,88 @@ test('Tier 2.51: a re-plan replaces the previous layout instead of adding to it'
   assert.ok(!grid.classList.contains('grid-default'), 'the previous layout class must be gone');
   assert.ok(!grid.classList.contains('grid-columns'), 'no other layout class may linger');
   assert.equal(grid.style.aspectRatio, '0.92');
+});
+
+// -------------------------------------------------------------
+// Thread scope: exclusions saved for a thread that is no longer open
+// -------------------------------------------------------------
+
+/** A thread of `count` posts, ids `t1..tn`, targeting the second one. */
+function thread(count: number): ThreadData {
+  const author = { name: 'A', handle: '@a', avatarUrl: '' };
+  return {
+    author,
+    isSingle: count === 1,
+    targetTweetIndex: Math.min(1, count - 1),
+    tweets: Array.from({ length: count }, (_, i) => ({
+      id: `t${i + 1}`,
+      url: `https://x.com/a/status/t${i + 1}`,
+      author,
+      text: `post ${i + 1}`,
+      timestamp: '2026-02-01T10:00:00.000Z',
+    })),
+  };
+}
+
+test('Tier 2.52: another thread’s exclusions do not count against this card', () => {
+  // Exclusions live in the saved preferences, not with the thread, so they
+  // outlive it. Two keys left over from a previous thread must not decide how
+  // many tweets this one may drop: the on-card exclude button appears whenever
+  // more than one tweet shows, so a stricter verdict leaves a button that is
+  // there, focusable and inert.
+  const three = thread(3);
+  const scope = threadScope(three, ['other1', 'other2']);
+
+  assert.equal(scope.activeCount, 3);
+  assert.equal(scope.totalCount, 3);
+  assert.equal(scope.canExcludeMore, true);
+  assert.equal(scope.excluded.size, 0);
+});
+
+test('Tier 2.53: building the next set from the scope drops the stale keys', () => {
+  // The cure for stale keys is that callers write from the scoped set, so the
+  // first exclusion after switching threads cleans the storage as a side
+  // effect and no rule about when to clear is needed anywhere.
+  const scope = threadScope(thread(3), ['other1', 'other2', 't1']);
+  assert.deepEqual(Array.from(scope.excluded), ['t1']);
+
+  const next = new Set(scope.excluded);
+  next.add('t2');
+  assert.deepEqual(Array.from(next).sort(), ['t1', 't2']);
+});
+
+test('Tier 2.54: one tweet left is the one that has to stay', () => {
+  const three = thread(3);
+  assert.equal(threadScope(three, []).canExcludeMore, true);
+  assert.equal(threadScope(three, ['t1']).canExcludeMore, true);
+  assert.equal(threadScope(three, ['t1', 't2']).canExcludeMore, false);
+  assert.equal(threadScope(three, ['t1', 't2']).activeCount, 1);
+});
+
+test('Tier 2.55: the scope reports the raw count and leaves the floor to the surface', () => {
+  // Everything excluded is a state the surfaces have to survive rather than one
+  // the scope hides: the card renders a fallback tweet and the preview summary
+  // floors its count, and those are two different decisions.
+  const scope = threadScope(thread(2), ['t1', 't2']);
+  assert.equal(scope.activeCount, 0);
+  assert.equal(scope.canExcludeMore, false);
+});
+
+test('Tier 2.56: a post without an id is keyed by its position, as every surface must', () => {
+  // The controls panel and the card have to name the same tweet. A post that
+  // arrived without an id is identified by where it sits, so the derivation is
+  // part of the scope rather than written out at each call site.
+  const withoutIds = thread(3);
+  withoutIds.tweets[1] = { ...withoutIds.tweets[1], id: '' };
+
+  assert.equal(tweetKey(withoutIds.tweets[0], 0), 't1');
+  assert.equal(tweetKey(withoutIds.tweets[1], 1), '1');
+  assert.equal(tweetKey(undefined, 2), '2', 'an index past the end still names a position');
+
+  // Which means the id-less post is excluded by position, and only by position.
+  const scope = threadScope(withoutIds, ['1']);
+  assert.deepEqual(Array.from(scope.excluded), ['1']);
+  assert.equal(scope.activeCount, 2);
 });
 
 // -------------------------------------------------------------
