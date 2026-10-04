@@ -19,6 +19,16 @@ export interface RichToken {
 }
 
 /**
+ * A node's children as an indexable list.
+ *
+ * `childNodes` is optional on the DOM shim and may be absent on a bare object,
+ * and several walks here need it by index. One cast, one place to change.
+ */
+function childNodesOf(node: Node): ArrayLike<Node> {
+  return (node as { childNodes?: ArrayLike<Node> }).childNodes || [];
+}
+
+/**
  * Returns true when `el` sits inside an <article> that is itself nested in
  * another <article> (how X sometimes renders a quoted post).
  */
@@ -101,7 +111,7 @@ function isInsideQuoteTweet(el: Element): boolean {
  */
 function extractDisplayName(userNameEl: Element): string {
   const handleLink = userNameEl.querySelector('a[href^="/"]:not([href*="/status/"])');
-  const children = (userNameEl as { childNodes?: ArrayLike<Node> }).childNodes || [];
+  const children = childNodesOf(userNameEl);
 
   if (handleLink) {
     let nameParts = '';
@@ -205,7 +215,24 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
   if (!tweetTextEl) return [];
 
   const tokens: RichToken[] = [];
-  const children = (tweetTextEl as { childNodes?: ArrayLike<Node> }).childNodes || [];
+  const children = childNodesOf(tweetTextEl);
+
+  /**
+   * True when a node would put anything visible on the card.
+   *
+   * Text is the obvious case, but an emoji renders as `<img alt="🔥">` whose
+   * `textContent` is empty -- the glyph lives in the attribute. Treating that as
+   * whitespace made a pic link followed by an emoji look like the last thing in
+   * the body, so the token pass dropped a link the body-text stripper kept.
+   */
+  function siblingHasContent(node: Node): boolean {
+    if ((node.textContent || '').trim() !== '') return true;
+    const el = node as Element;
+    if (typeof el.getAttribute === 'function' && (el.getAttribute('alt') || '').trim() !== '') {
+      return true;
+    }
+    return false;
+  }
 
   /**
    * True when nothing but whitespace follows `node` in the body.
@@ -222,16 +249,15 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
     while (current && current !== tweetTextEl) {
       const parent: Node | null = current.parentNode;
       if (!parent) return false;
-      const siblings = (parent as { childNodes?: ArrayLike<Node> }).childNodes || [];
+      const siblings = childNodesOf(parent);
       let seen = false;
       for (let i = 0; i < siblings.length; i++) {
         if (siblings[i] === current) {
           seen = true;
           continue;
         }
-        // Anything after `current`, or any non-empty sibling once it is passed,
-        // means the body does not end here.
-        if (seen && (siblings[i].textContent || '').trim() !== '') return false;
+        // Only what follows `current` counts; `seen` gates the check.
+        if (seen && siblingHasContent(siblings[i])) return false;
       }
       current = parent;
     }

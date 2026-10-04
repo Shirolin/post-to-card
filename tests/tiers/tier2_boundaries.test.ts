@@ -1327,6 +1327,33 @@ test('Tier 2.65: the host matcher and the tail stripper are the same rule', () =
   assert.equal(isPicMediaLink('https://example.com/post'), false);
 });
 
+test('Tier 2.66: an emoji after a pic link keeps the link, in both views', () => {
+  // The two views agreed on a link at the very end and on one mid-sentence, but
+  // not on a link with an emoji after it: the DOM walk saw the emoji's `<img>`
+  // as empty (its glyph is in the `alt` attribute, not in `textContent`) and
+  // called the link trailing, while the text stripper's `\S+` swallowed the
+  // restored glyph and called it trailing too -- so the body dropped it and the
+  // token list kept it, or the reverse, depending on which side ran first. Both
+  // now see the emoji as content after the link, so the link is not the tail.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+      <div data-testid="tweetText">
+        <span>look at </span>
+        <a href="https://pic.x.com/mine" role="link">pic.x.com/mine</a>
+        <img alt="🔥">
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  const inText = (tweet?.text || '').includes('pic.x.com/mine');
+  const inTokens = (tweet?.richTokens || []).some((tk) => tk.value.includes('pic.x.com/mine'));
+
+  assert.ok(inText, 'an emoji after the link means the link is not the appended tail');
+  assert.equal(inTokens, inText, 'the two views must agree about the same link');
+});
+
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 2
 // -------------------------------------------------------------

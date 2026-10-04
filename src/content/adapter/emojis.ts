@@ -92,8 +92,14 @@ export function isPicMediaLink(value: string): boolean {
  */
 export function stripPicTwitterLink(text: string): string {
   if (!text) return '';
+  // The path is matched with URL characters only, not `\S+`: an emoji is glued
+  // straight onto the link once it is restored to a glyph, and `\S+` would eat
+  // it, making a link the author wrote mid-post look like the appended tail and
+  // strip it. Anything that is not a URL character after the link means the link
+  // is not the last thing, so it stays -- which is what the token pass does too.
+  const PIC_PATH = '[A-Za-z0-9\\-._~:/?#\\[\\]@!$&\'()*+,;=%]+';
   return text
-    .replace(new RegExp(`(?:https?://)?${PIC_MEDIA_HOST}/\\S+\\s*$`), '')
+    .replace(new RegExp(`(?:https?://)?${PIC_MEDIA_HOST}/${PIC_PATH}\\s*$`), '')
     .trim();
 }
 

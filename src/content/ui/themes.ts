@@ -102,7 +102,7 @@ export interface ThemeTokens {
   texture: string;
   /** The ink of every drawn line: the signature, the footer rule, the thread. */
   rule: string;
-  /** `solid`, `dashed` or `dotted`; a receipt's rules are torn along a dash. */
+  /** `solid` or `dashed`; a receipt's rules are torn along a dash. */
   ruleStyle: RuleStyle;
   signature: SignatureSpec;
   /**
