@@ -953,10 +953,17 @@ test('F17.19: the type scale is a material token, not a block of CSS per materia
     for (const field of [
       'displaySize', 'displayWeight', 'displayTracking', 'quoteSize',
       'bodySize', 'bodyLeading', 'metaSize', 'metaTracking',
-      'metaUppercase', 'metaTabular', 'metaDivider',
+      'metaUppercase', 'metaTabular',
     ] as const) {
       assert.notEqual(type[field], undefined, `${id}.type.${field} must be stated`);
     }
+    // The stat divider is a footnote treatment, not a letterform, so it sits on
+    // the tokens beside `statChip` rather than inside the type scale.
+    assert.notEqual(
+      THEMES[id].tokens.metaDivider,
+      undefined,
+      `${id}.metaDivider must be stated`
+    );
   }
 });
 

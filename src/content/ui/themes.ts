@@ -45,8 +45,6 @@ export interface TypeScale {
   metaUppercase: boolean;
   /** Tabular figures, so counts line up as a data strip. */
   metaTabular: boolean;
-  /** Rules between the stat columns, as a darkroom data strip is ruled. */
-  metaDivider: boolean;
 }
 
 export interface ThemeTokens {
@@ -115,6 +113,12 @@ export interface ThemeTokens {
   quoteStyle: QuoteStyle;
   /** Stat counts drawn as small rounded chips rather than a bare row. */
   statChip: boolean;
+  /**
+   * Rules between the stat columns, as a darkroom data strip is ruled. A
+   * footnote treatment rather than a letterform, so it lives beside `statChip`
+   * rather than inside `TypeScale`.
+   */
+  metaDivider: boolean;
   rhythm: Rhythm;
   fontDisplay: string;
   fontBody: string;
@@ -162,7 +166,7 @@ export interface SignatureSpec {
 
 export type MediaFrameStyle = 'rule' | 'mat';
 
-export type RuleStyle = 'solid' | 'dashed' | 'dotted';
+export type RuleStyle = 'solid' | 'dashed';
 
 export type QuoteStyle = 'filled' | 'outlined';
 
@@ -281,8 +285,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0.01em',
         metaUppercase: false,
         metaTabular: true,
-        metaDivider: false,
       },
+      metaDivider: false,
       canvas: '#d6d7d3',
       surface: '#f7f7f4',
       text: '#101011',
@@ -336,8 +340,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0.08em',
         metaUppercase: false,
         metaTabular: true,
-        metaDivider: true,
       },
+      metaDivider: true,
       canvas: '#050506',
       surface: '#1b1b1e',
       text: '#ededf0',
@@ -391,8 +395,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0.03em',
         metaUppercase: false,
         metaTabular: true,
-        metaDivider: true,
       },
+      metaDivider: true,
       canvas: '#d3d6cf',
       surface: '#f2f3ee',
       text: '#17238a',
@@ -448,8 +452,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0.05em',
         metaUppercase: false,
         metaTabular: false,
-        metaDivider: false,
       },
+      metaDivider: false,
       canvas: '#bcc6bb',
       surface: '#e4e9e3',
       text: '#161f1a',
@@ -503,8 +507,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0.01em',
         metaUppercase: false,
         metaTabular: true,
-        metaDivider: false,
       },
+      metaDivider: false,
       canvas: '#9fb9d6',
       surface: '#d8e6f4',
       text: '#0d2540',
@@ -557,8 +561,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0.02em',
         metaUppercase: false,
         metaTabular: false,
-        metaDivider: false,
       },
+      metaDivider: false,
       canvas: '#080a08',
       surface: '#161d16',
       text: '#d8f5d0',
@@ -614,8 +618,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0.08em',
         metaUppercase: true,
         metaTabular: true,
-        metaDivider: false,
       },
+      metaDivider: false,
       canvas: '#c9c9c3',
       surface: '#f5f5f1',
       text: '#1c1c1b',
@@ -671,8 +675,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaTracking: '0',
         metaUppercase: false,
         metaTabular: false,
-        metaDivider: false,
       },
+      metaDivider: false,
       canvas: '#141413',
       surface: '#ffe64a',
       text: '#111110',

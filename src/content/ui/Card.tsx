@@ -502,8 +502,8 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
 
   const imageFit = config.imageFit || 'contain';
   const mediaLayout = config.mediaLayout || 'grid';
-  // `data-radius`/`radius-*` stay keyed on the stored option so the explicit
-  // corner rules still match; only the inline values resolve 'theme'.
+  // The stored option resolves to the card's own corner and the corner inside
+  // it; both are injected, so the stylesheet never has to re-derive either.
   const radius = resolveRadius(config.borderRadius, config.theme);
   const mediaRadius = radius.media;
   const tokens = THEMES[config.theme].tokens;
@@ -548,7 +548,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       data-signature={tokens.signature.style}
       data-quote-style={tokens.quoteStyle}
       data-media-frame={tokens.mediaFrame}
-      data-meta-divider={tokens.type.metaDivider ? 'on' : undefined}
+      data-meta-divider={tokens.metaDivider ? 'on' : undefined}
       data-keyline={tokens.keyline ? 'on' : undefined}
       data-stat-chip={tokens.statChip ? 'on' : undefined}
       style={{

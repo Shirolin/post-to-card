@@ -208,20 +208,34 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
   const children = (tweetTextEl as { childNodes?: ArrayLike<Node> }).childNodes || [];
 
   /**
-   * True when `node` is the last thing in the body, ignoring empty text.
+   * True when nothing but whitespace follows `node` in the body.
    *
-   * X appends the media permalink at the very end of the text. A pic link the
-   * author wrote mid-sentence is their own text and belongs in the card, so the
-   * position is what separates the two -- which is exactly what the body-text
-   * stripper already keys on, and what this pass used not to.
+   * X appends the media permalink at the very end of the text, and a pic link
+   * the author wrote mid-sentence is their own text. Position is what separates
+   * them, and this walks up through wrappers to answer it: X nests the anchor
+   * inside a `<span>` in some layouts, so comparing only the direct children of
+   * the body missed it and left the token pass keeping a link the text stripper
+   * had already removed.
    */
   function isTrailingNode(node: Node): boolean {
-    for (let i = children.length - 1; i >= 0; i--) {
-      const sibling = children[i];
-      if (sibling === node) return true;
-      if ((sibling.textContent || '').trim() !== '') return false;
+    let current: Node | null = node;
+    while (current && current !== tweetTextEl) {
+      const parent: Node | null = current.parentNode;
+      if (!parent) return false;
+      const siblings = (parent as { childNodes?: ArrayLike<Node> }).childNodes || [];
+      let seen = false;
+      for (let i = 0; i < siblings.length; i++) {
+        if (siblings[i] === current) {
+          seen = true;
+          continue;
+        }
+        // Anything after `current`, or any non-empty sibling once it is passed,
+        // means the body does not end here.
+        if (seen && (siblings[i].textContent || '').trim() !== '') return false;
+      }
+      current = parent;
     }
-    return false;
+    return current === tweetTextEl;
   }
 
   function processNode(node: Node | null | undefined) {

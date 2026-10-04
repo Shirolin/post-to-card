@@ -577,12 +577,17 @@
    item is border-box), so the frame never grows the grid track. */
 .post-to-card-target[data-media-frame="mat"] .media-grid .media-item {
   padding: 10px;
-  background: var(--mat);
 }
 
+/* The mount colour, stated once. The video item is a media item too, so the
+   rule above already reaches it -- but `.media-item.media-video-item` sets its
+   own background further down and would win on specificity, so the colour is
+   restated for it in the same place rather than duplicated apart. */
+.post-to-card-target[data-media-frame="mat"] .media-grid .media-item,
 .post-to-card-target[data-media-frame="mat"] .media-grid .media-video-item {
   background: var(--mat);
 }
+
 /* ---------------- Single Image (Count = 1) ---------------- */
 .media-grid[data-count="1"] {
   grid-template-columns: 1fr;
@@ -1203,12 +1208,18 @@
   flex: 1;
 }
 
-.card-timestamp {
+/* Footnote and data figures share the material's meta treatment. Stated once,
+   because both take all four of the same tokens and only the layout differs. */
+.card-timestamp,
+.stats-row {
   font-size: var(--type-meta-size);
   letter-spacing: var(--type-meta-tracking);
   text-transform: var(--type-meta-transform);
   font-variant-numeric: var(--type-meta-numeric);
   color: var(--faint, var(--text-sec, #9ca3af));
+}
+
+.card-timestamp {
   line-height: 1.4;
 }
 
@@ -1217,11 +1228,6 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  color: var(--faint, var(--text-sec, #9ca3af));
-  font-size: var(--type-meta-size);
-  letter-spacing: var(--type-meta-tracking);
-  text-transform: var(--type-meta-transform);
-  font-variant-numeric: var(--type-meta-numeric);
 }
 
 .stat-item {
