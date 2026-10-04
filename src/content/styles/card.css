@@ -128,32 +128,28 @@
 
 /* -------------------------------------------------------------
    Border Radius Options
+
+   The card's own corner is the explicit option; the corner inside it is
+   `--media-radius`, which Card.tsx resolves from `resolveRadius` and injects
+   unconditionally. This used to be a second copy of that table, written by hand
+   per explicit option and with no `theme` row at all — so the default option
+   left multi-image media at 0px while a single image of the same material took
+   the material's own radius. One table now, and the default option is a real
+   option rather than the one the copy forgot.
    ------------------------------------------------------------- */
 .post-to-card-target[data-radius="0px"] {
   border-radius: 0px;
 }
-.post-to-card-target[data-radius="0px"] .media-grid,
-.post-to-card-target[data-radius="0px"] .media-item,
-.post-to-card-target[data-radius="0px"] .quote-card {
-  border-radius: 0px;
-}
-
 .post-to-card-target[data-radius="12px"] {
   border-radius: 12px;
 }
-.post-to-card-target[data-radius="12px"] .media-grid,
-.post-to-card-target[data-radius="12px"] .media-item,
-.post-to-card-target[data-radius="12px"] .quote-card {
-  border-radius: 8px;
-}
-
 .post-to-card-target[data-radius="20px"] {
   border-radius: 20px;
 }
-.post-to-card-target[data-radius="20px"] .media-grid,
-.post-to-card-target[data-radius="20px"] .media-item,
-.post-to-card-target[data-radius="20px"] .quote-card {
-  border-radius: 14px;
+.post-to-card-target .media-grid,
+.post-to-card-target .media-item,
+.post-to-card-target .quote-card {
+  border-radius: var(--media-radius, 0px);
 }
 
 /* -------------------------------------------------------------

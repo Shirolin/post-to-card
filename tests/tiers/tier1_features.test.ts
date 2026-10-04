@@ -960,6 +960,35 @@ test('F17.19: the type scale is a material token, not a block of CSS per materia
   }
 });
 
+test('F17.20: the inner corner comes from the resolved radius, not a second table', () => {
+  // card.css used to carry its own copy of the radius table: a per-option rule
+  // setting the media and quote corners by hand. It had no `theme` row, so the
+  // default option left multi-image media at 0px while a single image of the
+  // same material took the material's own radius. The copy is gone; the inner
+  // corner is `--media-radius`, which Card.tsx injects from `resolveRadius`.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+
+  assert.ok(
+    css.includes('border-radius: var(--media-radius'),
+    'the inner corner must be read from the injected token'
+  );
+  for (const option of ['0px', '12px', '20px']) {
+    assert.ok(
+      css.includes(`[data-radius="${option}"] {`),
+      `the card corner for ${option} must still be stated`
+    );
+  }
+  assert.ok(
+    !/\[data-radius="[^"]+"\] \.media-(grid|item)/.test(css),
+    'the inner corner must not be set per option again'
+  );
+  assert.ok(
+    card.includes("'--media-radius': mediaRadius"),
+    '--media-radius must be injected unconditionally, or multi-image falls back'
+  );
+});
+
 test('F17.18: every card-root option is named once, by its data attribute', () => {
   // Each option used to be emitted twice, as a class and as a data attribute,
   // and card.css matched both spellings in every rule. Same element, same
