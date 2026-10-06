@@ -10,3 +10,4 @@ export * from './extractor.ts';
 export * from './thread.ts';
 export * from './social.ts';
 export * from './injection.ts';
+export * from './resolver.ts';

@@ -18,8 +18,7 @@
  * an isolated world.
  */
 
-import type { ThreadData } from '../../types/tweet.ts';
-import { extractContinuousThread, TWEET_ARTICLE_SELECTOR } from './thread.ts';
+import { TWEET_ARTICLE_SELECTOR } from './thread.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../ui/themes.ts';
 
 interface CustomObserver {
@@ -426,16 +425,13 @@ function isTopLevelActionBar(el: Element): boolean {
  * 3. Hooks popstate and history pushState/replaceState for SPA transitions.
  */
 export function initTwitterInjection(
-  onCardTrigger: (data: ThreadData, article: Element) => void
+  onCardTrigger: (article: Element) => void
 ): { disconnect: () => void; injectAll: () => void; triggerActiveTweet: () => boolean } {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let observer: CustomObserver | null = null;
 
   const handleArticleTrigger = (article: Element) => {
-    const threadData = extractContinuousThread(article);
-    // The originating element is passed through so the caller can correlate the
-    // DOM result with any structured response captured for the same tweet.
-    onCardTrigger(threadData, article);
+    onCardTrigger(article);
   };
 
   // 1. Initial preference load. Visibility hides the triggers; the locale is what

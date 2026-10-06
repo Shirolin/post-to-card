@@ -855,11 +855,22 @@ export function extractTweetStats(article: Element): TweetStats | undefined {
   return stats;
 }
 
+function findTweetStatusLink(article: Element): Element | null {
+  const links = article.querySelectorAll('a[href*="/status/"]');
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    if (!link.closest?.('[data-testid="quoteTweet"]')) {
+      return link;
+    }
+  }
+  return null;
+}
+
 /**
  * Extracts tweet ID from status link or current URL.
  */
 export function extractTweetId(article: Element): string {
-  const statusLink = article.querySelector('a[href*="/status/"]:not([data-testid="quoteTweet"] a)');
+  const statusLink = findTweetStatusLink(article);
   if (statusLink) {
     const href = statusLink.getAttribute('href') || '';
     const match = href.match(/\/status\/(\d+)/);
@@ -878,7 +889,7 @@ export function extractTweetId(article: Element): string {
  * Extracts canonical permalink URL for the tweet.
  */
 export function extractTweetUrl(article: Element): string {
-  const statusLink = article.querySelector('a[href*="/status/"]:not([data-testid="quoteTweet"] a)');
+  const statusLink = findTweetStatusLink(article);
   if (statusLink) {
     const href = statusLink.getAttribute('href') || '';
     if (href.startsWith('http')) return href;

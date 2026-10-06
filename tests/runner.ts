@@ -9,6 +9,7 @@ import { runTier3 } from './tiers/tier3_interactions.test.ts';
 import { runTier4 } from './tiers/tier4_workloads.test.ts';
 import { runTierI18n } from './tiers/tier_i18n.test.ts';
 import { runTierGraphQL } from './tiers/tier_graphql.test.ts';
+import { runTierResolver } from './tiers/tier_resolver.test.ts';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -42,6 +43,9 @@ async function main() {
   }
   if (!targetTier || targetTier === 'graphql') {
     tiersToRun.push({ name: 'Tier GraphQL: Structured Response Parsing', run: runTierGraphQL });
+  }
+  if (!targetTier || targetTier === 'resolver') {
+    tiersToRun.push({ name: 'Tier Resolver: Deep Unified Thread Resolution', run: runTierResolver });
   }
 
   for (const tier of tiersToRun) {
