@@ -84,7 +84,6 @@ function renderTweetContent(tweet: TweetData) {
 
 function renderMediaGrid(
   media: MediaItem[] | undefined,
-  mediaRadius: string,
   altPrefix: string = 'Tweet photo',
   imageFit: ImageFitOption = 'contain',
   aspectRatio: AspectRatioOption = 'auto',
@@ -113,13 +112,11 @@ function renderMediaGrid(
       data-layout={mediaLayout}
       data-grid-layout={plan.layout}
       style={{
-        borderRadius: mediaRadius,
         aspectRatio: plan.aspectRatio,
       }}
     >
       {items.map((m, idx) => {
         const isVideo = m.type === 'video' || m.type === 'gif';
-        const itemRadius = (count === 1 || mediaLayout === 'stack') ? mediaRadius : undefined;
 
         if (isVideo) {
           return (
@@ -130,7 +127,6 @@ function renderMediaGrid(
               data-layout={mediaLayout}
               data-media-type={m.type}
               style={{
-                borderRadius: itemRadius,
                 aspectRatio: (count === 1 && m.aspectRatio) ? `${m.aspectRatio}` : undefined,
               }}
             >
@@ -184,7 +180,6 @@ function renderMediaGrid(
             class={`media-item ${fitClass} ${layoutClass}`}
             data-fit={imageFit}
             data-layout={mediaLayout}
-            style={{ borderRadius: itemRadius }}
             loading="eager"
             onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => {
               const imgEl = e.currentTarget;
@@ -341,7 +336,6 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
 
 function renderQuoteCard(
   quotePost: NonNullable<TweetData['quotePost']>,
-  mediaRadius: string,
   t: ReturnType<typeof getTranslation>,
   imageFit: ImageFitOption,
   aspectRatio: AspectRatioOption,
@@ -354,14 +348,14 @@ function renderQuoteCard(
 
   if (quotePost.isUnavailable) {
     return (
-      <div class="quote-card quote-card-unavailable" style={{ borderRadius: mediaRadius }}>
+      <div class="quote-card quote-card-unavailable">
         <span class="quote-unavailable-text">{t.unavailablePost}</span>
       </div>
     );
   }
 
   return (
-    <div class="quote-card" style={{ borderRadius: mediaRadius }}>
+    <div class="quote-card">
       <div class="quote-author">
         <img
           src={author.avatarUrl || defaultAvatar}
@@ -399,7 +393,7 @@ function renderQuoteCard(
       ) : text ? (
         <div class="quote-text">{text}</div>
       ) : null}
-      {renderMediaGrid(quotePost.media, mediaRadius, t.photoAlt, imageFit, aspectRatio, mediaLayout, t.videoLabel, showPlayButton)}
+      {renderMediaGrid(quotePost.media, t.photoAlt, imageFit, aspectRatio, mediaLayout, t.videoLabel, showPlayButton)}
     </div>
   );
 }
@@ -408,7 +402,6 @@ function renderSingleTweet(
   tweet: TweetData,
   config: CardConfig,
   t: ReturnType<typeof getTranslation>,
-  mediaRadius: string,
   imageFit: ImageFitOption,
   mediaLayout: MediaLayoutOption
 ) {
@@ -418,8 +411,8 @@ function renderSingleTweet(
       {renderAuthorHeader(tweet.author, config.blurAuthor, t.verified)}
       {renderTranslationNotice(tweet)}
       {renderTweetContent(tweet)}
-      {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-      {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
+      {renderMediaGrid(tweet.media, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
+      {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
     </div>
   );
 }
@@ -429,7 +422,6 @@ function renderThreadTweet(
   isLast: boolean,
   config: CardConfig,
   t: ReturnType<typeof getTranslation>,
-  mediaRadius: string,
   imageFit: ImageFitOption,
   mediaLayout: MediaLayoutOption,
   onExcludeTweet?: (tweetId: string) => void,
@@ -473,8 +465,8 @@ function renderThreadTweet(
         {renderAuthorDetails(tweet.author, config.blurAuthor, t.verified)}
         {renderTranslationNotice(tweet)}
         {renderTweetContent(tweet)}
-        {renderMediaGrid(tweet.media, mediaRadius, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-        {tweet.quotePost && renderQuoteCard(tweet.quotePost, mediaRadius, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
+        {renderMediaGrid(tweet.media, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
+        {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
       </div>
     </div>
   );
@@ -605,7 +597,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
     >
       <div class="post-to-card-body-content">
         {!isThread ? (
-          renderSingleTweet(mainTweet, config, t, mediaRadius, imageFit, mediaLayout)
+          renderSingleTweet(mainTweet, config, t, imageFit, mediaLayout)
         ) : (
           <div class="thread-list">
             {effectiveTweets.map((tweet, index) => {
@@ -615,7 +607,6 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
                 isLast,
                 config,
                 t,
-                mediaRadius,
                 imageFit,
                 mediaLayout,
                 onExcludeTweet,

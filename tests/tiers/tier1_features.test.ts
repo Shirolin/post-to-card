@@ -1246,9 +1246,13 @@ test('F16.5: inline style injection populates textContent correctly', () => {
 });
 
 // -------------------------------------------------------------
-// F17: Curated Themes (3 papers + 3 non-paper stocks + 1 phase-2 + 1 experimental)
+// F17: Curated Themes (4 modern/classic + 3 papers + 3 non-paper stocks + 1 phase-2 + 1 experimental)
 // -------------------------------------------------------------
 const THEME_IDS: ThemeId[] = [
+  'minimal',
+  'midnight',
+  'glass',
+  'material',
   'gallery',
   'darkroom',
   'riso',
@@ -1259,7 +1263,7 @@ const THEME_IDS: ThemeId[] = [
   'brutalist',
 ];
 
-test('F17.1: all eight themes ship, and every theme exposes a full token set', () => {
+test('F17.1: all twelve themes ship, and every theme exposes a full token set', () => {
   assert.deepEqual(Object.keys(THEMES).sort(), [...THEME_IDS].sort());
   for (const id of THEME_IDS) {
     const tokens = THEMES[id].tokens;
@@ -1294,6 +1298,7 @@ test('F17.1b: every material names its signature, quote treatment and rhythm', (
   // A theme used to be able to omit its signature, which is how the restored
   // classics ended up as flat colour. The contract is total now.
   const signatureStyles = new Set([
+    'none',
     'rule',
     'tick-rule',
     'perforation',
@@ -1306,7 +1311,11 @@ test('F17.1b: every material names its signature, quote treatment and rhythm', (
   for (const id of THEME_IDS) {
     const { signature, quoteStyle, rhythm } = THEMES[id].tokens;
     assert.ok(signatureStyles.has(signature.style), `${id} signature style ${signature.style}`);
-    assert.ok(/^\d/.test(signature.height), `${id} signature height must be a length`);
+    if (signature.style === 'none') {
+      assert.equal(signature.height, '0px', `${id} signature height must be 0px when style is none`);
+    } else {
+      assert.ok(/^\d/.test(signature.height), `${id} signature height must be a length`);
+    }
     assert.ok(quoteStyle === 'filled' || quoteStyle === 'outlined', `${id} quoteStyle`);
     assert.ok(/^\d/.test(rhythm.gap), `${id} rhythm.gap must be a length`);
     assert.ok(/^\d/.test(rhythm.mediaGap), `${id} rhythm.mediaGap must be a length`);
@@ -1362,6 +1371,11 @@ test('F17.4: each material sets its letterforms for the object it is', () => {
   assert.match(THEMES.sumi.tokens.fontDisplay, /Kaiti|KaiTi/i);
   assert.match(THEMES.sumi.tokens.fontBody, /Songti|SimSun/);
   assert.match(THEMES.clay.tokens.fontDisplay, /Rounded|Nunito|Yuanti/);
+  // Modern themes provide distinct high-quality letterforms.
+  assert.match(THEMES.midnight.tokens.fontDisplay, /Helvetica|Arial|sans-serif/);
+  assert.match(THEMES.glass.tokens.fontDisplay, /Rounded|Nunito|Yuanti/);
+  assert.match(THEMES.minimal.tokens.fontDisplay, /sans-serif/);
+  assert.match(THEMES.material.tokens.fontDisplay, /sans-serif/);
   // Terminal and receipt both set body and display in a fixed-pitch face.
   assert.match(THEMES.terminal.tokens.fontDisplay, /monospace/);
   assert.match(THEMES.terminal.tokens.fontBody, /monospace/);
@@ -1381,21 +1395,20 @@ test('F17.5: every material states exactly one accent, and no two share it', () 
 });
 test('F17.5b: Brutalist is the only experimental theme, and it stays off the default picker', () => {
   assert.deepEqual([...EXPERIMENTAL_THEMES], ['brutalist']);
-  assert.equal(DEFAULT_CARD_CONFIG.theme, 'gallery');
+  assert.equal(DEFAULT_CARD_CONFIG.theme, 'minimal');
   assert.ok(!EXPERIMENTAL_THEMES.has(DEFAULT_CARD_CONFIG.theme));
   // Every theme must be reachable from the ordered picker list.
   assert.deepEqual([...THEME_ORDER].sort(), [...THEME_IDS].sort());
-  assert.equal(THEME_ORDER[0], 'gallery');
+  assert.equal(THEME_ORDER[0], 'minimal');
   assert.equal(THEME_ORDER[THEME_ORDER.length - 1], 'brutalist');
-  // The non-paper stocks sit in the everyday rotation, ahead of the phase-2
-  // materials, so the picker's first screen is the six everyday materials.
+  // The first six themes are the modern and everyday rotation on the picker's primary screen.
   assert.deepEqual(THEME_ORDER.slice(0, 6), [
+    'minimal',
+    'midnight',
+    'glass',
+    'material',
     'gallery',
     'darkroom',
-    'riso',
-    'sumi',
-    'clay',
-    'terminal',
   ]);
 });
 
@@ -1411,8 +1424,8 @@ test('F17.6: retired presets migrate to a live theme instead of resetting', () =
   assert.equal(sanitizeTheme('oled'), 'darkroom');
   assert.equal(sanitizeTheme('notion-white'), 'gallery');
   assert.equal(sanitizeTheme('notion-clean-white'), 'gallery');
-  assert.equal(sanitizeTheme('nonsense'), 'gallery');
-  assert.equal(sanitizeTheme(undefined), 'gallery');
+  assert.equal(sanitizeTheme('nonsense'), 'minimal');
+  assert.equal(sanitizeTheme(undefined), 'minimal');
   for (const alias of Object.keys(LEGACY_THEME_ALIASES)) {
     assert.ok(THEMES[sanitizeTheme(alias)], `legacy id ${alias} must resolve to a live theme`);
   }
@@ -1598,6 +1611,13 @@ test('F17.16: the media gutter is a material decision, not one repeated value', 
   // Lock the actual design intent per material rather than a relative ordering,
   // which any uniform value would satisfy. Each entry states why that gutter.
   const EXPECTED_GUTTERS: Record<string, number> = {
+    // Minimal and Material keep an 8px modern breathing grid.
+    minimal: 8,
+    material: 8,
+    // Midnight packs content in deep nocturnal compactness.
+    midnight: 6,
+    // Liquid Glass with generous 24px/14px corners leaves 10px ample room for diffuse light.
+    glass: 10,
     // A console and a till slip pack their pictures tight.
     terminal: 3,
     receipt: 4,
@@ -2243,8 +2263,8 @@ test('F27.3: Modal, Card watermark and CSS define zero-emoji and ratio-aware ima
   assert.ok(!cardContent.includes('<span>✨</span>'), 'Card watermark must not contain sparkle emoji');
 
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  assert.ok(cssContent.includes('.media-fit-contain'), 'CSS must include media-fit-contain rule');
-  assert.ok(cssContent.includes('.media-fit-cover'), 'CSS must include media-fit-cover rule');
+  assert.ok(cssContent.includes('data-fit="contain"'), 'CSS must include data-fit="contain" attribute rule');
+  assert.ok(cssContent.includes('data-fit="cover"'), 'CSS must include data-fit="cover" attribute rule');
   assert.ok(cssContent.includes('data-ratio="3:4"'), 'CSS must include 3:4 ratio rule');
   assert.ok(cssContent.includes('data-ratio="16:9"'), 'CSS must include 16:9 ratio rule');
 });
@@ -2259,8 +2279,8 @@ test('F27.4: mediaLayout configuration supports grid and stack with safe sanitiz
 test('F27.5: CSS defines media-layout-stack for 100% full-display of all multi images', () => {
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
   assert.ok(cssContent.includes('.media-layout-stack'), 'CSS must include .media-layout-stack');
-  assert.ok(cssContent.includes('aspect-ratio: unset !important'), 'Stack layout must unset aspect-ratio constraint');
-  assert.ok(cssContent.includes('max-height: unset !important'), 'Stack layout must unset max-height constraint for full display');
+  assert.ok(cssContent.includes('aspect-ratio: unset'), 'Stack layout must unset aspect-ratio constraint');
+  assert.ok(cssContent.includes('max-height: unset'), 'Stack layout must unset max-height constraint for full display');
 });
 
 // -------------------------------------------------------------

@@ -150,6 +150,7 @@ export interface ThemeTokens {
  * per-theme override.
  */
 export type SignatureStyle =
+  | 'none'
   | 'rule'
   | 'tick-rule'
   | 'perforation'
@@ -265,14 +266,232 @@ const CRT_TEXTURE =
   'repeating-linear-gradient(to bottom, rgba(94, 224, 138, 0.05) 0, rgba(94, 224, 138, 0.05) 1px, transparent 1px, transparent 3px)';
 
 export const THEMES: Record<ThemeId, ThemeDefinition> = {
-  // 1. Gallery — the wall label beside a framed work. A neutral off-white sheet,
+  // 1. Minimal — quiet, distraction-free modern layout. Warm paper tone, no edge line,
+  //    no top furniture, zero distraction, letting pure typography speak.
+  minimal: {
+    id: 'minimal',
+    name: 'Minimal',
+    preview: 'linear-gradient(135deg, #faf9f5 0%, #deddd6 45%, #c7d8f5 75%, #2563eb 100%)',
+    tokens: {
+      type: {
+        displaySize: '18px',
+        displayWeight: '600',
+        displayTracking: '-0.01em',
+        quoteSize: '14.5px',
+        bodySize: '16.5px',
+        bodyLeading: '1.68',
+        metaSize: '12.5px',
+        metaTracking: '0.01em',
+        metaUppercase: false,
+        metaTabular: true,
+      },
+      metaDivider: false,
+      canvas: '#deddd6',
+      surface: '#faf9f5',
+      text: '#121211',
+      muted: '#4a4a47',
+      faint: '#5e5e5b',
+      accent: '#2563eb',
+      link: '#2563eb',
+      border: '#e5e4de',
+      divider: '#e5e4de',
+      quoteBackground: '#e5e4dc',
+      quoteBorder: '#d5d4cd',
+      qrFill: '#121211',
+      mediaBorder: '#dcdbd4',
+      mediaFrame: 'rule',
+      mat: '#faf9f5',
+      keyline: false,
+      texture: 'none',
+      rule: 'transparent',
+      ruleStyle: 'solid',
+      signature: { style: 'none', height: '0px' },
+      quoteStyle: 'filled',
+      statChip: false,
+      rhythm: { gap: '18px', mediaGap: '8px' },
+      fontDisplay: SANS,
+      fontBody: SANS,
+      avatarRadius: '50%',
+      avatarShadow: 'none',
+      radius: '16px',
+      mediaRadius: '10px',
+      borderWidth: '0px',
+      shadow: 'none',
+    },
+  },
+
+  // 2. Midnight — deep nocturnal navy-grey. High contrast, easy on the eyes,
+  //    delivering an elegant dark mode without harsh pitch-black contrast.
+  midnight: {
+    id: 'midnight',
+    name: 'Midnight',
+    preview: 'linear-gradient(135deg, #181b22 0%, #101217 40%, #293856 75%, #7aa2ff 100%)',
+    tokens: {
+      type: {
+        displaySize: '18px',
+        displayWeight: '600',
+        displayTracking: '-0.01em',
+        quoteSize: '14.5px',
+        bodySize: '16.5px',
+        bodyLeading: '1.68',
+        metaSize: '12.5px',
+        metaTracking: '0.01em',
+        metaUppercase: false,
+        metaTabular: true,
+      },
+      metaDivider: false,
+      canvas: '#060709',
+      surface: '#181b22',
+      text: '#f0f2f5',
+      muted: '#a8b0ba',
+      faint: '#88909a',
+      accent: '#7aa2ff',
+      link: '#7aa2ff',
+      border: '#282e3a',
+      divider: '#242934',
+      quoteBackground: '#232936',
+      quoteBorder: '#323b4e',
+      qrFill: '#f0f2f5',
+      mediaBorder: '#2c3442',
+      mediaFrame: 'rule',
+      mat: '#181b22',
+      keyline: false,
+      texture: 'none',
+      rule: 'transparent',
+      ruleStyle: 'solid',
+      signature: { style: 'none', height: '0px' },
+      quoteStyle: 'filled',
+      statChip: false,
+      rhythm: { gap: '18px', mediaGap: '6px' },
+      fontDisplay: GROTESK,
+      fontBody: SANS,
+      avatarRadius: '50%',
+      avatarShadow: 'none',
+      radius: '16px',
+      mediaRadius: '10px',
+      borderWidth: '0px',
+      shadow: 'none',
+    },
+  },
+
+  // 3. Liquid Glass — inspired by translucent Apple liquid glass aesthetics.
+  //    A soft aurora diffuse background layered with a high-translucency white plate,
+  //    delicate specular inner highlights, and a generous 24px radius.
+  glass: {
+    id: 'glass',
+    name: 'Liquid Glass',
+    preview: 'linear-gradient(135deg, #ebf1f8 0%, #d4e4f5 40%, #7db5de 75%, #0369a1 100%)',
+    tokens: {
+      type: {
+        displaySize: '18px',
+        displayWeight: '600',
+        displayTracking: '-0.01em',
+        quoteSize: '14.5px',
+        bodySize: '16.5px',
+        bodyLeading: '1.68',
+        metaSize: '12px',
+        metaTracking: '0.01em',
+        metaUppercase: false,
+        metaTabular: true,
+      },
+      metaDivider: false,
+      canvas: '#bdc9d8',
+      surface: '#ebf1f8',
+      text: '#0f172a',
+      muted: '#475569',
+      faint: '#546479',
+      accent: '#0369a1',
+      link: '#0369a1',
+      border: 'rgba(255, 255, 255, 0.6)',
+      divider: '#c8daf0',
+      quoteBackground: '#ebf1f8',
+      quoteBorder: '#8fa8c8',
+      qrFill: '#0f172a',
+      mediaBorder: '#c0d4ed',
+      mediaFrame: 'rule',
+      mat: '#ebf1f8',
+      keyline: false,
+      texture:
+        'radial-gradient(at 0% 0%, rgba(200, 220, 255, 0.7) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(255, 215, 230, 0.6) 0px, transparent 50%)',
+      rule: 'transparent',
+      ruleStyle: 'solid',
+      signature: { style: 'none', height: '0px' },
+      quoteStyle: 'outlined',
+      statChip: true,
+      rhythm: { gap: '18px', mediaGap: '10px' },
+      fontDisplay: ROUNDED,
+      fontBody: SANS,
+      avatarRadius: '50%',
+      avatarShadow: 'none',
+      radius: '24px',
+      mediaRadius: '14px',
+      borderWidth: '1px',
+      shadow: 'inset 0 1.5px 0 0 rgba(255, 255, 255, 0.9), 0 8px 32px 0 rgba(31, 38, 135, 0.08)',
+    },
+  },
+
+  // 4. Material 3 — Google Material You in natural sage green.
+  //    Tonal surface elevations, friendly 28px pill contours, and tonal container chips.
+  material: {
+    id: 'material',
+    name: 'Material 3',
+    preview: 'linear-gradient(135deg, #f4f6f0 0%, #dfe4d8 45%, #92ab8a 75%, #3e6837 100%)',
+    tokens: {
+      type: {
+        displaySize: '18px',
+        displayWeight: '600',
+        displayTracking: '-0.01em',
+        quoteSize: '14.5px',
+        bodySize: '16.5px',
+        bodyLeading: '1.68',
+        metaSize: '12px',
+        metaTracking: '0.01em',
+        metaUppercase: false,
+        metaTabular: true,
+      },
+      metaDivider: false,
+      canvas: '#dfe4d8',
+      surface: '#f4f6f0',
+      text: '#191d17',
+      muted: '#444f42',
+      faint: '#546152',
+      accent: '#3e6837',
+      link: '#3e6837',
+      border: '#d8e0d3',
+      divider: '#dde5d8',
+      quoteBackground: '#d7e2d1',
+      quoteBorder: '#cad6c3',
+      qrFill: '#191d17',
+      mediaBorder: '#cbd6c4',
+      mediaFrame: 'rule',
+      mat: '#f4f6f0',
+      keyline: false,
+      texture: 'none',
+      rule: 'transparent',
+      ruleStyle: 'solid',
+      signature: { style: 'none', height: '0px' },
+      quoteStyle: 'filled',
+      statChip: true,
+      rhythm: { gap: '18px', mediaGap: '8px' },
+      fontDisplay: SANS,
+      fontBody: SANS,
+      avatarRadius: '50%',
+      avatarShadow: 'none',
+      radius: '28px',
+      mediaRadius: '16px',
+      borderWidth: '0px',
+      shadow: 'none',
+    },
+  },
+
+  // 5. Gallery — the wall label beside a framed work. A neutral off-white sheet,
   //    one Klein-blue tick over a black hairline, and pictures mounted behind a
   //    thick mat. The quiet default: the post is the exhibit, the card gets out
   //    of the way.
   gallery: {
     id: 'gallery',
     name: 'Gallery',
-    preview: 'linear-gradient(135deg, #d6d7d3 0%, #f7f7f4 62%, #1b3bd6 62%, #1b3bd6 100%)',
+    preview: 'linear-gradient(135deg, #f7f7f4 0%, #dcded9 45%, #7b8de6 75%, #1b3bd6 100%)',
     tokens: {
       type: {
         displaySize: '17px',
@@ -296,8 +515,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       link: '#1b3bd6',
       border: '#d4d5d0',
       divider: '#dedfda',
-      quoteBackground: '#ebebe7',
-      quoteBorder: '#b4b5b0',
+      quoteBackground: '#f0f0eb',
+      quoteBorder: '#c8c9c4',
       qrFill: '#101011',
       mediaBorder: '#c4c5c0',
       mediaFrame: 'mat',
@@ -327,7 +546,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   darkroom: {
     id: 'darkroom',
     name: 'Darkroom',
-    preview: 'linear-gradient(135deg, #050506 0%, #1b1b1e 60%, #ffb02e 60%, #ffb02e 100%)',
+    preview: 'linear-gradient(135deg, #1b1b1e 0%, #151517 40%, #61461d 75%, #ffb02e 100%)',
     tokens: {
       type: {
         displaySize: '19px',
@@ -341,7 +560,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
         metaUppercase: false,
         metaTabular: true,
       },
-      metaDivider: true,
+      metaDivider: false,
       canvas: '#050506',
       surface: '#1b1b1e',
       text: '#ededf0',
@@ -368,7 +587,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       fontDisplay: CONDENSED,
       fontBody: SANS,
       avatarRadius: '50%',
-      avatarShadow: '0 0 0 2px #1b1b1e, 0 0 0 3.5px #ffb02e',
+      avatarShadow: '0 0 0 1.5px #ffb02e',
       radius: '8px',
       mediaRadius: '3px',
       borderWidth: '1px',
@@ -382,7 +601,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   riso: {
     id: 'riso',
     name: 'Riso',
-    preview: 'linear-gradient(135deg, #f2f3ee 0%, #f2f3ee 50%, #17238a 50%, #17238a 78%, #ff3d8b 78%, #ff3d8b 100%)',
+    preview: 'linear-gradient(135deg, #f2f3ee 0%, #d5dbf4 42%, #17238a 75%, #ff3d8b 100%)',
     tokens: {
       type: {
         displaySize: '17px',
@@ -439,7 +658,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   sumi: {
     id: 'sumi',
     name: 'Sumi',
-    preview: 'linear-gradient(135deg, #bcc6bb 0%, #e4e9e3 58%, #b4281d 58%, #b4281d 100%)',
+    preview: 'linear-gradient(135deg, #e4e9e3 0%, #cad4c9 50%, #59655e 80%, #b4281d 100%)',
     tokens: {
       type: {
         displaySize: '19px',
@@ -494,7 +713,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   clay: {
     id: 'clay',
     name: 'Clay',
-    preview: 'linear-gradient(135deg, #9fb9d6 0%, #d8e6f4 60%, #ff6a2b 60%, #ff6a2b 100%)',
+    preview: 'linear-gradient(135deg, #d8e6f4 0%, #b8d2ec 50%, #688eb8 78%, #ff6a2b 100%)',
     tokens: {
       type: {
         displaySize: '18px',
@@ -548,7 +767,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   terminal: {
     id: 'terminal',
     name: 'Terminal',
-    preview: 'linear-gradient(135deg, #0b0e0b 0%, #141a14 100%)',
+    preview: 'linear-gradient(135deg, #0d120e 0%, #162218 55%, #244629 82%, #5ee08a 100%)',
     tokens: {
       type: {
         displaySize: '16px',
@@ -605,7 +824,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   receipt: {
     id: 'receipt',
     name: 'Receipt',
-    preview: 'linear-gradient(135deg, #c9c9c3 0%, #f5f5f1 58%, #1c1c1b 58%, #1c1c1b 100%)',
+    preview: 'linear-gradient(135deg, #f5f5f1 0%, #deded8 50%, #7d7d77 82%, #1c1c1b 100%)',
     tokens: {
       type: {
         displaySize: '15.5px',
@@ -662,7 +881,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     id: 'brutalist',
     name: 'Brutalist',
     preview:
-      'linear-gradient(135deg, #ffe64a 0%, #ffe64a 46%, #111110 46%, #111110 100%)',
+      'linear-gradient(135deg, #ffe64a 0%, #ffd000 48%, #1a1a18 75%, #5a14d8 100%)',
     tokens: {
       type: {
         displaySize: '22px',
@@ -756,6 +975,10 @@ export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
  * behind the "more" disclosure.
  */
 export const THEME_ORDER: ThemeId[] = [
+  'minimal',
+  'midnight',
+  'glass',
+  'material',
   'gallery',
   'darkroom',
   'riso',
@@ -768,8 +991,13 @@ export const THEME_ORDER: ThemeId[] = [
 
 export const EXPERIMENTAL_THEMES: ReadonlySet<ThemeId> = new Set<ThemeId>(['brutalist']);
 
+/** The first six themes are the modern and everyday rotation shown by default. */
+export const PRIMARY_THEMES: ReadonlySet<ThemeId> = new Set<ThemeId>(
+  THEME_ORDER.slice(0, 6)
+);
+
 export const DEFAULT_CARD_CONFIG: CardConfig = {
-  theme: 'gallery',
+  theme: 'minimal',
   padding: '32px',
   borderRadius: 'theme',
   aspectRatio: 'auto',

@@ -264,8 +264,8 @@
   gap: var(--rhythm-gap, 16px);
 }
 
-.post-to-card-target[data-signature] .post-to-card-body-content::before,
-.post-to-card-target[data-signature] .post-to-card-body-content::after {
+.post-to-card-target[data-signature]:not([data-signature="none"]) .post-to-card-body-content::before,
+.post-to-card-target[data-signature]:not([data-signature="none"]) .post-to-card-body-content::after {
   content: "";
   position: absolute;
   left: 0;
@@ -446,7 +446,7 @@
 }
 
 .author-handle {
-  font-size: 14px;
+  font-size: var(--type-meta-size, 14px);
   color: var(--text-sec, #9ca3af);
   line-height: 1.3;
   white-space: nowrap;
@@ -543,28 +543,20 @@
   border: var(--border-width, 1px) solid var(--media-border, var(--border-color));
 }
 
-/* Fit Modes (Contain vs Cover) */
-.media-fit-contain,
-.media-item.fit-contain,
-.media-video-poster.fit-contain,
-.media-grid.media-fit-contain .media-item,
-.media-grid[data-fit="contain"] .media-item,
-.media-grid[data-fit="contain"] .media-video-poster,
+/* Fit Modes (Contain vs Cover) - Attribute Selector Unified */
 .post-to-card-target[data-fit="contain"] .media-item,
-.post-to-card-target[data-fit="contain"] .media-video-poster {
+.post-to-card-target[data-fit="contain"] .media-video-poster,
+.media-grid[data-fit="contain"] .media-item,
+.media-grid[data-fit="contain"] .media-video-poster {
   object-fit: contain;
   background: transparent;
   box-shadow: none;
 }
 
-.media-fit-cover,
-.media-item.fit-cover,
-.media-video-poster.fit-cover,
-.media-grid.media-fit-cover .media-item,
-.media-grid[data-fit="cover"] .media-item,
-.media-grid[data-fit="cover"] .media-video-poster,
 .post-to-card-target[data-fit="cover"] .media-item,
-.post-to-card-target[data-fit="cover"] .media-video-poster {
+.post-to-card-target[data-fit="cover"] .media-video-poster,
+.media-grid[data-fit="cover"] .media-item,
+.media-grid[data-fit="cover"] .media-video-poster {
   object-fit: cover;
   background: transparent;
   box-shadow: none;
@@ -576,7 +568,7 @@
    otherwise paint the mount transparent. The padding is inside the box (the
    item is border-box), so the frame never grows the grid track. */
 .post-to-card-target[data-media-frame="mat"] .media-grid .media-item {
-  padding: 10px;
+  padding: 8px;
 }
 
 /* The mount colour, stated once. The video item is a media item too, so the
@@ -630,230 +622,167 @@
 }
 
 /* ---------------- Multi Images (Count = 2, 3, 4) in Grid Mode ---------------- */
-.media-grid:not(.media-layout-stack)[data-count="2"],
-.media-grid.media-layout-grid[data-count="2"] {
+.media-grid[data-layout="grid"][data-count="2"],
+.media-grid:not([data-layout="stack"])[data-count="2"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 16 / 10;
 }
-.media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="stacked"],
-.media-grid.media-layout-grid[data-count="2"][data-grid-layout="stacked"],
-.media-grid:not(.media-layout-stack)[data-count="2"].grid-stacked,
-.media-grid.media-layout-grid[data-count="2"].grid-stacked {
+.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="stacked"],
+.media-grid:not([data-layout="stack"])[data-count="2"][data-grid-layout="stacked"] {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 16 / 11;
 }
 /* Dual Portrait (2 tall / mobile screenshots side-by-side in Auto or Grid) */
-.media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="portrait-columns"],
-.media-grid.media-layout-grid[data-count="2"][data-grid-layout="portrait-columns"],
-.media-grid:not(.media-layout-stack)[data-count="2"].grid-portrait-columns,
-.media-grid.media-layout-grid[data-count="2"].grid-portrait-columns {
+.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="portrait-columns"],
+.media-grid:not([data-layout="stack"])[data-count="2"][data-grid-layout="portrait-columns"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   aspect-ratio: 1 / 1;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid:not(.media-layout-stack)[data-count="2"][data-grid-layout="portrait-columns"],
-.post-to-card-target[data-ratio="auto"] .media-grid.media-layout-grid[data-count="2"][data-grid-layout="portrait-columns"],
-.post-to-card-target[data-ratio="auto"] .media-grid:not(.media-layout-stack)[data-count="2"].grid-portrait-columns,
-.post-to-card-target[data-ratio="auto"] .media-grid.media-layout-grid[data-count="2"].grid-portrait-columns {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="2"][data-grid-layout="portrait-columns"] {
   aspect-ratio: 1 / 1;
   max-height: 640px;
 }
-.media-grid:not(.media-layout-stack)[data-count="2"] .media-item,
-.media-grid.media-layout-grid[data-count="2"] .media-item {
+.media-grid:not([data-layout="stack"])[data-count="2"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.media-grid:not(.media-layout-stack)[data-count="2"][data-fit="contain"] .media-item,
-.media-grid.media-layout-grid[data-count="2"][data-fit="contain"] .media-item,
-.media-grid:not(.media-layout-stack)[data-count="2"][data-fit="contain"] .media-video-poster,
-.media-grid.media-layout-grid[data-count="2"][data-fit="contain"] .media-video-poster {
-  object-fit: contain;
-}
 /* 2 images in 3:4: richer vertical aspect ratio */
-.post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="2"],
-.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="2"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid:not([data-layout="stack"])[data-count="2"] {
   aspect-ratio: 4 / 3;
   min-height: 280px;
 }
 /* 2 images in 16:9: sleeker horizontal grid */
-.post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="2"],
-.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="2"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid:not([data-layout="stack"])[data-count="2"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
 
 /* 3 images: Auto ratio uses comfortable 4:3 */
-.media-grid:not(.media-layout-stack)[data-count="3"],
-.media-grid.media-layout-grid[data-count="3"] {
+.media-grid[data-layout="grid"][data-count="3"],
+.media-grid:not([data-layout="stack"])[data-count="3"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }
 /* Top-Hero: First image is wide/landscape/square -> spans 2 columns on top (row 1: 1.4fr), bottom 2 images on row 2 (1fr) */
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"],
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"],
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero,
-.media-grid.media-layout-grid[data-count="3"].grid-top-hero {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"],
+.media-grid:not([data-layout="stack"])[data-count="3"][data-grid-layout="top-hero"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
 }
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"] .media-item:first-child,
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:first-child,
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero .media-item:first-child,
-.media-grid.media-layout-grid[data-count="3"].grid-top-hero .media-item:first-child {
+.media-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:first-child {
   grid-column: span 2;
   grid-row: 1;
 }
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2),
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2),
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero .media-item:nth-child(2),
-.media-grid.media-layout-grid[data-count="3"].grid-top-hero .media-item:nth-child(2) {
+.media-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2) {
   grid-column: 1;
   grid-row: 2;
 }
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3),
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3),
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-top-hero .media-item:nth-child(3),
-.media-grid.media-layout-grid[data-count="3"].grid-top-hero .media-item:nth-child(3) {
+.media-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3) {
   grid-column: 2;
   grid-row: 2;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="top-hero"],
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-top-hero {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="top-hero"] {
   aspect-ratio: 16 / 15;
   max-height: 640px;
 }
 
 /* Left-Hero: First image is portrait/square/standard (< 1.2) -> spans 2 rows on left (1.6fr), right 2 images stacked vertically (1fr) */
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"],
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"],
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero,
-.media-grid.media-layout-grid[data-count="3"].grid-left-hero {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"],
+.media-grid:not([data-layout="stack"])[data-count="3"][data-grid-layout="left-hero"] {
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="left-hero"],
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"].grid-left-hero {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="left-hero"] {
   aspect-ratio: 4 / 3;
   max-height: 640px;
 }
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"] .media-item:first-child,
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:first-child,
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero .media-item:first-child,
-.media-grid.media-layout-grid[data-count="3"].grid-left-hero .media-item:first-child {
+.media-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:first-child {
   grid-row: span 2;
   grid-column: 1;
 }
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2),
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2),
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero .media-item:nth-child(2),
-.media-grid.media-layout-grid[data-count="3"].grid-left-hero .media-item:nth-child(2) {
+.media-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2) {
   grid-column: 2;
   grid-row: 1;
 }
-.media-grid:not(.media-layout-stack)[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3),
-.media-grid.media-layout-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3),
-.media-grid:not(.media-layout-stack)[data-count="3"].grid-left-hero .media-item:nth-child(3),
-.media-grid.media-layout-grid[data-count="3"].grid-left-hero .media-item:nth-child(3) {
+.media-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3) {
   grid-column: 2;
   grid-row: 2;
 }
 
-.media-grid:not(.media-layout-stack)[data-count="3"] .media-item,
-.media-grid.media-layout-grid[data-count="3"] .media-item {
+.media-grid:not([data-layout="stack"])[data-count="3"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.media-grid:not(.media-layout-stack)[data-count="3"][data-fit="contain"] .media-item,
-.media-grid.media-layout-grid[data-count="3"][data-fit="contain"] .media-item,
-.media-grid:not(.media-layout-stack)[data-count="3"][data-fit="contain"] .media-video-poster,
-.media-grid.media-layout-grid[data-count="3"][data-fit="contain"] .media-video-poster {
-  object-fit: contain;
-}
-.post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="3"],
-.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="3"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid:not([data-layout="stack"])[data-count="3"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="3"],
-.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="3"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid:not([data-layout="stack"])[data-count="3"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
 
 /* 4 images: Auto ratio uses comfortable 4:3 */
-.media-grid:not(.media-layout-stack)[data-count="4"],
-.media-grid.media-layout-grid[data-count="4"] {
+.media-grid[data-layout="grid"][data-count="4"],
+.media-grid:not([data-layout="stack"])[data-count="4"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }
-.media-grid:not(.media-layout-stack)[data-count="4"] .media-item,
-.media-grid.media-layout-grid[data-count="4"] .media-item {
+.media-grid:not([data-layout="stack"])[data-count="4"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.media-grid:not(.media-layout-stack)[data-count="4"][data-fit="contain"] .media-item,
-.media-grid.media-layout-grid[data-count="4"][data-fit="contain"] .media-item,
-.media-grid:not(.media-layout-stack)[data-count="4"][data-fit="contain"] .media-video-poster,
-.media-grid.media-layout-grid[data-count="4"][data-fit="contain"] .media-video-poster {
-  object-fit: contain;
-}
-.post-to-card-target[data-ratio="3:4"] .media-grid:not(.media-layout-stack)[data-count="4"],
-.post-to-card-target[data-ratio="3:4"] .media-grid.media-layout-grid[data-count="4"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid:not([data-layout="stack"])[data-count="4"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid:not(.media-layout-stack)[data-count="4"],
-.post-to-card-target[data-ratio="16:9"] .media-grid.media-layout-grid[data-count="4"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid:not([data-layout="stack"])[data-count="4"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
 
 /* ---------------- Multi Images (Stack Mode: 100% Full Display) ---------------- */
-.media-grid.media-layout-stack,
-.media-grid[data-layout="stack"],
+.post-to-card-target .media-grid[data-layout="stack"],
+.post-to-card-target .media-grid.media-layout-stack,
 .post-to-card-target[data-media-layout="stack"] .media-grid {
-  display: flex !important;
-  flex-direction: column !important;
+  display: flex;
+  flex-direction: column;
   /* Stacked full-width images need more air than a grid gutter, so this stays a
      fixed step rather than the theme's `--media-gap` (the grid gutter). */
-  gap: 12px !important;
-  width: 100% !important;
-  aspect-ratio: unset !important;
-  min-height: unset !important;
-  max-height: unset !important;
+  gap: 12px;
+  width: 100%;
+  aspect-ratio: unset;
+  min-height: unset;
+  max-height: unset;
   /* Matches the grid's material-derived top step, so switching between grid and
      stack does not change the space above the media. */
   margin-top: calc(var(--rhythm-gap, 16px) * 0.6);
 }
 
-.media-grid.media-layout-stack .media-item,
-.media-grid[data-layout="stack"] .media-item,
+.post-to-card-target .media-grid[data-layout="stack"] .media-item,
+.post-to-card-target .media-grid.media-layout-stack .media-item,
 .post-to-card-target[data-media-layout="stack"] .media-item {
-  width: 100% !important;
-  height: auto !important;
-  max-height: unset !important;
-  aspect-ratio: unset !important;
+  width: 100%;
+  height: auto;
+  max-height: unset;
+  aspect-ratio: unset;
   object-fit: contain;
   display: block;
 }
 
-.media-grid.media-layout-stack.fit-cover .media-item,
-.media-grid[data-layout="stack"].fit-cover .media-item,
-.media-grid.media-layout-stack .media-item.fit-cover {
+.post-to-card-target .media-grid[data-layout="stack"][data-fit="cover"] .media-item,
+.post-to-card-target[data-media-layout="stack"][data-fit="cover"] .media-item {
   object-fit: cover;
-}
-.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="4"] {
-  aspect-ratio: 21 / 9;
-  max-height: 180px;
 }
 
 /* -------------------------------------------------------------
@@ -1014,7 +943,7 @@
 
 .quote-handle,
 .quote-timestamp {
-  font-size: 12px;
+  font-size: var(--type-meta-size, 12px);
   color: var(--text-sec, #9ca3af);
   white-space: nowrap;
   overflow: hidden;
@@ -1043,7 +972,7 @@
 }
 
 .quote-text {
-  font-size: 14.5px;
+  font-size: var(--type-quote-size, 14.5px);
   line-height: 1.6;
   color: inherit;
   overflow-wrap: anywhere;
@@ -1094,9 +1023,7 @@
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: rgba(15, 20, 25, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(15, 20, 25, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #9ca3af;
   display: flex;
@@ -1167,21 +1094,6 @@
   padding-bottom: 8px;
 }
 
-/* Backward compatibility fallbacks */
-.thread-item-wrapper {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-.thread-tweet-block {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  position: relative;
-}
-.thread-divider {
-  display: none;
-}
 
 /* -------------------------------------------------------------
    Card Footer (Timestamp, Stats, QR Code, Watermark)

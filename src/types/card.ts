@@ -5,6 +5,10 @@
  * off the default picker.
  */
 export type ThemeId =
+  | 'minimal'
+  | 'midnight'
+  | 'glass'
+  | 'material'
   | 'gallery'
   | 'darkroom'
   | 'riso'
@@ -65,4 +69,3 @@ export interface CardConfig {
   locale?: Locale;
   excludedTweetIds?: string[];
 }
-

@@ -47,6 +47,10 @@ export interface Translations {
   videoPlayButton: string;
 
   // Themes
+  theme_minimal: string;
+  theme_midnight: string;
+  theme_glass: string;
+  theme_material: string;
   theme_gallery: string;
   theme_darkroom: string;
   theme_riso: string;
@@ -122,6 +126,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     tweetActionButton: '推文卡片按钮',
     videoPlayButton: '视频播放按钮',
 
+    theme_minimal: '极简',
+    theme_midnight: '夜幕',
+    theme_glass: '液态玻璃',
+    theme_material: '质感 (MD3)',
     theme_gallery: '画廊',
     theme_darkroom: '暗房',
     theme_riso: '孔版',
@@ -192,6 +200,10 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     tweetActionButton: 'Tweet Card Button',
     videoPlayButton: 'Video Play Button',
 
+    theme_minimal: 'Minimal',
+    theme_midnight: 'Midnight',
+    theme_glass: 'Liquid Glass',
+    theme_material: 'Material 3',
     theme_gallery: 'Gallery',
     theme_darkroom: 'Darkroom',
     theme_riso: 'Riso',
