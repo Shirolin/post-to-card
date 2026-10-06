@@ -1371,10 +1371,10 @@ test('F17.4: each material sets its letterforms for the object it is', () => {
   assert.match(THEMES.sumi.tokens.fontDisplay, /Kaiti|KaiTi/i);
   assert.match(THEMES.sumi.tokens.fontBody, /Songti|SimSun/);
   assert.match(THEMES.clay.tokens.fontDisplay, /Rounded|Nunito|Yuanti/);
-  // Modern themes provide distinct high-quality letterforms.
-  assert.match(THEMES.midnight.tokens.fontDisplay, /Helvetica|Arial|sans-serif/);
-  assert.match(THEMES.glass.tokens.fontDisplay, /Rounded|Nunito|Yuanti/);
+  // Modern themes provide a clean, unified System Sans stack.
   assert.match(THEMES.minimal.tokens.fontDisplay, /sans-serif/);
+  assert.match(THEMES.midnight.tokens.fontDisplay, /sans-serif/);
+  assert.match(THEMES.glass.tokens.fontDisplay, /sans-serif/);
   assert.match(THEMES.material.tokens.fontDisplay, /sans-serif/);
   // Terminal and receipt both set body and display in a fixed-pitch face.
   assert.match(THEMES.terminal.tokens.fontDisplay, /monospace/);

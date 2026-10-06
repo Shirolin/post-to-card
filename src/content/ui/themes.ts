@@ -363,7 +363,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       quoteStyle: 'filled',
       statChip: false,
       rhythm: { gap: '18px', mediaGap: '6px' },
-      fontDisplay: GROTESK,
+      fontDisplay: SANS,
       fontBody: SANS,
       avatarRadius: '50%',
       avatarShadow: 'none',
@@ -412,14 +412,14 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       mat: '#ebf1f8',
       keyline: false,
       texture:
-        'radial-gradient(at 0% 0%, rgba(200, 220, 255, 0.7) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(255, 215, 230, 0.6) 0px, transparent 50%)',
+        'radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.8) 0px, transparent 60%), radial-gradient(at 100% 100%, rgba(3, 105, 161, 0.12) 0px, transparent 50%)',
       rule: 'transparent',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'outlined',
       statChip: true,
       rhythm: { gap: '18px', mediaGap: '10px' },
-      fontDisplay: ROUNDED,
+      fontDisplay: SANS,
       fontBody: SANS,
       avatarRadius: '50%',
       avatarShadow: 'none',
@@ -990,11 +990,6 @@ export const THEME_ORDER: ThemeId[] = [
 ];
 
 export const EXPERIMENTAL_THEMES: ReadonlySet<ThemeId> = new Set<ThemeId>(['brutalist']);
-
-/** The first six themes are the modern and everyday rotation shown by default. */
-export const PRIMARY_THEMES: ReadonlySet<ThemeId> = new Set<ThemeId>(
-  THEME_ORDER.slice(0, 6)
-);
 
 export const DEFAULT_CARD_CONFIG: CardConfig = {
   theme: 'minimal',

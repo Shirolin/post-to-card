@@ -1,7 +1,7 @@
 import type { JSX } from 'preact';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card.ts';
-import { THEMES, THEME_ORDER, PRIMARY_THEMES, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
@@ -128,15 +128,13 @@ export function Controls({
     onChange({ ...config, ...patch });
   };
 
-  // The first six themes are the modern and everyday rotation shown by default.
-  // Brutalist is deliberately experimental, and along with remaining vintage materials,
-  // joins the picker once the user opens "More Settings" or when already active.
+  // Brutalist is deliberately experimental, so it is not in the main rotation.
+  // It only joins the picker once the user opens "More", or when it is already
+  // the active theme (otherwise a saved Brutalist config would show no
+  // selection at all).
   const themeList = THEME_ORDER.map((id) => THEMES[id]);
   const visibleThemes = themeList.filter(
-    (th) =>
-      (PRIMARY_THEMES.has(th.id) && !EXPERIMENTAL_THEMES.has(th.id)) ||
-      showMore ||
-      config.theme === th.id
+    (th) => !EXPERIMENTAL_THEMES.has(th.id) || showMore || config.theme === th.id
   );
 
   const getThemeDisplayName = (themeId: string, defaultName: string) => {

@@ -537,7 +537,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
       data-ratio={config.aspectRatio}
       data-fit={imageFit}
       data-media-layout={mediaLayout}
-      data-signature={tokens.signature.style}
+      data-signature={tokens.signature.style === 'none' ? undefined : tokens.signature.style}
       data-quote-style={tokens.quoteStyle}
       data-media-frame={tokens.mediaFrame}
       data-meta-divider={tokens.metaDivider ? 'on' : undefined}

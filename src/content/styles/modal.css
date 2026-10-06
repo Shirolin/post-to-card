@@ -369,7 +369,7 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 5px 4px 6px;
+  padding: 6px 5px 7px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--ptc-radius);
@@ -396,20 +396,17 @@
   height: 34px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: border-color 0.15s ease;
 }
 
 .theme-button:hover .theme-swatch {
   border-color: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 3px 8px rgba(0, 0, 0, 0.35);
 }
 
 .theme-button.is-active .theme-swatch {
   border-color: var(--ptc-accent);
   box-shadow: 0 0 0 2px #16171b, 0 0 0 4px var(--ptc-accent), 0 4px 12px rgba(29, 155, 240, 0.35);
-  transform: translateY(-1px);
 }
 
 /* Badge in upper-right corner so it never obscures the material preview */
@@ -437,11 +434,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-  transition: color 0.15s ease;
-}
-
-.theme-button:hover .theme-button-label {
-  color: var(--ptc-text);
 }
 
 .theme-button.is-active .theme-button-label {

@@ -264,8 +264,8 @@
   gap: var(--rhythm-gap, 16px);
 }
 
-.post-to-card-target[data-signature]:not([data-signature="none"]) .post-to-card-body-content::before,
-.post-to-card-target[data-signature]:not([data-signature="none"]) .post-to-card-body-content::after {
+.post-to-card-target[data-signature] .post-to-card-body-content::before,
+.post-to-card-target[data-signature] .post-to-card-body-content::after {
   content: "";
   position: absolute;
   left: 0;
@@ -543,20 +543,16 @@
   border: var(--border-width, 1px) solid var(--media-border, var(--border-color));
 }
 
-/* Fit Modes (Contain vs Cover) - Attribute Selector Unified */
-.post-to-card-target[data-fit="contain"] .media-item,
-.post-to-card-target[data-fit="contain"] .media-video-poster,
-.media-grid[data-fit="contain"] .media-item,
-.media-grid[data-fit="contain"] .media-video-poster {
+/* Fit Modes (Contain vs Cover) - Single Attribute Selector */
+[data-fit="contain"] .media-item,
+[data-fit="contain"] .media-video-poster {
   object-fit: contain;
   background: transparent;
   box-shadow: none;
 }
 
-.post-to-card-target[data-fit="cover"] .media-item,
-.post-to-card-target[data-fit="cover"] .media-video-poster,
-.media-grid[data-fit="cover"] .media-item,
-.media-grid[data-fit="cover"] .media-video-poster {
+[data-fit="cover"] .media-item,
+[data-fit="cover"] .media-video-poster {
   object-fit: cover;
   background: transparent;
   box-shadow: none;
@@ -622,131 +618,124 @@
 }
 
 /* ---------------- Multi Images (Count = 2, 3, 4) in Grid Mode ---------------- */
-.media-grid[data-layout="grid"][data-count="2"],
-.media-grid:not([data-layout="stack"])[data-count="2"] {
+.media-grid[data-layout="grid"][data-count="2"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 16 / 10;
 }
-.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="stacked"],
-.media-grid:not([data-layout="stack"])[data-count="2"][data-grid-layout="stacked"] {
+.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="stacked"] {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 16 / 11;
 }
 /* Dual Portrait (2 tall / mobile screenshots side-by-side in Auto or Grid) */
-.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="portrait-columns"],
-.media-grid:not([data-layout="stack"])[data-count="2"][data-grid-layout="portrait-columns"] {
+.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="portrait-columns"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   aspect-ratio: 1 / 1;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="2"][data-grid-layout="portrait-columns"] {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-layout="grid"][data-count="2"][data-grid-layout="portrait-columns"] {
   aspect-ratio: 1 / 1;
   max-height: 640px;
 }
-.media-grid:not([data-layout="stack"])[data-count="2"] .media-item {
+.media-grid[data-layout="grid"][data-count="2"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 /* 2 images in 3:4: richer vertical aspect ratio */
-.post-to-card-target[data-ratio="3:4"] .media-grid:not([data-layout="stack"])[data-count="2"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-layout="grid"][data-count="2"] {
   aspect-ratio: 4 / 3;
   min-height: 280px;
 }
 /* 2 images in 16:9: sleeker horizontal grid */
-.post-to-card-target[data-ratio="16:9"] .media-grid:not([data-layout="stack"])[data-count="2"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-layout="grid"][data-count="2"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
 
 /* 3 images: Auto ratio uses comfortable 4:3 */
-.media-grid[data-layout="grid"][data-count="3"],
-.media-grid:not([data-layout="stack"])[data-count="3"] {
+.media-grid[data-layout="grid"][data-count="3"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }
 /* Top-Hero: First image is wide/landscape/square -> spans 2 columns on top (row 1: 1.4fr), bottom 2 images on row 2 (1fr) */
-.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"],
-.media-grid:not([data-layout="stack"])[data-count="3"][data-grid-layout="top-hero"] {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
 }
-.media-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:first-child {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] .media-item:first-child {
   grid-column: span 2;
   grid-row: 1;
 }
-.media-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2) {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2) {
   grid-column: 1;
   grid-row: 2;
 }
-.media-grid[data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3) {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3) {
   grid-column: 2;
   grid-row: 2;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="top-hero"] {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] {
   aspect-ratio: 16 / 15;
   max-height: 640px;
 }
 
 /* Left-Hero: First image is portrait/square/standard (< 1.2) -> spans 2 rows on left (1.6fr), right 2 images stacked vertically (1fr) */
-.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"],
-.media-grid:not([data-layout="stack"])[data-count="3"][data-grid-layout="left-hero"] {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] {
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="3"][data-grid-layout="left-hero"] {
+.post-to-card-target[data-ratio="auto"] .media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] {
   aspect-ratio: 4 / 3;
   max-height: 640px;
 }
-.media-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:first-child {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] .media-item:first-child {
   grid-row: span 2;
   grid-column: 1;
 }
-.media-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2) {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2) {
   grid-column: 2;
   grid-row: 1;
 }
-.media-grid[data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3) {
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3) {
   grid-column: 2;
   grid-row: 2;
 }
 
-.media-grid:not([data-layout="stack"])[data-count="3"] .media-item {
+.media-grid[data-layout="grid"][data-count="3"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.post-to-card-target[data-ratio="3:4"] .media-grid:not([data-layout="stack"])[data-count="3"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-layout="grid"][data-count="3"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid:not([data-layout="stack"])[data-count="3"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-layout="grid"][data-count="3"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
 
 /* 4 images: Auto ratio uses comfortable 4:3 */
-.media-grid[data-layout="grid"][data-count="4"],
-.media-grid:not([data-layout="stack"])[data-count="4"] {
+.media-grid[data-layout="grid"][data-count="4"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }
-.media-grid:not([data-layout="stack"])[data-count="4"] .media-item {
+.media-grid[data-layout="grid"][data-count="4"] .media-item {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.post-to-card-target[data-ratio="3:4"] .media-grid:not([data-layout="stack"])[data-count="4"] {
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-layout="grid"][data-count="4"] {
   aspect-ratio: 1 / 1;
   min-height: 320px;
 }
-.post-to-card-target[data-ratio="16:9"] .media-grid:not([data-layout="stack"])[data-count="4"] {
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-layout="grid"][data-count="4"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
 }
