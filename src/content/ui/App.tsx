@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig } from '../../types/card.ts';
 import { DEFAULT_CARD_CONFIG, THEMES } from './themes.ts';
@@ -16,6 +16,18 @@ import { getTranslation, sanitizeLocale } from '../i18n.ts';
 
 const ZOOM_LEVELS = [0.5, 0.75, 1] as const;
 
+/** The card's own width, mirrored from card.css. */
+const CARD_WIDTH = 640;
+
+/**
+ * Horizontal breathing room the viewport reserves on each side. Mirrors the
+ * `.preview-viewport` padding, and drops to zero on the narrow layout where the
+ * stage runs edge to edge.
+ */
+function viewportHorizontalPadding(width: number): number {
+  return width <= 900 ? 12 : 24;
+}
+
 export interface AppProps {
   threadData: ThreadData;
   onClose: () => void;
@@ -31,8 +43,51 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   // dimensions stay at the fixed 640px card width.
   const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.length - 1);
   const zoom = ZOOM_LEVELS[zoomIndex];
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [fitScale, setFitScale] = useState<number>(1);
 
   const t = getTranslation(sanitizeLocale(config.locale));
+
+  /**
+   * Fits the card to the viewport when the user's zoom would otherwise push it
+   * past the edge.
+   *
+   * The card is a fixed 640px so exports stay pixel-exact, which is wider than
+   * a phone. Letting it overflow relied on the user discovering a horizontal
+   * scroll they cannot see (the mobile scrollbar is hidden), so the preview
+   * scales down instead. The clamp is a ceiling rather than a floor: a zoom the
+   * user picked is never exceeded, so shrinking is reachable but the card can
+   * still be panned at 100% on a viewport wide enough to want it.
+   */
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || typeof ResizeObserver === 'undefined') return;
+
+    const measure = () => {
+      const padding = viewportHorizontalPadding(window.innerWidth);
+      const available = viewport.clientWidth - padding * 2;
+      if (available <= 0) return;
+      setFitScale(available / CARD_WIDTH);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [zoom]);
+
+  /**
+   * Returns the preview to the card's origin whenever its geometry changes.
+   *
+   * A preserved scroll offset is only meaningful while the card keeps the same
+   * shape: after a zoom or a theme change the card can be smaller than the
+   * offset, leaving its left edge off-screen behind a scroll the user never
+   * asked for.
+   */
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport) viewport.scrollLeft = 0;
+  }, [zoom, config.theme]);
 
   // Load saved preferences on mount
   useEffect(() => {
@@ -120,6 +175,21 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   // summary never says zero.
   const activeTweetCount = scope.activeCount || 1;
 
+  /**
+   * Which zoom level carries the group's single tab stop.
+   *
+   * The roving-tabindex contract wants exactly one, and it must not be a
+   * disabled button or the picker drops out of the tab order. The active level
+   * is preferred; when the fitted scale has disabled it, the first level still
+   * within reach takes over.
+   */
+  const zoomTabStopIndex = (() => {
+    const isReachable = (idx: number) => ZOOM_LEVELS[idx] <= fitScale + 0.001;
+    if (isReachable(zoomIndex)) return zoomIndex;
+    const found = ZOOM_LEVELS.findIndex((_, idx) => isReachable(idx));
+    return found >= 0 ? found : zoomIndex;
+  })();
+
   return (
     <Modal
       onClose={onClose}
@@ -127,39 +197,58 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
       summary={`${t.previewSummary.replace('{count}', String(activeTweetCount))}`}
     >
       <div class="preview-stage">
-        <div class="preview-toolbar" role="group" aria-label={t.zoomLabel}>
+        {/* Hidden when the window cannot show even the smallest level: at that
+            point every choice resolves to the same fitted scale, so the
+            control would be a row of dead buttons. */}
+        <div
+          class="preview-toolbar"
+          role="group"
+          aria-label={t.zoomLabel}
+          hidden={fitScale < ZOOM_LEVELS[0]}
+        >
           <span class="preview-toolbar-label">{t.zoomLabel}</span>
           <div class="btn-group btn-group-compact" role="radiogroup" aria-label={t.zoomLabel}>
-            {ZOOM_LEVELS.map((level, idx) => (
-              <button
-                key={level}
-                type="button"
-                role="radio"
-                aria-checked={idx === zoomIndex}
-                tabIndex={idx === zoomIndex ? 0 : -1}
-                class={`btn-group-item ${idx === zoomIndex ? 'is-active' : ''}`}
-                onClick={() => setZoomIndex(idx)}
-                onKeyDown={(e) =>
-                  handleRadioKeyDown(
-                    e,
-                    ZOOM_LEVELS,
-                    ZOOM_LEVELS[zoomIndex],
-                    (next) => setZoomIndex(ZOOM_LEVELS.indexOf(next))
-                  )
-                }
-              >
-                {Math.round(level * 100)}%
-              </button>
-            ))}
+            {ZOOM_LEVELS.map((level, idx) => {
+              // A level above the fitted scale cannot be shown: the card would
+              // run past the stage edge behind a scrollbar the mobile shell
+              // hides. Such a level is disabled rather than silently ignored.
+              const isCapped = level > fitScale + 0.001;
+              const isActive = idx === zoomIndex;
+              const isTabStop = idx === zoomTabStopIndex;
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  role="radio"
+                  aria-checked={isActive}
+                  disabled={isCapped}
+                  tabIndex={isTabStop ? 0 : -1}
+                  class={`btn-group-item ${isActive && !isCapped ? 'is-active' : ''}`}
+                  title={isCapped ? t.zoomFitCapped : undefined}
+                  onClick={() => setZoomIndex(idx)}
+                  onKeyDown={(e) =>
+                    handleRadioKeyDown(
+                      e,
+                      ZOOM_LEVELS,
+                      ZOOM_LEVELS[zoomIndex],
+                      (next) => setZoomIndex(ZOOM_LEVELS.indexOf(next))
+                    )
+                  }
+                >
+                  {Math.round(level * 100)}%
+                </button>
+              );
+            })}
           </div>
         </div>
         <div
           class="preview-viewport"
+          ref={viewportRef}
           style={{ '--ptc-preview-canvas': THEMES[config.theme].tokens.canvas }}
         >
           <div
             class="preview-scale"
-            style={{ zoom: `${zoom}` }}
+            style={{ zoom: `${Math.min(zoom, fitScale)}` }}
             data-html2canvas-ignore="true"
           >
             <Card data={threadData} config={config} onExcludeTweet={handleExcludeTweet} />

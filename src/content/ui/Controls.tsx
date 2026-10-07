@@ -33,6 +33,13 @@ const ASPECT_OPTIONS: AspectOption[] = [
   { value: '16:9', label: '16:9' },
 ];
 
+/**
+ * How many themes the grid shows before "all themes" is expanded. Two rows in
+ * the narrow panel: enough to show the rotation's range without an unbroken
+ * wall of swatches pushing the controls below it off the screen.
+ */
+const THEME_GRID_VISIBLE = 6;
+
 export interface ControlsProps {
   config: CardConfig;
   onChange: (newConfig: CardConfig) => void;
@@ -122,7 +129,9 @@ export function Controls({
 }: ControlsProps): JSX.Element {
   const t = getTranslation(sanitizeLocale(config.locale));
   const [showMore, setShowMore] = useState<boolean>(false);
+  const [showAllThemes, setShowAllThemes] = useState<boolean>(false);
   const moreId = useId();
+  const themeGridId = useId();
 
   const updateConfig = (patch: Partial<CardConfig>) => {
     onChange({ ...config, ...patch });
@@ -133,9 +142,24 @@ export function Controls({
   // the active theme (otherwise a saved Brutalist config would show no
   // selection at all).
   const themeList = THEME_ORDER.map((id) => THEMES[id]);
-  const visibleThemes = themeList.filter(
+  const allowedThemes = themeList.filter(
     (th) => !EXPERIMENTAL_THEMES.has(th.id) || showMore || config.theme === th.id
   );
+
+  // The grid is four rows tall in the narrow panel, which pushed every control
+  // below it off the first screen. It opens on the everyday rotation instead;
+  // the active theme is always kept so a saved choice is never hidden, and
+  // "More" reveals the rest alongside it.
+  const primaryThemes = allowedThemes.slice(0, THEME_GRID_VISIBLE);
+  const activeTheme = allowedThemes.find((th) => th.id === config.theme);
+  const collapsedThemes = [
+    ...primaryThemes,
+    ...(activeTheme && !primaryThemes.includes(activeTheme) ? [activeTheme] : []),
+  ];
+  const visibleThemes = showAllThemes ? allowedThemes : collapsedThemes;
+  // Counted from what is actually shown, so pinning the active theme does not
+  // leave the label promising more themes than the expansion reveals.
+  const hiddenThemeCount = allowedThemes.length - collapsedThemes.length;
 
   const getThemeDisplayName = (themeId: string, defaultName: string) => {
     const key = `theme_${themeId.replace(/-/g, '_')}` as keyof typeof t;
@@ -255,7 +279,7 @@ export function Controls({
             <Palette size={14} strokeWidth={2} />
             <span>{t.theme}</span>
           </span>
-          <div class="theme-grid" role="radiogroup" aria-label={t.theme}>
+          <div class="theme-grid" id={themeGridId} role="radiogroup" aria-label={t.theme}>
             {visibleThemes.map((th) => {
               const isActive = config.theme === th.id;
               const displayName = getThemeDisplayName(th.id, th.name);
@@ -290,6 +314,27 @@ export function Controls({
               );
             })}
           </div>
+          {hiddenThemeCount > 0 && (
+            <button
+              type="button"
+              class="more-toggle theme-expand"
+              aria-expanded={showAllThemes}
+              aria-controls={themeGridId}
+              onClick={() => setShowAllThemes((v) => !v)}
+            >
+              <ChevronDown
+                size={15}
+                strokeWidth={2}
+                class={`more-chevron ${showAllThemes ? 'is-open' : ''}`}
+                aria-hidden="true"
+              />
+              <span>
+                {showAllThemes
+                  ? t.themesShowLess
+                  : t.themesShowAll.replace('{count}', String(hiddenThemeCount))}
+              </span>
+            </button>
+          )}
         </section>
 
         {/* 3. Aspect ratio */}

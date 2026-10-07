@@ -17,6 +17,8 @@ export interface Translations {
   language: string;
   layoutAndStyle: string;
   theme: string;
+  themesShowAll: string;
+  themesShowLess: string;
   aspectRatio: string;
   imageFit: string;
   fitContain: string;
@@ -74,6 +76,7 @@ export interface Translations {
 
   // Preview
   zoomLabel: string;
+  zoomFitCapped: string;
   previewSummary: string;
   tweetUnit: string;
 
@@ -100,6 +103,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     language: '界面语言',
     layoutAndStyle: '版式与样式',
     theme: '视觉主题',
+    themesShowAll: '展开其余 {count} 款',
+    themesShowLess: '收起主题',
     aspectRatio: '画幅比例',
     imageFit: '图片适配',
     fitContain: '完整展示',
@@ -151,6 +156,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     clipboardFallbackNotice: '剪贴板写入受限，已自动为您下载高清图片！',
 
     zoomLabel: '预览缩放',
+    zoomFitCapped: '当前窗口放不下整张卡片，已自动适配',
     previewSummary: '共 {count} 条推文',
     tweetUnit: '条',
 
@@ -174,6 +180,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     language: 'Language',
     layoutAndStyle: 'Layout & Style',
     theme: 'Theme',
+    themesShowAll: 'Show {count} more',
+    themesShowLess: 'Hide extra themes',
     aspectRatio: 'Aspect Ratio',
     imageFit: 'Image Fit',
     fitContain: 'Fit',
@@ -225,6 +233,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     clipboardFallbackNotice: 'Clipboard restricted; auto-downloaded PNG!',
 
     zoomLabel: 'Preview Zoom',
+    zoomFitCapped: 'The card does not fit this window, so it is auto-fitted',
     previewSummary: '{count} tweets',
     tweetUnit: 'tweets',
 

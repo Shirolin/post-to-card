@@ -492,16 +492,33 @@ async function runRadioGroupAudit(): Promise<void> {
       `group "${group.getAttribute('aria-label')}": ${radios.length} radios, ${tabbable.length} tabbable`
     );
 
-    const checkedIndex = radios.findIndex((r) => r.getAttribute('aria-checked') === 'true');
-    if (checkedIndex < 0) {
-      report.push('  FAIL: no aria-checked radio');
+    const checked = radios.filter((r) => r.getAttribute('aria-checked') === 'true');
+    if (checked.length !== 1) {
+      report.push(`  FAIL: expected exactly 1 aria-checked radio, found ${checked.length}`);
       continue;
     }
-    if (radios[checkedIndex].tabIndex !== 0) {
-      report.push('  FAIL: checked radio is not the tab stop');
+    const checkedIndex = radios.indexOf(checked[0]);
+
+    // A radio can be checked but unavailable: the zoom picker keeps the user's
+    // choice selected while the window is too narrow to render at that scale.
+    // The tab stop then belongs to the lowest enabled radio, so the requirement
+    // is one tabbable radio that is actually focusable -- not that it is also
+    // the checked one.
+    if (tabbable.length !== 1) {
+      report.push(`  FAIL: expected exactly 1 tabbable radio, found ${tabbable.length}`);
+    } else if (tabbable[0].disabled) {
+      report.push('  FAIL: the tab stop is disabled and cannot take focus');
+    }
+    if (!checked[0].disabled && radios[checkedIndex].tabIndex !== 0) {
+      report.push('  FAIL: an enabled checked radio is not the tab stop');
     }
 
-    const expected = (checkedIndex + 1) % radios.length;
+    // Arrow keys must land on the next enabled radio, since a disabled one
+    // cannot hold focus.
+    const enabledIndexes = radios
+      .map((r, i) => (r.disabled ? -1 : i))
+      .filter((i) => i >= 0);
+    const expected = enabledIndexes[(enabledIndexes.indexOf(checkedIndex) + 1) % enabledIndexes.length];
     radios[checkedIndex].focus();
     radios[checkedIndex].dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })
