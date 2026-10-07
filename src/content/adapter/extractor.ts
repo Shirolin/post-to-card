@@ -367,7 +367,25 @@ function extractRichTokens(tweetTextEl: Element | null | undefined): RichToken[]
     processNode(children[i]);
   }
 
-  return tokens;
+  return trimTokenEdges(tokens);
+}
+
+/**
+ * Drops whitespace-only text tokens from the two ends of the body.
+ *
+ * The top-level children of X's body carry newline indentation around the
+ * content, and a break that survives at an edge would print a blank first or
+ * last line on the card. `tweet.text` trims its edges as well, so both views of
+ * the same post agree. Interior whitespace is untouched: it is the body's own
+ * paragraph structure.
+ */
+function trimTokenEdges(tokens: RichToken[]): RichToken[] {
+  const isEdgeFiller = (token: RichToken) => token.type === 'text' && token.value.trim() === '';
+  let start = 0;
+  let end = tokens.length;
+  while (start < end && isEdgeFiller(tokens[start])) start++;
+  while (end > start && isEdgeFiller(tokens[end - 1])) end--;
+  return start === 0 && end === tokens.length ? tokens : tokens.slice(start, end);
 }
 
 /**

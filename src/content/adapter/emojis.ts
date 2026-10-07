@@ -9,15 +9,25 @@
  * Normalises the whitespace of a single text node.
  *
  * X renders line breaks as literal "\n" inside a `white-space: pre-wrap` block,
- * not as <br> elements, so a content-bearing node's newlines are real and must
- * survive. Whitespace-only nodes are the indentation between elements and
- * collapse to a single separator space, which is what keeps inline spacing
- * around emoji and links intact.
+ * not as <br> elements, so a node's newlines are real and must survive. Running
+ * whitespace between words collapses to one space, which is what keeps inline
+ * spacing around emoji and links intact.
+ *
+ * A node can be whitespace-only and still carry a line break: X splits a body
+ * around every inline element (link, mention, emoji img), so a paragraph break
+ * between two such elements lands in a node of its own. Treating every
+ * whitespace-only node as indentation collapsed that break to a space, which
+ * flattened a multi-paragraph post into one blob.
  */
 export function normalizeTweetWhitespace(raw: string): string {
   if (!raw) return '';
-  if (!/\S/.test(raw)) return ' ';
-  return raw.replace(/[^\S\n]+/g, ' ').replace(/ ?\n ?/g, '\n');
+  const collapsed = raw.replace(/[^\S\n]+/g, ' ').replace(/ ?\n ?/g, '\n');
+  // Nothing but whitespace: keep the line breaks it carries, otherwise the node
+  // is the indentation between elements and reads as one separator.
+  if (!/\S/.test(raw)) {
+    return collapsed.includes('\n') ? collapsed.replace(/ +/g, '') : ' ';
+  }
+  return collapsed;
 }
 
 /**

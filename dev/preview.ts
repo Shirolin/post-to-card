@@ -242,6 +242,40 @@ const videoThreadData: ThreadData = {
   ],
 };
 
+/**
+ * A multi-paragraph post whose line breaks sit next to inline elements.
+ *
+ * X splits the body around every link, mention and emoji, so a paragraph break
+ * between two of them lives in a whitespace-only text node. That is the shape
+ * that got flattened to a single paragraph, twice (?wrap=1). Every paragraph
+ * here ends on an inline element on purpose.
+ */
+const wrappedThreadData: ThreadData = {
+  author: { name: '沈亦航', handle: '@yi_hang', avatarUrl: avatar, verified: true },
+  isSingle: true,
+  targetTweetIndex: 0,
+  tweets: [
+    {
+      id: '6001',
+      url: 'https://x.com/yi_hang/status/6001',
+      author: { name: '沈亦航', handle: '@yi_hang', avatarUrl: avatar, verified: true },
+      timestamp: '2026-10-02T09:24:00.000Z',
+      richTokens: [
+        { type: 'text', value: '第一段以一个链接结束 ' },
+        { type: 'link', value: 'example.com', href: 'https://example.com' },
+        { type: 'text', value: '\n\n' },
+        { type: 'text', value: '第二段以一个提及结束 ' },
+        { type: 'mention', value: '@someone' },
+        { type: 'text', value: '\n\n' },
+        { type: 'text', value: '第三段以一个 emoji 结束 🧵' },
+        { type: 'text', value: '\n\n' },
+        { type: 'text', value: '第四段。' },
+      ],
+      stats: { replies: '12', reposts: '88', likes: '1.2K', views: '3.1万' },
+    },
+  ],
+};
+
 const container = document.querySelector('post-to-card-container') as HTMLElement & {
   shadow: ShadowRoot;
   mountPoint: HTMLDivElement;
@@ -320,9 +354,11 @@ const activeThreadData =
         ? videoThreadData
         : params.get('cjk') === '1'
           ? cjkThreadData
-          : params.get('grid')
-            ? gridThreadData(Math.min(4, Math.max(2, Number(params.get('grid')))) as 2 | 3 | 4)
-            : threadData;
+          : params.get('wrap') === '1'
+            ? wrappedThreadData
+            : params.get('grid')
+              ? gridThreadData(Math.min(4, Math.max(2, Number(params.get('grid')))) as 2 | 3 | 4)
+              : threadData;
 
 /**
  * ?a11y=1 runs a scripted focus-trap check against the live modal and writes

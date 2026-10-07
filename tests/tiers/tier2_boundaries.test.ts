@@ -733,6 +733,54 @@ last line</span></div>
   );
 });
 
+test('Tier 2.74: a paragraph break inside its own text node is not flattened', () => {
+  // X splits the body around every inline element (link, mention, emoji img), so
+  // a paragraph break between two such elements lives in a whitespace-only node
+  // of its own. The first fix only protected a break inside a content-bearing
+  // node, so any post whose line ended at a mention or emoji came back as one
+  // paragraph -- the regression that was reported twice.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>first para</span><span>\n\n</span><span>second para with <a href="/alice">@alice</a> here</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.text, 'first para\n\nsecond para with @alice here');
+
+  const tokens = tweet?.richTokens || [];
+  assert.equal(
+    tokens.map(tk => tk.value).join(''),
+    'first para\n\nsecond para with @alice here',
+    'the token view must flatten to the same body, break included'
+  );
+  assert.ok(
+    tokens.some(tk => tk.type === 'text' && tk.value.includes('\n\n')),
+    'the paragraph break must survive as a break, not a space'
+  );
+});
+
+test('Tier 2.75: newline indentation at the body edges prints no blank line', () => {
+  // A break that reaches the start or end of the body would show as an empty
+  // first or last line on the card. `tweet.text` trims its edges, so the token
+  // view must agree.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>
+</span><span>the only line <a href="/alice">@alice</a></span>
+</div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  const tokens = tweet?.richTokens || [];
+  assert.ok(tokens.length > 0, 'the body must still produce tokens');
+  assert.equal(tokens[0].type === 'text' ? tokens[0].value.trim() : tokens[0].value, 'the only line');
+  assert.equal(tweet?.text, 'the only line @alice');
+});
+
 test('Tier 2.44: a quoted video renders once, not as a poster plus the video', () => {
   // Regression guard. The quote's media pass had no poster handling, so a quoted
   // video kept its poster image AND the video item, and the card drew the same
