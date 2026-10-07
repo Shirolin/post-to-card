@@ -3,7 +3,7 @@ import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '.
 import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card.ts';
 import { CardQrCode } from './qrcode.ts';
 import { resolveRadius, getAspectMinHeight, THEMES } from './themes.ts';
-import { planMediaGrid, applyMediaGridPlan } from './mediaGrid.ts';
+import { planMediaGrid, applyMediaGridPlan, recordShape } from './mediaGrid.ts';
 import { threadScope, tweetKey } from './threadScope.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
@@ -92,7 +92,9 @@ function renderMediaGrid(
   showPlayButton: boolean = true
 ) {
   if (!media || media.length === 0) return null;
-  const items = media.slice(0, 4);
+  // A mutable copy: a picture that reports its real shape replaces its own entry
+  // here, so the next plan sees it. The caller's MediaItems are left untouched.
+  let items = media.slice(0, 4);
   const count = items.length;
   const fitClass = `fit-${imageFit}`;
   const layoutClass = `media-layout-${mediaLayout}`;
@@ -102,6 +104,20 @@ function renderMediaGrid(
   // settle differently if the pictures told it something new.
   const gridOptions = { aspectRatio, mediaLayout };
   const plan = planMediaGrid(items, gridOptions);
+
+  // Both an image and a video poster settle the grid the same way: record the
+  // shape it reported, re-plan, and write the plan back.
+  const settleGrid = (imgEl: HTMLImageElement, index: number) => {
+    if (!imgEl.naturalWidth || !imgEl.naturalHeight) return;
+    const ratio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
+    const settled = recordShape(items, index, ratio);
+    if (settled === items) return;
+    items = settled;
+    const grid = imgEl.closest ? (imgEl.closest('.media-grid') as HTMLElement) : null;
+    if (grid) {
+      applyMediaGridPlan(grid, planMediaGrid(items, gridOptions));
+    }
+  };
 
   return (
     <div
@@ -136,21 +152,7 @@ function renderMediaGrid(
                 class={`media-video-poster ${fitClass}`}
                 data-fit={imageFit}
                 loading="eager"
-                onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => {
-                  const imgEl = e.currentTarget;
-                  if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
-                    const ratio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
-                    if (!m.aspectRatio) {
-                      m.aspectRatio = ratio;
-                    }
-                    if (count === 1) {
-                      const wrapper = imgEl.closest ? (imgEl.closest('.media-video-item') as HTMLElement) : null;
-                      if (wrapper && !wrapper.style.aspectRatio) {
-                        wrapper.style.aspectRatio = `${ratio}`;
-                      }
-                    }
-                  }
-                }}
+                onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
               />
               {/* Play badge sits on the poster without a scrim: the pill is
                   opaque, so a gradient would only dim the image. */}
@@ -181,20 +183,7 @@ function renderMediaGrid(
             data-fit={imageFit}
             data-layout={mediaLayout}
             loading="eager"
-            onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => {
-              const imgEl = e.currentTarget;
-              if (!imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight || m.aspectRatio) {
-                return;
-              }
-              // This picture's shape was unknown when the grid was planned, so
-              // the plan gets to see it now. Re-planning is what keeps a grid
-              // from settling on a layout its pictures do not fit.
-              m.aspectRatio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
-              const grid = imgEl.closest ? (imgEl.closest('.media-grid') as HTMLElement) : null;
-              if (grid) {
-                applyMediaGridPlan(grid, planMediaGrid(items, gridOptions));
-              }
-            }}
+            onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
           />
         );
       })}

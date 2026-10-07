@@ -198,6 +198,22 @@ export function planMediaGrid(
 }
 
 /**
+ * Records one picture's real shape, returning a new list.
+ *
+ * A shape that is already known is left alone: the first known shape is the
+ * one the plan will read, and a second report of the same picture says nothing
+ * new. Returns the same list when nothing changed, so a caller can tell a
+ * no-op from an update without diffing objects.
+ */
+export function recordShape(items: MediaItem[], index: number, ratio: number): MediaItem[] {
+  const item = items[index];
+  if (!item || item.aspectRatio !== undefined || !(ratio > 0)) return items;
+  const next = items.slice();
+  next[index] = { ...item, aspectRatio: ratio };
+  return next;
+}
+
+/**
  * Writes a plan onto an already-rendered grid.
  *
  * No decisions here: the layout classes are cleared wholesale and the planned

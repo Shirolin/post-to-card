@@ -9,7 +9,7 @@ import { Card } from './Card.tsx';
 import { Controls } from './Controls.tsx';
 import { Modal } from './Modal.tsx';
 import { handleRadioKeyDown } from './radioGroup.ts';
-import { threadScope } from './threadScope.ts';
+import { threadScope, toggleExcluded } from './threadScope.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
 
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
@@ -113,13 +113,7 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   const scope = threadScope(threadData, config.excludedTweetIds);
 
   const handleExcludeTweet = (tweetId: string) => {
-    const next = new Set(scope.excluded);
-    if (next.has(tweetId)) {
-      next.delete(tweetId);
-    } else if (scope.canExcludeMore) {
-      next.add(tweetId);
-    }
-    handleConfigChange({ ...config, excludedTweetIds: Array.from(next) });
+    handleConfigChange({ ...config, excludedTweetIds: toggleExcluded(threadData, config.excludedTweetIds, tweetId) });
   };
 
   // The card never renders empty — Card substitutes a fallback tweet — so the

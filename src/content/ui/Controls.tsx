@@ -5,7 +5,7 @@ import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIO
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
-import { threadScope, tweetKey } from './threadScope.ts';
+import { threadScope, tweetKey, toggleExcluded, selectCurrentOnly } from './threadScope.ts';
 import {
   Languages,
   Palette,
@@ -151,13 +151,7 @@ export function Controls({
   const totalTweets = totalCount;
 
   const handleToggleExclude = (key: string) => {
-    const nextSet = new Set(excluded);
-    if (nextSet.has(key)) {
-      nextSet.delete(key);
-    } else if (canExcludeMore) {
-      nextSet.add(key);
-    }
-    updateConfig({ excludedTweetIds: Array.from(nextSet) });
+    updateConfig({ excludedTweetIds: toggleExcluded(threadData, config.excludedTweetIds, key) });
   };
 
   const handleSelectAll = () => {
@@ -170,12 +164,7 @@ export function Controls({
 
   const handleSelectCurrentOnly = () => {
     if (!threadData) return;
-    const targetIdx = threadData.targetTweetIndex ?? 0;
-    const key = tweetKey(threadData.tweets[targetIdx], targetIdx);
-    const toExclude = threadData.tweets
-      .map((item, idx) => tweetKey(item, idx))
-      .filter((k) => k !== key);
-    updateConfig({ excludedTweetIds: toExclude });
+    updateConfig({ excludedTweetIds: selectCurrentOnly(threadData) });
   };
 
   const toggles: ToggleSpec[] = [

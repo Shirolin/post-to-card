@@ -82,3 +82,35 @@ export function threadScope(
     canExcludeMore: activeCount > 1,
   };
 }
+
+/**
+ * Next exclusions after toggling one tweet. Re-adding is always allowed;
+ * dropping goes through the scope verdict, so the last showing tweet stays.
+ * Built from the scope's own set, which drops stale keys as a side effect.
+ */
+export function toggleExcluded(
+  thread: ThreadData | null | undefined,
+  storedExclusions: string[] | undefined,
+  key: string
+): string[] {
+  const scope = threadScope(thread, storedExclusions);
+  const next = new Set(scope.excluded);
+  if (next.has(key)) {
+    next.delete(key);
+  } else if (scope.canExcludeMore) {
+    next.add(key);
+  }
+  return Array.from(next);
+}
+
+/**
+ * Next exclusions that leave only the target tweet showing.
+ */
+export function selectCurrentOnly(thread: ThreadData | null | undefined): string[] {
+  if (!thread) return [];
+  const targetIdx = thread.targetTweetIndex ?? 0;
+  const key = tweetKey(thread.tweets[targetIdx], targetIdx);
+  return thread.tweets
+    .map((item, idx) => tweetKey(item, idx))
+    .filter((k) => k !== key);
+}
