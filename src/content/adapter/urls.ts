@@ -52,8 +52,10 @@ export function getPhotoUrlCandidates(url: string): string[] {
     ) {
       const build = (name: string): string => {
         const next = new URL(parsed.toString());
-        // JPEG source is required for original quality; WebP is recompressed.
-        if (next.searchParams.get('format') === 'webp') {
+        // JPEG source is what original quality is fetched in. WebP is recompressed
+        // by X and a source that names no format may well be WebP, so the format
+        // is stated for both cases rather than only rewritten when named.
+        if (next.searchParams.get('format') !== 'jpg') {
           next.searchParams.set('format', 'jpg');
         }
         next.searchParams.set('name', name);

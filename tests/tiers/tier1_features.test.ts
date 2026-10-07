@@ -2232,7 +2232,7 @@ const __dirname = path.dirname(__filename);
 // F27: Image Fit, Ratio-Aware Media Layout & Zero-Emoji UI
 // -------------------------------------------------------------
 test('F27.1: injection module defines SVG vector trigger button without sparkle emoji', () => {
-  const content = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/injection.ts'), 'utf-8');
+  const content = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/triggerViews.ts'), 'utf-8');
   assert.ok(content.includes('TRIGGER_BUTTON_SVG'), 'Must export TRIGGER_BUTTON_SVG');
   assert.ok(content.includes('<svg'), 'Must define SVG icon');
   assert.ok(!content.includes("btn.textContent = '✨'"), 'Must not assign sparkle emoji to button');
@@ -2476,7 +2476,7 @@ test('F30.2: Controls.tsx contains toggle for showActionBarButton with i18n twee
 });
 
 test('F30.3: injection.ts defines setInjectedButtonVisibility, HIDE_ACTION_BUTTON_CLASS and style injection', () => {
-  const injectionContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/injection.ts'), 'utf-8');
+  const injectionContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/triggerViews.ts'), 'utf-8');
   assert.ok(injectionContent.includes("HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn'"), 'Must define hide class constant');
   assert.ok(injectionContent.includes("VISIBILITY_STYLE_ID = 'post-to-card-visibility-style'"), 'Must define visibility style id');
   assert.ok(injectionContent.includes('function setInjectedButtonVisibility'), 'Must export setInjectedButtonVisibility');

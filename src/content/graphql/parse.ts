@@ -11,7 +11,7 @@
  */
 
 import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet.ts';
-import { upgradeAvatarUrl } from '../adapter/urls.ts';
+import { upgradeAvatarUrl, upgradePhotoUrl } from '../adapter/urls.ts';
 
 type Json = Record<string, unknown>;
 
@@ -220,13 +220,13 @@ function parseMedia(tweet: Json): MediaItem[] | undefined {
     const height = typeof info.height === 'number' ? info.height : 0;
 
     if (type === 'photo' || !type) {
-      // `format=jpg&name=orig` is stated rather than derived: the GraphQL payload
-      // can carry a WebP source, and `upgradePhotoUrl` only rewrites the format
-      // when one is already named, so it would leave a WebP original in place.
-      const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}format=jpg&name=orig`;
+      // The URL rule is `urls.ts`'s, not a second copy: it rewrites a WebP source
+      // to JPEG and states `name=orig`, which is the same statement this channel
+      // used to hardcode — but with the `orig -> large -> medium` fallback the
+      // export path already relies on when `orig` 404s.
       items.push({
         type: 'image',
-        url,
+        url: upgradePhotoUrl(baseUrl),
         originalUrl: baseUrl,
         alt: str(entry.ext_alt_text),
         aspectRatio: width > 0 && height > 0 ? Number((width / height).toFixed(3)) : undefined,
@@ -251,8 +251,9 @@ function parseMedia(tweet: Json): MediaItem[] | undefined {
 
       const durationMillis = typeof videoInfo.duration_millis === 'number' ? videoInfo.duration_millis : 0;
       const totalSeconds = Math.floor(durationMillis / 1000);
-      // Same reasoning as the photo above: the format is stated, not derived.
-      const poster = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}format=jpg&name=orig`;
+      // Same rule as the photo above, per `urls.ts`: the poster carries the
+      // stated format and the resolution fallback.
+      const poster = upgradePhotoUrl(baseUrl);
 
       items.push({
         type: type === 'animated_gif' ? 'gif' : 'video',

@@ -16,11 +16,13 @@ import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGri
 import {
   createTriggerButton,
   applyTriggerLocale,
+  setInjectedButtonVisibility,
+  HIDE_ACTION_BUTTON_CLASS,
+} from '../../src/content/adapter/triggerViews.ts';
+import {
   injectIntoActionBar,
   injectAll,
-  setInjectedButtonVisibility,
   initTwitterInjection,
-  HIDE_ACTION_BUTTON_CLASS,
 } from '../../src/content/adapter/injection.ts';
 import { getTranslation } from '../../src/content/i18n.ts';
 import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
@@ -1238,12 +1240,9 @@ test('Tier 2.57: a language chosen after the triggers exist reaches them', () =>
   // are already there. The label is also the button's accessible name, which is
   // why it cannot be left to a title attribute the card never re-reads.
   withFakeDocument((doc) => {
-    // Stated rather than assumed: the locale is module state, so a test that
-    // relied on whatever ran before it would answer a different question
-    // depending on its position in the file.
-    applyTriggerLocale('en-US');
-
-    const injected = createTriggerButton(() => {});
+    // The locale is passed to the factory, so this test states its own
+    // language rather than relying on module state from an earlier test.
+    const injected = createTriggerButton(() => {}, 'en-US');
     doc.body.appendChild(injected);
     const beforeSwitch = injected.getAttribute('title');
     assert.ok(beforeSwitch, 'a trigger must carry a label from the moment it exists');
@@ -1258,17 +1257,15 @@ test('Tier 2.57: a language chosen after the triggers exist reaches them', () =>
 });
 
 test('Tier 2.58: a trigger injected after the change agrees with the ones above it', () => {
-  // The locale is held in the module rather than passed down, because that is
-  // how it reaches buttons injected earlier. That is only safe while the factory
-  // and the applier read the same place: otherwise a tweet that scrolls in later
-  // would say something different from the tweets already on screen.
+  // The manager holds the locale and hands it to each new button, so a tweet
+  // that scrolls in later says the same thing as the tweets already on screen.
+  // The factory takes the locale as an argument, which is what lets the manager
+  // read one place and the button read another without them drifting.
   withFakeDocument((doc) => {
-    applyTriggerLocale('en-US');
-    const earlier = createTriggerButton(() => {});
+    const earlier = createTriggerButton(() => {}, 'zh-CN');
     doc.body.appendChild(earlier);
 
-    applyTriggerLocale('zh-CN');
-    const later = createTriggerButton(() => {});
+    const later = createTriggerButton(() => {}, 'zh-CN');
     doc.body.appendChild(later);
 
     assert.equal(
