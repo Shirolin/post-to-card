@@ -17,7 +17,7 @@ import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
 import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML } from '../fixtures/multi-images.ts';
-import { extractTweetMedia } from '../../src/content/adapter/extractor.ts';
+import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
@@ -687,7 +687,7 @@ test('F11.5: handles empty or missing media gracefully', () => {
 // -------------------------------------------------------------
 test('F11.6: keeps the photo when a tweet also contains a GIF', () => {
   const tweet = createDomElement(PHOTO_AND_GIF_HTML);
-  const media = extractTweetMedia(tweet as unknown as Element);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
 
   assert.ok(media, 'expected media to be extracted');
   assert.equal(media.length, 2, 'expected both the photo and the GIF');
@@ -702,7 +702,7 @@ test('F11.6: keeps the photo when a tweet also contains a GIF', () => {
 
 test('F11.7: keeps the photo when a tweet also contains a plain video', () => {
   const tweet = createDomElement(PHOTO_AND_VIDEO_HTML);
-  const media = extractTweetMedia(tweet as unknown as Element);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
 
   assert.ok(media, 'expected media to be extracted');
   assert.equal(media.length, 2, 'expected both the photo and the video');
@@ -712,7 +712,7 @@ test('F11.7: keeps the photo when a tweet also contains a plain video', () => {
 
 test('F11.8: a video-only tweet still yields exactly one item', () => {
   const tweet = createDomElement(VIDEO_POSTER_HTML);
-  const media = extractTweetMedia(tweet as unknown as Element);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
 
   assert.ok(media, 'expected media to be extracted');
   assert.equal(media.length, 1, 'video-only tweets must not gain phantom items');
@@ -721,7 +721,7 @@ test('F11.8: a video-only tweet still yields exactly one item', () => {
 
 test('F11.9: never returns more than 4 media items', () => {
   const tweet = createDomElement(PHOTO_AND_VIDEO_HTML);
-  const media = extractTweetMedia(tweet as unknown as Element);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
   assert.ok((media?.length ?? 0) <= 4, 'media count must respect the 4-item layout cap');
 });
 
@@ -729,7 +729,7 @@ test('F11.10: a GIF poster layer is not extracted as a photo', () => {
   // Observed on a live GIF post: the hidden poster sits inside the tweetPhoto
   // wrapper behind the <video>, so counting it would render the GIF twice.
   const tweet = createDomElement(GIF_POSTER_LAYER_HTML);
-  const media = extractTweetMedia(tweet as unknown as Element);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
 
   assert.ok(media, 'expected the GIF to be extracted');
   assert.equal(media!.length, 1, 'a GIF post must yield exactly one item');
@@ -745,7 +745,7 @@ test('F11.11: a visible video poster is not also collected as a photo', () => {
   // structural checks that caught the hidden GIF layer missed it and the frame
   // rendered twice: once as a photo, once as the video item with the duration.
   const tweet = createDomElement(VIDEO_VISIBLE_POSTER_HTML);
-  const media = extractTweetMedia(tweet as unknown as Element);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
 
   assert.ok(media, 'expected the video to be extracted');
   assert.equal(media!.length, 1, 'a video post must yield exactly one item');
@@ -2439,7 +2439,8 @@ test('F29.5: i18n provides localized videoLabel for zh-CN and en-US', () => {
 test('F29.6: DEFAULT_CARD_CONFIG defines showPlayButton: true and loadUserPreferences parses it', () => {
   const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
   assert.ok(themesContent.includes('showPlayButton: true'), 'DEFAULT_CARD_CONFIG must include showPlayButton: true');
-  assert.ok(themesContent.includes('showPlayButton: saved.showPlayButton !== false'), 'loadUserPreferences must parse showPlayButton');
+  const prefsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/prefs.ts'), 'utf-8');
+  assert.ok(prefsContent.includes('showPlayButton: saved.showPlayButton !== false'), 'loadUserPreferences must parse showPlayButton');
 });
 
 test('F29.7: Controls.tsx contains toggle for showPlayButton with localized label', () => {
@@ -2461,8 +2462,9 @@ test('F29.8: Card.tsx conditionally renders the video badge based on showPlayBut
 test('F30.1: DEFAULT_CARD_CONFIG defines showActionBarButton: true and themes.ts persists it', () => {
   const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
   assert.ok(themesContent.includes('showActionBarButton: true'), 'DEFAULT_CARD_CONFIG must include showActionBarButton: true');
-  assert.ok(themesContent.includes('showActionBarButton: saved.showActionBarButton !== false'), 'loadUserPreferences must parse showActionBarButton');
-  assert.ok(themesContent.includes("STORAGE_KEY = 'post_to_card_user_prefs'"), 'Must export STORAGE_KEY');
+  const prefsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/prefs.ts'), 'utf-8');
+  assert.ok(prefsContent.includes('showActionBarButton: saved.showActionBarButton !== false'), 'loadUserPreferences must parse showActionBarButton');
+  assert.ok(prefsContent.includes("STORAGE_KEY = 'post_to_card_user_prefs'"), 'Must export STORAGE_KEY');
 });
 
 test('F30.2: Controls.tsx contains toggle for showActionBarButton with i18n tweetActionButton', () => {

@@ -8,7 +8,7 @@ import { DomElement, DomImageElement, DomDocument, DomMutationObserver, createDo
 import { createChromeMock } from '../env/chrome.ts';
 import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
-import { extractQuoteTweet, extractTweetData } from '../../src/content/adapter/extractor.ts';
+import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { isPicMediaLink } from '../../src/content/adapter/emojis.ts';
@@ -388,7 +388,6 @@ test('Tier 2.25: quote extraction returns undefined for a tweet without a quote 
     </article>
   `);
 
-  assert.equal(extractQuoteTweet(article), undefined);
   assert.equal(extractTweetData(article)?.quotePost, undefined);
 });
 

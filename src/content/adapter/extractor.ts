@@ -53,7 +53,7 @@ function isInsideNestedArticle(el: Element): boolean {
  * fall back through progressively weaker structural signals instead of trusting
  * a single data-testid.
  */
-export function findQuoteContainer(article: Element): Element | null {
+function findQuoteContainer(article: Element): Element | null {
   if (!article) return null;
 
   // 1. Canonical marker used by current X.
@@ -203,7 +203,7 @@ function extractAuthorFrom(userNameEl: Element | null, scope: Element): AuthorIn
 /**
  * Extracts AuthorInfo (name, handle, high-res avatar, verified badge).
  */
-export function extractAuthorInfo(article: Element): AuthorInfo {
+function extractAuthorInfo(article: Element): AuthorInfo {
   return extractAuthorFrom(article.querySelector('div[data-testid="User-Name"]'), article);
 }
 
@@ -211,7 +211,7 @@ export function extractAuthorInfo(article: Element): AuthorInfo {
  * Extracts rich tokens (@mentions, #hashtags, $cashtags, URLs, emojis, text)
  * from tweetText element.
  */
-export function extractRichTokens(tweetTextEl: Element | null | undefined): RichToken[] {
+function extractRichTokens(tweetTextEl: Element | null | undefined): RichToken[] {
   if (!tweetTextEl) return [];
 
   const tokens: RichToken[] = [];
@@ -378,7 +378,7 @@ export function extractRichTokens(tweetTextEl: Element | null | undefined): Rich
  * is a technical abbreviation it does not vary with the interface language,
  * which makes it more dependable than the localized labels used elsewhere.
  */
-export function isGifMedia(container: Element): boolean {
+function isGifMedia(container: Element): boolean {
   if (!container) return false;
   const aria = container.getAttribute('aria-label') || '';
   if (aria.toUpperCase().includes('GIF')) return true;
@@ -392,7 +392,7 @@ export function isGifMedia(container: Element): boolean {
 /**
  * Extracts video duration string (e.g. '0:42', '1:23', '12:05') from video controls.
  */
-export function extractVideoDuration(container: Element): string | undefined {
+function extractVideoDuration(container: Element): string | undefined {
   if (!container) return undefined;
 
   const candidateEls = container.querySelectorAll('time, span, div');
@@ -419,7 +419,7 @@ export function extractVideoDuration(container: Element): string | undefined {
  * Deeply searches an article or container for video elements and extracts
  * the poster frame URL or captures a frame via HTML5 Canvas.
  */
-export function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem | null {
+function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem | null {
   if (!container) return null;
 
   // A main-tweet scan must not adopt a video that belongs to a nested quote.
@@ -681,7 +681,7 @@ function collectPhotoAndVideoMedia(
  * Extracts up to 4 high-res photos plus any video/GIF poster frame for the main
  * tweet. Excludes media belonging to nested quote tweets.
  */
-export function extractTweetMedia(article: Element): MediaItem[] | undefined {
+function extractTweetMedia(article: Element): MediaItem[] | undefined {
   const items = collectPhotoAndVideoMedia(
     article,
     (img) => !isInsideQuoteTweet(img) && !isMediaPosterLayer(img),
@@ -748,7 +748,7 @@ function isUnavailableMarker(container: Element): boolean {
 /**
  * Extracts nested Quote Tweet data (author, text, media, timestamp).
  */
-export function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
+function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
   const quoteBox = findQuoteContainer(article);
 
   if (!quoteBox) return undefined;
@@ -831,7 +831,7 @@ function parseStatValue(el: Element | null): string | undefined {
 /**
  * Extracts interaction statistics (replies, reposts, likes, bookmarks, views).
  */
-export function extractTweetStats(article: Element): TweetStats | undefined {
+function extractTweetStats(article: Element): TweetStats | undefined {
   const actionBar = article.querySelector('div[role="group"]');
   if (!actionBar || isInsideQuoteTweet(actionBar)) return undefined;
 
@@ -888,7 +888,7 @@ export function extractTweetId(article: Element): string {
 /**
  * Extracts canonical permalink URL for the tweet.
  */
-export function extractTweetUrl(article: Element): string {
+function extractTweetUrl(article: Element): string {
   const statusLink = findTweetStatusLink(article);
   if (statusLink) {
     const href = statusLink.getAttribute('href') || '';
@@ -906,7 +906,7 @@ export function extractTweetUrl(article: Element): string {
 /**
  * Extracts ISO 8601 UTC timestamp from <time> tag.
  */
-export function extractTimestamp(article: Element): string {
+function extractTimestamp(article: Element): string {
   const timeEls = Array.from(article.querySelectorAll('time'));
   const validTime = timeEls.find(t => !isInsideQuoteTweet(t));
   if (validTime) {
@@ -925,7 +925,7 @@ export function extractTimestamp(article: Element): string {
  * immediately before the body that carries a button. The toggle itself is
  * dropped because a static card cannot be clicked.
  */
-export function extractTranslationNotice(tweetTextEl: Element | null | undefined): string | undefined {
+function extractTranslationNotice(tweetTextEl: Element | null | undefined): string | undefined {
   if (!tweetTextEl) return undefined;
 
   const notice = tweetTextEl.previousElementSibling;

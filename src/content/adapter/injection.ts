@@ -19,7 +19,7 @@
  */
 
 import { TWEET_ARTICLE_SELECTOR } from './thread.ts';
-import { loadUserPreferences, STORAGE_KEY } from '../ui/themes.ts';
+import { loadUserPreferences, subscribePreferences } from '../prefs.ts';
 
 interface CustomObserver {
   observe: (target: Node, options?: MutationObserverInit) => void;
@@ -454,21 +454,11 @@ export function initTwitterInjection(
     .catch(() => {});
 
   // 2. Storage change listener for multi-tab live sync
-  const handleStorageChange = (
-    changes: Record<string, { newValue?: unknown }>,
-    areaName: string
-  ) => {
-    if (areaName === 'local' && changes[STORAGE_KEY]?.newValue) {
-      preferenceChangedSinceLoad = true;
-      const newConfig = changes[STORAGE_KEY].newValue as { showActionBarButton?: boolean; locale?: Locale };
-      setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
-      applyTriggerLocale(newConfig.locale);
-    }
-  };
-
-  if (chrome.storage?.onChanged) {
-    chrome.storage.onChanged.addListener(handleStorageChange as unknown as (changes: object, area: string) => void);
-  }
+  const unsubscribePrefs = subscribePreferences((newConfig) => {
+    preferenceChangedSinceLoad = true;
+    setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
+    applyTriggerLocale(newConfig.locale);
+  });
 
   // 3. Track hovered article & trigger active tweet (for shortcut & popup)
   let lastHoveredArticle: Element | null = null;
@@ -608,9 +598,7 @@ export function initTwitterInjection(
       window.removeEventListener('locationchange', handleNavigation as EventListener);
       window.removeEventListener('keydown', handleKeyDown as EventListener);
       document.removeEventListener('mouseover', handleMouseOver);
-      if (chrome.storage?.onChanged) {
-        chrome.storage.onChanged.removeListener(handleStorageChange as unknown as (changes: object, area: string) => void);
-      }
+      unsubscribePrefs();
       if (unhookHistory) {
         unhookHistory();
       }
