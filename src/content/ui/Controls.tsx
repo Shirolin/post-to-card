@@ -1,7 +1,7 @@
 import type { JSX } from 'preact';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../types/card.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS } from './themes.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS, IMAGE_FIT_OPTIONS, MEDIA_LAYOUT_OPTIONS } from './themes.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
@@ -433,8 +433,8 @@ export function Controls({
               </span>
               <Segmented
                 name={t.imageFit}
-                options={['contain', 'cover'] as const}
-                value={(config.imageFit || 'contain') as 'contain' | 'cover'}
+                options={IMAGE_FIT_OPTIONS}
+                value={config.imageFit || 'contain'}
                 onSelect={(next) => updateConfig({ imageFit: next })}
                 labels={{ contain: t.fitContain, cover: t.fitCover }}
                 titles={{ contain: t.fitContain, cover: t.fitCover }}
@@ -448,8 +448,8 @@ export function Controls({
               </span>
               <Segmented
                 name={t.mediaLayout}
-                options={['grid', 'stack'] as const}
-                value={(config.mediaLayout || 'grid') as 'grid' | 'stack'}
+                options={MEDIA_LAYOUT_OPTIONS}
+                value={config.mediaLayout || 'grid'}
                 onSelect={(next) => updateConfig({ mediaLayout: next })}
                 labels={{ grid: t.layoutGrid, stack: t.layoutStack }}
                 titles={{ grid: t.layoutGrid, stack: t.layoutStack }}
