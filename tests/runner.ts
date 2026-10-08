@@ -8,6 +8,7 @@ import { runTier2 } from './tiers/tier2_boundaries.test.ts';
 import { runTier3 } from './tiers/tier3_interactions.test.ts';
 import { runTier4 } from './tiers/tier4_workloads.test.ts';
 import { runTierI18n } from './tiers/tier_i18n.test.ts';
+import { runTierHygiene } from './tiers/tier_hygiene.test.ts';
 import { runTierGraphQL } from './tiers/tier_graphql.test.ts';
 import { runTierResolver } from './tiers/tier_resolver.test.ts';
 
@@ -46,6 +47,9 @@ async function main() {
   }
   if (!targetTier || targetTier === 'resolver') {
     tiersToRun.push({ name: 'Tier Resolver: Deep Unified Thread Resolution', run: runTierResolver });
+  }
+  if (!targetTier || targetTier === 'hygiene') {
+    tiersToRun.push({ name: 'Tier Hygiene: Mechanical Repository Invariants', run: runTierHygiene });
   }
 
   for (const tier of tiersToRun) {
