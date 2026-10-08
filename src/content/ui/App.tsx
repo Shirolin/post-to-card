@@ -11,6 +11,7 @@ import { Modal } from './Modal.tsx';
 import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadScope, toggleExcluded } from './threadScope.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
+import { DEFAULT_EXPORT_SCALE } from '../engine/index.ts';
 
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 
@@ -68,10 +69,6 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   // The card's height at scale 1. Zero until the first measurement, which leaves
   // the height axis out of `fit` for a frame rather than guessing at it.
   const [cardHeight, setCardHeight] = useState<number>(0);
-  // The last applied scale, kept here so the measurement can undo it. CSS `zoom`
-  // scales layout, so the card's measured box comes back multiplied by whatever
-  // is in force; dividing it out recovers the natural height.
-  const appliedZoomRef = useRef<number>(1);
   const [availableWidth, setAvailableWidth] = useState<number>(0);
   const [availableHeight, setAvailableHeight] = useState<number>(0);
 
@@ -88,11 +85,22 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   const fitScale = cardHeight > 0 ? Math.min(maxScale, availableHeight / cardHeight) : maxScale;
 
   const zoom = isFixedLevel(level) ? Math.min(level, maxScale) : fitScale;
-  // Published for the measurement below to divide out. Assigned during render
-  // rather than in an effect because the observer can fire before one would run,
-  // and `zoom` is derived purely from props and state, so writing it twice is
-  // harmless while writing it late would corrupt the card's height by a frame.
-  appliedZoomRef.current = zoom;
+
+  /**
+   * The exported PNG's pixel size, or null until the card has been measured.
+   *
+   * The export captures an unzoomed copy at the card's own 640px width and
+   * rasterizes it at the engine's default scale, so this is the figure that lands
+   * on the clipboard. It has nothing to do with the preview's zoom: a long thread
+   * on a phone can look tiny here and still export at full width.
+   */
+  const exportSize =
+    cardHeight > 0
+      ? {
+          width: Math.round(CARD_WIDTH * DEFAULT_EXPORT_SCALE),
+          height: Math.round(cardHeight * DEFAULT_EXPORT_SCALE),
+        }
+      : null;
 
   const t = getTranslation(sanitizeLocale(config.locale));
 
@@ -111,12 +119,19 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
    * regression: picking 100% on a tall card is a deliberate choice to read it at
    * full size and scroll, not a scale the window is allowed to refuse.
    *
-   * The card is measured through the zoom in force, because `zoom` scales layout
-   * and the reading arrives multiplied by it. Dividing it back out recovers the
-   * natural height whichever level is selected, so the two cannot chase each
-   * other. The card's own observer covers every content change -- a theme, a
-   * different tweet set, an image settling into the grid -- so this effect does
-   * not need the config in its dependencies.
+   * The card is read with `offsetHeight`, not `getBoundingClientRect`. The rect
+   * is the right box for a pixel comparison and the wrong one here for two
+   * reasons: it arrives multiplied by the preview's `zoom`, and it also carries
+   * any transform on an ancestor. The dialog animates in with
+   * `transform: scale(0.975)`, so a measurement taken during that animation came
+   * back 2.5% short and stayed wrong -- a transform does not change layout, so the
+   * observer never fired again to correct it, and the error was non-deterministic
+   * because it depended on whether the animation had finished. `offsetHeight` is
+   * the border box in layout pixels, free of both.
+   *
+   * The card's own observer covers every content change -- a theme, a different
+   * tweet set, an image settling into the grid -- so this effect does not need the
+   * config in its dependencies.
    */
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -134,9 +149,8 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
 
       const card = cardRef.current;
       if (!card) return;
-      const applied = appliedZoomRef.current;
-      const natural = card.getBoundingClientRect().height / applied;
-      setCardHeight((prev) => (Math.abs(prev - natural) > 0.5 ? natural : prev));
+      const natural = card.offsetHeight;
+      if (natural > 0) setCardHeight((prev) => (Math.abs(prev - natural) > 0.5 ? natural : prev));
     };
 
     measure();
@@ -348,6 +362,7 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
         statusMessage={statusMessage}
         isErrorStatus={isErrorStatus}
         threadData={threadData}
+        exportSize={exportSize}
       />
     </Modal>
   );

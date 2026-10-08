@@ -13,7 +13,7 @@
  * for a card that the clipboard had refused and the browser had downloaded.
  */
 
-import { renderCardToBlob, type RenderOptions } from './export.ts';
+import { renderCardToBlob, DEFAULT_EXPORT_SCALE, type RenderOptions } from './export.ts';
 import { exportBlobWithFallback, type ExportAction, type ExportResult } from './fallback.ts';
 
 export * from './export.ts';
@@ -46,7 +46,7 @@ export async function exportCard(
   cardElement: HTMLElement,
   options: ExportCardOptions = {}
 ): Promise<ExportOutcome> {
-  const { action = 'copy', scale = 2, filename, render } = options;
+  const { action = 'copy', scale = DEFAULT_EXPORT_SCALE, filename, render } = options;
 
   const blob = await renderCardToBlob(cardElement, { scale, ...render });
   return exportBlobWithFallback(blob, action, filename);

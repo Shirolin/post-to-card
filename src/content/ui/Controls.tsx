@@ -45,6 +45,12 @@ export interface ControlsProps {
   statusMessage?: string;
   isErrorStatus?: boolean;
   threadData?: ThreadData;
+  /**
+   * The exported PNG's pixel size, or null until the preview has measured the
+   * card. Shown under the aspect ratio because that is the control that moves the
+   * height most, and it is not persisted -- it is a readout, not a preference.
+   */
+  exportSize?: { width: number; height: number } | null;
 }
 
 interface ToggleSpec {
@@ -122,6 +128,7 @@ export function Controls({
   statusMessage = '',
   isErrorStatus = false,
   threadData,
+  exportSize,
 }: ControlsProps): JSX.Element {
   const t = getTranslation(sanitizeLocale(config.locale));
   const [showMore, setShowMore] = useState<boolean>(false);
@@ -354,6 +361,15 @@ export function Controls({
             onSelect={(next) => updateConfig({ aspectRatio: next })}
             labels={{ auto: t.aspectAuto }}
           />
+          {/* Hidden until the card has been measured rather than showing a
+              zero-height figure for a frame. */}
+          {exportSize && (
+            <span class="control-hint">
+              {t.exportSize
+                .replace('{w}', String(exportSize.width))
+                .replace('{h}', String(exportSize.height))}
+            </span>
+          )}
         </section>
 
         {/* 4. Element toggles */}

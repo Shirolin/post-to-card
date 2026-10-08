@@ -12,6 +12,16 @@ import { domToBlob } from 'modern-screenshot';
 export const FALLBACK_PLACEHOLDER_DATA_URL =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%23333333"/></svg>';
 
+/**
+ * The retina factor an export uses unless a caller passes its own.
+ *
+ * Named because the preview quotes the resulting pixel size to the user. The
+ * number used to be written out in three places, and a readout quoting a
+ * different figure than the exporter actually applied would be worse than having
+ * no readout at all.
+ */
+export const DEFAULT_EXPORT_SCALE = 2;
+
 export interface RenderOptions {
   scale?: number;
   backgroundColor?: string | null;
@@ -153,7 +163,7 @@ export async function renderCardToBlob(
   );
 
   try {
-    const scale = options.scale ?? 2;
+    const scale = options.scale ?? DEFAULT_EXPORT_SCALE;
     const backgroundColor = options.backgroundColor !== undefined ? options.backgroundColor : null;
 
     const filter = (node: Node): boolean => {

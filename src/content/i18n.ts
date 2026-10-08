@@ -22,6 +22,7 @@ export interface Translations {
   themesShowLess: string;
   aspectRatio: string;
   aspectAuto: string;
+  exportSize: string;
   imageFit: string;
   fitContain: string;
   fitCover: string;
@@ -112,6 +113,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     themesShowLess: '收起主题',
     aspectRatio: '画幅比例',
     aspectAuto: '自适应',
+    exportSize: '导出尺寸 {w} × {h} px',
     imageFit: '图片适配',
     fitContain: '完整展示',
     fitCover: '填充铺满',
@@ -193,6 +195,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     themesShowLess: 'Hide extra themes',
     aspectRatio: 'Aspect Ratio',
     aspectAuto: 'Auto',
+    exportSize: 'Exports at {w} × {h} px',
     imageFit: 'Image Fit',
     fitContain: 'Fit',
     fitCover: 'Fill',
