@@ -7,6 +7,7 @@ import { planMediaGrid, applyMediaGridPlan, recordShape } from './mediaGrid.ts';
 import { threadScope, tweetKey } from './threadScope.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
+import { CARD_BUILD } from '../build.ts';
 
 export interface CardProps {
   data: ThreadData | TweetData;
@@ -624,6 +625,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
                 <div class="card-watermark" title="Post-to-Card">
                   <Sparkles size={13} strokeWidth={2} aria-hidden="true" />
                   <span>Post to Card</span>
+                  <span class="card-build">{CARD_BUILD}</span>
                 </div>
               )}
               {config.showQrCode && mainTweet.url && (

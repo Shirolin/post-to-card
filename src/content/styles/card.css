@@ -1193,3 +1193,17 @@
   color: var(--faint, var(--text-sec, #9ca3af));
   user-select: none;
 }
+
+/* The build stamp. Quieter than the mark beside it by size and weight alone,
+   which is the same decision the watermark's own ink is made on: a step down,
+   never a fade. It is the one place the card names the build that drew it, so
+   a shared image can be traced back to the code that produced it. */
+.card-build {
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  /* Keeps the stamp whole on one line: a break here would read as a fault in
+     the card rather than as the mark it belongs to. */
+  white-space: nowrap;
+  opacity: 0.72;
+}
