@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
-    "typecheck": "tsc --noEmit && node --check public/popup.js",
+    "typecheck": "tsc --noEmit && node --check public/popup.js && node --check dev/verify-extension.mjs",
     "build:background": "vite build --mode background",
     "build:hook": "vite build --mode hook",
     "build:content": "vite build --mode content",
