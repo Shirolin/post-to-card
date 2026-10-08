@@ -37,7 +37,22 @@
   --ptc-border-strong: rgba(255, 255, 255, 0.2);
 
   --ptc-text: #e7e9ea;
-  --ptc-text-muted: #71767b;
+  /* Secondary text: the 11-12px labels, unselected segmented options and swatch
+     names. Eleven rules use it, and the value has to clear AA on more than one
+     background -- the bare panel plus the translucent white the tweet section
+     (2.5%) and the segmented groups (3%) lay over it, and the hover state (4%):
+
+       #71767b  panel 3.91  tweet 3.68  group 3.63  hover 3.54
+       #848a91  panel 5.14  tweet 4.84  group 4.78  hover 4.65
+
+     #848a91 is the smallest step of that hue that clears 4.5:1 on all four. A value
+     chosen against the panel alone (#7c8288, 4.61) looks right in a screenshot and
+     still fails inside the groups, which is why this was measured on the surfaces
+     rather than the token in isolation. Selected states are unaffected: they are
+     white on accent at 14.7:1, so the gap to unselected is still wide. */
+  --ptc-text-muted: #848a91;
+  /* Only the disabled text action uses this, and WCAG 1.4.3 exempts inactive
+     controls from contrast minimums, so it stays dim on purpose. */
   --ptc-text-dim: #536471;
 
   --ptc-radius-sm: 6px;
