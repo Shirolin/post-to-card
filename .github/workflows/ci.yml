@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The committed lockfile is pnpm-lock.yaml at lockfileVersion 9.0, which pnpm 9
       # and 10 both write. package.json declares no `packageManager`, so corepack has
@@ -37,7 +37,10 @@ jobs:
       - name: Install pnpm 10
         run: npm install -g pnpm@10
 
-      - uses: actions/setup-node@v4
+      # v7, not v4: the v4 line targets the deprecated Node 20 action runtime, which
+      # GitHub is already force-overriding to Node 24 and will eventually stop running.
+      # v7 is the current major for both actions.
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
