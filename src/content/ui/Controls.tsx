@@ -1,7 +1,7 @@
 import type { JSX } from 'preact';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../types/card.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS } from './themes.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
@@ -21,13 +21,6 @@ import {
   Check,
   LayoutGrid,
 } from 'lucide-preact';
-
-/**
- * Aspect ratios, in the order the segmented control offers them. The values are
- * the user-facing labels already, so only `auto` needs a translation -- `3:4` and
- * `16:9` are ratios, not words.
- */
-const ASPECT_OPTIONS = ['auto', '3:4', '16:9'] as const;
 
 /**
  * How many themes the grid shows before "all themes" is expanded. Two rows in
@@ -356,7 +349,7 @@ export function Controls({
           </span>
           <Segmented
             name={t.aspectRatio}
-            options={ASPECT_OPTIONS}
+            options={ASPECT_RATIO_OPTIONS}
             value={config.aspectRatio}
             onSelect={(next) => updateConfig({ aspectRatio: next })}
             labels={{ auto: t.aspectAuto }}

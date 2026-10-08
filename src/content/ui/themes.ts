@@ -962,6 +962,19 @@ export const LEGACY_THEME_ALIASES: Record<string, ThemeId> = {
 
 export const PADDING_OPTIONS: PaddingOption[] = ['16px', '32px', '48px'];
 export const RADIUS_OPTIONS: RadiusOption[] = ['theme', '0px', '12px', '20px'];
+
+/**
+ * Aspect ratios, in the order the segmented control offers them. The values are
+ * the user-facing labels already, so only `auto` needs a translation -- `3:4` and
+ * `16:9` are ratios, not words. That is why the control's labels map has exactly one
+ * key.
+ *
+ * These strings are persisted config and compared as literals downstream, not just
+ * display text: `getAspectMinHeight` switches on them, mediaGrid checks `=== 'auto'`
+ * to decide whether to fit cells to their pictures, and Card emits them as the
+ * export target's `data-ratio`. Translating this list would break all three, so
+ * localize through the labels map and leave the values alone.
+ */
 export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = ['auto', '3:4', '16:9'];
 export const IMAGE_FIT_OPTIONS: ImageFitOption[] = ['contain', 'cover'];
 export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
