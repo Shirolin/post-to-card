@@ -410,6 +410,11 @@ export function Controls({
                 onSelect={(next) => updateConfig({ locale: next })}
                 labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
               />
+              {/* The card's own copy stays verbatim from X -- a translated-from
+                  notice is attribution, not UI -- so this knob only reaches the
+                  card's dates. Saying so is cheaper than letting someone expect a
+                  re-localized notice. */}
+              <span class="control-hint">{t.languageCardHint}</span>
             </div>
 
             <div class="control-section">

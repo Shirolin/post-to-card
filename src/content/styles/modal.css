@@ -391,9 +391,14 @@
   text-transform: none;
 }
 
+/* Secondary text under a control, at the same weight as the 11px labels around
+   it. `--ptc-text-dim` was authored for this rule when nothing used it, and came
+   out at 2.9:1 against the panel -- too dim to read. `--ptc-text-muted` is what
+   every other small label here already uses (3.9:1), so the hint reads as the
+   same class of information as the section labels rather than as a footnote. */
 .control-hint {
   font-size: 11px;
-  color: var(--ptc-text-dim);
+  color: var(--ptc-text-muted);
 }
 
 /* Theme Swatches Grid */

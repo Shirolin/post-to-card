@@ -15,6 +15,7 @@ export interface Translations {
   moreSettings: string;
   lessSettings: string;
   language: string;
+  languageCardHint: string;
   layoutAndStyle: string;
   theme: string;
   themesShowAll: string;
@@ -103,7 +104,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     moreSettings: '更多设置',
     lessSettings: '收起设置',
-    language: '界面语言',
+    language: '界面与卡片语言',
+    languageCardHint: '同时决定卡片上的日期格式',
     layoutAndStyle: '版式与样式',
     theme: '视觉主题',
     themesShowAll: '展开其余 {count} 款',
@@ -183,7 +185,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     moreSettings: 'More Settings',
     lessSettings: 'Hide Settings',
-    language: 'Language',
+    language: 'Language (UI & Card)',
+    languageCardHint: 'Also sets the date format on the card',
     layoutAndStyle: 'Layout & Style',
     theme: 'Theme',
     themesShowAll: 'Show {count} more',
