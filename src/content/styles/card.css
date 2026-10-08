@@ -1005,12 +1005,20 @@
   position: relative;
 }
 
+/* Preview-only affordance: excluded from the export by
+   `data-html2canvas-ignore`, and hidden at rest so the preview stays close to the
+   artifact it produces.
+
+   24x24 rather than the 22 it was, which is the floor WCAG 2.2 Target Size
+   (Minimum) asks for. It is still well under the 44pt Apple's guidance prefers,
+   which is a deliberate trade for a preview-only chip; the panel's list is the
+   real control on a phone. */
 .thread-exclude-btn {
   position: absolute;
   top: 0;
   right: 0;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
   background: rgba(15, 20, 25, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1026,7 +1034,12 @@
   padding: 0;
 }
 
-.thread-item:hover .thread-exclude-btn {
+/* `:focus-visible` is not redundant with `:hover` here. At `opacity: 0` the
+   element and its focus ring are both invisible, so a keyboard user tabbing onto
+   the button saw nothing at all until they activated it -- the global
+   `:focus-visible` ring in modal.css is painted, but at zero opacity. */
+.thread-item:hover .thread-exclude-btn,
+.thread-exclude-btn:focus-visible {
   opacity: 0.85;
   transform: scale(1);
 }
