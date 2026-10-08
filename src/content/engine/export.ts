@@ -101,6 +101,34 @@ export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Pro
 }
 
 /**
+ * Mounts a copy of the card beside the content it lives in, outside any zoomed
+ * ancestor, and returns it with a disposer.
+ *
+ * The preview scales the card with `zoom` to fit a narrow window. The
+ * rasterizer lays the card out at that scaled size, so the PNG came out shrunk
+ * and its footer wrapped ("Post to / Card"). Clearing `zoom` on the live
+ * ancestors was not dependable: the new size was not yet visible to layout
+ * when the capture read it. A copy keeps the live preview untouched and is
+ * captured at the card's own width. It stays in the same root, so the card's
+ * stylesheet still applies.
+ */
+function mountUnzoomedCopy(card: HTMLElement): { copy: HTMLElement; dispose: () => void } {
+  const root = card.getRootNode();
+  const host: Node = root instanceof ShadowRoot ? root : document.body;
+  // The copy itself carries no positioning: the rasterizer serializes its inline
+  // style, so an offset there would push the picture out of its own frame. The
+  // off-screen placement lives on a wrapper the rasterizer never sees.
+  const wrapper = document.createElement('div');
+  wrapper.setAttribute('aria-hidden', 'true');
+  wrapper.style.cssText = 'position:fixed;left:-100000px;top:0;';
+  const copy = card.cloneNode(true) as HTMLElement;
+  copy.removeAttribute('id');
+  wrapper.appendChild(copy);
+  host.appendChild(wrapper);
+  return { copy, dispose: () => wrapper.remove() };
+}
+
+/**
  * Renders the target card DOM node to a high-resolution PNG Blob.
  * Ensures the canvas remains 100% origin-clean without SecurityError.
  *
@@ -117,6 +145,12 @@ export async function renderCardToBlob(
   options: RenderOptions = {}
 ): Promise<Blob> {
   const restoreImages = await replaceCardImagesWithBase64(cardElement);
+  const { copy, dispose } = mountUnzoomedCopy(cardElement);
+  await Promise.all(
+    Array.from(copy.querySelectorAll('img')).map((img) =>
+      typeof img.decode === 'function' ? img.decode().catch(() => {}) : undefined
+    )
+  );
 
   try {
     const scale = options.scale ?? 2;
@@ -141,7 +175,7 @@ export async function renderCardToBlob(
       return true;
     };
 
-    const blob = await domToBlob(cardElement, {
+    const blob = await domToBlob(copy, {
       scale,
       type: 'image/png',
       backgroundColor,
@@ -163,6 +197,7 @@ export async function renderCardToBlob(
 
     return blob;
   } finally {
+    dispose();
     restoreImages();
   }
 }

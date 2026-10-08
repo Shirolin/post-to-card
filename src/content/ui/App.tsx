@@ -39,8 +39,9 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isErrorStatus, setIsErrorStatus] = useState<boolean>(false);
-  // Preview-only scale. Never applied to the export target, so exported
-  // dimensions stay at the fixed 640px card width.
+  // Preview-only scale. The export captures a copy of the card outside this
+  // zoom (see mountUnzoomedCopy in engine/export.ts), so exported dimensions
+  // stay at the fixed 640px card width.
   const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.length - 1);
   const zoom = ZOOM_LEVELS[zoomIndex];
   const viewportRef = useRef<HTMLDivElement | null>(null);
