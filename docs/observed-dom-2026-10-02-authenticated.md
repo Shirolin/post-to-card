@@ -1,5 +1,16 @@
 # 实测记录：登录态 X DOM 判据核验
 
+> **状态：历史记录，三项发现均已修复。** 本文是一次性的实测快照，不是待办清单。
+> 下面「建议修复」列出的三项已由 `6bb87d2`（*stop GIF posters rendering twice and
+> re-scope video detection*）落地；核验时该 commit 只改了代码、没有更新本文正文，
+> 所以正文一度读起来仍像未修的 P0 缺陷表。**读本文前先看本行。**
+>
+> 对照当前实现：`extractor.ts` 的 `playButton` 分支（约 L457）、
+> `isMediaPosterLayer` 的不可见 img 过滤（约 L639，注释直接点名 GIF poster）、
+> `findQuoteContainer` 仍优先 `div[data-testid="quoteTweet"]`（约 L60）。
+>
+> **仍未核验的部分见文末「尚未核验」**，那部分是真的还开着。
+
 > 采集时间：2026-10-02
 > 页面：`https://x.com/Wikipedia/status/1888944671579078978`（已登录，主推文为 GIF + 含引用推文的回复）
 
@@ -55,6 +66,8 @@
 - 图 + GIF 混合的真实布局（本页是纯 GIF，混合场景仍需用户那条帖子）
 
 ## 建议修复
+
+> **以下三项已于 `6bb87d2` 完成，保留原文仅作决策依据。**
 
 1. `extractVideoMedia` 增加 `button[data-testid="playButton"]` 作为容器判据，
    使 `targetContainer` 重新收窄到真正的 media 区域
