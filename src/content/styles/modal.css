@@ -794,12 +794,24 @@
   gap: 10px;
 }
 
+/* Wrapping is deliberate rather than incidental. This header carries a label, a
+   count and two actions, and in English that does not fit the panel's 269px:
+   the actions alone are 143px, leaving 116px for a label that wants 172px.
+   Without `wrap` the label simply folded mid-phrase and left the actions
+   floating beside the gap, which read as a broken layout.
+
+   One line is not reachable without cutting information -- dropping the count
+   badge only frees 38px of the 56px needed, and truncating a section heading to
+   "INCLUDED TW..." is worse than showing it on two rows. So the actions drop to
+   their own row when they have to, which costs 13px in English and nothing in
+   Chinese, where the header already fits. */
 .control-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .tweet-manager-actions {
@@ -807,6 +819,10 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  /* Keeps the actions against the right edge on their own row, matching where
+     they sit when everything shares one. Redundant with `space-between` while
+     they do share a row, and correct once they do not. */
+  margin-left: auto;
 }
 
 .btn-text-action {
