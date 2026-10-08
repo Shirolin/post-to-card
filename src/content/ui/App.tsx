@@ -174,6 +174,40 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   }, []);
 
   /**
+   * Keeps the selected zoom on a level the stage can actually show.
+   *
+   * A fixed level above `maxScale` is rendered anyway, clamped to `maxScale`, so
+   * leaving it selected produced three surfaces disagreeing: the radio reported
+   * `aria-checked`, the button carried no active styling, and the card drew at
+   * something other than the percentage on screen. Because the capped button is
+   * `disabled` rather than `aria-disabled` it also leaves the tab order, so the
+   * group's checked member was unreachable and undiscoverable by keyboard or
+   * screen reader. That was the default state at most viewport widths, 1024x768
+   * included.
+   *
+   * Snapping down to the largest reachable fixed level costs some preview -- 0.902
+   * to 0.75 on a 1024px window, 0.558 to 0.5 on a phone -- and buys a control that
+   * says what it is showing. `fit` is the fallback only when every fixed level is
+   * capped away, which is also the case where the toolbar hides itself.
+   *
+   * Runs on `maxScale` rather than once at mount, so rotating a tablet into a
+   * narrower stage corrects the selection too. It does not restore the previous
+   * level when space comes back: the effective view is what the user was just
+   * looking at, and tracking the intent separately would be state for its own sake.
+   */
+  useEffect(() => {
+    setZoomIndex((current) => {
+      const selected = ZOOM_LEVELS[current];
+      if (!isFixedLevel(selected) || selected <= maxScale + 0.001) return current;
+      for (let i = ZOOM_LEVELS.length - 1; i >= 0; i--) {
+        const candidate = ZOOM_LEVELS[i];
+        if (isFixedLevel(candidate) && candidate <= maxScale + 0.001) return i;
+      }
+      return ZOOM_LEVELS.indexOf('fit');
+    });
+  }, [maxScale]);
+
+  /**
    * Returns the preview to the card's origin whenever its geometry changes.
    *
    * A preserved scroll offset is only meaningful while the card keeps the same
