@@ -235,7 +235,15 @@ export function Controls({
                 const key = tweetKey(tweet, idx);
                 const isExcluded = excluded.has(key);
                 const isTarget = idx === (threadData.targetTweetIndex ?? 0);
-                const trimmedText = tweet.text ? tweet.text.replace(/\s+/g, ' ').trim() : '';
+                // `text` is the canonical field and the primary source. The rich tokens are
+                // read as a fallback because `Card` renders from them, so a tweet that
+                // arrives carrying only tokens would otherwise be labelled "media
+                // only" here while the card shows its paragraph. Both extraction
+                // paths currently write `text` alongside them, so this is a guard
+                // against the two surfaces drifting rather than a live case.
+                const source =
+                  tweet.text || (tweet.richTokens ?? []).map((token) => token.value).join('');
+                const trimmedText = source.replace(/\s+/g, ' ').trim();
                 const snippet = trimmedText ? trimmedText.slice(0, 30) : t.mediaOnlyTweet;
                 const hasMedia = tweet.media && tweet.media.length > 0;
                 const isOnlyOneActive = !canExcludeMore && !isExcluded;
