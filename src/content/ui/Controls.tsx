@@ -1,6 +1,6 @@
 import type { JSX } from 'preact';
 import type { ThreadData } from '../../types/tweet.ts';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../types/card.ts';
+import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../types/card.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS } from './themes.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
@@ -22,16 +22,12 @@ import {
   LayoutGrid,
 } from 'lucide-preact';
 
-interface AspectOption {
-  value: AspectRatioOption;
-  label: string;
-}
-
-const ASPECT_OPTIONS: AspectOption[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: '3:4', label: '3:4' },
-  { value: '16:9', label: '16:9' },
-];
+/**
+ * Aspect ratios, in the order the segmented control offers them. The values are
+ * the user-facing labels already, so only `auto` needs a translation -- `3:4` and
+ * `16:9` are ratios, not words.
+ */
+const ASPECT_OPTIONS = ['auto', '3:4', '16:9'] as const;
 
 /**
  * How many themes the grid shows before "all themes" is expanded. Two rows in
@@ -351,32 +347,13 @@ export function Controls({
             <Maximize2 size={14} strokeWidth={2} />
             <span>{t.aspectRatio}</span>
           </span>
-          <div class="btn-group" role="radiogroup" aria-label={t.aspectRatio}>
-            {ASPECT_OPTIONS.map((opt) => {
-              const isActive = config.aspectRatio === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  tabIndex={isActive ? 0 : -1}
-                  class={`btn-group-item ${isActive ? 'is-active' : ''}`}
-                  onClick={() => updateConfig({ aspectRatio: opt.value })}
-                  onKeyDown={(e) =>
-                    handleRadioKeyDown(
-                      e,
-                      ASPECT_OPTIONS.map((item) => item.value),
-                      config.aspectRatio,
-                      (next) => updateConfig({ aspectRatio: next })
-                    )
-                  }
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+          <Segmented
+            name={t.aspectRatio}
+            options={ASPECT_OPTIONS}
+            value={config.aspectRatio}
+            onSelect={(next) => updateConfig({ aspectRatio: next })}
+            labels={{ auto: t.aspectAuto }}
+          />
         </section>
 
         {/* 4. Element toggles */}
