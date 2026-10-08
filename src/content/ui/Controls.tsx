@@ -481,6 +481,7 @@ export function Controls({
                 value={config.borderRadius}
                 onSelect={(next) => updateConfig({ borderRadius: next as RadiusOption })}
                 labels={{ theme: t.borderRadiusFollowTheme }}
+                titles={{ theme: t.borderRadiusFollowTheme }}
               />
             </div>
           </div>

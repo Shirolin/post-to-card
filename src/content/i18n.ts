@@ -76,6 +76,8 @@ export interface Translations {
 
   // Preview
   zoomLabel: string;
+  zoomFit: string;
+  zoomFitHint: string;
   zoomFitCapped: string;
   previewSummary: string;
   tweetUnit: string;
@@ -156,6 +158,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     clipboardFallbackNotice: '剪贴板写入受限，已自动为您下载高清图片！',
 
     zoomLabel: '预览缩放',
+    zoomFit: '适应',
+    zoomFitHint: '缩放到刚好放下整张卡片',
     zoomFitCapped: '当前窗口放不下整张卡片，已自动适配',
     previewSummary: '共 {count} 条推文',
     tweetUnit: '条',
@@ -191,7 +195,12 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     layoutStack: 'Stack',
     padding: 'Padding',
     borderRadius: 'Border Radius',
-    borderRadiusFollowTheme: 'Follow Theme',
+    // Short on purpose: the four-option group gives each entry ~69px, and this
+    // label is the only one long enough to be ellipsised. `Auto` is the word the
+    // aspect ratio already uses for "the app decides", so the two groups do not
+    // invent separate terms for the same idea, and it has the most headroom of
+    // any candidate. The tooltip carries the precise meaning.
+    borderRadiusFollowTheme: 'Auto',
     elementsAndPrivacy: 'Elements & Privacy',
     manageTweets: 'Included Tweets',
     selectAll: 'Select All',
@@ -233,6 +242,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     clipboardFallbackNotice: 'Clipboard restricted; auto-downloaded PNG!',
 
     zoomLabel: 'Preview Zoom',
+    zoomFit: 'Fit',
+    zoomFitHint: 'Scale so the whole card is visible',
     zoomFitCapped: 'The card does not fit this window, so it is auto-fitted',
     previewSummary: '{count} tweets',
     tweetUnit: 'tweets',

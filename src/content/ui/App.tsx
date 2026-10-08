@@ -14,17 +14,36 @@ import type { ExportAction, ExportOutcome } from '../engine/index.ts';
 
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 
-const ZOOM_LEVELS = [0.5, 0.75, 1] as const;
+/**
+ * Zoom levels the preview offers.
+ *
+ * The numbers are fixed fractions of the card's own 640px width, so they mean the
+ * same thing on every screen and a chosen level survives a window resize. `fit` is
+ * the exception: it is resolved per render against the card's measured height, so
+ * it shows the whole card at whatever scale the window turns out to allow. It
+ * leads the list because it is the only level that stays useful on a phone, where
+ * the fixed levels are all capped away.
+ */
+const ZOOM_LEVELS = ['fit', 0.5, 0.75, 1] as const;
+type ZoomLevel = (typeof ZOOM_LEVELS)[number];
+
+/** The percentage levels, smallest first. Read where `fit` must be excluded. */
+const FIXED_ZOOM_LEVELS = [0.5, 0.75, 1] as const;
+type FixedZoomLevel = (typeof FIXED_ZOOM_LEVELS)[number];
 
 /** The card's own width, mirrored from card.css. */
 const CARD_WIDTH = 640;
 
+function isFixedLevel(level: ZoomLevel): level is FixedZoomLevel {
+  return typeof level === 'number';
+}
+
 /**
- * Horizontal breathing room the viewport reserves on each side. Mirrors the
- * `.preview-viewport` padding, and drops to zero on the narrow layout where the
- * stage runs edge to edge.
+ * Breathing room the viewport reserves on each side. Mirrors the
+ * `.preview-viewport` padding, which is uniform on both axes and trims on the
+ * narrow layout where the stage has to give the card every pixel it can get.
  */
-function viewportHorizontalPadding(width: number): number {
+function viewportPadding(width: number): number {
   return width <= 900 ? 12 : 24;
 }
 
@@ -43,39 +62,90 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
   // zoom (see mountUnzoomedCopy in engine/export.ts), so exported dimensions
   // stay at the fixed 640px card width.
   const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.length - 1);
-  const zoom = ZOOM_LEVELS[zoomIndex];
+  const level = ZOOM_LEVELS[zoomIndex];
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const [fitScale, setFitScale] = useState<number>(1);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  // The card's height at scale 1. Zero until the first measurement, which leaves
+  // the height axis out of `fit` for a frame rather than guessing at it.
+  const [cardHeight, setCardHeight] = useState<number>(0);
+  // The last applied scale, kept here so the measurement can undo it. CSS `zoom`
+  // scales layout, so the card's measured box comes back multiplied by whatever
+  // is in force; dividing it out recovers the natural height.
+  const appliedZoomRef = useRef<number>(1);
+  const [availableWidth, setAvailableWidth] = useState<number>(0);
+  const [availableHeight, setAvailableHeight] = useState<number>(0);
+
+  /**
+   * The ceiling on the *fixed* levels: the card must never run past the mat
+   * sideways, and a user who picks 100% on a tall card accepts scrolling.
+   */
+  const maxScale = availableWidth > 0 ? availableWidth / CARD_WIDTH : 1;
+
+  /**
+   * The scale `fit` resolves to: the whole card has to clear the mat in both
+   * axes, so this is the smaller of the two.
+   */
+  const fitScale = cardHeight > 0 ? Math.min(maxScale, availableHeight / cardHeight) : maxScale;
+
+  const zoom = isFixedLevel(level) ? Math.min(level, maxScale) : fitScale;
+  // Published for the measurement below to divide out. Assigned during render
+  // rather than in an effect because the observer can fire before one would run,
+  // and `zoom` is derived purely from props and state, so writing it twice is
+  // harmless while writing it late would corrupt the card's height by a frame.
+  appliedZoomRef.current = zoom;
 
   const t = getTranslation(sanitizeLocale(config.locale));
 
   /**
-   * Fits the card to the viewport when the user's zoom would otherwise push it
-   * past the edge.
+   * Measures what the stage can show: the mat's own box, and the card's height at
+   * scale 1.
    *
-   * The card is a fixed 640px so exports stay pixel-exact, which is wider than
-   * a phone. Letting it overflow relied on the user discovering a horizontal
-   * scroll they cannot see (the mobile scrollbar is hidden), so the preview
-   * scales down instead. The clamp is a ceiling rather than a floor: a zoom the
+   * The width half is a hard ceiling -- the card is a fixed 640px so exports stay
+   * pixel-exact, which is wider than a phone, and letting it overflow relied on
+   * the user discovering a horizontal scroll they cannot see (the mobile
+   * scrollbar is hidden). The clamp is a ceiling rather than a floor: a zoom the
    * user picked is never exceeded, so shrinking is reachable but the card can
    * still be panned at 100% on a viewport wide enough to want it.
+   *
+   * The height half only feeds `fit`. Capping the fixed levels by it would be a
+   * regression: picking 100% on a tall card is a deliberate choice to read it at
+   * full size and scroll, not a scale the window is allowed to refuse.
+   *
+   * The card is measured through the zoom in force, because `zoom` scales layout
+   * and the reading arrives multiplied by it. Dividing it back out recovers the
+   * natural height whichever level is selected, so the two cannot chase each
+   * other. The card's own observer covers every content change -- a theme, a
+   * different tweet set, an image settling into the grid -- so this effect does
+   * not need the config in its dependencies.
    */
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport || typeof ResizeObserver === 'undefined') return;
+    if (!viewport) return;
 
     const measure = () => {
-      const padding = viewportHorizontalPadding(window.innerWidth);
-      const available = viewport.clientWidth - padding * 2;
-      if (available <= 0) return;
-      setFitScale(available / CARD_WIDTH);
+      const padding = viewportPadding(window.innerWidth);
+      const width = viewport.clientWidth - padding * 2;
+      const height = viewport.clientHeight - padding * 2;
+      // Guarded against the no-op update: the observer fires on the card's own
+      // resize, which the zoom change also causes, and re-rendering for an
+      // unchanged number would loop.
+      if (width > 0) setAvailableWidth((prev) => (Math.abs(prev - width) > 0.5 ? width : prev));
+      if (height > 0) setAvailableHeight((prev) => (Math.abs(prev - height) > 0.5 ? height : prev));
+
+      const card = cardRef.current;
+      if (!card) return;
+      const applied = appliedZoomRef.current;
+      const natural = card.getBoundingClientRect().height / applied;
+      setCardHeight((prev) => (Math.abs(prev - natural) > 0.5 ? natural : prev));
     };
 
     measure();
+    if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
     observer.observe(viewport);
+    if (cardRef.current) observer.observe(cardRef.current);
     return () => observer.disconnect();
-  }, [zoom]);
+  }, []);
 
   /**
    * Returns the preview to the card's origin whenever its geometry changes.
@@ -182,10 +252,15 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
    * The roving-tabindex contract wants exactly one, and it must not be a
    * disabled button or the picker drops out of the tab order. The active level
    * is preferred; when the fitted scale has disabled it, the first level still
-   * within reach takes over.
+   * within reach takes over. `fit` is never disabled, so it is always a valid
+   * fallback -- and it leads the list, which makes it the one the Home key lands
+   * on and the one ArrowLeft reaches from 50%.
    */
   const zoomTabStopIndex = (() => {
-    const isReachable = (idx: number) => ZOOM_LEVELS[idx] <= fitScale + 0.001;
+    const isReachable = (idx: number) => {
+      const candidate = ZOOM_LEVELS[idx];
+      return !isFixedLevel(candidate) || candidate <= maxScale + 0.001;
+    };
     if (isReachable(zoomIndex)) return zoomIndex;
     const found = ZOOM_LEVELS.findIndex((_, idx) => isReachable(idx));
     return found >= 0 ? found : zoomIndex;
@@ -198,45 +273,48 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
       summary={`${t.previewSummary.replace('{count}', String(activeTweetCount))}`}
     >
       <div class="preview-stage">
-        {/* Hidden when the window cannot show even the smallest level: at that
-            point every choice resolves to the same fitted scale, so the
-            control would be a row of dead buttons. */}
+        {/* Hidden when the window cannot show even the smallest fixed level: at
+            that point every percentage resolves to the same fitted scale, so the
+            control would be a row of dead buttons. `fit` is exempt from the
+            reasoning -- it is the only live choice left there, so the toolbar
+            earns its place by showing it. */}
         <div
           class="preview-toolbar"
           role="group"
           aria-label={t.zoomLabel}
-          hidden={fitScale < ZOOM_LEVELS[0]}
+          hidden={maxScale < FIXED_ZOOM_LEVELS[0]}
         >
           <span class="preview-toolbar-label">{t.zoomLabel}</span>
           <div class="btn-group btn-group-compact" role="radiogroup" aria-label={t.zoomLabel}>
-            {ZOOM_LEVELS.map((level, idx) => {
-              // A level above the fitted scale cannot be shown: the card would
-              // run past the stage edge behind a scrollbar the mobile shell
-              // hides. Such a level is disabled rather than silently ignored.
-              const isCapped = level > fitScale + 0.001;
+            {ZOOM_LEVELS.map((candidate, idx) => {
+              // A percentage above the fitted scale cannot be shown: the card
+              // would run past the stage edge behind a scrollbar the mobile
+              // shell hides. Such a level is disabled rather than silently
+              // ignored. `fit` is never capped -- it is defined by the stage.
+              const isCapped = isFixedLevel(candidate) && candidate > maxScale + 0.001;
               const isActive = idx === zoomIndex;
               const isTabStop = idx === zoomTabStopIndex;
               return (
                 <button
-                  key={level}
+                  key={candidate}
                   type="button"
                   role="radio"
                   aria-checked={isActive}
                   disabled={isCapped}
                   tabIndex={isTabStop ? 0 : -1}
                   class={`btn-group-item ${isActive && !isCapped ? 'is-active' : ''}`}
-                  title={isCapped ? t.zoomFitCapped : undefined}
+                  title={isCapped ? t.zoomFitCapped : isFixedLevel(candidate) ? undefined : t.zoomFitHint}
                   onClick={() => setZoomIndex(idx)}
                   onKeyDown={(e) =>
                     handleRadioKeyDown(
                       e,
                       ZOOM_LEVELS,
-                      ZOOM_LEVELS[zoomIndex],
+                      level,
                       (next) => setZoomIndex(ZOOM_LEVELS.indexOf(next))
                     )
                   }
                 >
-                  {Math.round(level * 100)}%
+                  {isFixedLevel(candidate) ? `${Math.round(candidate * 100)}%` : t.zoomFit}
                 </button>
               );
             })}
@@ -249,10 +327,15 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
         >
           <div
             class="preview-scale"
-            style={{ zoom: `${Math.min(zoom, fitScale)}` }}
+            style={{ zoom: `${zoom}` }}
             data-html2canvas-ignore="true"
           >
-            <Card data={threadData} config={config} onExcludeTweet={handleExcludeTweet} />
+            <Card
+              data={threadData}
+              config={config}
+              onExcludeTweet={handleExcludeTweet}
+              cardRef={cardRef}
+            />
           </div>
         </div>
       </div>

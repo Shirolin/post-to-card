@@ -1,4 +1,4 @@
-import type { JSX } from 'preact';
+import type { JSX, Ref } from 'preact';
 import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet.ts';
 import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card.ts';
 import { CardQrCode } from './qrcode.ts';
@@ -13,6 +13,12 @@ export interface CardProps {
   data: ThreadData | TweetData;
   config: CardConfig;
   onExcludeTweet?: (tweetId: string) => void;
+  /**
+   * The card's root node, so a host can measure the card it renders. The preview
+   * needs the height to resolve its fit-to-window zoom level. Optional because the
+   * dev harness and the tests render the card with nothing to measure against.
+   */
+  cardRef?: Ref<HTMLDivElement>;
 }
 
 function normalizeThreadData(data: ThreadData | TweetData): ThreadData {
@@ -462,7 +468,7 @@ function renderThreadTweet(
   );
 }
 
-export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
+export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.Element {
   const t = getTranslation(sanitizeLocale(config.locale));
   const thread = normalizeThreadData(data);
   // The same scope the controls panel reads, so the exclude buttons on the card
@@ -520,6 +526,7 @@ export function Card({ data, config, onExcludeTweet }: CardProps): JSX.Element {
   return (
     <div
       id="post-to-card-export-target"
+      ref={cardRef}
       class={cardClasses}
       data-theme={config.theme}
       data-padding={config.padding}

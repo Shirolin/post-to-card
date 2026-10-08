@@ -11,9 +11,10 @@ build/
 # Subagent teamwork & internal logs
 .agents/
 
-# Agent harness state (screenshots, panel state)
+# Agent harness state (screenshots, panel state, issue tracker)
 .openchamber/
 .playwright-mcp/
+.scratch/
 
 # Logs
 logs

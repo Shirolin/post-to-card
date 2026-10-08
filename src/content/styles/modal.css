@@ -62,6 +62,21 @@
   border-radius: var(--ptc-radius-sm);
 }
 
+/* The dialog is focused programmatically on open, so a screen reader lands inside
+   it rather than behind it. It is a container rather than a control, so the
+   browser's own ring has nothing to point at -- and because the dialog is the
+   whole 1140px modal, that ring traces its entire outline and reads as a
+   rendering fault.
+
+   Deliberately a separate rule instead of another entry in the list above: it must
+   never be added to the `:focus-visible` selector, or the dialog would trade a
+   browser-drawn ring for a 2px accent ring around the same 1140px. Keeping it out
+   of that list is the point. */
+#post-to-card-dialog:focus,
+.post-to-card-dialog:focus {
+  outline: none;
+}
+
 /* -------------------------------------------------------------
    Modal Backdrop
    ------------------------------------------------------------- */
@@ -247,8 +262,32 @@
   padding: 24px;
   overflow: auto;
   /* The mat follows the theme's canvas token (set by App), so a warm paper
-     reads as paper on a mat instead of a light rectangle floating on black. */
-  background: var(--ptc-preview-canvas, #171716);
+     reads as paper on a mat instead of a light rectangle floating on black.
+
+     The first four layers are the scroll cue, and the order is the whole trick.
+     Layers paint back to front, so each `scroll` layer -- the shadow, pinned to an
+     edge of the scrollport -- is listed underneath an identical `local` copy that
+     rides the content. At rest the content copy sits on top and hides the shadow
+     on that side; scrolling it away exposes it. The result is a gradient on
+     exactly the side that has more card beyond it and none on the side that does
+     not, with no script and no way for the two to disagree. The copy is mat
+     coloured over a mat, so it is invisible; only the shadow is ever perceived.
+
+     The cover is 30px with its opaque run out to 18px, and the shadow is 14px.
+     That relationship is load-bearing: the cover's opaque part has to outlast the
+     shadow band, or both are partly transparent where they overlap and the shadow
+     seeps through at rest. Giving them the same height does not work.
+
+     The shadow is a darkening rather than a mat-coloured fade on purpose: fading
+     the card into the mat reads as the card ending there, which is the one thing
+     the cue exists to contradict. It is kept short so it reads as depth on a
+     paper theme instead of a printing fault. */
+  background:
+    linear-gradient(var(--ptc-preview-canvas, #171716) 60%, rgba(0, 0, 0, 0)) top / 100% 30px no-repeat local,
+    linear-gradient(rgba(0, 0, 0, 0), var(--ptc-preview-canvas, #171716) 40%) bottom / 100% 30px no-repeat local,
+    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0)) top / 100% 14px no-repeat scroll,
+    linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.3)) bottom / 100% 14px no-repeat scroll,
+    var(--ptc-preview-canvas, #171716);
 }
 
 .preview-viewport::-webkit-scrollbar {
@@ -933,15 +972,43 @@
     padding: 12px;
   }
   /* The panel holds roughly three screens of controls, and a fixed slice left
-     most of them unreachable. The stage only needs enough room for the fitted
-     card (about 250px including its toolbar), so the panel takes the larger
-     share and scrolls; the stage stops it from being crowded out entirely. */
+     most of them unreachable, so it normally takes a share and scrolls.
+
+     Two caps, and the order they are read in is the whole design. The panel's own
+     52vh ceiling says the preview gets the larger share: the card is the artifact
+     this feature exists to produce, and giving the controls the majority meant a
+     phone showed barely a third of it. The stage's floor is then subtracted from
+     whatever the body has left, so the panel yields when the window is short --
+     a landscape phone is 844px wide and 390px tall, so it also matches this
+     query, and the original unconditional 62vh left the stage 91px, less than the
+     zoom toolbar above it, with the card visible as a 43px sliver.
+
+     The stage floor is `max(168px, 40vh)` rather than one number: 168px is what a
+     short landscape window needs (toolbar plus a usable strip of card), and 40vh
+     is what a tall portrait one needs. Whichever is larger wins, so a short window
+     keeps the fixed floor and a tall one gets a real share.
+
+     It sits inside the cap rather than on the stage as a `min-height` on purpose.
+     A cap can only ever make the panel smaller, so the column cannot overflow at
+     any height and a window too short for both degrades to the floor below
+     instead of clipping the export button. 132px is that floor, and it is derived
+     rather than chosen: the pinned export bar is 87px and the scrolling list
+     cannot shrink below its own padding (24px below), which is 111px plus room
+     for a status message that wraps to a second line. A reachable primary action
+     outranks a larger preview. */
   .controls-panel {
     width: 100%;
-    max-height: 62vh;
+    max-height: max(132px, min(52vh, calc(100% - max(168px, 40vh))));
     border-left: none;
     border-top: 1px solid var(--ptc-border);
-  }  /* The export bar is fixed chrome on every screen, so it trades some of its
+  }
+  /* Trimming the list's block padding is what lets the panel yield that far: a
+     border-box box cannot be shorter than its own padding, so 20px of it became a
+     hard 40px the panel had to keep even when there was nothing left to show. */
+  .controls-scroll {
+    padding: 12px 18px;
+  }
+  /* The export bar is fixed chrome on every screen, so it trades some of its
      generous padding for control space. It stays pinned and tappable. */
   .export-actions {
     padding: 8px 12px 12px;
