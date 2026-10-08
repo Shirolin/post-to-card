@@ -294,6 +294,18 @@ const params = new URLSearchParams(location.search);
  * Optional overrides so a single card state can be inspected without clicking
  * through the panel: ?theme=riso&ratio=3:4&padding=48px&radius=20px
  *
+ * These apply in every mode, not just `bare`. `bare` renders the panel and card on
+ * their own; `modal=1` and the default mount the real modal, so
+ * `?modal=1&theme=terminal&ratio=3:4&locale=en-US` reaches a review state in the
+ * actual component tree rather than a stripped-down one.
+ *
+ * That matters because the modal's layout is the one thing this repo cannot test:
+ * `tests/env/browser.ts` is a hand-written DOM with no layout engine, so no
+ * viewport-dependent regression in `modal.css` can be caught by the suite. The
+ * browser harness is the only place it can be checked, so the state under review
+ * has to be reachable by URL -- otherwise checking it means clicking through the
+ * panel by hand every time.
+ *
  * The theme goes through the same sanitizer as stored preferences, so a retired
  * id in a bookmarked URL still resolves to its replacement paper.
  */
@@ -562,7 +574,10 @@ const auditMode = params.get('a11y');
 
 if (auditMode === '1' || auditMode === 'radio') {
   // Mount the real modal first, then audit the focus trap it produced.
-  render(h(App, { threadData: activeThreadData, onClose: () => {} }), container.mountPoint);
+  render(
+    h(App, { threadData: activeThreadData, onClose: () => {}, initialConfig: harnessConfig }),
+    container.mountPoint
+  );
   const waitForDialog = (attemptsLeft: number) => {
     if (container.shadow?.querySelector('#post-to-card-dialog')) {
       if (auditMode === 'radio') {
@@ -608,9 +623,16 @@ if (auditMode === '1' || auditMode === 'radio') {
   container.remove();
   document.head.appendChild(styleEl);
   render(
-    h('div', { class: 'ptc-scope' }, h(App, { threadData: activeThreadData, onClose: () => {} })),
+    h(
+      'div',
+      { class: 'ptc-scope' },
+      h(App, { threadData: activeThreadData, onClose: () => {}, initialConfig: harnessConfig })
+    ),
     document.body
   );
 } else {
-  render(h(App, { threadData: activeThreadData, onClose: () => {} }), container.mountPoint);
+  render(
+    h(App, { threadData: activeThreadData, onClose: () => {}, initialConfig: harnessConfig }),
+    container.mountPoint
+  );
 }

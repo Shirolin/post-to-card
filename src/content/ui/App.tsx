@@ -52,10 +52,22 @@ export interface AppProps {
   threadData: ThreadData;
   onClose: () => void;
   onExport?: (target: HTMLElement, action: ExportAction) => Promise<ExportOutcome>;
+  /**
+   * Replaces the stored preferences for one mount, and skips reading them.
+   *
+   * Exists for the dev harness, so a review state can be reached from a URL
+   * (`?modal=1&theme=terminal&ratio=3:4`) instead of by clicking through the
+   * panel. Skipping the read rather than racing it is the point: storage resolves
+   * asynchronously, so an override that only set the initial state would be
+   * overwritten a tick later and the URL would silently mean nothing.
+   *
+   * Undefined in the extension, where the stored preferences are the only source.
+   */
+  initialConfig?: CardConfig;
 }
 
-export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
-  const [config, setConfig] = useState<CardConfig>(DEFAULT_CARD_CONFIG);
+export function App({ threadData, onClose, onExport, initialConfig }: AppProps): JSX.Element {
+  const [config, setConfig] = useState<CardConfig>(initialConfig ?? DEFAULT_CARD_CONFIG);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isErrorStatus, setIsErrorStatus] = useState<boolean>(false);
@@ -174,8 +186,9 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     if (viewport) viewport.scrollLeft = 0;
   }, [zoom, config.theme]);
 
-  // Load saved preferences on mount
+  // Load saved preferences on mount, unless the caller supplied a state to review.
   useEffect(() => {
+    if (initialConfig) return;
     let mounted = true;
     loadUserPreferences().then((saved) => {
       if (mounted) {
@@ -186,6 +199,9 @@ export function App({ threadData, onClose, onExport }: AppProps): JSX.Element {
     return () => {
       mounted = false;
     };
+    // Mount-only by intent: `initialConfig` is a harness override that must not be
+    // re-read, and reading it as a dependency would re-run the effect whenever the
+    // caller passed a fresh object literal.
   }, []);
 
   const handleConfigChange = (newConfig: CardConfig) => {
