@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && node --check public/popup.js",
     "build:background": "vite build --mode background",
     "build:hook": "vite build --mode hook",
     "build:content": "vite build --mode content",
-    "build": "tsc --noEmit && vite build --mode background && vite build --mode hook && vite build --mode content",
+    "build": "npm run typecheck && vite build --mode background && vite build --mode hook && vite build --mode content",
     "test": "node tests/runner.ts",
     "test:tier5": "node tests/tier5_adversarial.ts"
   },
