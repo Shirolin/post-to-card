@@ -625,3 +625,76 @@ export const TWEET_DETAIL_MEDIA_PERMALINK_JSON = JSON.stringify({
     }
   }
 });
+
+/**
+ * A media post that also carries an author link inside the display range.
+ *
+ * The tail strip is per `display_text_range`, not "drop the last URL": the
+ * author's own `t.co` (indices inside the range, expanded to a live site) must
+ * survive while the appended media permalink after the range is dropped. This is
+ * the boundary the plain media fixture cannot state, since its `entities` is
+ * empty.
+ */
+export const TWEET_DETAIL_MEDIA_WITH_LINK_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-8002',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '8002',
+                      core: {
+                        user_results: {
+                          result: {
+                            legacy: { screen_name: 'ada_builds', name: 'Ada Nakamura' },
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/1/ada.jpg'
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: 'See https://t.co/abc123 https://t.co/MEDIAPERM',
+                        display_text_range: [0, 23],
+                        created_at: 'Fri Oct 09 07:27:00 +0000 2026',
+                        entities: {
+                          urls: [
+                            {
+                              url: 'https://t.co/abc123',
+                              expanded_url: 'https://example.com/post',
+                              display_url: 'example.com/post',
+                              indices: [4, 23]
+                            }
+                          ]
+                        },
+                        extended_entities: {
+                          media: [
+                            {
+                              type: 'photo',
+                              media_url_https: 'https://pbs.twimg.com/media/chat.jpg',
+                              original_info: { width: 1200, height: 900 },
+                              ext_alt_text: '聊天记录'
+                            }
+                          ]
+                        },
+                        favorite_count: 9
+                      },
+                      views: { count: '1000' }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});

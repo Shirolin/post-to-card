@@ -344,8 +344,7 @@ function parseQuote(tweet: Json): QuoteTweetData | undefined {
   if (!quoted.tweet) return undefined;
   const inner = quoted.tweet;
   const legacy = isObject(inner.legacy) ? inner.legacy : {};
-  const fullText = str(legacy.full_text) || '';
-  const quoteText = authorText(fullText, legacy);
+  const quoteText = displayedText(legacy) || '';
   return {
     author: parseAuthor(inner),
     text: quoteText,
@@ -387,23 +386,30 @@ function stripTrailingArticleEntity(text: string, entityContainer: unknown): str
 }
 
 /**
- * The author's own text from `legacy.full_text`, without the tail X appends.
+ * The text a `legacy` object actually displays, without the tail X appends.
  *
- * For a post with media, `full_text` ends with the media permalink's `t.co` URL
- * and `display_text_range` states where the author's text actually stops. The
- * card prints the author's words, not that tail; the DOM channel already drops
- * its `pic.twitter.com` form, and this is the GraphQL side of the same rule.
+ * For a post with media, `full_text` ends with the media permalink's `t.co` URL,
+ * and `display_text_range` states where the text X shows stops. The card prints
+ * the author's words, not that tail; the DOM channel already drops its
+ * `pic.twitter.com` form, and this is the GraphQL side of the same rule. The
+ * range is authoritative, so it is applied whenever X gives one — a media
+ * permalink is the common case, not a precondition.
  *
- * Only the end is honoured. Entity indices are stated against `full_text`, so
- * trimming the start would shift every one of them, and X sets the range's start
- * to zero for the posts the card renders.
+ * Only the range's end is honoured. Entity indices are stated against
+ * `full_text`, so trimming the start would shift every one of them, and X
+ * renders a reply's leading mentions in the DOM too, so keeping them here is
+ * what makes the two channels agree. A missing range means no trim, and a
+ * trailing space inside the range is dropped the way the DOM channel trims it.
  */
-function authorText(fullText: string, legacy: Json): string {
+function displayedText(legacy: Json): string | undefined {
+  const fullText = str(legacy.full_text);
+  if (!fullText) return undefined;
+
   const range = legacy.display_text_range;
   if (!Array.isArray(range) || typeof range[1] !== 'number') return fullText;
   const end = range[1];
   if (!(end > 0) || end >= fullText.length) return fullText;
-  return fullText.slice(0, end);
+  return fullText.slice(0, end).trimEnd();
 }
 
 /**
@@ -428,11 +434,7 @@ function parseBody(
   const noteResult = isObject(noteTweet) ? noteTweet.result : undefined;
   const entitySource = entitySourceFor(noteResult, legacy);
   const noteText = isObject(noteResult) ? str(noteResult.text) : undefined;
-  const legacyText = str(legacy.full_text);
-  const rawText =
-    noteText ||
-    (legacyText ? authorText(legacyText, legacy) : undefined) ||
-    fallbackText;
+  const rawText = noteText || displayedText(legacy) || fallbackText;
 
   // Only a post that carries an article ends with the appended link to it; a
   // tweet merely ending with a link to someone else's article keeps that link.

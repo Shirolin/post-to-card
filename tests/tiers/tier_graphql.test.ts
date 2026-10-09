@@ -23,6 +23,7 @@ import {
   TWEET_DETAIL_NEW_USER_SHAPE_JSON,
   TWEET_DETAIL_ENTITIES_JSON,
   TWEET_DETAIL_MEDIA_PERMALINK_JSON,
+  TWEET_DETAIL_MEDIA_WITH_LINK_JSON,
 } from '../fixtures/graphql.ts';
 
 export interface TestResult {
@@ -300,6 +301,23 @@ test('gql.21: the media permalink X appends to full_text is dropped', () => {
     'the text must stop at the display range');
   assert.doesNotMatch(tweet!.text, /t\.co/, 'the appended permalink must not be printed');
   assert.ok(tweet!.media && tweet!.media.length === 1, 'the media is still carried');
+  assert.equal(tweet!.richTokens, undefined, 'the trimmed tail leaves no tokens behind');
+});
+
+test('gql.22: an author link inside the range survives the tail strip', () => {
+  // The strip is per `display_text_range`, not "drop the last URL". The author's
+  // own `t.co` sits inside the range and must stay -- in the token list as well
+  // as the plain text -- while the media permalink after the range is dropped.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_MEDIA_WITH_LINK_JSON, 'TweetDetail', 'q1');
+  const tweet = parsed.thread?.tweets[0];
+  assert.ok(tweet, 'expected a tweet');
+  assert.doesNotMatch(tweet!.text, /MEDIAPERM/, 'the appended permalink is dropped');
+  assert.ok(tweet!.media && tweet!.media.length === 1, 'the media is carried');
+
+  const link = (tweet!.richTokens || []).find((token) => token.type === 'link');
+  assert.ok(link, 'the author link must remain as a token');
+  assert.equal(link!.value, 'example.com/post', 'and keep its display form');
+  assert.equal(link!.href, 'https://example.com/post');
 });
 
 export async function runTierGraphQL(): Promise<{
