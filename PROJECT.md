@@ -64,6 +64,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F28 | Adversarial Testing & Audit | Tier 5 对抗性边缘强化与 Forensic Auditor 门禁审计 | M6 | Integrity Forensics |
 | F29 | Non-Obstructive Video Styling | 视频帖不透明胶囊角标，无渐变进度条、无压暗层（角标已自带底色），不遮挡高清 poster 与烧录字幕 | M6 | Feature Enhancement |
 | F30 | Configurable Action Button | 支持推文卡片按钮显隐开关、Popup 快捷管理、Alt+C 快捷键与多标签实时同步 | M6 | Feature Enhancement |
+| F31 | Long-form Post (Article) Rendering | 识别 X 长文推文（文章以嵌套 `<article>` 渲染在推文内），抽出封面 / 眉标 / 标题并以文章版式呈现；同时修正文章被误判为引用推文而导致的互动数据与封面丢失 | M6 | Feature Enhancement |
 
 ---
 
@@ -183,6 +184,7 @@ d:/Project/post-to-card/
 │   └── vite.harness.config.ts
 ├── docs/
 │   ├── detection-audit.md         # 检测逻辑整改清单（P0/P1/P2）
+│   ├── observed-dom-2026-10-09.md # 长文推文（Article）登录态 DOM 实测
 │   ├── x-graphql-research.md      # GraphQL 拦截方案调研
 │   └── real-dom-sampling-checklist.md  # 真实 DOM 采样清单
 ├── src/
@@ -197,6 +199,7 @@ d:/Project/post-to-card/
 │   │   ├── index.ts               # 入口、双通道调度
 │   │   ├── adapter/               # Twitter DOM 适配与数据提取
 │   │   │   ├── extractor.ts
+│   │   │   ├── articleScope.ts    # 长文文章边界（读视图 / 正文 / 引用判定）
 │   │   │   ├── emojis.ts
 │   │   │   ├── thread.ts
 │   │   │   ├── social.ts          # 转发/回复/置顶的结构化判据

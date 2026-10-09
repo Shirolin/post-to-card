@@ -276,6 +276,48 @@ const wrappedThreadData: ThreadData = {
   ],
 };
 
+/**
+ * A long-form post carrying an X article.
+ *
+ * Mirrors the real case: a short post pointing at an article, whose cover is a
+ * 5:2 banner. Exists so the article block — cover, kicker, title and lead — can
+ * be reviewed on its own and across every material (?article=1), which is the
+ * only place the layout can be seen, since the test DOM has no layout engine.
+ *
+ * The cover is deliberately wide and short. It is the shape most likely to
+ * expose a mismatched mount, and it is the shape the real article uses.
+ */
+const articleCover = svg(
+  `<defs><linearGradient id="ac" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e1b4b"/><stop offset=".5" stop-color="#7c3aed"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs>
+   <rect width="1344" height="538" fill="url(#ac)"/>
+   <circle cx="1120" cy="150" r="120" fill="rgba(255,255,255,.22)"/>
+   <path d="M0 400l260-160 210 130 250-170 300 190 324-120v268H0z" fill="rgba(15,23,42,.5)"/>`,
+  1344,
+  538
+);
+
+const articleThreadData: ThreadData = {
+  author: { name: 'Kevin Le Guillou', handle: '@kevinleguillou', avatarUrl: avatar, verified: true },
+  isSingle: true,
+  targetTweetIndex: 0,
+  tweets: [
+    {
+      id: '7001',
+      url: 'https://x.com/kevinleguillou/status/7001',
+      author: { name: 'Kevin Le Guillou', handle: '@kevinleguillou', avatarUrl: avatar, verified: true },
+      timestamp: '2026-10-08T21:19:52.000Z',
+      text: 'Here is the promised write up, it explains how I made the recent videos, how to structure your work, and good ideas I picked up along the way.',
+      stats: { replies: '2', reposts: '14', likes: '153', bookmarks: '105', views: '15.9K' },
+      article: {
+        title: 'Anime Harry Potter',
+        previewText: 'This is a writeup for those that wanted to know how I made the videos.',
+        restId: '2108301504562262016',
+        cover: { type: 'image', url: articleCover, aspectRatio: 2.498 },
+      },
+    },
+  ],
+};
+
 const container = document.querySelector('post-to-card-container') as HTMLElement & {
   shadow: ShadowRoot;
   mountPoint: HTMLDivElement;
@@ -360,7 +402,9 @@ const gridThreadData = (count: 2 | 3 | 4): ThreadData => {
 const activeThreadData =
   params.get('quote') === '1'
     ? quoteThreadData
-    : params.get('translated') === '1'
+    : params.get('article') === '1'
+      ? articleThreadData
+      : params.get('translated') === '1'
       ? translatedThreadData
       : params.get('video') === '1'
         ? videoThreadData

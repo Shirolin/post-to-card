@@ -81,7 +81,26 @@ function renderRichTokens(tokens: NonNullable<TweetData['richTokens']>, classNam
   );
 }
 
-function renderTweetContent(tweet: TweetData) {
+function renderTweetContent(tweet: TweetData, t: ReturnType<typeof getTranslation>, imageFit: ImageFitOption) {
+  // A long-form post reads as: what the author said about it, then the article.
+  // When the post says nothing, the article's own opening line stands in so the
+  // block never reads as an untitled cover.
+  if (tweet.article) {
+    const leadRich = tweet.richTokens && tweet.richTokens.length > 0 ? tweet.richTokens : null;
+    return (
+      <>
+        {leadRich
+          ? renderRichTokens(leadRich, 'tweet-text-content')
+          : tweet.text
+            ? <div class="tweet-text-content">{tweet.text}</div>
+            : tweet.article.previewText
+              ? <div class="tweet-text-content">{tweet.article.previewText}</div>
+              : null}
+        {renderArticleBlock(tweet.article, t, imageFit)}
+      </>
+    );
+  }
+
   if (tweet.richTokens && tweet.richTokens.length > 0) {
     return renderRichTokens(tweet.richTokens, 'tweet-text-content');
   }
@@ -394,6 +413,36 @@ function renderQuoteCard(
   );
 }
 
+/**
+ * The block a long-form post's article renders as.
+ *
+ * Order follows X's own reading order — cover, then what the article is called,
+ * then what the post says about it — because a card that reorders the source
+ * reads as a different document. The cover takes the same MediaItem shape as any
+ * other picture, so it is mounted with the theme's own media frame and honours
+ * the user's image-fit choice rather than growing a second picture treatment.
+ *
+ * The article's prose is not printed. It runs to thousands of words and a card
+ * is a poster; the cover and the title are what make the article recognisable
+ * when the card is shared.
+ */
+function renderArticleBlock(
+  article: NonNullable<TweetData['article']>,
+  t: ReturnType<typeof getTranslation>,
+  imageFit: ImageFitOption
+) {
+  return (
+    <div class="article-block" data-article="on">
+      {article.cover &&
+        renderMediaGrid([article.cover], t.articleAlt, imageFit, 'auto', 'grid', t.videoLabel, false)}
+      <div class="article-head">
+        <span class="article-kicker">{t.articleKicker}</span>
+        <div class="article-title">{article.title}</div>
+      </div>
+    </div>
+  );
+}
+
 function renderSingleTweet(
   tweet: TweetData,
   config: CardConfig,
@@ -406,7 +455,7 @@ function renderSingleTweet(
       {renderRetweetNotice(tweet, t.retweetedBy)}
       {renderAuthorHeader(tweet.author, config.blurAuthor, t.verified)}
       {renderTranslationNotice(tweet)}
-      {renderTweetContent(tweet)}
+      {renderTweetContent(tweet, t, imageFit)}
       {renderMediaGrid(tweet.media, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
       {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
     </div>
@@ -460,7 +509,7 @@ function renderThreadTweet(
         {renderRetweetNotice(tweet, t.retweetedBy)}
         {renderAuthorDetails(tweet.author, config.blurAuthor, t.verified)}
         {renderTranslationNotice(tweet)}
-        {renderTweetContent(tweet)}
+        {renderTweetContent(tweet, t, imageFit)}
         {renderMediaGrid(tweet.media, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
         {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
       </div>

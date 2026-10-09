@@ -34,6 +34,26 @@ export interface QuoteTweetData {
   isUnavailable?: boolean;
 }
 
+/**
+ * A long-form post: X's article attached to a tweet.
+ *
+ * The tweet that carries an article is still a tweet — it has its own body,
+ * author and stats — but the article is the reason it exists. `cover` is the
+ * same shape as any other MediaItem so the card can mount it with the theme's
+ * own media frame rather than growing a second picture treatment.
+ *
+ * The article's own body is deliberately not modelled. It runs to thousands of
+ * words and a card is a poster, not a reader; what the card needs is the cover,
+ * the title and what the post says about it.
+ */
+export interface ArticleData {
+  title: string;
+  /** The article's own opening text, used only when the tweet body is empty. */
+  previewText?: string;
+  cover?: MediaItem;
+  restId?: string;
+}
+
 export interface TweetData {
   id: string;
   url: string;
@@ -44,6 +64,7 @@ export interface TweetData {
   stats?: TweetStats;
   media?: MediaItem[];
   quotePost?: QuoteTweetData;
+  article?: ArticleData;
   isThreadPart?: boolean;
   threadIndex?: number;
   threadTotal?: number;

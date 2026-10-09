@@ -23,5 +23,8 @@ Interface and card language is one setting with two scopes, deliberately. It loc
 ### Media Item
 A rich media asset attached to a tweet (image, video poster, animated GIF) with normalized dimensions, high-resolution URLs, and layout hints.
 
+### Article
+The long-form document an X post can carry, rendered inside the post as a nested reading surface. On the card it contributes three things — cover, kicker and title — and never its own body: an article runs to thousands of words, and a card is a poster rather than a reader. The post around it remains an ordinary tweet, with its own body, author and stats.
+
 ### Signature
 A material-specific decorative or structural header/divider line (e.g. tick-rule, perforation, titlebar, seal, block) defined uniquely per theme tokens.

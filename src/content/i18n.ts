@@ -89,6 +89,8 @@ export interface Translations {
   retweetedBy: string;
   unavailablePost: string;
   verified: string;
+  articleKicker: string;
+  articleAlt: string;
   replies: string;
   reposts: string;
   likes: string;
@@ -173,6 +175,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     retweetedBy: '转发自',
     unavailablePost: '此推文不可用',
     verified: '已认证账号',
+    articleKicker: '长文',
+    articleAlt: '文章封面',
     replies: '条回复',
     reposts: '次转推',
     likes: '次喜欢',
@@ -260,6 +264,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     retweetedBy: 'Retweeted by',
     unavailablePost: 'This post is unavailable',
     verified: 'Verified',
+    articleKicker: 'Article',
+    articleAlt: 'Article cover',
     replies: 'Replies',
     reposts: 'Reposts',
     likes: 'Likes',

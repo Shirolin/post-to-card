@@ -10,7 +10,7 @@
  * the second caller of it rather than a second implementation of it.
  */
 
-import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet.ts';
+import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../adapter/urls.ts';
 
 type Json = Record<string, unknown>;
@@ -201,6 +201,56 @@ function parseStats(tweet: Json): TweetStats | undefined {
   return hasAny ? out : undefined;
 }
 
+/**
+ * Parses the article attached to a long-form post, or undefined.
+ *
+ * The article rides on the tweet as `article.article_results.result`, an
+ * `ArticleEntity`. Only what the card shows is read: the title, the cover and
+ * the opening preview. The article's own body lives under `content_state` in
+ * the `ArticleByTweetId` response and runs to thousands of words — a card is a
+ * poster, not a reader.
+ *
+ * X pads the title with trailing whitespace in the payload (`"Anime Harry
+ * Potter "`), which would ride into the card's layout as a phantom gap, so it is
+ * trimmed here rather than at every use.
+ */
+function parseArticle(tweet: Json): ArticleData | undefined {
+  const article = isObject(tweet.article) ? tweet.article.article_results : undefined;
+  const result = isObject(article) ? article.result : undefined;
+  if (!isObject(result)) return undefined;
+  if (str(result.__typename) !== 'ArticleEntity') return undefined;
+
+  const title = str(result.title)?.trim();
+  // A title is what makes an article an article on the card; without one the
+  // record would only add an untitled cover.
+  if (!title) return undefined;
+
+  const coverResult = isObject(result.cover_media_results) ? result.cover_media_results.result : undefined;
+  const mediaInfo = isObject(coverResult) && isObject(coverResult.media_info) ? coverResult.media_info : undefined;
+  const coverUrl = isObject(mediaInfo) ? str(mediaInfo.original_img_url) : undefined;
+
+  let cover: MediaItem | undefined;
+  if (coverUrl) {
+    const width = isObject(mediaInfo) && typeof mediaInfo.original_img_width === 'number' ? mediaInfo.original_img_width : 0;
+    const height = isObject(mediaInfo) && typeof mediaInfo.original_img_height === 'number' ? mediaInfo.original_img_height : 0;
+    // Same rule as every other picture: `urls.ts` states the format and the
+    // resolution fallback, so the cover is not a second implementation of it.
+    cover = {
+      type: 'image',
+      url: upgradePhotoUrl(coverUrl),
+      originalUrl: coverUrl,
+      aspectRatio: width > 0 && height > 0 ? Number((width / height).toFixed(3)) : undefined,
+    };
+  }
+
+  return {
+    title,
+    previewText: str(result.preview_text),
+    cover,
+    restId: str(result.rest_id),
+  };
+}
+
 function parseMedia(tweet: Json): MediaItem[] | undefined {
   const legacy = isObject(tweet.legacy) ? tweet.legacy : {};
   const extended = isObject(legacy.extended_entities) ? legacy.extended_entities.media : undefined;
@@ -292,6 +342,39 @@ function parseQuote(tweet: Json): QuoteTweetData | undefined {
   };
 }
 
+/**
+ * Drops the trailing link X appends for a long-form post's own article.
+ *
+ * A tweet carrying an article ends with a `t.co` entity that expands to
+ * `/i/article/<id>`. X does not render it — the article preview replaces it, and
+ * the server-rendered body has no such link — but the entity is still in the
+ * payload, so the GraphQL channel printed it as a visible `x.com/i/article/…`
+ * tail that the DOM channel never showed. Since the card gives the article its
+ * own block, the link is redundant as well as inconsistent.
+ *
+ * Only a trailing article link is dropped: one the author wrote mid-sentence is
+ * their own text, and a quote's body is untransformed.
+ */
+function stripArticlePermalink(tokens: RichToken[] | undefined): RichToken[] | undefined {
+  if (!tokens || tokens.length === 0) return tokens;
+
+  let end = tokens.length;
+  // Skip the whitespace that separates the link from the body.
+  while (end > 0 && tokens[end - 1].type === 'text' && tokens[end - 1].value.trim() === '') end--;
+
+  const last = tokens[end - 1];
+  if (!last || last.type !== 'link') return tokens;
+  const href = last.href || last.value;
+  if (!/\/i\/article\/\d+/.test(href) && !/\/i\/article\/\d+/.test(last.value)) return tokens;
+
+  const kept = tokens.slice(0, end - 1);
+  // Trimming may strand the whitespace that preceded the link.
+  while (kept.length > 0 && kept[kept.length - 1].type === 'text' && kept[kept.length - 1].value.trim() === '') {
+    kept.pop();
+  }
+  return kept;
+}
+
 function parseTweet(entry: Json, fallbackId: string): TweetData | null {
   const itemContent = isObject(entry.content) ? entry.content.itemContent : undefined;
   if (!isObject(itemContent)) return null;
@@ -315,11 +398,12 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     url: `https://x.com/i/status/${id}`,
     author: parseAuthor(tweet),
     text,
-    richTokens: parseRichTokens(text, entitySourceFor(noteResult, legacy)),
+    richTokens: stripArticlePermalink(parseRichTokens(text, entitySourceFor(noteResult, legacy))),
     timestamp: parseXDate(legacy.created_at),
     stats: parseStats(tweet),
     media: parseMedia(tweet),
     quotePost: parseQuote(tweet),
+    article: parseArticle(tweet),
     isThreadPart: false,
   };
 
@@ -339,12 +423,14 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     data.author = originalAuthor;
     const originalText = (isObject(noteOriginalResult) ? str(noteOriginalResult.text) : undefined) || str(originalLegacy.full_text) || text;
     data.text = originalText;
-    data.richTokens = parseRichTokens(originalText, entitySourceFor(noteOriginalResult, originalLegacy));
+    data.richTokens = stripArticlePermalink(parseRichTokens(originalText, entitySourceFor(noteOriginalResult, originalLegacy)));
     data.id = str(original.rest_id) || str(originalLegacy.id_str) || id;
     data.url = `https://x.com/${originalAuthor.handle.replace(/^@/, '')}/status/${data.id}`;
     // Media can be truncated on the outer object, so read the nested original.
     data.media = parseMedia(original) || data.media;
     data.stats = parseStats(original) || data.stats;
+    // The article belongs to the original post, exactly as the body does.
+    data.article = parseArticle(original) || data.article;
     data.retweetedBy = reposter || undefined;
   }
 

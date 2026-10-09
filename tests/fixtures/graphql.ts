@@ -351,6 +351,98 @@ export const TWEET_DETAIL_NEW_USER_SHAPE_JSON = JSON.stringify({
   }
 });
 
+/**
+ * A long-form post carrying an X article.
+ *
+ * Transcribed from a real `TweetResultByRestId` response captured on 2026-10-09
+ * (`docs/observed-dom-2026-10-09.md`). Three details are load-bearing:
+ *
+ *   - `title` carries a trailing space (`"Anime Harry Potter "`), which X really
+ *     sends and which would otherwise print as a phantom gap on the card;
+ *   - the cover's dimensions are the only source of its ratio, since the article
+ *     entity carries no aspect ratio of its own;
+ *   - the body's last entity expands to `/i/article/<id>`, a link X does not
+ *     render, so a card built from this payload used to grow an `x.com/i/article`
+ *     tail the DOM channel never showed.
+ */
+export const TWEET_DETAIL_ARTICLE_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-2108306407921443081',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  __typename: 'TimelineTweet',
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '2108306407921443081',
+                      core: {
+                        user_results: {
+                          result: {
+                            core: { screen_name: 'kevinleguillou', name: 'Kevin Le Guillou' },
+                            avatar: { image_url: 'https://pbs.twimg.com/profile_images/1700476606/avatar_normal.jpg' },
+                            is_blue_verified: true
+                          }
+                        }
+                      },
+                      article: {
+                        article_results: {
+                          id: 'QXJ0aWNsZUVudGl0eVJlc3VsdHM6MjEwODMwMTUwNDU2MjI2MjAxNg==',
+                          result: {
+                            __typename: 'ArticleEntity',
+                            id: 'QXJ0aWNsZUVudGl0eToyMTA4MzAxNTA0NTYyMjYyMDE2',
+                            rest_id: '2108301504562262016',
+                            title: 'Anime Harry Potter ',
+                            preview_text: 'This is a writeup for those that wanted to know how I made the videos that got popular during the Malfoid craze.\n \nThe core concept to make the videos is simple. Use a Video Generation model, locally',
+                            cover_media_results: {
+                              id: 'QXBpTWVkaWFSZXN1bHRzOgwABQoAAR1CMYAp1hABCgACAAAAABcfxyYAAA==',
+                              result: {
+                                __typename: 'ApiMedia',
+                                media_info: {
+                                  __typename: 'ApiImage',
+                                  original_img_url: 'https://pbs.twimg.com/media/HUIxgCnWEAEUKgI.jpg',
+                                  original_img_width: 1344,
+                                  original_img_height: 538
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: 'Here is the promised write up, it explains how I made the recent videos, how to structure your work, and good ideas I picked up along the way. https://t.co/MXcei1QhVg',
+                        created_at: 'Thu Oct 08 21:19:52 +0000 2026',
+                        entities: {
+                          urls: [
+                            {
+                              url: 'https://t.co/MXcei1QhVg',
+                              expanded_url: 'https://x.com/i/article/2108301504562262016',
+                              display_url: 'x.com/i/article/2108…',
+                              indices: [143, 166]
+                            }
+                          ]
+                        }
+                      },
+                      views: { count: '15947' }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});
+
 /** A cursor entry that must not be mistaken for a tweet. */
 export const TWEET_DETAIL_CURSOR_ONLY_JSON = JSON.stringify({
   data: {

@@ -5,10 +5,11 @@
  * multi-image grids (1-4 images), video poster frames, nested quote tweets, and engagement stats.
  */
 
-import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData } from '../../types/tweet.ts';
+import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
 import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
+import { isInsideArticleReadView, isInsideArticleBody, findArticleReadView } from './articleScope.ts';
 
 export type RichTokenType = 'text' | 'mention' | 'hashtag' | 'cashtag' | 'link' | 'emoji';
 
@@ -31,12 +32,20 @@ function childNodesOf(node: Node): ArrayLike<Node> {
 /**
  * Returns true when `el` sits inside an <article> that is itself nested in
  * another <article> (how X sometimes renders a quoted post).
+ *
+ * A long-form post renders its article as a nested <article> too, but that
+ * article is the tweet's own content rather than a quoted post. Counting it here
+ * made every element of the article look quoted, and the extractor treats quoted
+ * content as not-the-tweet's: stats were dropped and the cover image was
+ * filtered out of the media pass. So the walk skips the article's reading
+ * surface when deciding what counts as an article boundary.
  */
 function isInsideNestedArticle(el: Element): boolean {
   let curr: Element | null = el.parentElement;
   let seenArticle = false;
   while (curr) {
-    if ((curr.tagName || '').toUpperCase() === 'ARTICLE') {
+    const isReadView = isInsideArticleReadView(curr);
+    if ((curr.tagName || '').toUpperCase() === 'ARTICLE' && !isReadView) {
       if (seenArticle) return true;
       seenArticle = true;
     }
@@ -60,16 +69,26 @@ function findQuoteContainer(article: Element): Element | null {
   const byTestId = article.querySelector('div[data-testid="quoteTweet"]');
   if (byTestId) return byTestId;
 
-  // 2. Nested <article> — the quoted post rendered as its own article.
-  const nestedArticle = article.querySelector('article');
+  // 2. Nested <article> — the quoted post rendered as its own article. The
+  //    article's reading surface is a nested <article> as well, and a bare
+  //    `querySelector('article')` matched it every time, turning a long-form
+  //    post into a fake quote box holding its own article. A quoted post carries
+  //    no read view, so skipping that subtree leaves genuine quotes intact —
+  //    including a quote inside an article, which keeps its own `quoteTweet`.
+  const nestedArticle = Array.from(article.querySelectorAll('article')).find(
+    (candidate) => !isInsideArticleReadView(candidate)
+  );
   if (nestedArticle) return nestedArticle;
 
   // 3. Structural fallback: any descendant that owns a second User-Name plus a
-  //    tweetText, while not containing the main post's User-Name.
+  //    tweetText, while not containing the main post's User-Name. The article's
+  //    prose embeds other tweets, which carry both of those, so it is excluded
+  //    here for the same reason step 2 excludes the read view.
   const mainUserName = article.querySelector('div[data-testid="User-Name"]');
   const allUserNames = Array.from(article.querySelectorAll('div[data-testid="User-Name"]'));
   for (const userName of allUserNames) {
     if (userName === mainUserName) continue;
+    if (isInsideArticleBody(userName)) continue;
 
     let node: Element | null = userName.parentElement;
     while (node && node !== article) {
@@ -440,10 +459,11 @@ function extractVideoDuration(container: Element): string | undefined {
 function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem | null {
   if (!container) return null;
 
-  // A main-tweet scan must not adopt a video that belongs to a nested quote.
+  // A main-tweet scan must not adopt a video that belongs to a nested quote, nor
+  // one embedded in the prose of a long-form post's article.
   const firstMatch = <E extends Element>(selector: string): E | undefined =>
     Array.from(container.querySelectorAll<E>(selector)).find(
-      (el) => !excludeQuoted || !isInsideQuoteTweet(el)
+      (el) => !excludeQuoted || (!isInsideQuoteTweet(el) && !isInsideArticleBody(el))
     );
 
   // 1. Locate the video container. Verified against a live GIF post: the
@@ -698,11 +718,18 @@ function collectPhotoAndVideoMedia(
 /**
  * Extracts up to 4 high-res photos plus any video/GIF poster frame for the main
  * tweet. Excludes media belonging to nested quote tweets.
+ *
+ * A long-form post's article is excluded wholesale: its cover is extracted
+ * separately as `article.cover` and mounted by the article layout, so leaving it
+ * here would render the same picture twice. Its prose is excluded for the
+ * stronger reason that its embedded posts are not this tweet's media.
  */
 function extractTweetMedia(article: Element): MediaItem[] | undefined {
+  const isArticleOwned = (el: Element) => isInsideArticleReadView(el);
+
   const items = collectPhotoAndVideoMedia(
     article,
-    (img) => !isInsideQuoteTweet(img) && !isMediaPosterLayer(img),
+    (img) => !isInsideQuoteTweet(img) && !isArticleOwned(img) && !isMediaPosterLayer(img),
     true
   );
 
@@ -746,6 +773,58 @@ function extractLinkCardMedia(article: Element): MediaItem | undefined {
     alt: img.getAttribute('alt') || undefined,
     aspectRatio: (w > 0 && h > 0) ? Number((w / h).toFixed(3)) : undefined,
   };
+}
+
+/**
+ * Extracts the attached article of a long-form post, or undefined.
+ *
+ * The reading view is the anchor: a tweet either has one or does not, and the
+ * title lives under its own testid. The cover is deliberately taken from the
+ * read view's own `tweetPhoto` rather than from the prose, because the prose
+ * embeds other posts whose pictures would otherwise be adopted as the cover.
+ *
+ * Nothing here reads interface wording. X's `alt` text on the cover is
+ * localized ("图像" in a Chinese session), so a marker built on it would break
+ * on the first non-English interface; the testids do not.
+ */
+function extractArticle(article: Element): ArticleData | undefined {
+  const readView = findArticleReadView(article);
+  if (!readView) return undefined;
+
+  const titleEl = readView.querySelector('[data-testid="twitter-article-title"]');
+  const title = (titleEl?.textContent || '').trim();
+
+  // A read view with no title is not a usable article: the card would gain a
+  // cover stripped of the one line that identifies it.
+  if (!title) return undefined;
+
+  // No `restId` from this channel. The only article links in the rendered DOM
+  // are `/handle/article/<tweetId>/media/<mediaId>`, whose number is the tweet's
+  // id and not the article's; reporting it as the article's id would be wrong
+  // data rather than missing data. The GraphQL channel carries the real one.
+
+  // The cover is the read view's own picture, not one from the prose.
+  const coverImg = Array.from(readView.querySelectorAll('div[data-testid="tweetPhoto"] img')).find(
+    (img) => !isInsideArticleBody(img)
+  );
+  let cover: MediaItem | undefined;
+  if (coverImg) {
+    const src = coverImg.getAttribute('src') || '';
+    if (src && !src.includes('profile_images') && !src.includes('/emoji/')) {
+      const imgEl = coverImg as unknown as { naturalWidth?: number; naturalHeight?: number };
+      const w = imgEl.naturalWidth || Number.parseFloat(coverImg.getAttribute('width') || '0') || 0;
+      const h = imgEl.naturalHeight || Number.parseFloat(coverImg.getAttribute('height') || '0') || 0;
+      cover = {
+        type: 'image',
+        url: upgradePhotoUrl(src),
+        originalUrl: src,
+        alt: coverImg.getAttribute('alt') || undefined,
+        aspectRatio: (w > 0 && h > 0) ? Number((w / h).toFixed(3)) : undefined,
+      };
+    }
+  }
+
+  return { title, cover };
 }
 
 /**
@@ -850,8 +929,14 @@ function parseStatValue(el: Element | null): string | undefined {
  * Extracts interaction statistics (replies, reposts, likes, bookmarks, views).
  */
 function extractTweetStats(article: Element): TweetStats | undefined {
-  const actionBar = article.querySelector('div[role="group"]');
-  if (!actionBar || isInsideQuoteTweet(actionBar)) return undefined;
+  // The article's prose embeds other posts, and those carry an action bar of
+  // their own. Document order puts the embedded one first, so a plain
+  // `querySelector` reported a stranger's counts as this tweet's.
+  const actionBars = Array.from(article.querySelectorAll('div[role="group"]'));
+  const actionBar = actionBars.find(
+    (bar) => !isInsideQuoteTweet(bar) && !isInsideArticleBody(bar)
+  );
+  if (!actionBar) return undefined;
 
   const replies = parseStatValue(actionBar.querySelector('div[data-testid="reply"], button[data-testid="reply"]'));
   const reposts = parseStatValue(actionBar.querySelector('div[data-testid="retweet"], div[data-testid="unretweet"], button[data-testid="retweet"]'));
@@ -979,6 +1064,7 @@ export function extractTweetData(article: Element): TweetData | null {
   const stats = extractTweetStats(article);
   const media = extractTweetMedia(article);
   const quotePost = extractQuoteTweet(article);
+  const articleData = extractArticle(article);
   const retweetedBy = getRetweetedBy(article);
   const translatedFrom = validTextEl ? extractTranslationNotice(validTextEl) : undefined;
 
@@ -994,6 +1080,7 @@ export function extractTweetData(article: Element): TweetData | null {
     stats,
     media,
     quotePost,
+    article: articleData,
     retweetedBy: retweetedBy || undefined,
     translatedFrom,
     isThreadPart: false,

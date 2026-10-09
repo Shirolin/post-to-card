@@ -979,6 +979,62 @@
 }
 
 /* -------------------------------------------------------------
+   Long-form post (article)
+
+   X renders an article as a nested reading surface inside the tweet. The card
+   keeps three things from it — the cover, the kicker and the title — and leaves
+   the prose behind, because a card is a poster rather than a reader.
+
+   The cover is a plain one-item media grid, so it inherits the theme's mounting
+   frame, corner and fit behaviour for free; nothing here re-states any of that.
+
+   The title's size is derived from the material's own display size rather than
+   added as a per-theme token: a headline is a display line, so a material that
+   sets a big byline gets a big title and the typewriter receipt stays small,
+   with no table to keep in sync across twelve themes.
+   ------------------------------------------------------------- */
+.article-block {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--rhythm-gap, 16px) * 0.6);
+}
+
+.article-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The kicker names what this block is, so the title is not mistaken for a
+   headline the author typed into the post body. Set in the accent, which is the
+   one chromatic highlight the card allows itself. */
+.article-kicker {
+  font-family: var(--font-display);
+  font-size: calc(var(--type-meta-size, 12px) * 0.92);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent, var(--link));
+}
+
+.article-title {
+  font-family: var(--font-display);
+  font-size: calc(var(--type-display-size, 18px) * 1.7);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
+  line-height: 1.2;
+  color: inherit;
+  text-wrap: balance;
+}
+
+/* The article's cover is the block's own hero, so it takes a little more air
+   below than the media grid's usual rhythm. Keyed on the block, not on a
+   material. */
+.article-block .media-grid {
+  margin-top: 0;
+}
+
+/* -------------------------------------------------------------
    Single Tweet Layout
    ------------------------------------------------------------- */
 .single-tweet-block {
