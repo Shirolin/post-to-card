@@ -119,6 +119,15 @@
       height: 0;
     }
 
+    /* The checkbox itself is 0x0, so the browser's own ring has nothing to
+       trace and a keyboard user gets no indication of where they are. The
+       visible control is the slider, so the ring is drawn on it -- and only
+       for `:focus-visible`, so a mouse click does not leave it behind. */
+    .switch input:focus-visible + .slider {
+      outline: 2px solid #60a5fa;
+      outline-offset: 2px;
+    }
+
     .slider {
       position: absolute;
       cursor: pointer;

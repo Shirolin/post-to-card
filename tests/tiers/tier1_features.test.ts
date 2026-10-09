@@ -1702,6 +1702,31 @@ test('F17.14: the thread layout breathes with the material, and its connector is
   );
 });
 
+test('F17.14b: every material\'s line ink is a real ink, so the drawn lines exist', () => {
+  // `transparent` is a *defined* value, so the `var(--rule, …)` fallbacks in
+  // card.css never fire: a blank rule token erased the thread connector and the
+  // footer rule outright on the four modern materials. "This paper has no
+  // furniture" is what `signature.style: 'none'` says; a blank ink says nothing
+  // and silently deletes every line that consumes the token.
+  for (const id of THEME_IDS) {
+    assert.notEqual(
+      THEMES[id].tokens.rule.toLowerCase(),
+      'transparent',
+      `${id} rule must be an ink, or the thread connector and footer rule vanish`
+    );
+  }
+  // And the token still has to reach the two lines that draw with it, so a
+  // future rename cannot leave the contract asserted but unenforced.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  for (const selector of ['.thread-connector-line {', '.card-footer {']) {
+    const rule = css.slice(css.indexOf(selector));
+    assert.ok(
+      rule.slice(0, rule.indexOf('}')).includes('var(--rule'),
+      `${selector} must draw in the material line ink`
+    );
+  }
+});
+
 test('F17.15: the masthead tick is the accent, but its hairline stays neutral ink', () => {
   // Regression: feeding the tick's colour through one shared `--signature-color`
   // painted Nocturne's whole masthead hairline terracotta. The signature has a
@@ -1877,6 +1902,30 @@ test('F20.5: offline generation functions without internet or external CDN', () 
   assert.equal(isOfflineSafe, true);
 });
 
+test('F20.6: the QR tooltip is localized, not a hard-coded English literal', () => {
+  // The tooltip used to be spelled inside qrcode.ts, so a zh-CN card still said
+  // "Scan to open original tweet" on hover. It is a translation key now and the
+  // card passes it down, the same way every other card string travels.
+  const qrSrc = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/qrcode.ts'), 'utf-8');
+  assert.ok(
+    !qrSrc.includes('Scan to open'),
+    'the QR tooltip must not be hard-coded in the component'
+  );
+  assert.ok(qrSrc.includes('title'), 'the QR component must accept a title');
+  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  assert.ok(
+    /CardQrCode[^>]*title=\{t\.qrHint\}/.test(card),
+    'the card must pass the localized hint to the QR'
+  );
+  assert.ok(TRANSLATIONS['zh-CN'].qrHint, 'zh-CN has the QR hint');
+  assert.ok(TRANSLATIONS['en-US'].qrHint, 'en-US has the QR hint');
+  assert.notEqual(
+    TRANSLATIONS['zh-CN'].qrHint,
+    TRANSLATIONS['en-US'].qrHint,
+    'the two locales must not share one literal'
+  );
+});
+
 // -------------------------------------------------------------
 // F21: Interactive Controls & Toggles
 // -------------------------------------------------------------
@@ -2017,6 +2066,26 @@ test('F23.5: scroll lock calculates and compensates for scrollbar width', () => 
   const body = new DomElement('BODY');
   lockScroll(body, 15);
   assert.equal(body.style.paddingRight, '15px');
+});
+
+test('F23.6: a hidden preview toolbar is actually hidden, not just marked', () => {
+  // The `hidden` attribute is a user-agent style, and the toolbar's own
+  // `display: flex` is an author rule, so it won every time: on a window
+  // narrower than the smallest fixed zoom level the row stayed in flow and
+  // kept eating 48px of the stage it was meant to yield. The guard is the same
+  // one `.more-body[hidden]` already carries.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/modal.css'), 'utf-8');
+  const toolbar = css.slice(css.indexOf('.preview-toolbar {'));
+  assert.ok(
+    toolbar.slice(0, toolbar.indexOf('}')).includes('display: flex'),
+    'the toolbar is a flex row at rest'
+  );
+  const hiddenRule = css.slice(css.indexOf('.preview-toolbar[hidden]'));
+  assert.ok(hiddenRule, 'the toolbar needs a [hidden] guard');
+  assert.ok(
+    hiddenRule.slice(0, hiddenRule.indexOf('}')).includes('display: none'),
+    'a hidden toolbar must not keep occupying its row'
+  );
 });
 
 // -------------------------------------------------------------
@@ -2510,6 +2579,22 @@ test('F30.5: manifest.json declares action popup pointing to popup.html', () => 
   const popupHtml = fs.readFileSync(path.resolve(__dirname, '../../public/popup.html'), 'utf-8');
   assert.ok(popupHtml.includes('toggle-button'), 'Popup must have toggle switch');
   assert.ok(popupHtml.includes('Alt'), 'Popup must describe Alt+C shortcut');
+});
+
+test('F30.6: the popup switch paints a focus ring on the control that is visible', () => {
+  // The checkbox is deliberately `opacity: 0; width: 0; height: 0` so the slider
+  // can be drawn in its place. That also means the browser's own ring has a 0x0
+  // box to trace, so a keyboard user tabbing through the popup saw nothing at
+  // all. The ring belongs on the slider, and only for `:focus-visible`.
+  const popupHtml = fs.readFileSync(path.resolve(__dirname, '../../public/popup.html'), 'utf-8');
+  assert.ok(
+    /\.switch input:focus-visible \+ \.slider\s*\{[^}]*outline/.test(popupHtml),
+    'the slider must take the focus ring when the hidden checkbox is keyboard-focused'
+  );
+  assert.ok(
+    !/\.switch input:focus \+ \.slider/.test(popupHtml),
+    'the ring must be :focus-visible, or a mouse click leaves it behind'
+  );
 });
 
 

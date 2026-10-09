@@ -55,9 +55,11 @@ export interface CardQrCodeProps {
   url: string;
   fillColor?: string;
   className?: string;
+  /** Tooltip text; the card passes the localized string. */
+  title?: string;
 }
 
-export function CardQrCode({ url, fillColor = 'currentColor', className }: CardQrCodeProps): ComponentChild {
+export function CardQrCode({ url, fillColor = 'currentColor', className, title }: CardQrCodeProps): ComponentChild {
   const data = useMemo(() => generateQrCodeData(url), [url]);
 
   if (!data) return null;
@@ -66,7 +68,7 @@ export function CardQrCode({ url, fillColor = 'currentColor', className }: CardQ
     'div',
     {
       class: `card-qr-container ${className || ''}`,
-      title: 'Scan to open original tweet',
+      title,
     },
     h(
       'svg',

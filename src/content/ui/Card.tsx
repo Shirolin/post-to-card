@@ -743,7 +743,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
                 </div>
               )}
               {config.showQrCode && mainTweet.url && (
-                <CardQrCode url={mainTweet.url} fillColor={tokens.qrFill} />
+                <CardQrCode url={mainTweet.url} fillColor={tokens.qrFill} title={t.qrHint} />
               )}
             </div>
           )}

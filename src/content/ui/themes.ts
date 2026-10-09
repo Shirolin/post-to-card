@@ -99,7 +99,18 @@ export interface ThemeTokens {
    * dark tint. A value is a CSS `background-image` (or `none`).
    */
   texture: string;
-  /** The ink of every drawn line: the signature, the footer rule, the thread. */
+  /**
+   * The ink of every drawn line: the signature, the footer rule, the thread.
+   *
+   * It must be a real ink, never `transparent`. The four modern materials used to
+   * set it to `transparent` to mean "this paper draws no furniture", which was
+   * true of the signature (`signature.style: 'none'`) and false of everything
+   * else that consumes this token: the thread connector and the footer rule draw
+   * with `var(--rule)`, and a CSS fallback only fires when the variable is
+   * *undefined*. A defined `transparent` therefore erased both lines silently —
+   * the thread lost its spine and the footer floated without its rule. "No
+   * furniture" is expressed by the signature style, not by a blank ink.
+   */
   rule: string;
   /** `solid` or `dashed`; a receipt's rules are torn along a dash. */
   ruleStyle: RuleStyle;
@@ -302,7 +313,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       mat: '#faf9f5',
       keyline: false,
       texture: 'none',
-      rule: 'transparent',
+      rule: '#dcdbd4',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'filled',
@@ -356,7 +367,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       mat: '#181b22',
       keyline: false,
       texture: 'none',
-      rule: 'transparent',
+      rule: '#2c3442',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'filled',
@@ -412,7 +423,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       keyline: false,
       texture:
         'radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.8) 0px, transparent 60%), radial-gradient(at 100% 100%, rgba(3, 105, 161, 0.12) 0px, transparent 50%)',
-      rule: 'transparent',
+      rule: '#c0d4ed',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'outlined',
@@ -466,7 +477,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       mat: '#f4f6f0',
       keyline: false,
       texture: 'none',
-      rule: 'transparent',
+      rule: '#cbd6c4',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'filled',

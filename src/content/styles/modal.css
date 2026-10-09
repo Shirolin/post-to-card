@@ -256,6 +256,16 @@
   flex-shrink: 0;
 }
 
+/* The `hidden` attribute alone is defeated by the `display: flex` above, which
+   is an author rule and therefore outranks the user-agent `[hidden]` style. On a
+   window narrower than the smallest fixed zoom level the toolbar is meant to
+   disappear -- the row is all disabled buttons except `fit`, which the stage
+   resolves to anyway -- but it kept occupying its 48px and eating the stage it
+   was supposed to yield. Same guard `.more-body[hidden]` already carries. */
+.preview-toolbar[hidden] {
+  display: none;
+}
+
 .preview-toolbar-label {
   font-size: 11.5px;
   font-weight: 600;

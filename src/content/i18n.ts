@@ -83,7 +83,7 @@ export interface Translations {
   zoomFitHint: string;
   zoomFitCapped: string;
   previewSummary: string;
-  tweetUnit: string;
+  previewSummarySingular: string;
 
   // Card Content
   retweetedBy: string;
@@ -92,6 +92,7 @@ export interface Translations {
   verified: string;
   articleKicker: string;
   articleAlt: string;
+  qrHint: string;
   replies: string;
   reposts: string;
   likes: string;
@@ -171,7 +172,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     zoomFitHint: '缩放到刚好放下整张卡片',
     zoomFitCapped: '当前窗口放不下整张卡片，已自动适配',
     previewSummary: '共 {count} 条推文',
-    tweetUnit: '条',
+    previewSummarySingular: '共 {count} 条推文',
 
     retweetedBy: '转发自',
     unavailablePost: '此推文不可用',
@@ -179,6 +180,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     verified: '已认证账号',
     articleKicker: '长文',
     articleAlt: '文章封面',
+    qrHint: '扫码打开原推文',
     replies: '条回复',
     reposts: '次转推',
     likes: '次喜欢',
@@ -261,7 +263,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     zoomFitHint: 'Scale so the whole card is visible',
     zoomFitCapped: 'The card does not fit this window, so it is auto-fitted',
     previewSummary: '{count} tweets',
-    tweetUnit: 'tweets',
+    previewSummarySingular: '{count} tweet',
 
     retweetedBy: 'Retweeted by',
     unavailablePost: 'This post is unavailable',
@@ -269,6 +271,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     verified: 'Verified',
     articleKicker: 'Article',
     articleAlt: 'Article cover',
+    qrHint: 'Scan to open original tweet',
     replies: 'Replies',
     reposts: 'Reposts',
     likes: 'Likes',

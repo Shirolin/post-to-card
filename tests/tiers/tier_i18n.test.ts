@@ -179,6 +179,25 @@ test('i18n.8: trigger button localization uses localized title and aria-label', 
   });
 });
 
+// 9. Preview summary singular/plural
+test('i18n.9: the preview summary has a singular form for a one-post card', () => {
+  // Opening a single post is the common case, and English marks the count, so
+  // the plural template alone read "1 tweets" in the header.
+  const fill = (template: string, count: number) => template.replace('{count}', String(count));
+
+  assert.equal(fill(TRANSLATIONS['en-US'].previewSummarySingular, 1), '1 tweet');
+  assert.equal(fill(TRANSLATIONS['en-US'].previewSummary, 3), '3 tweets');
+  // Chinese does not inflect, so the two templates may read the same; both still
+  // have to exist and interpolate, or a locale could silently lose the count.
+  assert.equal(fill(TRANSLATIONS['zh-CN'].previewSummarySingular, 1), '共 1 条推文');
+  assert.equal(fill(TRANSLATIONS['zh-CN'].previewSummary, 3), '共 3 条推文');
+
+  for (const locale of ['zh-CN', 'en-US'] as const) {
+    const singular = TRANSLATIONS[locale].previewSummarySingular;
+    assert.ok(singular.includes('{count}'), `${locale} singular template must interpolate the count`);
+  }
+});
+
 export async function runTierI18n(): Promise<{
   total: number;
   passed: number;

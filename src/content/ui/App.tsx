@@ -330,11 +330,16 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     return found >= 0 ? found : zoomIndex;
   })();
 
+  // The summary counts one post as often as it counts several -- opening a
+  // single post is the common case -- and English marks the difference, so a
+  // one-count would otherwise read "1 tweets".
+  const summaryTemplate = activeTweetCount === 1 ? t.previewSummarySingular : t.previewSummary;
+
   return (
     <Modal
       onClose={onClose}
       locale={config.locale}
-      summary={`${t.previewSummary.replace('{count}', String(activeTweetCount))}`}
+      summary={`${summaryTemplate.replace('{count}', String(activeTweetCount))}`}
     >
       <div class="preview-stage">
         {/* Hidden when the window cannot show even the smallest fixed level: at
