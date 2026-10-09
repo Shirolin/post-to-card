@@ -22,6 +22,7 @@ import {
   TWEET_DETAIL_VISIBILITY_JSON,
   TWEET_DETAIL_NEW_USER_SHAPE_JSON,
   TWEET_DETAIL_ENTITIES_JSON,
+  TWEET_DETAIL_MEDIA_PERMALINK_JSON,
 } from '../fixtures/graphql.ts';
 
 export interface TestResult {
@@ -284,6 +285,21 @@ test('gql.20: an untranslated page leaves the GraphQL body untouched', () => {
 
   assert.equal(thread.tweets[0].text, originalText, 'GraphQL stays authoritative without a translation');
   assert.equal(thread.tweets[0].translatedFrom, undefined);
+});
+
+test('gql.21: the media permalink X appends to full_text is dropped', () => {
+  // X appends the media permalink's `t.co` URL to `legacy.full_text` and states
+  // where the author's text really ends with `display_text_range`. The URL is
+  // not in `entities.urls`, so the range is the only signal; without it the card
+  // prints a bare `https://t.co/...` after the author's words. The DOM channel
+  // already drops its `pic.twitter.com` form.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_MEDIA_PERMALINK_JSON, 'TweetDetail', 'q1');
+  const tweet = parsed.thread?.tweets[0];
+  assert.ok(tweet, 'expected a tweet');
+  assert.equal(tweet!.text, '怪不得1600N的力能踩断尊界的踏板......',
+    'the text must stop at the display range');
+  assert.doesNotMatch(tweet!.text, /t\.co/, 'the appended permalink must not be printed');
+  assert.ok(tweet!.media && tweet!.media.length === 1, 'the media is still carried');
 });
 
 export async function runTierGraphQL(): Promise<{

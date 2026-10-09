@@ -344,7 +344,8 @@ function parseQuote(tweet: Json): QuoteTweetData | undefined {
   if (!quoted.tweet) return undefined;
   const inner = quoted.tweet;
   const legacy = isObject(inner.legacy) ? inner.legacy : {};
-  const quoteText = str(legacy.full_text) || '';
+  const fullText = str(legacy.full_text) || '';
+  const quoteText = authorText(fullText, legacy);
   return {
     author: parseAuthor(inner),
     text: quoteText,
@@ -386,6 +387,26 @@ function stripTrailingArticleEntity(text: string, entityContainer: unknown): str
 }
 
 /**
+ * The author's own text from `legacy.full_text`, without the tail X appends.
+ *
+ * For a post with media, `full_text` ends with the media permalink's `t.co` URL
+ * and `display_text_range` states where the author's text actually stops. The
+ * card prints the author's words, not that tail; the DOM channel already drops
+ * its `pic.twitter.com` form, and this is the GraphQL side of the same rule.
+ *
+ * Only the end is honoured. Entity indices are stated against `full_text`, so
+ * trimming the start would shift every one of them, and X sets the range's start
+ * to zero for the posts the card renders.
+ */
+function authorText(fullText: string, legacy: Json): string {
+  const range = legacy.display_text_range;
+  if (!Array.isArray(range) || typeof range[1] !== 'number') return fullText;
+  const end = range[1];
+  if (!(end > 0) || end >= fullText.length) return fullText;
+  return fullText.slice(0, end);
+}
+
+/**
  * The body a tweet contributes to the card: its plain text and the styled-token
  * view, with the appended article link dropped when the post carries an article.
  *
@@ -406,9 +427,11 @@ function parseBody(
   const noteTweet = isObject(tweet.note_tweet) ? tweet.note_tweet.note_tweet_results : undefined;
   const noteResult = isObject(noteTweet) ? noteTweet.result : undefined;
   const entitySource = entitySourceFor(noteResult, legacy);
+  const noteText = isObject(noteResult) ? str(noteResult.text) : undefined;
+  const legacyText = str(legacy.full_text);
   const rawText =
-    (isObject(noteResult) ? str(noteResult.text) : undefined) ||
-    str(legacy.full_text) ||
+    noteText ||
+    (legacyText ? authorText(legacyText, legacy) : undefined) ||
     fallbackText;
 
   // Only a post that carries an article ends with the appended link to it; a

@@ -561,3 +561,67 @@ export const TWEET_DETAIL_ENTITIES_JSON = JSON.stringify({
     }
   }
 });
+
+/**
+ * A post with media, where X appends the media permalink to the body.
+ *
+ * `legacy.full_text` ends with the permalink's `t.co` URL and
+ * `display_text_range` states where the author's text actually stops. The URL is
+ * not listed in `entities.urls`, so the range is the only signal that it is not
+ * the author's words; the DOM channel instead renders the tail as a bare
+ * `pic.twitter.com` link and already drops it.
+ */
+export const TWEET_DETAIL_MEDIA_PERMALINK_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-8001',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '8001',
+                      core: {
+                        user_results: {
+                          result: {
+                            legacy: { screen_name: 'YLDLZN', name: '伊利丹' },
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/9/yldlzn.jpg'
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: '怪不得1600N的力能踩断尊界的踏板...... https://t.co/PFUKksZ8YL',
+                        display_text_range: [0, 24],
+                        created_at: 'Fri Oct 09 07:27:00 +0000 2026',
+                        entities: {},
+                        extended_entities: {
+                          media: [
+                            {
+                              type: 'photo',
+                              media_url_https: 'https://pbs.twimg.com/media/chat.jpg',
+                              original_info: { width: 1200, height: 900 },
+                              ext_alt_text: '聊天记录'
+                            }
+                          ]
+                        },
+                        favorite_count: 152
+                      },
+                      views: { count: '81200' }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});
