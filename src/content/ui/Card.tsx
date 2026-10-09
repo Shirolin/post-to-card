@@ -4,6 +4,7 @@ import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, 
 import { CardQrCode } from './qrcode.ts';
 import { resolveRadius, getAspectMinHeight, THEMES } from './themes.ts';
 import { planMediaGrid, applyMediaGridPlan, recordShape } from './mediaGrid.ts';
+import { imageFallbackAttrs, advanceImageFallback } from './imageFallback.ts';
 import { threadScope, tweetKey } from './threadScope.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
@@ -81,6 +82,15 @@ function renderRichTokens(tokens: NonNullable<TweetData['richTokens']>, classNam
   );
 }
 
+/**
+ * Advances a failed picture to the next URL in its fallback chain, or leaves it
+ * broken once the chain is exhausted so a genuinely gone picture is still
+ * visible as missing rather than silently swapped for a placeholder.
+ */
+function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
+  advanceImageFallback(event.currentTarget);
+}
+
 function renderMediaGrid(
   media: MediaItem[] | undefined,
   altPrefix: string = 'Tweet photo',
@@ -151,7 +161,9 @@ function renderMediaGrid(
                 class={`media-video-poster ${fitClass}`}
                 data-fit={imageFit}
                 loading="eager"
+                {...imageFallbackAttrs(m)}
                 onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
+                onError={handleImageError}
               />
               {/* Play badge sits on the poster without a scrim: the pill is
                   opaque, so a gradient would only dim the image. */}
@@ -182,7 +194,9 @@ function renderMediaGrid(
             data-fit={imageFit}
             data-layout={mediaLayout}
             loading="eager"
+            {...imageFallbackAttrs(m)}
             onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
+            onError={handleImageError}
           />
         );
       })}

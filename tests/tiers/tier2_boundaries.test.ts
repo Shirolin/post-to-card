@@ -9,10 +9,11 @@ import { createChromeMock } from '../env/chrome.ts';
 import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
-import { getPhotoUrlCandidates } from '../../src/content/adapter/urls.ts';
+import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { isPicMediaLink } from '../../src/content/adapter/emojis.ts';
 import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
+import { imageFallbackAttrs, advanceImageFallback } from '../../src/content/ui/imageFallback.ts';
 import {
   createTriggerButton,
   applyTriggerLocale,
@@ -612,6 +613,69 @@ test('Tier 2.37: photo resolution requests the highest available variant and kee
   assert.ok(candidates[0].includes('name=orig'), 'first candidate must request the original');
   assert.ok(candidates[0].includes('format=jpg'), 'webp must be rewritten to jpg for original quality');
   assert.ok(candidates.some(c => c.includes('name=large')), 'chain must include a smaller fallback');
+});
+
+test('Tier 2.37b: a card picture’s fallback chain ends at the URL the page rendered', () => {
+  // `orig` is known to 404 where `large` still resolves, so the chain exists to
+  // recover a broken <img> rather than print its alt text. It must lead with the
+  // mounted URL, run through the derived variants, and finish on the exact URL
+  // X itself rendered -- the one variant that is certain to still exist.
+  const originalUrl = 'https://pbs.twimg.com/media/photo.jpg?format=jpg&name=small';
+  const preferredUrl = getPhotoUrlCandidates(originalUrl)[0];
+  const chain = getPhotoFallbackChain(originalUrl, preferredUrl);
+
+  assert.equal(chain[0], preferredUrl, 'the mounted URL must be tried first');
+  assert.equal(chain[chain.length - 1], originalUrl, 'the page-rendered URL is the last resort');
+  assert.ok(chain.some(c => c.includes('name=large')), 'large must remain in the chain');
+  assert.equal(new Set(chain).size, chain.length, 'no URL may be tried twice');
+});
+
+test('Tier 2.37c: a picture with no derivable variants still has itself as a fallback-free single entry', () => {
+  // A non-media source (or one already at its best) yields one URL. The card
+  // then mounts it with no `data-fallback`, so a broken image stays visibly
+  // broken instead of being retried against itself.
+  const raw = 'https://pbs.twimg.com/profile_images/1/avatar_400x400.jpg';
+  const chain = getPhotoFallbackChain(raw, raw);
+  assert.deepEqual(chain, [raw], 'a non-upgradable source must not invent a retry');
+});
+
+test('Tier 2.37d: a broken card picture advances to its next variant, one step per error', () => {
+  // The end-to-end recovery: mount the highest variant, then feed errors and
+  // watch the src walk down the chain until it lands on the page-rendered URL.
+  const item: MediaItem = {
+    type: 'image',
+    url: 'https://pbs.twimg.com/media/photo.jpg?format=jpg&name=orig',
+    originalUrl: 'https://pbs.twimg.com/media/photo.jpg?format=jpg&name=small',
+  };
+
+  const img = new DomImageElement();
+  img.setAttribute('src', item.url);
+  for (const [name, value] of Object.entries(imageFallbackAttrs(item))) {
+    img.setAttribute(name, value);
+  }
+
+  advanceImageFallback(img);
+  assert.match(img.src, /name=large/, 'first error drops to large');
+  advanceImageFallback(img);
+  assert.match(img.src, /name=medium/, 'second error drops to medium');
+  advanceImageFallback(img);
+  assert.equal(img.src, item.originalUrl, 'third error lands on the page-rendered URL');
+  // The last step emptied the chain, so the element is left with nothing to retry.
+  assert.equal(img.getAttribute('data-fallback'), '[]');
+
+  // One more error must not throw or loop: the picture is simply broken.
+  assert.doesNotThrow(() => advanceImageFallback(img));
+  assert.equal(img.src, item.originalUrl, 'an exhausted chain leaves the last URL in place');
+});
+
+test('Tier 2.37e: a picture with no fallback is mounted without the attribute and never retried', () => {
+  const item: MediaItem = { type: 'image', url: 'https://pbs.twimg.com/profile_images/1/plain_400x400.jpg' };
+  assert.deepEqual(imageFallbackAttrs(item), {}, 'nothing to fall back to means no attribute');
+
+  const img = new DomImageElement();
+  img.setAttribute('src', item.url);
+  advanceImageFallback(img);
+  assert.equal(img.src, item.url, 'a picture with no chain is left untouched');
 });
 
 test('Tier 2.38: extraction degrades gracefully when no data-testid is present', () => {

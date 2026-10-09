@@ -73,6 +73,34 @@ export function getPhotoUrlCandidates(url: string): string[] {
 export const getHighResPhotoUrl = upgradePhotoUrl;
 
 /**
+ * The ordered list of URLs to try for one card picture, best resolution first.
+ *
+ * The card mounts `preferredUrl`, which is the highest variant we believe
+ * exists. `orig` is not infallible (see `upgradePhotoUrl`), and a 404 shows as a
+ * broken image with nothing to recover, so this is the chain a caller walks on
+ * error. It starts with the mounted URL, continues through the variants derived
+ * from `originalUrl`, and ends with `originalUrl` itself -- the exact URL the
+ * page rendered, which is the one variant X is certain to still have.
+ *
+ * Duplicates are dropped so an already-tried URL is never retried, and a source
+ * with no derivable variants yields just `[preferredUrl, originalUrl]`.
+ */
+export function getPhotoFallbackChain(originalUrl: string, preferredUrl: string): string[] {
+  const chain: string[] = [];
+  const push = (url: string | undefined) => {
+    if (url && !chain.includes(url)) chain.push(url);
+  };
+
+  push(preferredUrl);
+  for (const candidate of getPhotoUrlCandidates(originalUrl)) {
+    push(candidate);
+  }
+  push(originalUrl);
+
+  return chain;
+}
+
+/**
  * Extracts the video poster frame URL from a <video> element or video container.
  */
 export function extractVideoPosterUrl(videoElementOrContainer: Element | null | undefined): string | null {
