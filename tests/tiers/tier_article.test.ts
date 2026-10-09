@@ -18,7 +18,8 @@
  *   art.6  the GraphQL channel parses the article, trims X's padded title, and
  *          drops the self-referential `/i/article/` link from both fields
  *   art.7  the DOM channel drops the same link, from both fields
- *   art.8  a body that is nothing but the link does not resurrect it via `text`
+ *   art.9  a tweet merely sharing someone else's article keeps the link
+ *   art.10 a body that is only its own article link ends up empty in both fields
  *
  * Shapes come from a logged-in session on 2026-10-09; see
  * `docs/observed-dom-2026-10-09.md`.
@@ -139,9 +140,55 @@ test('art.7: the article permalink is dropped from the DOM body, in both fields'
   assert.match(tweet?.text || '', /promised write up/, 'the author\'s own body survives');
 });
 
-test('art.8: a post whose body is only its article link keeps no link at all', () => {
-  // The case the token-only strip missed: tokens end up empty, the card falls
-  // back to `text`, and the link it was supposed to hide comes back.
+test('art.6: GraphQL parses the article and drops its self-referential link', () => {
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_ARTICLE_JSON, 'TweetDetail', 'q_art');
+  assert.ok(parsed.thread, 'expected a thread');
+  const tweet = parsed.thread!.tweets[0];
+
+  assert.equal(tweet.article?.title, 'Anime Harry Potter', 'X pads the title with trailing space');
+  assert.match(tweet.article?.previewText || '', /^This is a writeup for those that wanted/,
+    'the article opening is carried as the lead');
+  assert.match(tweet.article?.cover?.url || '', /name=orig/, 'the cover is served at full size');
+  assert.equal(tweet.article?.cover?.aspectRatio, 2.498, 'cover ratio comes from original_info');
+
+  // The body's trailing `t.co` expands to `/i/article/<id>`. X does not render
+  // it, so the card must not print it either — from `text` or from the tokens.
+  assert.doesNotMatch(tweet.text, /i\/article/, 'the plain text must not carry the link');
+  assert.doesNotMatch(tweet.text, /t\.co/, 'nor the unexpanded form');
+  assert.match(tweet.text, /promised write up/, 'the author\'s own body survives');
+  const tokenText = (tweet.richTokens || []).map((token) => token.value).join('');
+  assert.doesNotMatch(tokenText, /i\/article/, 'the article permalink must not be printed');
+  assert.match(tokenText, /promised write up/, 'the author\'s own body survives');
+});
+
+test('art.9: a tweet merely sharing someone else\'s article keeps the link', () => {
+  // The strip must key on the post actually carrying an article. A tweet that
+  // merely ends with a link to an article the author is sharing has no article
+  // of its own, and that link is the author's own text — dropping it would
+  // silently delete what the post is about.
+  const html = `
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <div><span>Author</span></div>
+        <div><a href="/author"><span>@author</span></a></div>
+      </div>
+      <div data-testid="tweetText" lang="en">
+        <span>great read </span>
+        <a href="https://t.co/xyz"><span>x.com/i/article/999</span></a>
+      </div>
+      <div role="group"><div data-testid="like"><span>3</span></div></div>
+    </article>`;
+  const tweet = extractTweetData(createDomElement(html));
+  assert.equal(tweet?.article, undefined, 'no article of its own');
+  assert.match(tweet?.text || '', /i\/article\/999/, 'the shared link is the author\'s own text and stays');
+  const tokenText = (tweet?.richTokens || []).map((token) => token.value).join('');
+  assert.match(tokenText, /i\/article\/999/, 'and it stays in the tokens too');
+});
+
+test('art.10: a body that is only its own article link ends up empty, in both channels', () => {
+  // The regression art.8 guards, re-checked through the shared strip after it was
+  // re-keyed on "has an article": tokens empty, so `text` is the fallback and
+  // must be empty too.
   const html = `
     <article data-testid="tweet">
       <div data-testid="User-Name">
@@ -158,30 +205,9 @@ test('art.8: a post whose body is only its article link keeps no link at all', (
       <div role="group"><div data-testid="like"><span>1</span></div></div>
     </article>`;
   const tweet = extractTweetData(createDomElement(html));
-  assert.equal(tweet?.text, '', 'a body that is only the article link is empty');
+  assert.ok(tweet?.article, 'the post carries an article');
+  assert.equal(tweet?.text, '', 'the body was only the link, so it is empty');
   assert.equal(tweet?.richTokens, undefined, 'and it has no tokens');
-});
-
-test('art.6: GraphQL parses the article and drops its self-referential link', () => {
-  const parsed = parseTweetDetailResponse(TWEET_DETAIL_ARTICLE_JSON, 'TweetDetail', 'q_art');
-  assert.ok(parsed.thread, 'expected a thread');
-  const tweet = parsed.thread!.tweets[0];
-
-  assert.equal(tweet.article?.title, 'Anime Harry Potter', 'X pads the title with trailing space');
-  assert.equal(tweet.article?.restId, '2108301504562262016');
-  assert.match(tweet.article?.previewText || '', /^This is a writeup for those that wanted/,
-    'the article opening is carried as the lead');
-  assert.match(tweet.article?.cover?.url || '', /name=orig/, 'the cover is served at full size');
-  assert.equal(tweet.article?.cover?.aspectRatio, 2.498, 'cover ratio comes from original_info');
-
-  // The body's trailing `t.co` expands to `/i/article/<id>`. X does not render
-  // it, so the card must not print it either — from `text` or from the tokens.
-  assert.doesNotMatch(tweet.text, /i\/article/, 'the plain text must not carry the link');
-  assert.doesNotMatch(tweet.text, /t\.co/, 'nor the unexpanded form');
-  assert.match(tweet.text, /promised write up/, 'the author\'s own body survives');
-  const tokenText = (tweet.richTokens || []).map((token) => token.value).join('');
-  assert.doesNotMatch(tokenText, /i\/article/, 'the article permalink must not be printed');
-  assert.match(tokenText, /promised write up/, 'the author\'s own body survives');
 });
 
 export async function runTierArticle(): Promise<{

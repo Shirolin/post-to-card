@@ -2,7 +2,7 @@
 
 > **状态：本次发现已全部修复并被测试覆盖。** 本文是一次性快照，不是待办清单。
 > 采集日期 2026-10-09，采集时 X 的 `data-app-version` 为 `e9b82655819b239e9de923fddd58156f63f7c23c`。
-> 下面列出的判据已被 `tests/tiers/tier_article.test.ts` 的 6 条用例锁住（每条都做过变异测试）。
+> 下面列出的判据已被 `tests/tiers/tier_article.test.ts` 的 10 条用例锁住（每条都做过变异测试）。
 
 > 采集时间：2026-10-09
 > 页面：`https://x.com/kevinleguillou/status/2108306407921443081?s=20`（已登录）
@@ -103,7 +103,7 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
 
 ## 复核补记（同日）
 
-首次落地后复审又发现并修正了四处，均已加回归用例（`art.5b` / `art.7` / `art.8` 及 `art.6` 的
+首次落地后复审又发现并修正了四处，均已加回归用例（`art.5b` / `art.7` / `art.10` 及 `art.6` 的
 `text` 断言，逐条变异测试）：
 
 1. **文章链接只在 GraphQL 通道被剥**。DOM 通道的 `cleanTweetText` 与 token pass 都只认
@@ -122,3 +122,29 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
    而真实 DOM 的 `getAttribute('src')` 返回解码后的 `&`，所以夹具写 `&amp;` 会让封面 URL 变成
    `format=jpg&amp%3Bname=small`。已改回 `&`；`EXPECTED_ARTICLE_TWEET_DATA` 因无人引用且内容
    有误（写成 `name=large`，实际为 `name=orig`）而删除。
+
+## 复核补记二（同日，code-review）
+
+对 `de0f038..f49ee70` 跑双轴审查（Standards / Spec）后，又修了五处：
+
+1. **剥离被施加到每条推文，而非仅长文**（Spec：范围蔓延）。`cleanTweetText` 无条件剥
+   `/i/article/` 尾链，于是任何正文恰好以「别人文章」链接结尾的推文会静默丢掉该链接。
+   现由调用点按「本推文是否确实带文章」决定是否剥离，DOM 与 GraphQL 两侧都是；新增 `art.9`
+   锁住「仅分享他人文章链接不被剥」。
+2. **导语渲染在封面/标题之前**（Spec：版式）。用户选定顺序是 封面 → 眉标+标题 → 导语，
+   但代码把导语放在最前，且 `renderArticleBlock` 的注释还宣称相反顺序。现改为导语在标题之后；
+   浏览器实测确认顺序为 封面 → 长文 → 标题 → 导语。
+3. **`ArticleData.restId` 是死字段**（Standards：Speculative Generality）。GraphQL 填充但
+   生产渲染无处读取，DOM 侧还明确声明不设。已删除（连同 `dev/preview.ts` 夹具中的对应项）。
+4. **`previewText` 只有 GraphQL 通道填**（Spec：部分实现）。DOM 的 `extractArticle` 原先不返回
+   它，于是从时间线（只有 DOM 通道）打开的无正文长文没有导语——正是需求点名的场景。现 DOM 侧
+   从正文区首段读取 `previewText`。
+5. **文档与词汇漂移**（Standards）。`GLOSSARY.md` 的 Article 定义补上「自身开头行仅在推文无正文时
+   作导语」并新增 **Long-form Post** 词条（此前 `long-form post` 被当作 Article 的同义词使用）；
+   `AGENTS.md` 的 tier 数 8→9；`PROJECT.md` 接口契约补 `ArticleData` / `article?`；本文状态行
+   的用例数 6→10；`data-article="on"`（无选择器、无测试）随重构移除；封面 grid 不再传
+   `t.videoLabel`（封面恒为图片）。
+
+其余为基线 smell 的取舍：封面 `MediaItem` 在 DOM 与 GraphQL 两处各自构造、retweet 分支重复
+strip 序列——两处都因两侧输入形态不同（DOM 读 `getAttribute`，GraphQL 读 JSON 字段）而保留，
+未强行合并。

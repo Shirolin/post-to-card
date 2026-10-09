@@ -94,28 +94,32 @@ export function isPicMediaLink(value: string): boolean {
 }
 
 /**
- * True when a string names a post's own X article permalink.
+ * True when a string names an X article permalink.
  *
- * A long-form post's body carries a trailing entity pointing at its article. X
- * does not render it — the article preview replaces it, and the server-rendered
- * body has no such link — but the entity survives in the GraphQL payload and, in
- * the logged-out client, in the DOM too. Both channels must agree about dropping
- * it, so the rule lives here beside `isPicMediaLink`, the same way the media-host
- * rule does, and each channel consults it in the medium it works in.
+ * A post carrying an article ends with an entity pointing at that article. X
+ * does not render it — the article block replaces it — but the entity survives
+ * in the GraphQL payload and, in the rendered DOM, as a truncated
+ * `x.com/i/article/2108…` label. Both channels must agree about dropping it, so
+ * the rule lives here beside `isPicMediaLink`.
  *
- * The rendered link's label is a truncated `x.com/i/article/2108…`, so the match
- * is on the path prefix rather than on a whole URL.
+ * This predicate cannot tell the post's own article from one the author merely
+ * shared; that is why it only *identifies* the link and the caller decides
+ * whether the post actually carries an article.
  */
 export function isArticlePermalink(value: string): boolean {
   return /\/i\/article\/\d+/.test(value || '');
 }
 
 /**
- * Strips the trailing article permalink X appends to a long-form post.
+ * Strips the trailing article permalink X appends to a post carrying an article.
  *
  * Same shape as `stripPicTwitterLink`: only a trailing link is removed, because
  * one the author wrote mid-sentence is their own text. Shares the predicate with
  * the GraphQL channel so the two cannot disagree about which link this is.
+ *
+ * The caller decides *whether* to strip: a link to some other article that a
+ * tweet merely ends with is the author's own text, not an appended tail, so this
+ * is only applied when the post actually carries an article.
  */
 export function stripTrailingArticleLink(text: string): string {
   if (!text) return '';
@@ -123,6 +127,41 @@ export function stripTrailingArticleLink(text: string): string {
   if (!match || match.index === undefined) return text;
   if (!isArticlePermalink(match[1])) return text;
   return text.slice(0, match.index).trimEnd();
+}
+
+/** The shape `stripTrailingArticleToken` needs, so both channels can share it. */
+export interface TrailingLinkToken {
+  type: string;
+  value: string;
+  href?: string;
+}
+
+/**
+ * The token-list form of `stripTrailingArticleLink`.
+ *
+ * Both data channels end up with a rich-token list, and both must drop the same
+ * trailing link from it; one implementation keeps them from disagreeing. The
+ * caller still decides whether to strip, on the same rule as the text form.
+ */
+export function stripTrailingArticleToken<T extends TrailingLinkToken>(
+  tokens: T[] | undefined
+): T[] | undefined {
+  if (!tokens || tokens.length === 0) return tokens;
+
+  let end = tokens.length;
+  // Skip the whitespace that separates the link from the body.
+  while (end > 0 && tokens[end - 1].type === 'text' && tokens[end - 1].value.trim() === '') end--;
+
+  const last = tokens[end - 1];
+  if (!last || last.type !== 'link') return tokens;
+  if (!isArticlePermalink(last.href || last.value) && !isArticlePermalink(last.value)) return tokens;
+
+  const kept = tokens.slice(0, end - 1);
+  // Trimming may strand the whitespace that preceded the link.
+  while (kept.length > 0 && kept[kept.length - 1].type === 'text' && kept[kept.length - 1].value.trim() === '') {
+    kept.pop();
+  }
+  return kept;
 }
 
 /**
@@ -146,14 +185,14 @@ export function stripPicTwitterLink(text: string): string {
 }
 
 /**
- * Restores Unicode emojis and strips the trailing links X appends to a tweet:
- * the media attachment link, and the article permalink on a long-form post.
+ * Restores Unicode emojis and strips the trailing media attachment link.
  *
- * Both are stripped here rather than one at the call site, because `text` is the
- * canonical field the card falls back to when the token list is empty; stripping
- * only the tokens would let a body that is nothing but the link reappear.
+ * The article permalink is deliberately *not* stripped here: that link is only
+ * an appended tail on a post that carries an article, and this function has no
+ * way to know. The article's strip is applied by the caller that knows, so a
+ * tweet ending with a link to someone else's article keeps it.
  */
 export function cleanTweetText(node: Node | null | undefined): string {
   const restored = restoreUnicodeEmojis(node);
-  return stripTrailingArticleLink(stripPicTwitterLink(restored));
+  return stripPicTwitterLink(restored);
 }

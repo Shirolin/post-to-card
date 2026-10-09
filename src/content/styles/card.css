@@ -982,8 +982,9 @@
    Long-form post (article)
 
    X renders an article as a nested reading surface inside the tweet. The card
-   keeps three things from it — the cover, the kicker and the title — and leaves
-   the prose behind, because a card is a poster rather than a reader.
+   keeps the cover, the kicker, the title and — under them — the post's own lead,
+   and leaves the article's prose behind, because a card is a poster rather than
+   a reader.
 
    The cover is a plain one-item media grid, so it inherits the theme's mounting
    frame, corner and fit behaviour for free; nothing here re-states any of that.

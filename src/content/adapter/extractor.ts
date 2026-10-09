@@ -6,7 +6,7 @@
  */
 
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
-import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, isArticlePermalink } from './emojis.ts';
+import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, stripTrailingArticleLink, stripTrailingArticleToken } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
 import { isInsideArticleReadView, isInsideArticleBody, findArticleReadView } from './articleScope.ts';
@@ -330,11 +330,11 @@ function extractRichTokens(tweetTextEl: Element | null | undefined): RichToken[]
         // cannot disagree about it; the position rule is why they used to
         // disagree, and it is now the same in both.
         //
-        // The article permalink X appends to a long-form post is the same case at
-        // a different host: the body-text stripper drops it, so the token pass
-        // must too, or a card built from tokens keeps a link the plain text path
-        // removed. Both rules are shared, for the same reason.
-        if ((isPicMediaLink(href) || isPicMediaLink(text) || isArticlePermalink(href) || isArticlePermalink(text)) && isTrailingNode(el)) {
+        // The article permalink is not handled here: whether it is an appended
+        // tail depends on whether this post carries an article, which this pass
+        // cannot see. `extractTweetData` strips it from both fields afterwards,
+        // only for a post that has one.
+        if ((isPicMediaLink(href) || isPicMediaLink(text)) && isTrailingNode(el)) {
           return;
         }
 
@@ -813,6 +813,13 @@ function extractArticle(article: Element): ArticleData | undefined {
   // id and not the article's; reporting it as the article's id would be wrong
   // data rather than missing data. The GraphQL channel carries the real one.
 
+  // The article's own opening line. X renders it inside the prose region as the
+  // first paragraph, so it is read from there rather than invented; it is only
+  // used as the card's lead when the post itself says nothing.
+  const proseEl = readView.querySelector('[data-testid="twitterArticleRichTextView"], [data-testid="longformRichTextComponent"]');
+  const firstPara = proseEl?.querySelector('p, div');
+  const previewText = firstPara ? cleanTweetText(firstPara).trim() : '';
+
   // The cover is the read view's own picture, not one from the prose.
   const coverImg = Array.from(readView.querySelectorAll('div[data-testid="tweetPhoto"] img')).find(
     (img) => !isInsideArticleBody(img)
@@ -834,7 +841,7 @@ function extractArticle(article: Element): ArticleData | undefined {
     }
   }
 
-  return { title, cover };
+  return { title, cover, previewText: previewText || undefined };
 }
 
 /**
@@ -1067,14 +1074,25 @@ export function extractTweetData(article: Element): TweetData | null {
 
   const tweetTextEl = article.querySelector('div[data-testid="tweetText"]');
   const validTextEl = tweetTextEl && !isInsideQuoteTweet(tweetTextEl) ? tweetTextEl : null;
-  const text = validTextEl ? cleanTweetText(validTextEl) : '';
-  const richTokens = validTextEl ? extractRichTokens(validTextEl) : [];
+  const articleData = extractArticle(article);
+
+  // A post carrying an article ends with a link to it that X does not render.
+  // Whether that link is an appended tail depends on the article being present,
+  // so the strip is applied here — to `text` and the tokens alike, since `text`
+  // is what the card falls back to when the token list is empty — and only for a
+  // post that has one. A tweet merely ending with a link to someone else's
+  // article keeps it: that is the author's own text.
+  let text = validTextEl ? cleanTweetText(validTextEl) : '';
+  let richTokens = validTextEl ? extractRichTokens(validTextEl) : [];
+  if (articleData) {
+    text = stripTrailingArticleLink(text);
+    richTokens = stripTrailingArticleToken(richTokens) || [];
+  }
 
   const timestamp = extractTimestamp(article);
   const stats = extractTweetStats(article);
   const media = extractTweetMedia(article);
   const quotePost = extractQuoteTweet(article);
-  const articleData = extractArticle(article);
   const retweetedBy = getRetweetedBy(article);
   const translatedFrom = validTextEl ? extractTranslationNotice(validTextEl) : undefined;
 

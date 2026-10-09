@@ -81,33 +81,6 @@ function renderRichTokens(tokens: NonNullable<TweetData['richTokens']>, classNam
   );
 }
 
-function renderTweetContent(tweet: TweetData, t: ReturnType<typeof getTranslation>, imageFit: ImageFitOption) {
-  // A long-form post reads as: what the author said about it, then the article.
-  // When the post says nothing, the article's own opening line stands in so the
-  // block never reads as an untitled cover.
-  if (tweet.article) {
-    const leadRich = tweet.richTokens && tweet.richTokens.length > 0 ? tweet.richTokens : null;
-    return (
-      <>
-        {leadRich
-          ? renderRichTokens(leadRich, 'tweet-text-content')
-          : tweet.text
-            ? <div class="tweet-text-content">{tweet.text}</div>
-            : tweet.article.previewText
-              ? <div class="tweet-text-content">{tweet.article.previewText}</div>
-              : null}
-        {renderArticleBlock(tweet.article, t, imageFit)}
-      </>
-    );
-  }
-
-  if (tweet.richTokens && tweet.richTokens.length > 0) {
-    return renderRichTokens(tweet.richTokens, 'tweet-text-content');
-  }
-
-  return <div class="tweet-text-content">{tweet.text}</div>;
-}
-
 function renderMediaGrid(
   media: MediaItem[] | undefined,
   altPrefix: string = 'Tweet photo',
@@ -414,33 +387,67 @@ function renderQuoteCard(
 }
 
 /**
+ * The lead the card prints under an article: what the post says about it.
+ *
+ * The post's own body comes first, because those are the author's words about
+ * the article. When the post says nothing, the article's own opening line stands
+ * in so the block never ends as an untitled cover with no context.
+ */
+function renderArticleLead(tweet: TweetData) {
+  if (tweet.richTokens && tweet.richTokens.length > 0) {
+    return renderRichTokens(tweet.richTokens, 'tweet-text-content');
+  }
+  if (tweet.text) return <div class="tweet-text-content">{tweet.text}</div>;
+  if (tweet.article?.previewText) {
+    return <div class="tweet-text-content">{tweet.article.previewText}</div>;
+  }
+  return null;
+}
+
+/**
  * The block a long-form post's article renders as.
  *
- * Order follows X's own reading order — cover, then what the article is called,
- * then what the post says about it — because a card that reorders the source
- * reads as a different document. The cover takes the same MediaItem shape as any
- * other picture, so it is mounted with the theme's own media frame and honours
- * the user's image-fit choice rather than growing a second picture treatment.
+ * Order is the one chosen for the card: cover, then what the article is called,
+ * then what the post says about it. The cover takes the same MediaItem shape as
+ * any other picture, so it is mounted with the theme's own media frame and
+ * honours the user's image-fit choice rather than growing a second picture
+ * treatment.
  *
  * The article's prose is not printed. It runs to thousands of words and a card
- * is a poster; the cover and the title are what make the article recognisable
- * when the card is shared.
+ * is a poster; the cover, the title and the post's own lead are what make the
+ * article recognisable when the card is shared.
  */
 function renderArticleBlock(
   article: NonNullable<TweetData['article']>,
+  lead: JSX.Element | null,
   t: ReturnType<typeof getTranslation>,
   imageFit: ImageFitOption
 ) {
   return (
-    <div class="article-block" data-article="on">
+    <div class="article-block">
       {article.cover &&
-        renderMediaGrid([article.cover], t.articleAlt, imageFit, 'auto', 'grid', t.videoLabel, false)}
+        renderMediaGrid([article.cover], t.articleAlt, imageFit, 'auto', 'grid', undefined, false)}
       <div class="article-head">
         <span class="article-kicker">{t.articleKicker}</span>
         <div class="article-title">{article.title}</div>
       </div>
+      {lead}
     </div>
   );
+}
+
+function renderTweetContent(tweet: TweetData, t: ReturnType<typeof getTranslation>, imageFit: ImageFitOption) {
+  // A post carrying an article renders as the article, with the post's own words
+  // as its lead.
+  if (tweet.article) {
+    return renderArticleBlock(tweet.article, renderArticleLead(tweet), t, imageFit);
+  }
+
+  if (tweet.richTokens && tweet.richTokens.length > 0) {
+    return renderRichTokens(tweet.richTokens, 'tweet-text-content');
+  }
+
+  return <div class="tweet-text-content">{tweet.text}</div>;
 }
 
 function renderSingleTweet(

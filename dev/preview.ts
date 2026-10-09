@@ -311,7 +311,6 @@ const articleThreadData: ThreadData = {
       article: {
         title: 'Anime Harry Potter',
         previewText: 'This is a writeup for those that wanted to know how I made the videos.',
-        restId: '2108301504562262016',
         cover: { type: 'image', url: articleCover, aspectRatio: 2.498 },
       },
     },

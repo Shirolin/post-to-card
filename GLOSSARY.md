@@ -24,7 +24,10 @@ Interface and card language is one setting with two scopes, deliberately. It loc
 A rich media asset attached to a tweet (image, video poster, animated GIF) with normalized dimensions, high-resolution URLs, and layout hints.
 
 ### Article
-The long-form document an X post can carry, rendered inside the post as a nested reading surface. On the card it contributes three things — cover, kicker and title — and never its own body: an article runs to thousands of words, and a card is a poster rather than a reader. The post around it remains an ordinary tweet, with its own body, author and stats.
+The long-form document an X post can carry, rendered inside the post as a nested reading surface. On the card it contributes a cover, a kicker, a title, and — only when the post itself says nothing — its own opening line as the lead; it never contributes its body, which runs to thousands of words and would make the card a reader rather than a poster. The post around it remains an ordinary tweet, with its own body, author and stats, and the post's own words take precedence as the lead whenever they exist.
+
+### Long-form Post
+A post that carries an Article. It is still a tweet — same author, body, stats and media — and the Article is one more thing it has. The distinction matters because the two are read from the same markup and are easy to conflate: a rule about the Article (its permalink is not rendered, its prose is not printed) is not automatically a rule about the post, and vice versa.
 
 ### Signature
 A material-specific decorative or structural header/divider line (e.g. tick-rule, perforation, titlebar, seal, block) defined uniquely per theme tokens.

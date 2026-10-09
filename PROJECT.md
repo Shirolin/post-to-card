@@ -116,6 +116,12 @@ export interface QuoteTweetData {
   timestamp?: string;
 }
 
+export interface ArticleData {
+  title: string;
+  previewText?: string; // the article's opening line; the lead only when the post is silent
+  cover?: MediaItem;
+}
+
 export interface TweetData {
   id: string;
   url: string;
@@ -126,6 +132,7 @@ export interface TweetData {
   stats?: TweetStats;
   media?: MediaItem[];
   quotePost?: QuoteTweetData;
+  article?: ArticleData;
   isThreadPart?: boolean;
   threadIndex?: number;
   threadTotal?: number;

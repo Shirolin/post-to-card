@@ -22,7 +22,7 @@ Single-context. See `docs/agents/domain.md`.
 ### Repository gates
 
 `npm run build` 含 typecheck 与两处 `node --check`（`public/popup.js`、`dev/verify-extension.mjs`
-—— 两者都在 tsconfig 的 `include` 之外，tsc 看不到），`npm test` 跑 8 个 tier，
+—— 两者都在 tsconfig 的 `include` 之外，tsc 看不到），`npm test` 跑 9 个 tier，
 `npm run test:tier5` 审计构建产物且自带产物新鲜度检查（T5.3.8）—— 顺序是
 build → test → tier5。改动落地前按此顺序全跑一遍。`.github/workflows/ci.yml` 跑同一条链。
 
