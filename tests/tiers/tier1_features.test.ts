@@ -2514,6 +2514,107 @@ test('F30.5: manifest.json declares action popup pointing to popup.html', () => 
 
 
 // -------------------------------------------------------------
+// F32: Truncated Post Indicator
+// X renders long posts in the timeline as a preview plus a "Show more"
+// control; the rest of the body is only in the GraphQL `note_tweet` field, so
+// the DOM channel reports the cut and the card states it rather than passing
+// the preview off as the whole post.
+// -------------------------------------------------------------
+test('F32.1: a post carrying X\'s "Show more" marker is flagged as truncated', () => {
+  const html = `
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <div><span>Author</span></div>
+        <div><a href="/author"><span>@author</span></a></div>
+      </div>
+      <div data-testid="tweetText" lang="zh"><span>与其他 Claude</span></div>
+      <div data-testid="tweet-text-show-more-link"><span>显示更多</span></div>
+      <div role="group"><div data-testid="like"><span>7</span></div></div>
+    </article>`;
+  const tweet = extractTweetData(createDomElement(html));
+  assert.equal(tweet?.truncated, true, 'the marker means the DOM holds only a preview');
+});
+
+test('F32.2: the "Show more" label never reaches the body, in text or tokens', () => {
+  // The control is placed beside `tweetText` in some layouts and nested inside
+  // it in others; as an anchor it used to be classified as a mention. Both
+  // shapes must keep the label out of the card, and both must still flag the cut.
+  const shapes = [
+    `
+      <article data-testid="tweet">
+        <div data-testid="User-Name">
+          <div><span>Author</span></div>
+          <div><a href="/author"><span>@author</span></a></div>
+        </div>
+        <div data-testid="tweetText" lang="zh">
+          <span>与其他 Claude</span>
+          <a href="/author/status/1" data-testid="tweet-text-show-more-link"><span>显示更多</span></a>
+        </div>
+      </article>`,
+    `
+      <article data-testid="tweet">
+        <div data-testid="User-Name">
+          <div><span>Author</span></div>
+          <div><a href="/author"><span>@author</span></a></div>
+        </div>
+        <div data-testid="tweetText" lang="zh"><span>与其他 Claude</span></div>
+        <div data-testid="tweet-text-show-more-link"><span>显示更多</span></div>
+      </article>`,
+  ];
+  for (const html of shapes) {
+    const tweet = extractTweetData(createDomElement(html));
+    assert.equal(tweet?.truncated, true, 'both layouts carry the marker');
+    assert.match(tweet?.text || '', /与其他 Claude/, 'the author\'s preview survives');
+    assert.doesNotMatch(tweet?.text || '', /显示更多/, 'the UI label is not body text');
+    const tokenText = (tweet?.richTokens || []).map((token) => token.value).join('');
+    assert.doesNotMatch(tokenText, /显示更多/, 'the UI label is not a token either');
+  }
+});
+
+test('F32.3: a truncated quoted post does not flag the main tweet', () => {
+  const html = `
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <div><span>Author</span></div>
+        <div><a href="/author"><span>@author</span></a></div>
+      </div>
+      <div data-testid="tweetText"><span>my take on it</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name">
+          <div><span>Other</span></div>
+          <div><a href="/other"><span>@other</span></a></div>
+        </div>
+        <div data-testid="tweetText"><span>a long quoted post</span></div>
+        <div data-testid="tweet-text-show-more-link"><span>Show more</span></div>
+      </div>
+      <div role="group"><div data-testid="like"><span>3</span></div></div>
+    </article>`;
+  const tweet = extractTweetData(createDomElement(html));
+  assert.equal(tweet?.truncated, undefined, 'the quote\'s cut is not this tweet\'s');
+});
+
+test('F32.4: a post without the marker is not flagged', () => {
+  const tweet = extractTweetData(createDomElement(SINGLE_TWEET_HTML));
+  assert.equal(tweet?.truncated, undefined);
+});
+
+test('F32.5: the card renders the truncation mark and a localized notice', () => {
+  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  assert.ok(card.includes('truncation-ellipsis'), 'Card.tsx renders the trailing ellipsis');
+  assert.ok(card.includes('truncation-notice'), 'Card.tsx renders the notice line');
+  assert.ok(card.includes('truncatedContent'), 'the notice is localized, not hard-coded');
+  assert.ok(css.includes('.truncation-ellipsis'), 'card.css styles the mark');
+  assert.ok(css.includes('.truncation-notice'), 'card.css styles the notice');
+});
+
+test('F32.6: both locales name the truncated state', () => {
+  assert.ok(TRANSLATIONS['zh-CN'].truncatedContent, 'zh-CN has the notice copy');
+  assert.ok(TRANSLATIONS['en-US'].truncatedContent, 'en-US has the notice copy');
+});
+
+
+// -------------------------------------------------------------
 // Test Execution Runner for Tier 1
 // -------------------------------------------------------------
 export async function runTier1(): Promise<{ total: number; passed: number; failed: number; results: TestResult[] }> {

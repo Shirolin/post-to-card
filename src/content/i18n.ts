@@ -88,6 +88,7 @@ export interface Translations {
   // Card Content
   retweetedBy: string;
   unavailablePost: string;
+  truncatedContent: string;
   verified: string;
   articleKicker: string;
   articleAlt: string;
@@ -174,6 +175,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     retweetedBy: '转发自',
     unavailablePost: '此推文不可用',
+    truncatedContent: '内容有删减',
     verified: '已认证账号',
     articleKicker: '长文',
     articleAlt: '文章封面',
@@ -263,6 +265,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     retweetedBy: 'Retweeted by',
     unavailablePost: 'This post is unavailable',
+    truncatedContent: 'Content truncated',
     verified: 'Verified',
     articleKicker: 'Article',
     articleAlt: 'Article cover',

@@ -29,5 +29,8 @@ The long-form document an X post can carry, rendered inside the post as a nested
 ### Long-form Post
 A post that carries an Article. It is still a tweet — same author, body, stats and media — and the Article is one more thing it has. The distinction matters because the two are read from the same markup and are easy to conflate: a rule about the Article (its permalink is not rendered, its prose is not printed) is not automatically a rule about the post, and vice versa.
 
+### Truncated Post
+A post X renders in the DOM as a preview with its "Show more" control beside it, because the complete body — a note tweet — lives only in X's GraphQL `note_tweet` field. The DOM channel cannot see it, so the Card marks the cut with an ellipsis and a notice instead of passing the preview off as the author's ending. Distinct from a Long-form Post: an Article is rendered in the markup and abbreviated by the Card by design, while a Truncated Post's remainder is simply absent from the DOM.
+
 ### Signature
 A material-specific decorative or structural header/divider line (e.g. tick-rule, perforation, titlebar, seal, block) defined uniquely per theme tokens.

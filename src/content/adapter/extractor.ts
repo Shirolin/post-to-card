@@ -30,6 +30,22 @@ function childNodesOf(node: Node): ArrayLike<Node> {
 }
 
 /**
+ * X's "Show more" affordance. A long post is truncated in the DOM and carries
+ * this control beside (or inside) its body; the complete text is not in the
+ * markup at all, only in the GraphQL `note_tweet` field.
+ *
+ * The label under it is X's localized UI wording ("显示更多", "Show more"), not
+ * the author's words, so this subtree is kept out of the body. Whether X nests
+ * it in `tweetText` or places it as a sibling has changed between layouts, so
+ * the rule is applied by identity rather than by position.
+ */
+const SHOW_MORE_MARKER = '[data-testid="tweet-text-show-more-link"]';
+
+function isShowMoreMarker(el: Element): boolean {
+  return el.getAttribute('data-testid') === 'tweet-text-show-more-link';
+}
+
+/**
  * Returns true when `el` sits inside an <article> that is itself nested in
  * another <article> (how X sometimes renders a quoted post).
  *
@@ -304,6 +320,12 @@ function extractRichTokens(tweetTextEl: Element | null | undefined): RichToken[]
 
     if (node.nodeType === 1) {
       const el = node as Element;
+
+      // X's "Show more" control is chrome, not the author's words. Dropping it
+      // here as well as in the text pass keeps the two views of the body in
+      // agreement even when X nests the control inside `tweetText`.
+      if (isShowMoreMarker(el)) return;
+
       const tagName = (el.tagName || '').toUpperCase();
 
       if (tagName === 'IMG') {
@@ -885,7 +907,7 @@ function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
 
   // Text
   const textEl = quoteBox.querySelector('div[data-testid="tweetText"]');
-  const text = textEl ? cleanTweetText(textEl) : '';
+  const text = textEl ? cleanTweetText(textEl, isShowMoreMarker) : '';
   const quoteRichTokens = textEl ? extractRichTokens(textEl) : [];
 
   // Permalink to the quoted post
@@ -1063,6 +1085,22 @@ function extractTranslationNotice(tweetTextEl: Element | null | undefined): stri
 }
 
 /**
+ * The "Show more" marker that belongs to this tweet, or null.
+ *
+ * A quoted post can carry a truncated body of its own, and that marker is not
+ * this tweet's — the media and stats passes already draw the same quote
+ * boundary. A marker inside an article's reading surface is excluded too: that
+ * prose is not printed, so a cut in it says nothing about the card.
+ */
+function findTruncationMarker(article: Element): Element | null {
+  const marker = article.querySelector(SHOW_MORE_MARKER);
+  if (!marker) return null;
+  if (isInsideQuoteTweet(marker)) return null;
+  if (isInsideArticleReadView(marker)) return null;
+  return marker;
+}
+
+/**
  * Extracts complete, production-grade TweetData model from a tweet article DOM element.
  */
 export function extractTweetData(article: Element): TweetData | null {
@@ -1082,7 +1120,7 @@ export function extractTweetData(article: Element): TweetData | null {
   // is what the card falls back to when the token list is empty — and only for a
   // post that has one. A tweet merely ending with a link to someone else's
   // article keeps it: that is the author's own text.
-  let text = validTextEl ? cleanTweetText(validTextEl) : '';
+  let text = validTextEl ? cleanTweetText(validTextEl, isShowMoreMarker) : '';
   let richTokens = validTextEl ? extractRichTokens(validTextEl) : [];
   if (articleData) {
     text = stripTrailingArticleLink(text);
@@ -1095,6 +1133,9 @@ export function extractTweetData(article: Element): TweetData | null {
   const quotePost = extractQuoteTweet(article);
   const retweetedBy = getRetweetedBy(article);
   const translatedFrom = validTextEl ? extractTranslationNotice(validTextEl) : undefined;
+  // X showed a preview with its "Show more" control; the rest of the body is not
+  // in the DOM. The card states the cut rather than inventing an ending.
+  const truncated = Boolean(findTruncationMarker(article));
 
   type CompatibleToken = NonNullable<TweetData['richTokens']>[number];
 
@@ -1111,6 +1152,7 @@ export function extractTweetData(article: Element): TweetData | null {
     article: articleData,
     retweetedBy: retweetedBy || undefined,
     translatedFrom,
+    truncated: truncated || undefined,
     isThreadPart: false,
     // Diagnostic only. A rising count of fallback/none values is the early
     // signal that X changed its DOM, ahead of user reports.

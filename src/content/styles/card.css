@@ -66,6 +66,20 @@
   opacity: 0.85;
 }
 
+/* X rendered only a preview of a long post. The body ends in an ellipsis and
+   this line says what it means, so the cut is not read as the author's ending.
+   Both take existing material ink: the mark is fainter than the prose, the
+   notice the same secondary ink as the card's other provenance lines. */
+.truncation-ellipsis {
+  color: var(--faint, var(--text-sec, #9ca3af));
+}
+
+.truncation-notice {
+  margin-top: 8px;
+  font-size: var(--type-meta-size, 13px);
+  color: var(--text-sec);
+}
+
 .quote-card-unavailable {
   padding: 14px 16px;
   display: flex;

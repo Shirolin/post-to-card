@@ -317,6 +317,31 @@ const articleThreadData: ThreadData = {
   ],
 };
 
+/**
+ * A post X truncated for the timeline, carrying its "Show more" control.
+ *
+ * The DOM only ever holds the preview; the rest of the body is in X's GraphQL
+ * `note_tweet` field, so the card cannot print it. Exists so the ellipsis and
+ * the "content truncated" notice can be reviewed on their own (?truncated=1).
+ */
+const truncatedThreadData: ThreadData = {
+  author: { name: 'Arena', handle: '@arena', avatarUrl: avatar, verified: true },
+  isSingle: true,
+  targetTweetIndex: 0,
+  tweets: [
+    {
+      id: '8001',
+      url: 'https://x.com/arena/status/8001',
+      author: { name: 'Arena', handle: '@arena', avatarUrl: avatar, verified: true },
+      timestamp: '2026-10-09T08:12:00.000Z',
+      text: '@AnthropicAI 的 Claude Haiku 5.5（高配版）的真实世界结果已出炉。\n\n在 Code Arena: WebDev 中以 1587 分首次登上 #30 榜单，此版本略微位于帕累托前沿之外，但仍提供强劲的成本效率。它与 GPT-6 Luna 的价格相同，为每 1M 输入/输出令牌 $0.10/$0.50，同时得分高出 6 分。\n\n与其他 Claude',
+      truncated: true,
+      stats: { replies: '13', reposts: '8', likes: '279', views: '2.4万' },
+      media: [{ type: 'image', url: photo1, aspectRatio: 1.6 }],
+    },
+  ],
+};
+
 const container = document.querySelector('post-to-card-container') as HTMLElement & {
   shadow: ShadowRoot;
   mountPoint: HTMLDivElement;
@@ -405,7 +430,9 @@ const activeThreadData =
       ? articleThreadData
       : params.get('translated') === '1'
       ? translatedThreadData
-      : params.get('video') === '1'
+      : params.get('truncated') === '1'
+        ? truncatedThreadData
+        : params.get('video') === '1'
         ? videoThreadData
         : params.get('cjk') === '1'
           ? cjkThreadData

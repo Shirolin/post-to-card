@@ -51,7 +51,21 @@ function formatStat(value?: string | number): string {
   return value.toLocaleString();
 }
 
-function renderRichTokens(tokens: NonNullable<TweetData['richTokens']>, className: string) {
+/**
+ * The ellipsis that marks a body X cut short, or nothing. Distinct from the
+ * author's own text: it takes the material's faint ink so it reads as the
+ * card's mark rather than a character the post ended on.
+ */
+function truncationMark(truncated: boolean | undefined) {
+  if (!truncated) return null;
+  return <span class="truncation-ellipsis">…</span>;
+}
+
+function renderRichTokens(
+  tokens: NonNullable<TweetData['richTokens']>,
+  className: string,
+  truncated: boolean = false
+) {
   return (
     <div class={className}>
       {tokens.map((token, index) => {
@@ -78,6 +92,7 @@ function renderRichTokens(tokens: NonNullable<TweetData['richTokens']>, classNam
         }
         return <span key={index}>{token.value}</span>;
       })}
+      {truncationMark(truncated)}
     </div>
   );
 }
@@ -409,9 +424,16 @@ function renderQuoteCard(
  */
 function renderArticleLead(tweet: TweetData) {
   if (tweet.richTokens && tweet.richTokens.length > 0) {
-    return renderRichTokens(tweet.richTokens, 'tweet-text-content');
+    return renderRichTokens(tweet.richTokens, 'tweet-text-content', tweet.truncated);
   }
-  if (tweet.text) return <div class="tweet-text-content">{tweet.text}</div>;
+  if (tweet.text) {
+    return (
+      <div class="tweet-text-content">
+        {tweet.text}
+        {truncationMark(tweet.truncated)}
+      </div>
+    );
+  }
   if (tweet.article?.previewText) {
     return <div class="tweet-text-content">{tweet.article.previewText}</div>;
   }
@@ -453,15 +475,30 @@ function renderArticleBlock(
 function renderTweetContent(tweet: TweetData, t: ReturnType<typeof getTranslation>, imageFit: ImageFitOption) {
   // A post carrying an article renders as the article, with the post's own words
   // as its lead.
+  let body: JSX.Element | null;
   if (tweet.article) {
-    return renderArticleBlock(tweet.article, renderArticleLead(tweet), t, imageFit);
+    body = renderArticleBlock(tweet.article, renderArticleLead(tweet), t, imageFit);
+  } else if (tweet.richTokens && tweet.richTokens.length > 0) {
+    body = renderRichTokens(tweet.richTokens, 'tweet-text-content', tweet.truncated);
+  } else {
+    body = (
+      <div class="tweet-text-content">
+        {tweet.text}
+        {truncationMark(tweet.truncated)}
+      </div>
+    );
   }
 
-  if (tweet.richTokens && tweet.richTokens.length > 0) {
-    return renderRichTokens(tweet.richTokens, 'tweet-text-content');
-  }
-
-  return <div class="tweet-text-content">{tweet.text}</div>;
+  // X only gave the DOM a preview of a long post. The body ends in an ellipsis
+  // above; this line says what that ellipsis means, so the preview is not read
+  // as the author's complete post.
+  if (!tweet.truncated) return body;
+  return (
+    <>
+      {body}
+      <div class="truncation-notice">{t.truncatedContent}</div>
+    </>
+  );
 }
 
 function renderSingleTweet(

@@ -80,6 +80,14 @@ export interface TweetData {
    */
   translatedFrom?: string;
   /**
+   * X rendered only a preview of this post in the DOM, with its "Show more"
+   * affordance beside it. The complete body is not in the markup at all — it
+   * lives in the GraphQL `note_tweet` field — so the DOM channel cannot print
+   * it. The card marks the cut instead of passing the preview off as the whole
+   * post. Only the DOM channel can set this; GraphQL reads the full body.
+   */
+  truncated?: boolean;
+  /**
    * Which extraction strategy produced this record. Purely diagnostic: a rising
    * count of `fallback` here is the early warning that X changed its DOM,
    * ahead of user reports.

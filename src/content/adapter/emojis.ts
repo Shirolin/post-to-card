@@ -34,8 +34,16 @@ export function normalizeTweetWhitespace(raw: string): string {
  * Recursively traverses a DOM node tree and reconstructs the text content
  * with native Unicode emojis restored from img[alt] attributes and real line
  * breaks preserved.
+ *
+ * `skip` lets a caller drop a subtree that is UI chrome rather than the author's
+ * words — X's "Show more" control is the one such node today. It is passed down
+ * the recursion so the same rule applies at every depth, and it stays opt-in so
+ * the name/handle callers keep reading the node whole.
  */
-export function restoreUnicodeEmojis(node: Node | null | undefined): string {
+export function restoreUnicodeEmojis(
+  node: Node | null | undefined,
+  skip?: (el: Element) => boolean
+): string {
   if (!node) return '';
 
   let result = '';
@@ -54,6 +62,7 @@ export function restoreUnicodeEmojis(node: Node | null | undefined): string {
     // Node.ELEMENT_NODE === 1
     if (child.nodeType === 1) {
       const el = child as Element;
+      if (skip && skip(el)) continue;
       const tagName = (el.tagName || '').toUpperCase();
 
       if (tagName === 'IMG') {
@@ -64,7 +73,7 @@ export function restoreUnicodeEmojis(node: Node | null | undefined): string {
       } else if (tagName === 'BR') {
         result += '\n';
       } else {
-        result += restoreUnicodeEmojis(child);
+        result += restoreUnicodeEmojis(child, skip);
       }
     }
   }
@@ -191,8 +200,14 @@ export function stripPicTwitterLink(text: string): string {
  * an appended tail on a post that carries an article, and this function has no
  * way to know. The article's strip is applied by the caller that knows, so a
  * tweet ending with a link to someone else's article keeps it.
+ *
+ * `skip` is forwarded to `restoreUnicodeEmojis`; the extractor uses it to keep
+ * X's "Show more" control out of the body text.
  */
-export function cleanTweetText(node: Node | null | undefined): string {
-  const restored = restoreUnicodeEmojis(node);
+export function cleanTweetText(
+  node: Node | null | undefined,
+  skip?: (el: Element) => boolean
+): string {
+  const restored = restoreUnicodeEmojis(node, skip);
   return stripPicTwitterLink(restored);
 }
