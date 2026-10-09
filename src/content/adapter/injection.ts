@@ -33,15 +33,11 @@ import {
 } from './triggerViews.ts';
 import type { Locale } from '../../types/card.ts';
 
-export {
-  HIDE_ACTION_BUTTON_CLASS,
-  VISIBILITY_STYLE_ID,
-  TRIGGER_BUTTON_SVG,
-  createTriggerButton,
-  createActionBarButtonWrapper,
-  applyTriggerLocale,
-  setInjectedButtonVisibility,
-} from './triggerViews.ts';
+// The view's own symbols are re-exported only where a consumer reaches for them
+// through this module: `App.tsx` imports the visibility setter from here. The
+// rest used to be re-exported too, for no caller, and knip read them as the dead
+// surface they were.
+export { setInjectedButtonVisibility } from './triggerViews.ts';
 
 interface CustomObserver {
   observe: (target: Node, options?: MutationObserverInit) => void;

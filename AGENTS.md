@@ -23,7 +23,8 @@ Single-context. See `docs/agents/domain.md`.
 
 `npm run build` 含 typecheck（`src/` 之外还有一份 `tsconfig.test-support.json`，覆盖
 `tests/{env,fixtures}` 与 `dev/`）与两处 `node --check`（`public/popup.js`、`dev/verify-extension.mjs`
-—— 两者都在 tsconfig 的 `include` 之外，tsc 看不到），`npm test` 跑全部 tier，
+—— 两者都在 tsconfig 的 `include` 之外，tsc 看不到）与 lint（`npm run lint` = knip，查未用导出/文件/依赖），
+`npm test` 跑全部 tier，
 `npm run test:tier5` 审计构建产物且自带产物新鲜度检查（T5.3.8）—— 顺序是
 build → test → tier5。改动落地前按此顺序全跑一遍。`.github/workflows/ci.yml` 跑同一条链。
 

@@ -18,8 +18,6 @@
  * deserves a second look at whether the browser agrees.
  */
 
-export type NodeFilterFunction = (node: DomNode) => boolean;
-
 export class DomNode {
   public static readonly ELEMENT_NODE = 1;
   public static readonly TEXT_NODE = 3;

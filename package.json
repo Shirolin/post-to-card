@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-support.json && node --check public/popup.js && node --check dev/verify-extension.mjs",
+    "lint": "knip",
     "build:background": "vite build --mode background",
     "build:hook": "vite build --mode hook",
     "build:content": "vite build --mode content",
-    "build": "npm run typecheck && vite build --mode background && vite build --mode hook && vite build --mode content",
+    "build": "npm run typecheck && npm run lint && vite build --mode background && vite build --mode hook && vite build --mode content",
     "test": "node tests/runner.ts",
     "test:tier5": "node tests/tier5_adversarial.ts"
   },
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@types/chrome": "^0.0.306",
     "@types/node": "^22.13.4",
+    "knip": "^6.40.0",
     "typescript": "^5.7.3",
     "vite": "^6.2.0"
   },

@@ -13,8 +13,6 @@ export function upgradeAvatarUrl(url: string): string {
   return url.replace(/_(?:normal|bigger|mini|200x200)(\.[a-zA-Z0-9]+)$/, '_400x400$1');
 }
 
-export const getHighResAvatarUrl = upgradeAvatarUrl;
-
 /**
  * Upgrades a Twitter photo URL to its highest available resolution.
  *
@@ -69,8 +67,6 @@ export function getPhotoUrlCandidates(url: string): string[] {
 
   return [url];
 }
-
-export const getHighResPhotoUrl = upgradePhotoUrl;
 
 /**
  * The ordered list of URLs to try for one card picture, best resolution first.

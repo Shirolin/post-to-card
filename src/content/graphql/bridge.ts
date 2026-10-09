@@ -100,11 +100,6 @@ export function lookupFromGraphQL(targetTweetId?: string): GraphQLLookup {
   return { thread: null };
 }
 
-/** True when any payload has been captured, i.e. the hook is actually wired. */
-export function hasGraphQLData(): boolean {
-  return cache.size > 0;
-}
-
 /**
  * Folds the page's translation into a GraphQL result.
  *
@@ -125,13 +120,4 @@ export function applyDomTranslation(graphqlThread: ThreadData, domThread: Thread
   target.text = domTarget.text;
   target.richTokens = domTarget.richTokens;
   target.translatedFrom = domTarget.translatedFrom;
-}
-
-/** Exposed for diagnostics: the queryId currently observed per operation. */
-export function observedQueryIds(): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [operation, entry] of cache) {
-    out[operation] = entry.queryId;
-  }
-  return out;
 }

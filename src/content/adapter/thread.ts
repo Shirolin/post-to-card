@@ -8,10 +8,10 @@
 
 import type { TweetData, ThreadData } from '../../types/tweet.ts';
 import { extractTweetData } from './extractor.ts';
-import { getReplyingToHandle, getRetweetedBy } from './social.ts';
+import { getReplyingToHandle } from './social.ts';
 
-// Re-exported so existing importers keep a single entry point for these signals.
-export { getReplyingToHandle, getRetweetedBy };
+// Re-exported so existing importers keep a single entry point for this signal.
+export { getReplyingToHandle };
 
 /**
  * Locates tweet articles, strongest signal first.

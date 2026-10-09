@@ -1,6 +1,5 @@
-import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig } from '../../types/card.ts';
-import { detectDefaultLocale, sanitizeLocale } from '../i18n.ts';
-export { sanitizeLocale };
+import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig, LegacyThemeId } from '../../types/card.ts';
+import { detectDefaultLocale } from '../i18n.ts';
 
 /**
  * A theme is an object a post can live on, not a colour skin.
@@ -941,7 +940,7 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
  * user's choice. This covers the old gradient skins and the previous material
  * set: each keeps its light/dark character and its place in the rotation.
  */
-export const LEGACY_THEME_ALIASES: Record<string, ThemeId> = {
+export const LEGACY_THEME_ALIASES: Record<LegacyThemeId, ThemeId> = {
   'sunset-glow': 'gallery',
   'aurora-purple': 'darkroom',
   'cyber-mint': 'terminal',
@@ -1039,7 +1038,8 @@ export function sanitizeTheme(val?: string | null): ThemeId {
     return val as ThemeId;
   }
   if (val && val in LEGACY_THEME_ALIASES) {
-    return LEGACY_THEME_ALIASES[val];
+    // `in` proves the key exists; TS cannot narrow a `string` to the key union.
+    return LEGACY_THEME_ALIASES[val as LegacyThemeId];
   }
   return DEFAULT_CARD_CONFIG.theme;
 }
@@ -1089,10 +1089,4 @@ export function getAspectMinHeight(ratio: AspectRatioOption, width: number = 640
   if (ratio === '3:4') return `${Math.round(width * (4 / 3))}px`;
   if (ratio === '16:9') return `${Math.round(width * (9 / 16))}px`;
   return 'auto';
-}
-
-export function getAspectMinHeightNumber(ratio: AspectRatioOption, width: number = 640): number {
-  if (ratio === '3:4') return Math.round(width * (4 / 3)); // 853
-  if (ratio === '16:9') return Math.round(width * (9 / 16)); // 360
-  return 0;
 }
