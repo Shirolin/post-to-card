@@ -26,10 +26,5 @@
     "knip": "^6.40.0",
     "typescript": "^5.7.3",
     "vite": "^6.2.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }
