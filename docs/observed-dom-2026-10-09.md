@@ -100,3 +100,25 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
   本次修的是 DOM 通道，因此时间线路径**应该**已经可用，但**未在真实时间线上验过**。
 - 文章正文里嵌入的视频（`amplify_video_thumb`）在卡片上的呈现：本次判定为文章内容而排除，
   若将来要展示需要单独设计。
+
+## 复核补记（同日）
+
+首次落地后复审又发现并修正了四处，均已加回归用例（`art.5b` / `art.7` / `art.8` 及 `art.6` 的
+`text` 断言，逐条变异测试）：
+
+1. **文章链接只在 GraphQL 通道被剥**。DOM 通道的 `cleanTweetText` 与 token pass 都只认
+   `pic.twitter.com` 尾链，于是改完之后变成「GraphQL 不印、DOM 印」——恰好是提交自述要去掉的
+   不一致。判据现落在 `emojis.ts` 的 `isArticlePermalink`，两个通道共用；DOM 侧 `text` 与
+   tokens 两条路都剥，GraphQL 侧 `text` 按实体 `indices` 剥（payload 里 `text` 是 `t.co` 形态，
+   展开后的 `/i/article/` 只在 tokens 里）。
+2. **`findQuoteContainer` 第 1 级没有文章边界守卫**。正文内嵌推文若自带引用，其
+   `div[data-testid="quoteTweet"]` 会被文档序搜索命中，卡片上出现陌生人的引用。第 2、3 级
+   早已有守卫，第 1 级补齐。
+3. **文章封面被卡片画幅劫持**。封面是 `data-count="1"` 的 media-grid，继承了「单张照片撑满
+   海报」那套按卡片 `data-ratio` 命中的尺寸规则：实测 3:4 下拉到 380px、16:9 下压到 200px，
+   2.498:1 的横带变成竖构图。现有 `.article-block` 作用域覆盖把它固定回自身比例（实测三种
+   画幅均为 231px = 576/2.498）。
+4. **夹具的 `&amp;` 未解码，且有一个错误且无人引用的期望常量**。测试 shim 不做 HTML 实体解码，
+   而真实 DOM 的 `getAttribute('src')` 返回解码后的 `&`，所以夹具写 `&amp;` 会让封面 URL 变成
+   `format=jpg&amp%3Bname=small`。已改回 `&`；`EXPECTED_ARTICLE_TWEET_DATA` 因无人引用且内容
+   有误（写成 `name=large`，实际为 `name=orig`）而删除。

@@ -6,7 +6,7 @@
  */
 
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
-import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink } from './emojis.ts';
+import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, isArticlePermalink } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
 import { isInsideArticleReadView, isInsideArticleBody, findArticleReadView } from './articleScope.ts';
@@ -65,8 +65,13 @@ function isInsideNestedArticle(el: Element): boolean {
 function findQuoteContainer(article: Element): Element | null {
   if (!article) return null;
 
-  // 1. Canonical marker used by current X.
-  const byTestId = article.querySelector('div[data-testid="quoteTweet"]');
+  // 1. Canonical marker used by current X. The article's prose can embed a post
+  //    that itself quotes someone, and that quote carries the same testid, so a
+  //    document-order search would adopt a stranger's quote as this tweet's.
+  //    Scoped past the article body for the same reason step 3 is.
+  const byTestId = Array.from(article.querySelectorAll('div[data-testid="quoteTweet"]')).find(
+    (candidate) => !isInsideArticleBody(candidate)
+  );
   if (byTestId) return byTestId;
 
   // 2. Nested <article> — the quoted post rendered as its own article. The
@@ -324,7 +329,12 @@ function extractRichTokens(tweetTextEl: Element | null | undefined): RichToken[]
         // rule lives in `isPicMediaLink` so this pass and the body-text stripper
         // cannot disagree about it; the position rule is why they used to
         // disagree, and it is now the same in both.
-        if ((isPicMediaLink(href) || isPicMediaLink(text)) && isTrailingNode(el)) {
+        //
+        // The article permalink X appends to a long-form post is the same case at
+        // a different host: the body-text stripper drops it, so the token pass
+        // must too, or a card built from tokens keeps a link the plain text path
+        // removed. Both rules are shared, for the same reason.
+        if ((isPicMediaLink(href) || isPicMediaLink(text) || isArticlePermalink(href) || isArticlePermalink(text)) && isTrailingNode(el)) {
           return;
         }
 

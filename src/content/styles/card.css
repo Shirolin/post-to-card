@@ -1027,11 +1027,36 @@
   text-wrap: balance;
 }
 
-/* The article's cover is the block's own hero, so it takes a little more air
-   below than the media grid's usual rhythm. Keyed on the block, not on a
-   material. */
-.article-block .media-grid {
+/* The article's cover is a one-item media grid only so it inherits the theme's
+   mount, corner and fit; its *shape* must not come from the card's aspect ratio.
+   The single-image rules above are keyed on `[data-ratio]` because a lone photo
+   is meant to fill a poster — a 3:4 card stretches it to 380px and a 16:9 card
+   clips it to 200px — which turns a 5:2 cover band into a hero portrait. These
+   overrides put the cover back on its own proportions at every card ratio; they
+   carry the same specificity as the rules they override and come later, which is
+   what lets them win without `!important`. */
+.post-to-card-target .article-block .media-grid[data-count="1"],
+.post-to-card-target[data-ratio="3:4"] .article-block .media-grid[data-count="1"],
+.post-to-card-target[data-ratio="16:9"] .article-block .media-grid[data-count="1"] {
+  flex: 0 0 auto;
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
+  min-height: 0;
+  aspect-ratio: auto;
+  /* The block's own gap already separates the cover from the lead above it; the
+     base grid's top margin would add a second helping on top. */
   margin-top: 0;
+}
+
+.post-to-card-target .article-block .media-grid[data-count="1"] .media-item,
+.post-to-card-target[data-ratio="3:4"] .article-block .media-grid[data-count="1"] .media-item,
+.post-to-card-target[data-ratio="16:9"] .article-block .media-grid[data-count="1"] .media-item {
+  /* Natural proportions, with a ceiling so a portrait cover cannot run away
+     with the card. */
+  max-height: 360px;
+  height: auto;
+  width: 100%;
 }
 
 /* -------------------------------------------------------------

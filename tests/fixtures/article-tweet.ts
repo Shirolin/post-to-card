@@ -17,8 +17,6 @@
  * fails here instead of in the field.
  */
 
-import type { TweetData } from '../../src/types/tweet.ts';
-
 export const ARTICLE_TWEET_HTML = `
 <article data-testid="tweet" tabindex="0" role="article">
   <div>
@@ -39,7 +37,7 @@ export const ARTICLE_TWEET_HTML = `
 
     <article data-testid="twitterArticleReadView">
       <div data-testid="tweetPhoto">
-        <img alt="图像" src="https://pbs.twimg.com/media/HUIxgCnWEAEUKgI?format=jpg&amp;name=small" />
+        <img alt="图像" src="https://pbs.twimg.com/media/HUIxgCnWEAEUKgI?format=jpg&name=small" />
       </div>
 
       <div data-testid="twitter-article-title">Anime Harry Potter</div>
@@ -80,33 +78,3 @@ export const ARTICLE_TWEET_HTML = `
   </div>
 </article>
 `;
-
-export const EXPECTED_ARTICLE_TWEET_DATA: TweetData = {
-  id: '2108306407921443081',
-  url: 'https://x.com/kevinleguillou/status/2108306407921443081',
-  author: {
-    name: 'Kevin Le Guillou',
-    handle: '@kevinleguillou',
-    avatarUrl: 'https://pbs.twimg.com/profile_images/1700476606/avatar_400x400.jpg',
-    verified: true,
-  },
-  text: 'Here is the promised write up, it explains how I made the recent videos, and good ideas I picked up along the way. x.com/i/article/2108…',
-  timestamp: '2026-10-08T21:19:52.000Z',
-  stats: {
-    replies: '2',
-    reposts: '14',
-    likes: '153',
-    bookmarks: '105',
-    views: '15947',
-  },
-  article: {
-    title: 'Anime Harry Potter',
-    cover: {
-      type: 'image',
-      url: 'https://pbs.twimg.com/media/HUIxgCnWEAEUKgI?format=jpg&name=large',
-      originalUrl: 'https://pbs.twimg.com/media/HUIxgCnWEAEUKgI?format=jpg&name=small',
-      alt: '图像',
-    },
-  },
-  isThreadPart: false,
-};

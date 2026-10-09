@@ -94,6 +94,38 @@ export function isPicMediaLink(value: string): boolean {
 }
 
 /**
+ * True when a string names a post's own X article permalink.
+ *
+ * A long-form post's body carries a trailing entity pointing at its article. X
+ * does not render it — the article preview replaces it, and the server-rendered
+ * body has no such link — but the entity survives in the GraphQL payload and, in
+ * the logged-out client, in the DOM too. Both channels must agree about dropping
+ * it, so the rule lives here beside `isPicMediaLink`, the same way the media-host
+ * rule does, and each channel consults it in the medium it works in.
+ *
+ * The rendered link's label is a truncated `x.com/i/article/2108…`, so the match
+ * is on the path prefix rather than on a whole URL.
+ */
+export function isArticlePermalink(value: string): boolean {
+  return /\/i\/article\/\d+/.test(value || '');
+}
+
+/**
+ * Strips the trailing article permalink X appends to a long-form post.
+ *
+ * Same shape as `stripPicTwitterLink`: only a trailing link is removed, because
+ * one the author wrote mid-sentence is their own text. Shares the predicate with
+ * the GraphQL channel so the two cannot disagree about which link this is.
+ */
+export function stripTrailingArticleLink(text: string): string {
+  if (!text) return '';
+  const match = text.match(/\s*(\S+)\s*$/);
+  if (!match || match.index === undefined) return text;
+  if (!isArticlePermalink(match[1])) return text;
+  return text.slice(0, match.index).trimEnd();
+}
+
+/**
  * Strips the trailing media attachment link X appends to tweets with media.
  *
  * The scheme is optional because X renders the link label as a bare host plus
@@ -114,9 +146,14 @@ export function stripPicTwitterLink(text: string): string {
 }
 
 /**
- * Restores Unicode emojis and strips trailing media link from tweet text node.
+ * Restores Unicode emojis and strips the trailing links X appends to a tweet:
+ * the media attachment link, and the article permalink on a long-form post.
+ *
+ * Both are stripped here rather than one at the call site, because `text` is the
+ * canonical field the card falls back to when the token list is empty; stripping
+ * only the tokens would let a body that is nothing but the link reappear.
  */
 export function cleanTweetText(node: Node | null | undefined): string {
   const restored = restoreUnicodeEmojis(node);
-  return stripPicTwitterLink(restored);
+  return stripTrailingArticleLink(stripPicTwitterLink(restored));
 }

@@ -12,6 +12,7 @@
 
 import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../adapter/urls.ts';
+import { isArticlePermalink } from '../adapter/emojis.ts';
 
 type Json = Record<string, unknown>;
 
@@ -343,7 +344,7 @@ function parseQuote(tweet: Json): QuoteTweetData | undefined {
 }
 
 /**
- * Drops the trailing link X appends for a long-form post's own article.
+ * Drops the trailing article link X appends for a long-form post's own article.
  *
  * A tweet carrying an article ends with a `t.co` entity that expands to
  * `/i/article/<id>`. X does not render it — the article preview replaces it, and
@@ -353,7 +354,9 @@ function parseQuote(tweet: Json): QuoteTweetData | undefined {
  * own block, the link is redundant as well as inconsistent.
  *
  * Only a trailing article link is dropped: one the author wrote mid-sentence is
- * their own text, and a quote's body is untransformed.
+ * their own text, and a quote's body is untransformed. The predicate is the
+ * shared `isArticlePermalink`, so this channel and the DOM channel cannot
+ * disagree about which link it is.
  */
 function stripArticlePermalink(tokens: RichToken[] | undefined): RichToken[] | undefined {
   if (!tokens || tokens.length === 0) return tokens;
@@ -365,7 +368,7 @@ function stripArticlePermalink(tokens: RichToken[] | undefined): RichToken[] | u
   const last = tokens[end - 1];
   if (!last || last.type !== 'link') return tokens;
   const href = last.href || last.value;
-  if (!/\/i\/article\/\d+/.test(href) && !/\/i\/article\/\d+/.test(last.value)) return tokens;
+  if (!isArticlePermalink(href) && !isArticlePermalink(last.value)) return tokens;
 
   const kept = tokens.slice(0, end - 1);
   // Trimming may strand the whitespace that preceded the link.
@@ -373,6 +376,34 @@ function stripArticlePermalink(tokens: RichToken[] | undefined): RichToken[] | u
     kept.pop();
   }
   return kept;
+}
+
+/**
+ * The same strip for the plain `text` field.
+ *
+ * `text` is what the card falls back to when the token list is empty, and the
+ * payload's `text` carries the `t.co` form rather than the expanded URL the
+ * tokens hold. So the entity's own `indices` are what locate it, and the entity
+ * is only removed when it is the last thing in the body. Without this, a post
+ * whose body is nothing but its article link lost the link from the tokens and
+ * then printed it again from `text`.
+ */
+function stripTrailingArticleEntity(text: string, entityContainer: unknown): string {
+  if (!text || !isObject(entityContainer) || !Array.isArray(entityContainer.urls)) return text;
+
+  for (const raw of entityContainer.urls) {
+    if (!isObject(raw)) continue;
+    if (!isArticlePermalink(str(raw.expanded_url) || '')) continue;
+    const indices = Array.isArray(raw.indices) ? raw.indices : null;
+    if (!indices || indices.length < 2) continue;
+    const start = Number(indices[0]);
+    const end = Number(indices[1]);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) continue;
+    if (end !== text.length) continue;
+    return text.slice(0, start).trimEnd();
+  }
+
+  return text;
 }
 
 function parseTweet(entry: Json, fallbackId: string): TweetData | null {
@@ -391,14 +422,16 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
   // truncated with a display range.
   const noteTweet = isObject(tweet.note_tweet) ? tweet.note_tweet.note_tweet_results : undefined;
   const noteResult = isObject(noteTweet) ? noteTweet.result : undefined;
-  const text = (isObject(noteResult) ? str(noteResult.text) : undefined) || str(legacy.full_text) || '';
+  const entitySource = entitySourceFor(noteResult, legacy);
+  const rawText = (isObject(noteResult) ? str(noteResult.text) : undefined) || str(legacy.full_text) || '';
+  const text = stripTrailingArticleEntity(rawText, entitySource);
 
   const data: TweetData = {
     id,
     url: `https://x.com/i/status/${id}`,
     author: parseAuthor(tweet),
     text,
-    richTokens: stripArticlePermalink(parseRichTokens(text, entitySourceFor(noteResult, legacy))),
+    richTokens: stripArticlePermalink(parseRichTokens(rawText, entitySource)),
     timestamp: parseXDate(legacy.created_at),
     stats: parseStats(tweet),
     media: parseMedia(tweet),
@@ -421,9 +454,10 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     const noteOriginalResult = isObject(noteOriginal) ? noteOriginal.result : undefined;
 
     data.author = originalAuthor;
-    const originalText = (isObject(noteOriginalResult) ? str(noteOriginalResult.text) : undefined) || str(originalLegacy.full_text) || text;
-    data.text = originalText;
-    data.richTokens = stripArticlePermalink(parseRichTokens(originalText, entitySourceFor(noteOriginalResult, originalLegacy)));
+    const originalEntitySource = entitySourceFor(noteOriginalResult, originalLegacy);
+    const rawOriginalText = (isObject(noteOriginalResult) ? str(noteOriginalResult.text) : undefined) || str(originalLegacy.full_text) || text;
+    data.text = stripTrailingArticleEntity(rawOriginalText, originalEntitySource);
+    data.richTokens = stripArticlePermalink(parseRichTokens(rawOriginalText, originalEntitySource));
     data.id = str(original.rest_id) || str(originalLegacy.id_str) || id;
     data.url = `https://x.com/${originalAuthor.handle.replace(/^@/, '')}/status/${data.id}`;
     // Media can be truncated on the outer object, so read the nested original.
