@@ -138,8 +138,8 @@ export function stripTrailingArticleLink(text: string): string {
   return text.slice(0, match.index).trimEnd();
 }
 
-/** The shape `stripTrailingArticleToken` needs, so both channels can share it. */
-export interface TrailingLinkToken {
+/** The minimum shape `stripTrailingArticleToken` needs of a token list. */
+interface TrailingLinkToken {
   type: string;
   value: string;
   href?: string;

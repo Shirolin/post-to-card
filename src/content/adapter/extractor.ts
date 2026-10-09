@@ -831,10 +831,10 @@ function extractArticle(article: Element): ArticleData | undefined {
   // cover stripped of the one line that identifies it.
   if (!title) return undefined;
 
-  // No `restId` from this channel. The only article links in the rendered DOM
-  // are `/handle/article/<tweetId>/media/<mediaId>`, whose number is the tweet's
-  // id and not the article's; reporting it as the article's id would be wrong
-  // data rather than missing data. The GraphQL channel carries the real one.
+  // No article id is reported. The only article links in the rendered DOM are
+  // `/handle/article/<tweetId>/media/<mediaId>`, whose number is the tweet's id
+  // and not the article's; reporting it would be wrong data rather than missing
+  // data, and nothing on the card reads an article id anyway.
 
   // The article's own opening line. X renders it inside the prose region as the
   // first paragraph, so it is read from there rather than invented; it is only
@@ -846,7 +846,7 @@ function extractArticle(article: Element): ArticleData | undefined {
   // the whole article as its own opening line.
   const proseEl = readView.querySelector(ARTICLE_BODY);
   const firstPara = proseEl?.querySelector('p');
-  const previewText = firstPara ? cleanTweetText(firstPara).trim() : '';
+  const openingLine = firstPara ? cleanTweetText(firstPara).trim() : '';
 
   // The cover is the read view's own picture, not one from the prose.
   const coverImg = Array.from(readView.querySelectorAll('div[data-testid="tweetPhoto"] img')).find(
@@ -869,7 +869,7 @@ function extractArticle(article: Element): ArticleData | undefined {
     }
   }
 
-  return { title, cover, previewText: previewText || undefined };
+  return { title, cover, openingLine: openingLine || undefined };
 }
 
 /**

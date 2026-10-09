@@ -82,9 +82,6 @@ test('art.3: the article is not extracted as a quote', () => {
 test('art.4: the title is read from the article marker and the cover is not doubled', () => {
   const tweet = extractTweetData(createDomElement(ARTICLE_TWEET_HTML));
   assert.equal(tweet?.article?.title, 'Anime Harry Potter');
-  // The rendered DOM carries no article id — its `/article/` links are keyed by
-  // the tweet id — so the DOM channel must report none rather than the wrong one.
-  assert.equal(tweet?.article?.restId, undefined, 'the DOM channel does not guess an article id');
   // The cover is the article's, so it must not also arrive as tweet media and
   // render a second time.
   assert.equal(tweet?.media, undefined, 'the cover does not double as tweet media');
@@ -147,8 +144,13 @@ test('art.6: GraphQL parses the article and drops its self-referential link', ()
   const tweet = parsed.thread!.tweets[0];
 
   assert.equal(tweet.article?.title, 'Anime Harry Potter', 'X pads the title with trailing space');
-  assert.match(tweet.article?.previewText || '', /^This is a writeup for those that wanted/,
+  assert.match(tweet.article?.openingLine || '', /^This is a writeup for those that wanted/,
     'the article opening is carried as the lead');
+  // X's `preview_text` carries several paragraphs; the card takes the opening
+  // one, the same slice the DOM channel can read, so the two channels do not
+  // print different amounts for the same article.
+  assert.doesNotMatch(tweet.article?.openingLine || '', /The core concept/,
+    'the lead is the opening paragraph, not the whole preview text');
   assert.match(tweet.article?.cover?.url || '', /name=orig/, 'the cover is served at full size');
   assert.equal(tweet.article?.cover?.aspectRatio, 2.498, 'cover ratio comes from original_info');
 
@@ -187,9 +189,9 @@ test('art.9: a tweet merely sharing someone else\'s article keeps the link', () 
 });
 
 test('art.10: a body that is only its own article link ends up empty, in both channels', () => {
-  // The regression art.8 guards, re-checked through the shared strip after it was
-  // re-keyed on "has an article": tokens empty, so `text` is the fallback and
-  // must be empty too.
+  // A body that is nothing but its own article link, re-checked through the
+  // shared strip after it was re-keyed on "has an article": the tokens are
+  // emptied, so `text` (the fallback) must be empty too.
   const html = `
     <article data-testid="tweet">
       <div data-testid="User-Name">
@@ -220,11 +222,11 @@ test('art.11: the DOM lead is the article\'s first paragraph, not the whole pros
   // used to hide this by returning every `p` before every `div`; see
   // `tests/env/browser.ts`.
   const tweet = extractTweetData(createDomElement(ARTICLE_TWEET_HTML));
-  assert.match(tweet?.article?.previewText || '', /^This is a writeup for those that wanted/,
+  assert.match(tweet?.article?.openingLine || '', /^This is a writeup for those that wanted/,
     'the lead is the article opening');
-  assert.doesNotMatch(tweet?.article?.previewText || '', /love potion/,
+  assert.doesNotMatch(tweet?.article?.openingLine || '', /love potion/,
     'the post embedded in the prose is not part of the lead');
-  assert.doesNotMatch(tweet?.article?.previewText || '', /Ref2Video/,
+  assert.doesNotMatch(tweet?.article?.openingLine || '', /Ref2Video/,
     'the rest of the article is not part of the lead');
 });
 

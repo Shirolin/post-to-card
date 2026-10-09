@@ -310,7 +310,7 @@ const articleThreadData: ThreadData = {
       stats: { replies: '2', reposts: '14', likes: '153', bookmarks: '105', views: '15.9K' },
       article: {
         title: 'Anime Harry Potter',
-        previewText: 'This is a writeup for those that wanted to know how I made the videos.',
+        openingLine: 'This is a writeup for those that wanted to know how I made the videos.',
         cover: { type: 'image', url: articleCover, aspectRatio: 2.498 },
       },
     },
@@ -420,27 +420,34 @@ const gridThreadData = (count: 2 | 3 | 4): ThreadData => {
   };
 };
 
+/**
+ * The fixture each `?<key>=1` selects, in priority order. A map rather than a
+ * nested ternary: each new fixture used to add another level, and a fixture now
+ * only has to be dropped in here. `?grid=N` is built rather than listed.
+ */
+const FIXTURE_BY_PARAM: Record<string, ThreadData> = {
+  quote: quoteThreadData,
+  article: articleThreadData,
+  translated: translatedThreadData,
+  truncated: truncatedThreadData,
+  video: videoThreadData,
+  cjk: cjkThreadData,
+  wrap: wrappedThreadData,
+};
+
 // ?quote=1 swaps in a single post that quotes another, so the quote card's
-// presentation can be reviewed on its own. ?translated=1 swaps in a post X is
-// showing translated, to review the "translated from" notice.
-const activeThreadData =
-  params.get('quote') === '1'
-    ? quoteThreadData
-    : params.get('article') === '1'
-      ? articleThreadData
-      : params.get('translated') === '1'
-      ? translatedThreadData
-      : params.get('truncated') === '1'
-        ? truncatedThreadData
-        : params.get('video') === '1'
-        ? videoThreadData
-        : params.get('cjk') === '1'
-          ? cjkThreadData
-          : params.get('wrap') === '1'
-            ? wrappedThreadData
-            : params.get('grid')
-              ? gridThreadData(Math.min(4, Math.max(2, Number(params.get('grid')))) as 2 | 3 | 4)
-              : threadData;
+// presentation can be reviewed on its own; ?translated=1 a post X is showing
+// translated, to review the "translated from" notice; and so on.
+function selectThreadData(): ThreadData {
+  for (const [key, data] of Object.entries(FIXTURE_BY_PARAM)) {
+    if (params.get(key) === '1') return data;
+  }
+  const grid = params.get('grid');
+  if (grid) return gridThreadData(Math.min(4, Math.max(2, Number(grid))) as 2 | 3 | 4);
+  return threadData;
+}
+
+const activeThreadData = selectThreadData();
 
 /**
  * ?a11y=1 runs a scripted focus-trap check against the live modal and writes

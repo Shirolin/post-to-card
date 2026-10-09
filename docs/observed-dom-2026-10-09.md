@@ -2,7 +2,7 @@
 
 > **状态：本次发现已全部修复并被测试覆盖。** 本文是一次性快照，不是待办清单。
 > 采集日期 2026-10-09，采集时 X 的 `data-app-version` 为 `e9b82655819b239e9de923fddd58156f63f7c23c`。
-> 下面列出的判据已被 `tests/tiers/tier_article.test.ts` 的 10 条用例锁住（每条都做过变异测试）。
+> 下面列出的判据已被 `tests/tiers/tier_article.test.ts` 的 11 条用例锁住（每条都做过变异测试）。
 
 > 采集时间：2026-10-09
 > 页面：`https://x.com/kevinleguillou/status/2108306407921443081?s=20`（已登录）
@@ -136,9 +136,9 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
    浏览器实测确认顺序为 封面 → 长文 → 标题 → 导语。
 3. **`ArticleData.restId` 是死字段**（Standards：Speculative Generality）。GraphQL 填充但
    生产渲染无处读取，DOM 侧还明确声明不设。已删除（连同 `dev/preview.ts` 夹具中的对应项）。
-4. **`previewText` 只有 GraphQL 通道填**（Spec：部分实现）。DOM 的 `extractArticle` 原先不返回
+4. **`openingLine` 只有 GraphQL 通道填**（Spec：部分实现）。DOM 的 `extractArticle` 原先不返回
    它，于是从时间线（只有 DOM 通道）打开的无正文长文没有导语——正是需求点名的场景。现 DOM 侧
-   从正文区首段读取 `previewText`。
+   从正文区首段读取 `openingLine`。
 5. **文档与词汇漂移**（Standards）。`GLOSSARY.md` 的 Article 定义补上「自身开头行仅在推文无正文时
    作导语」并新增 **Long-form Post** 词条（此前 `long-form post` 被当作 Article 的同义词使用）；
    `AGENTS.md` 的 tier 数 8→9；`PROJECT.md` 接口契约补 `ArticleData` / `article?`；本文状态行
@@ -150,9 +150,9 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
 
 ## 复核补记三（同日，code-review 二轮）
 
-对 `de0f038..HEAD`（含图片回退与截断标记两项）跑双轴审查后又修了两处，都与本文关系最密的 `previewText` 有关：
+对 `de0f038..HEAD`（含图片回退与截断标记两项）跑双轴审查后又修了两处，都与本文关系最密的 `openingLine` 有关：
 
-1. **DOM 的 `previewText` 实际取到整篇正文。** 复核补记二第 4 条声称「从正文区首段读取」，但代码写的是
+1. **DOM 的 `openingLine` 实际取到整篇正文。** 复核补记二第 4 条声称「从正文区首段读取」，但代码写的是
    `proseEl.querySelector('p, div')`。选择器列表按文档序返回首个命中，而 `longformRichTextComponent`
    （正文容器本身）就是个 `div`，排在所有 `<p>` 之前——于是「首段」变成整篇约 7000 字，恰好是这条修复
    要救的「从时间线打开的无正文长文」场景。改为只查 `p`；`art.11` 锁住，坑写进代码注释。
@@ -164,3 +164,26 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
 其余按标准收紧：`extractor.ts` 内联重复的 `ARTICLE_BODY` 选择器改从 `articleScope.ts` 导出复用；
 `FALLBACK_ATTR` 无第二调用方，收回为模块私有；`parse.ts` 里 retweet 分支与外层重复的
 `entitySourceFor → parseRichTokens → strip` 序列抽成了 `parseBody`。封面 `MediaItem` 的两侧各自构造仍保留。
+
+## 复核补记四（同日，code-review 三轮）
+
+对 `de0f038..HEAD`（此时 HEAD 为 `b8651fa`）再跑一次双轴审查，又修了四处：
+
+1. **视频 poster 的回退链取到了 mp4**（Spec：真 bug）。`parseMedia` 给视频设的 `originalUrl` 是**视频文件**
+   （`bestUrl`），而 `imageFallbackAttrs` 从 `originalUrl` 推导变体链，于是 GraphQL 视频 poster 的链是
+   `[poster, <mp4>]`——poster 一旦 404，`img.src` 被换成 `.mp4`，比原来更坏。改为视频一律以 poster 为链源。
+   诚实的结果：视频缩略图路径（`/amplify_video_thumb/` 等）不被 `getPhotoUrlCandidates` 识别，拿不到变体链、
+   也就没有回退，但**视频文件绝不进链**；`Tier 2.37f` 锁住这一点。照片路径不受影响。
+2. **`openingLine` 的粒度随通道不同**（Spec）。DOM 只读第一个 `<p>`，GraphQL 却把 X 的整段
+   `preview_text`（可含多段）原样当导语，同一篇文章两个通道印不同量。`parse.ts` 新增 `firstParagraph`，
+   两通道都只取首段；`art.6` 加了「不含第二段」的断言。
+3. **字段改名 `previewText` → `openingLine`**（Standards：Mysterious Name）。同一次改动里 `previewText`
+   （文章开头行）与截断推文语境里的「preview」（X 的截断渲染）含义冲突；改名既消除歧义，也更贴合
+   GLOSSARY 的「opening line」。
+4. **`ArticleData.restId` 类型声明是死字段的最后一截**（Standards：Speculative Generality）。复核补记二
+   第 3 条说它「已删除」，但实际只删了 GraphQL 的填充与夹具项，类型声明、`art.4` 的断言与 `extractor.ts`
+   的注释都还在。本轮彻底删除。
+
+其余：`TrailingLinkToken`（复核补记三收 `FALLBACK_ATTR` 时漏掉的同类）收回模块私有；`dev/preview.ts`
+夹具选择从嵌套三元改为 `FIXTURE_BY_PARAM` 映射；本文状态行用例数 10→11、`art.10` 注释里指向不存在的
+`art.8` 已改。

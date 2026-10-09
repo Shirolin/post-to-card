@@ -119,7 +119,7 @@ export interface QuoteTweetData {
 
 export interface ArticleData {
   title: string;
-  previewText?: string; // the article's opening line; the lead only when the post is silent
+  openingLine?: string; // the article's opening line; the lead only when the post is silent
   cover?: MediaItem;
 }
 

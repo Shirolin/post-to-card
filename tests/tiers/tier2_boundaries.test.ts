@@ -678,6 +678,35 @@ test('Tier 2.37e: a picture with no fallback is mounted without the attribute an
   assert.equal(img.src, item.url, 'a picture with no chain is left untouched');
 });
 
+test('Tier 2.37f: a video poster never falls back onto the video file', () => {
+  // The GraphQL channel stores the mp4 in `originalUrl` and the still frame in
+  // `url`/`posterUrl`. Deriving the chain from `originalUrl` made a 404 poster
+  // "recover" onto an `.mp4`, which an <img> cannot display -- worse than the
+  // broken poster it started with. The poster is the only valid source of
+  // picture variants. A poster thumbnail path X serves no `name=` variants for
+  // then yields no chain at all, which is the honest outcome rather than a
+  // wrong one.
+  const item: MediaItem = {
+    type: 'video',
+    url: 'https://pbs.twimg.com/amplify_video_thumb/9/img/x.jpg?format=jpg&name=orig',
+    originalUrl: 'https://video.twimg.com/amplify_video/9/vid/avc1/1280x720/x.mp4',
+    posterUrl: 'https://pbs.twimg.com/amplify_video_thumb/9/img/x.jpg?format=jpg&name=orig',
+  };
+
+  const attrs = imageFallbackAttrs(item);
+  assert.ok(!JSON.stringify(attrs).includes('.mp4'), 'the video file is never a fallback');
+  assert.ok(!JSON.stringify(attrs).includes('video.twimg.com'), 'nor is its host reached');
+
+  // The image path is unchanged: a photo still walks its own variants.
+  const photo: MediaItem = {
+    type: 'image',
+    url: 'https://pbs.twimg.com/media/p.jpg?format=jpg&name=orig',
+    originalUrl: 'https://pbs.twimg.com/media/p.jpg?format=jpg&name=small',
+  };
+  assert.match(imageFallbackAttrs(photo)['data-fallback'] || '', /name=large/,
+    'a photo still carries its variant chain');
+});
+
 test('Tier 2.38: extraction degrades gracefully when no data-testid is present', () => {
   // Logged-out pages carry no data-testid at all, so every testid-based lookup
   // misses. This must not throw and must report itself as a fallback so the

@@ -48,10 +48,13 @@ export interface QuoteTweetData {
  */
 export interface ArticleData {
   title: string;
-  /** The article's own opening text, used only when the tweet body is empty. */
-  previewText?: string;
+  /**
+   * The article's own opening line, used only when the tweet body is empty.
+   * X's own `preview_text` can span paragraphs; both channels carry only the
+   * first one, so the card's lead is the same whichever channel answered.
+   */
+  openingLine?: string;
   cover?: MediaItem;
-  restId?: string;
 }
 
 export interface TweetData {

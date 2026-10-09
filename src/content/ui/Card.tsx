@@ -434,8 +434,8 @@ function renderArticleLead(tweet: TweetData) {
       </div>
     );
   }
-  if (tweet.article?.previewText) {
-    return <div class="tweet-text-content">{tweet.article.previewText}</div>;
+  if (tweet.article?.openingLine) {
+    return <div class="tweet-text-content">{tweet.article.openingLine}</div>;
   }
   return null;
 }

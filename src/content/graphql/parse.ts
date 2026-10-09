@@ -203,6 +203,21 @@ function parseStats(tweet: Json): TweetStats | undefined {
 }
 
 /**
+ * The first paragraph of X's article preview text, or undefined.
+ *
+ * X's `preview_text` can carry several paragraphs. The card's lead is the
+ * article's opening line, and the DOM channel can only read the first
+ * paragraph, so both channels take the same slice rather than the card
+ * printing different amounts for the same article depending on which answered.
+ */
+function firstParagraph(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const [first] = value.split(/\n\s*\n/);
+  const trimmed = first.trim();
+  return trimmed || undefined;
+}
+
+/**
  * Parses the article attached to a long-form post, or undefined.
  *
  * The article rides on the tweet as `article.article_results.result`, an
@@ -246,7 +261,7 @@ function parseArticle(tweet: Json): ArticleData | undefined {
 
   return {
     title,
-    previewText: str(result.preview_text),
+    openingLine: firstParagraph(str(result.preview_text)),
     cover,
   };
 }

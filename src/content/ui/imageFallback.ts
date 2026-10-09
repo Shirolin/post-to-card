@@ -28,7 +28,13 @@ const FALLBACK_ATTR = 'data-fallback';
  * empty one.
  */
 export function imageFallbackAttrs(item: MediaItem): Record<string, string> {
-  const chain = getPhotoFallbackChain(item.originalUrl || item.url, item.url);
+  // A video item's `originalUrl` is the video file, not the still frame the card
+  // shows, so the chain is derived from the poster. Deriving it from the mp4
+  // made the recovery itself broken: a poster that 404s was "recovered" onto an
+  // `.mp4`, which an <img> cannot display.
+  const isVideo = item.type === 'video' || item.type === 'gif';
+  const source = isVideo ? (item.posterUrl || item.url) : (item.originalUrl || item.url);
+  const chain = getPhotoFallbackChain(source, item.url);
   const remaining = chain.slice(1);
   return remaining.length > 0 ? { [FALLBACK_ATTR]: JSON.stringify(remaining) } : {};
 }
