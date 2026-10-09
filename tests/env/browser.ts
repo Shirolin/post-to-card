@@ -576,17 +576,23 @@ function querySelectorInternal(root: DomNode, selector: string): DomElement | nu
 function querySelectorAllInternal(root: DomNode, selector: string): DomElement[] {
   if (selector.includes(',')) {
     const subSelectors = selector.split(',').map(s => s.trim()).filter(Boolean);
-    const seen = new Set<DomElement>();
-    const results: DomElement[] = [];
+    const matched = new Set<DomElement>();
     for (const sub of subSelectors) {
       for (const el of querySelectorAllInternal(root, sub)) {
-        if (!seen.has(el)) {
-          seen.add(el);
-          results.push(el);
-        }
+        matched.add(el);
       }
     }
-    return results;
+    // Document order, not per-selector groups. A real `querySelectorAll` returns
+    // elements in tree order, so `querySelector('p, div')` answers whichever of
+    // the two comes first in the document; concatenating the sub-selector
+    // results answered "all p's, then all div's", which picks the wrong element
+    // whenever a `div` precedes a `p` -- and quietly disagreed with the browser
+    // about exactly the article-prose query this project cares about.
+    const ordered: DomElement[] = [];
+    walkTree(root, node => {
+      if (node instanceof DomElement && matched.has(node)) ordered.push(node);
+    });
+    return ordered;
   }
 
   // Support descendant combinators (e.g. "div[role='group'] button")

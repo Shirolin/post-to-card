@@ -9,7 +9,7 @@ import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, Arti
 import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, stripTrailingArticleLink, stripTrailingArticleToken } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
-import { isInsideArticleReadView, isInsideArticleBody, findArticleReadView } from './articleScope.ts';
+import { isInsideArticleReadView, isInsideArticleBody, findArticleReadView, ARTICLE_BODY } from './articleScope.ts';
 
 export type RichTokenType = 'text' | 'mention' | 'hashtag' | 'cashtag' | 'link' | 'emoji';
 
@@ -39,10 +39,11 @@ function childNodesOf(node: Node): ArrayLike<Node> {
  * it in `tweetText` or places it as a sibling has changed between layouts, so
  * the rule is applied by identity rather than by position.
  */
-const SHOW_MORE_MARKER = '[data-testid="tweet-text-show-more-link"]';
+const SHOW_MORE_TESTID = 'tweet-text-show-more-link';
+const SHOW_MORE_MARKER = `[data-testid="${SHOW_MORE_TESTID}"]`;
 
 function isShowMoreMarker(el: Element): boolean {
-  return el.getAttribute('data-testid') === 'tweet-text-show-more-link';
+  return el.getAttribute('data-testid') === SHOW_MORE_TESTID;
 }
 
 /**
@@ -838,8 +839,13 @@ function extractArticle(article: Element): ArticleData | undefined {
   // The article's own opening line. X renders it inside the prose region as the
   // first paragraph, so it is read from there rather than invented; it is only
   // used as the card's lead when the post itself says nothing.
-  const proseEl = readView.querySelector('[data-testid="twitterArticleRichTextView"], [data-testid="longformRichTextComponent"]');
-  const firstPara = proseEl?.querySelector('p, div');
+  //
+  // Queried as `p` alone, never `p, div`: a selector list matches the first
+  // node in document order, and the prose container (`longformRichTextComponent`)
+  // is itself a `div` that comes before every paragraph — so `p, div` returned
+  // the whole article as its own opening line.
+  const proseEl = readView.querySelector(ARTICLE_BODY);
+  const firstPara = proseEl?.querySelector('p');
   const previewText = firstPara ? cleanTweetText(firstPara).trim() : '';
 
   // The cover is the read view's own picture, not one from the prose.
@@ -1090,14 +1096,19 @@ function extractTranslationNotice(tweetTextEl: Element | null | undefined): stri
  * A quoted post can carry a truncated body of its own, and that marker is not
  * this tweet's — the media and stats passes already draw the same quote
  * boundary. A marker inside an article's reading surface is excluded too: that
- * prose is not printed, so a cut in it says nothing about the card.
+ * prose is not printed, so a cut in it says nothing about the card. Every
+ * marker is considered, not just the first: a tweet's own can sit after a
+ * quote's in document order, and stopping at the first would miss it.
  */
 function findTruncationMarker(article: Element): Element | null {
-  const marker = article.querySelector(SHOW_MORE_MARKER);
-  if (!marker) return null;
-  if (isInsideQuoteTweet(marker)) return null;
-  if (isInsideArticleReadView(marker)) return null;
-  return marker;
+  const markers = article.querySelectorAll(SHOW_MORE_MARKER);
+  for (let i = 0; i < markers.length; i++) {
+    const marker = markers[i];
+    if (isInsideQuoteTweet(marker)) continue;
+    if (isInsideArticleReadView(marker)) continue;
+    return marker;
+  }
+  return null;
 }
 
 /**

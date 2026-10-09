@@ -35,7 +35,7 @@ const ARTICLE_READ_VIEW = '[data-testid="twitterArticleReadView"]';
  * The article's own content region. Media and links inside it belong to the
  * article, not to the tweet that carries it.
  */
-const ARTICLE_BODY = '[data-testid="twitterArticleRichTextView"], [data-testid="longformRichTextComponent"]';
+export const ARTICLE_BODY = '[data-testid="twitterArticleRichTextView"], [data-testid="longformRichTextComponent"]';
 
 /** True when `el` is, or sits inside, the article's reading surface. */
 export function isInsideArticleReadView(el: Element | null | undefined): boolean {

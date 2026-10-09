@@ -2598,17 +2598,7 @@ test('F32.4: a post without the marker is not flagged', () => {
   assert.equal(tweet?.truncated, undefined);
 });
 
-test('F32.5: the card renders the truncation mark and a localized notice', () => {
-  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  assert.ok(card.includes('truncation-ellipsis'), 'Card.tsx renders the trailing ellipsis');
-  assert.ok(card.includes('truncation-notice'), 'Card.tsx renders the notice line');
-  assert.ok(card.includes('truncatedContent'), 'the notice is localized, not hard-coded');
-  assert.ok(css.includes('.truncation-ellipsis'), 'card.css styles the mark');
-  assert.ok(css.includes('.truncation-notice'), 'card.css styles the notice');
-});
-
-test('F32.6: both locales name the truncated state', () => {
+test('F32.5: both locales name the truncated state', () => {
   assert.ok(TRANSLATIONS['zh-CN'].truncatedContent, 'zh-CN has the notice copy');
   assert.ok(TRANSLATIONS['en-US'].truncatedContent, 'en-US has the notice copy');
 });

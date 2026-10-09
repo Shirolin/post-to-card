@@ -370,6 +370,43 @@ function stripTrailingArticleEntity(text: string, entityContainer: unknown): str
   return text;
 }
 
+/**
+ * The body a tweet contributes to the card: its plain text and the styled-token
+ * view, with the appended article link dropped when the post carries an article.
+ *
+ * Long posts carry their complete body under `note_tweet`; `legacy.full_text` is
+ * the truncated fallback, and `fallbackText` is the last resort when neither
+ * exists (a retweet's nested original inherits the outer body if it has none of
+ * its own). Both fields are stripped together, since `text` is the card's
+ * fallback when the token list is empty.
+ *
+ * A tweet and a retweet's nested original go through here alike, so the rule is
+ * stated once instead of repeated for each.
+ */
+function parseBody(
+  tweet: Json,
+  legacy: Json,
+  fallbackText: string
+): { text: string; richTokens: RichToken[] | undefined; article: ArticleData | undefined } {
+  const noteTweet = isObject(tweet.note_tweet) ? tweet.note_tweet.note_tweet_results : undefined;
+  const noteResult = isObject(noteTweet) ? noteTweet.result : undefined;
+  const entitySource = entitySourceFor(noteResult, legacy);
+  const rawText =
+    (isObject(noteResult) ? str(noteResult.text) : undefined) ||
+    str(legacy.full_text) ||
+    fallbackText;
+
+  // Only a post that carries an article ends with the appended link to it; a
+  // tweet merely ending with a link to someone else's article keeps that link.
+  const article = parseArticle(tweet);
+  const rawTokens = parseRichTokens(rawText, entitySource);
+  return {
+    text: article ? stripTrailingArticleEntity(rawText, entitySource) : rawText,
+    richTokens: article ? stripTrailingArticleToken(rawTokens) : rawTokens,
+    article,
+  };
+}
+
 function parseTweet(entry: Json, fallbackId: string): TweetData | null {
   const itemContent = isObject(entry.content) ? entry.content.itemContent : undefined;
   if (!isObject(itemContent)) return null;
@@ -382,20 +419,7 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
   const legacy = isObject(tweet.legacy) ? tweet.legacy : {};
   const id = str(tweet.rest_id) || str(legacy.id_str) || fallbackId;
 
-  // Long posts carry their complete body under note_tweet; the legacy field is
-  // truncated with a display range.
-  const noteTweet = isObject(tweet.note_tweet) ? tweet.note_tweet.note_tweet_results : undefined;
-  const noteResult = isObject(noteTweet) ? noteTweet.result : undefined;
-  const entitySource = entitySourceFor(noteResult, legacy);
-  const rawText = (isObject(noteResult) ? str(noteResult.text) : undefined) || str(legacy.full_text) || '';
-
-  const article = parseArticle(tweet);
-  // Only a post that carries an article ends with the appended link to it; a
-  // tweet merely ending with a link to someone else's article keeps that link.
-  // Both fields are stripped together, since `text` is the card's fallback.
-  const rawTokens = parseRichTokens(rawText, entitySource);
-  const text = article ? stripTrailingArticleEntity(rawText, entitySource) : rawText;
-  const richTokens = article ? stripTrailingArticleToken(rawTokens) : rawTokens;
+  const { text, richTokens, article } = parseBody(tweet, legacy, '');
 
   const data: TweetData = {
     id,
@@ -421,25 +445,20 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     const originalLegacy = isObject(original.legacy) ? original.legacy : {};
     const originalAuthor = parseAuthor(original);
     const reposter = data.author.handle;
-    const noteOriginal = isObject(original.note_tweet) ? original.note_tweet.note_tweet_results : undefined;
-    const noteOriginalResult = isObject(noteOriginal) ? noteOriginal.result : undefined;
 
     data.author = originalAuthor;
-    const originalEntitySource = entitySourceFor(noteOriginalResult, originalLegacy);
-    const rawOriginalText = (isObject(noteOriginalResult) ? str(noteOriginalResult.text) : undefined) || str(originalLegacy.full_text) || rawText;
-    // The article belongs to the original post, exactly as the body does, so the
-    // strip follows that article rather than the outer one.
-    const originalArticle = parseArticle(original);
-    const rawOriginalTokens = parseRichTokens(rawOriginalText, originalEntitySource);
-    data.text = originalArticle ? stripTrailingArticleEntity(rawOriginalText, originalEntitySource) : rawOriginalText;
-    data.richTokens = originalArticle ? stripTrailingArticleToken(rawOriginalTokens) : rawOriginalTokens;
+    // The body and the article both belong to the original post, exactly as the
+    // media and stats read below do; the outer body is only a last-resort
+    // fallback for a nested original that somehow carries no text of its own.
+    const originalBody = parseBody(original, originalLegacy, text);
+    data.text = originalBody.text;
+    data.richTokens = originalBody.richTokens;
     data.id = str(original.rest_id) || str(originalLegacy.id_str) || id;
     data.url = `https://x.com/${originalAuthor.handle.replace(/^@/, '')}/status/${data.id}`;
     // Media can be truncated on the outer object, so read the nested original.
     data.media = parseMedia(original) || data.media;
     data.stats = parseStats(original) || data.stats;
-    // The article belongs to the original post, exactly as the body does.
-    data.article = originalArticle || data.article;
+    data.article = originalBody.article || data.article;
     data.retweetedBy = reposter || undefined;
   }
 

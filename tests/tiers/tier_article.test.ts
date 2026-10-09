@@ -20,6 +20,7 @@
  *   art.7  the DOM channel drops the same link, from both fields
  *   art.9  a tweet merely sharing someone else's article keeps the link
  *   art.10 a body that is only its own article link ends up empty in both fields
+ *   art.11 the DOM lead is the article's first paragraph, not the whole prose
  *
  * Shapes come from a logged-in session on 2026-10-09; see
  * `docs/observed-dom-2026-10-09.md`.
@@ -208,6 +209,23 @@ test('art.10: a body that is only its own article link ends up empty, in both ch
   assert.ok(tweet?.article, 'the post carries an article');
   assert.equal(tweet?.text, '', 'the body was only the link, so it is empty');
   assert.equal(tweet?.richTokens, undefined, 'and it has no tokens');
+});
+
+test('art.11: the DOM lead is the article\'s first paragraph, not the whole prose', () => {
+  // `proseEl.querySelector('p, div')` matched `longformRichTextComponent`, the
+  // prose container itself, which is a `div` that precedes every paragraph in
+  // document order. The "opening line" therefore came back as the entire
+  // article -- embedded post and all -- and the card prints it as its lead on a
+  // body-less long-form post, which is the case the lead exists for. The shim
+  // used to hide this by returning every `p` before every `div`; see
+  // `tests/env/browser.ts`.
+  const tweet = extractTweetData(createDomElement(ARTICLE_TWEET_HTML));
+  assert.match(tweet?.article?.previewText || '', /^This is a writeup for those that wanted/,
+    'the lead is the article opening');
+  assert.doesNotMatch(tweet?.article?.previewText || '', /love potion/,
+    'the post embedded in the prose is not part of the lead');
+  assert.doesNotMatch(tweet?.article?.previewText || '', /Ref2Video/,
+    'the rest of the article is not part of the lead');
 });
 
 export async function runTierArticle(): Promise<{

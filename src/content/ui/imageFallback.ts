@@ -18,7 +18,7 @@ import type { MediaItem } from '../../types/tweet.ts';
 import { getPhotoFallbackChain } from '../adapter/urls.ts';
 
 /** The attribute holding the not-yet-tried URLs, as a JSON array. */
-export const FALLBACK_ATTR = 'data-fallback';
+const FALLBACK_ATTR = 'data-fallback';
 
 /**
  * The extra attributes a media <img> needs to be able to recover.

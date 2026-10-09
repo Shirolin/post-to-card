@@ -64,7 +64,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F28 | Adversarial Testing & Audit | Tier 5 对抗性边缘强化与 Forensic Auditor 门禁审计 | M6 | Integrity Forensics |
 | F29 | Non-Obstructive Video Styling | 视频帖不透明胶囊角标，无渐变进度条、无压暗层（角标已自带底色），不遮挡高清 poster 与烧录字幕 | M6 | Feature Enhancement |
 | F30 | Configurable Action Button | 支持推文卡片按钮显隐开关、Popup 快捷管理、Alt+C 快捷键与多标签实时同步 | M6 | Feature Enhancement |
-| F31 | Long-form Post (Article) Rendering | 识别 X 长文推文（文章以嵌套 `<article>` 渲染在推文内），抽出封面 / 眉标 / 标题并以文章版式呈现；同时修正文章被误判为引用推文而导致的互动数据与封面丢失 | M6 | Feature Enhancement |
+| F31 | Long-form Post (Article) Rendering | 识别 X 长文推文（文章以嵌套 `<article>` 渲染在推文内），抽出封面 / 眉标 / 标题与导语（推文无正文时取文章开头行）并以文章版式呈现；同时修正文章被误判为引用推文而导致的互动数据与封面丢失 | M6 | Feature Enhancement |
 | F32 | Truncated Post Indicator | X 时间线里的长推文在 DOM 中只有截断预览（其余在 GraphQL 的 `note_tweet` 里），DOM 通道据此标记为截断：正文末尾补省略号并加「内容有删减」提示，且不把「显示更多」这个 UI 控件当正文 | M6 | Feature Enhancement |
 
 ---

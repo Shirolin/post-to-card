@@ -145,6 +145,22 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
    的用例数 6→10；`data-article="on"`（无选择器、无测试）随重构移除；封面 grid 不再传
    `t.videoLabel`（封面恒为图片）。
 
-其余为基线 smell 的取舍：封面 `MediaItem` 在 DOM 与 GraphQL 两处各自构造、retweet 分支重复
-strip 序列——两处都因两侧输入形态不同（DOM 读 `getAttribute`，GraphQL 读 JSON 字段）而保留，
-未强行合并。
+其余为基线 smell 的取舍：封面 `MediaItem` 在 DOM 与 GraphQL 两处各自构造——因两侧输入形态不同
+（DOM 读 `getAttribute`，GraphQL 读 JSON 字段）而保留，未强行合并。
+
+## 复核补记三（同日，code-review 二轮）
+
+对 `de0f038..HEAD`（含图片回退与截断标记两项）跑双轴审查后又修了两处，都与本文关系最密的 `previewText` 有关：
+
+1. **DOM 的 `previewText` 实际取到整篇正文。** 复核补记二第 4 条声称「从正文区首段读取」，但代码写的是
+   `proseEl.querySelector('p, div')`。选择器列表按文档序返回首个命中，而 `longformRichTextComponent`
+   （正文容器本身）就是个 `div`，排在所有 `<p>` 之前——于是「首段」变成整篇约 7000 字，恰好是这条修复
+   要救的「从时间线打开的无正文长文」场景。改为只查 `p`；`art.11` 锁住，坑写进代码注释。
+2. **测试 shim 的逗号选择器返回顺序与浏览器不一致。** `tests/env/browser.ts` 的 `querySelectorAllInternal`
+   把各子选择器的结果**分组拼接**（先所有 `p`、再所有 `div`），而真实 `querySelectorAll` 按文档序返回；
+   所以上面那个 bug 在测试里被掩盖成「拿到了第一个 `<p>`」。已改为按文档序遍历命中集合——这正是本文档
+   反复记的那类教训：夹具会和浏览器对着错。
+
+其余按标准收紧：`extractor.ts` 内联重复的 `ARTICLE_BODY` 选择器改从 `articleScope.ts` 导出复用；
+`FALLBACK_ATTR` 无第二调用方，收回为模块私有；`parse.ts` 里 retweet 分支与外层重复的
+`entitySourceFor → parseRichTokens → strip` 序列抽成了 `parseBody`。封面 `MediaItem` 的两侧各自构造仍保留。
