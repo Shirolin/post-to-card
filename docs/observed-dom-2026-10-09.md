@@ -2,7 +2,7 @@
 
 > **状态：本次发现已全部修复并被测试覆盖。** 本文是一次性快照，不是待办清单。
 > 采集日期 2026-10-09，采集时 X 的 `data-app-version` 为 `e9b82655819b239e9de923fddd58156f63f7c23c`。
-> 下面列出的判据已被 `tests/tiers/tier_article.test.ts` 的 11 条用例锁住（每条都做过变异测试）。
+> 下面列出的判据已被 `tests/tiers/tier_article.test.ts` 锁住（每条都做过变异测试）。
 
 > 采集时间：2026-10-09
 > 页面：`https://x.com/kevinleguillou/status/2108306407921443081?s=20`（已登录）

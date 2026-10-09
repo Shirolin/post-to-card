@@ -73,6 +73,8 @@ const threadData: ThreadData = {
       url: 'https://x.com/ada_builds/status/1001',
       author,
       timestamp: '2026-09-14T10:00:00.000Z',
+      // Token-only on purpose: exercises the snippet's fallback to the tokens.
+      text: '',
       richTokens: [
         { type: 'text', value: 'Thread: we rebuilt our card renderer from scratch. 🧵\n\n' },
         { type: 'hashtag', value: '#design' },
@@ -113,6 +115,7 @@ const threadData: ThreadData = {
       url: 'https://x.com/ada_builds/status/1003',
       author,
       timestamp: '2026-09-14T10:11:00.000Z',
+      text: '',
       richTokens: [
         { type: 'text', value: '3/3 Export runs offline at 2x retina through a service-worker CORS proxy, so screenshots never hit ' },
         { type: 'text', value: 'SecurityError' },
@@ -227,6 +230,7 @@ const videoThreadData: ThreadData = {
       url: 'https://x.com/yuito_0917/status/5001',
       author: { name: 'Yuito Kisaragi', handle: '@yuito_0917', avatarUrl: avatar },
       timestamp: '2026-10-02T09:15:00.000Z',
+      text: '',
       richTokens: [
         { type: 'text', value: 'ロシア語を話すヤニねこ、大家さんの声優さんが凄すぎる' },
         { type: 'text', value: '\n' },
@@ -260,6 +264,7 @@ const wrappedThreadData: ThreadData = {
       url: 'https://x.com/yi_hang/status/6001',
       author: { name: '沈亦航', handle: '@yi_hang', avatarUrl: avatar, verified: true },
       timestamp: '2026-10-02T09:24:00.000Z',
+      text: '',
       richTokens: [
         { type: 'text', value: '第一段以一个链接结束 ' },
         { type: 'link', value: 'example.com', href: 'https://example.com' },

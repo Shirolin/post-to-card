@@ -38,7 +38,7 @@ export class MockCanvasRenderingContext2D {
     }
   }
 
-  public getImageData(sx: number, sy: number, sw: number, sh: number): any {
+  public getImageData(_sx: number, _sy: number, sw: number, sh: number): any {
     if (!this.canvas.originClean) {
       throw new Error("SecurityError: Failed to execute 'getImageData' on 'CanvasRenderingContext2D': Tainted canvases may not be exported.");
     }
@@ -101,7 +101,7 @@ export async function mockDomToBlob(target: DomElement, options: ScreenshotOptio
   const { scale = 2, type = 'image/png', filter } = options;
 
   // Gather all nested images
-  const images = target.querySelectorAll('img');
+  const images = target.querySelectorAll<DomImageElement>('img');
   const canvas = new MockCanvasElement();
   canvas.width = 640 * scale;
   canvas.height = 400 * scale;

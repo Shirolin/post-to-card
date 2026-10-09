@@ -31,7 +31,7 @@ class ChromeRuntimeMock {
     message: ExtensionMessage,
     callback?: (response: ExtensionResponse) => void
   ): Promise<ExtensionResponse> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       let responded = false;
       const sender = { id: 'post-to-card-extension', tab: { id: 1 } };
 

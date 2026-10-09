@@ -1,6 +1,21 @@
 /**
  * Lightweight in-memory DOM, Custom Elements, and Shadow DOM environment.
  * Zero external dependencies, 100% deterministic execution in pure Node.js 24.
+ *
+ * This is a double, not a browser, and two limits have hidden real bugs:
+ *
+ *   - Elements are not lib.dom types. `DomElement` models only what the
+ *     extractor reads, so it is deliberately unassignable to `Element`; a test
+ *     that hands a shim node to production code crosses that boundary with a
+ *     cast. A type the shim accepts is not proof the browser would.
+ *   - No layout engine: no `getBoundingClientRect`, no `offsetHeight`. Anything
+ *     geometry-dependent is only verifiable in the browser harness
+ *     (`dev/preview.ts`), never here.
+ *
+ * Selector behaviour is meant to match a browser: `querySelectorAll` returns
+ * document order, and a query never matches the node it is called on. Both were
+ * once wrong here and let a real bug pass, so a change to the selector engine
+ * deserves a second look at whether the browser agrees.
  */
 
 export type NodeFilterFunction = (node: DomNode) => boolean;
@@ -382,7 +397,6 @@ export interface MutationRecord {
 export class DomMutationObserver {
   private callback: (mutations: MutationRecord[], observer: DomMutationObserver) => void;
   private observedTarget: DomNode | null = null;
-  private pendingMutations: MutationRecord[] = [];
 
   constructor(cb: (mutations: MutationRecord[], observer: DomMutationObserver) => void) {
     this.callback = cb;
@@ -401,7 +415,6 @@ export class DomMutationObserver {
       activeObservers.splice(idx, 1);
     }
     this.observedTarget = null;
-    this.pendingMutations = [];
   }
 
   public _notify(record: MutationRecord): void {
