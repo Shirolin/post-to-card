@@ -20,16 +20,16 @@ Tests are derived exclusively from the authoritative specifications (`ORIGINAL_R
 No test shall ever be written as a "pass-through facade" that asserts tautologies (e.g. `assert(true)` or mocking away the exact logic under test). Every assertion must exercise actual parsing logic, DOM state transitions, styling computation, SVG generation, canvas context operations, or error catch-and-fallback cascades.
 
 ### 1.3 Progressive Testability & Milestones Isolation
-Tests are organized into 4 distinct progressive tiers. While Tier 1 verifies isolated atomic features from F1 to F26, Tiers 2–4 progressively verify boundary stress, combinatorial interactions, and complete real-world user workflows.
+Tests are organized into 4 distinct progressive tiers. While Tier 1 verifies isolated atomic features, Tiers 2–4 progressively verify boundary stress, combinatorial interactions, and complete real-world user workflows.
 
 ### 1.4 High-Fidelity Environmental Emulation
 The test infrastructure provides a dedicated in-memory DOM, Shadow DOM, Chrome Extension Messaging & Storage, Canvas 2D Context (with CORS taint simulation), and Asynchronous Clipboard API emulator. This ensures tests run with 100% determinism, millisecond execution speeds, and zero flaky network calls.
 
 ---
 
-## 2. Feature Inventory Coverage Matrix (F1 – F26)
+## 2. Feature Inventory Coverage Matrix
 
-Every feature identified in `PROJECT.md` is covered with a minimum of 5 rigorous specification assertions in Tier 1:
+Every feature identified in `PROJECT.md` is covered with a minimum of 5 rigorous specification assertions in Tier 1. The rows are the original F1–F26 feature set: features added later have no row here, and from F27 on the test-side numbers and `PROJECT.md`'s numbers are not the same list (`PROJECT.md` F27 is the E2E suite; the tests' F27 is the image-fit/media-layout suite), so don't read one by the other's number.
 
 | ID | Feature Name | Primary Contract / Specification | Test Suite & Target | Min Tests | Assertion Targets |
 |:---|:---|:---|:---|:---:|:---|
@@ -83,7 +83,7 @@ tests/
 │   ├── ads-replies.ts            # Interleaved promoted posts and third-party replies fixture
 │   └── rich-tokens.ts            # Rich text with mentions, hashtags, cashtags and t.co URLs
 └── tiers/
-    ├── tier1_features.test.ts     # F1 – F26 Feature Coverage Suite (>=130 tests)
+    ├── tier1_features.test.ts     # Feature Coverage Suite
     ├── tier2_boundaries.test.ts   # Boundary & Corner Case Suite (20+ tests)
     ├── tier3_interactions.test.ts # Combinatorial & Cross-Feature Interaction Suite (25+ tests)
     └── tier4_workloads.test.ts    # End-to-End Real-World User Workflows Suite (15+ tests)
@@ -122,7 +122,7 @@ tests/
 
 | Tier | Name | Target Scope | Pass Threshold | Failure Policy |
 |:---:|:---|:---|:---:|:---|
-| **Tier 1** | Feature Coverage | F1 to F26, >=5 checks per feature area | **100% Pass** (0 failures allowed) | Blocks Milestone progression; failure signals broken requirement contract |
+| **Tier 1** | Feature Coverage | >=5 checks per feature area | **100% Pass** (0 failures allowed) | Blocks Milestone progression; failure signals broken requirement contract |
 | **Tier 2** | Boundaries & Corners | Empty text, 4000+ chars, emoji-only, missing avatars, CORS failures, deleted quotes, 0 vs millions stats | **100% Pass** (0 failures allowed) | Blocks Milestone progression; failure signals unhandled edge conditions |
 | **Tier 3** | Cross-Feature Interactions | Combinatorial matrices (Themes x Padding x Radius x Ratios x Toggles), long thread downward expansion | **100% Pass** (0 failures allowed) | Blocks Milestone progression; failure signals CSS/state collision |
 | **Tier 4** | Real-World Workflows | Full E2E user journeys from tweet observation to card generation, retina export, and fallback download | **100% Pass** (0 failures allowed) | Final Acceptance Gate for Extension Release |

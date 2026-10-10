@@ -37,6 +37,6 @@ headless 会被 x.com 403）。
 `article[data-testid="tweet"]` 的 outerHTML，即可对真实标记跑
 `src/content/adapter/extractor.ts`，无需登录。别在没读它之前断言提取器验不了。
 
-## Session linking
-
-Link working-set via `session.link`: 被处理、新建、解决的 issue 或 change，识别即 link；仅 link 工作集。
+要动 `extractor.ts` 或 `adapter/**` 里的判据，先读 `docs/detection-audit.md`：哪些选择器是真的可依赖、
+哪些明确不做，都在那里（P0/P1 已落地，剩下的见它开头的状态行）。虚构选择器就是这么来的——`gifBadge`
+曾经被当契约写进判据，而 X 的 DOM 里从来没有它。

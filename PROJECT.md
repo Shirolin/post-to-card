@@ -187,63 +187,18 @@ d:/Project/post-to-card/
 ├── tsconfig.json                  # TypeScript 配置
 ├── vite.config.ts                 # 三模式/多入口 Vite 构建管道
 ├── dev/                           # 仅开发用：可视化 UI harness
-│   ├── preview.html
-│   ├── preview.ts                 # 内存夹具 + ?bare=1 + ?a11y=1 焦点陷阱审计
-│   └── vite.harness.config.ts
-├── docs/
-│   ├── detection-audit.md         # 检测逻辑整改清单（P0/P1/P2）
-│   ├── observed-dom-2026-10-09.md # 长文推文（Article）登录态 DOM 实测
-│   ├── x-graphql-research.md      # GraphQL 拦截方案调研
-│   └── real-dom-sampling-checklist.md  # 真实 DOM 采样清单
+├── docs/                          # 检测整改清单、X DOM 实测快照、GraphQL 调研
 ├── src/
-│   ├── types/                     # 共享类型定义
-│   │   ├── tweet.ts
-│   │   ├── card.ts
-│   │   └── messages.ts
-│   ├── background/                # Background Service Worker (ESM)
-│   │   ├── index.ts
-│   │   └── proxy.ts               # twimg 跨域图片抓取与 Base64 缓存
-│   ├── content/                   # Content Script (IIFE)
-│   │   ├── index.ts               # 入口、双通道调度
-│   │   ├── adapter/               # Twitter DOM 适配与数据提取
-│   │   │   ├── extractor.ts
-│   │   │   ├── articleScope.ts    # 长文文章边界（读视图 / 正文 / 引用判定）
-│   │   │   ├── emojis.ts
-│   │   │   ├── thread.ts
-│   │   │   ├── social.ts          # 转发/回复/置顶的结构化判据
-│   │   │   ├── injection.ts
-│   │   │   └── urls.ts
-│   │   ├── graphql/               # 结构化数据通道
-│   │   │   ├── hook.ts            # MAIN world 拦截 fetch/XHR
-│   │   │   ├── bridge.ts          # 隔离 world 接收与缓存
-│   │   │   └── parse.ts           # 响应 → ThreadData
-│   │   ├── container/             # Shadow DOM 自定义元素封装
-│   │   │   └── element.ts
-│   │   ├── ui/                    # Preact 界面与卡片组件
-│   │   │   ├── App.tsx
-│   │   │   ├── Modal.tsx
-│   │   │   ├── Card.tsx
-│   │   │   ├── Controls.tsx
-│   │   │   ├── qrcode.ts
-│   │   │   └── themes.ts
-│   │   ├── styles/                # CSS 样式 (内联导入)
-│   │   │   ├── card.css
-│   │   │   └── modal.css
-│   │   └── engine/                # 截图与导出引擎
-│   │       ├── export.ts
-│   │       └── fallback.ts
-├── tests/                         # E2E 测试轨与夹具
-│   ├── runner.ts
-│   ├── fixtures/
-│   └── tiers/
-│       ├── tier1_features.test.ts
-│       ├── tier2_boundaries.test.ts
-│       ├── tier3_interactions.test.ts
-│       ├── tier4_workloads.test.ts
-│       ├── tier_i18n.test.ts
-│       └── tier_graphql.test.ts
+│   ├── types/                     # 共享类型（TweetData / CardConfig / 消息协议）
+│   ├── background/                # Service Worker：twimg 跨域抓取与 Base64 缓存
+│   └── content/                   # Content Script：adapter/ 走 DOM 通道，graphql/ 走结构化通道，
+│                                  #   ui/ 是 Preact 卡片与弹窗，styles/ 是其 Shadow DOM 内的 CSS，
+│                                  #   engine/ 负责截图与导出
+├── tests/                         # runner + fixtures/（真实 DOM 夹具）+ tiers/（分层验收）
 └── dist/                          # 构建产物 (manifest.json, background.js, graphql-hook.js, content.js)
 ```
+
+目录逐个文件列在这里只会过期（清单写的是当时的布局，不是现在的），所以这里只点职责，具体文件看仓库。
 
 ---
 

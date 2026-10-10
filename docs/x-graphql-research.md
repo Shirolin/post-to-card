@@ -1,5 +1,10 @@
 # X (Twitter) GraphQL 拦截方案调研报告
 
+> **状态：结论已采纳。** `src/content/graphql/hook.ts` 只按 URL 里的 `operationName` 匹配，
+> `queryId` 仅作诊断记录——正是本文 §0 的第 1 条，理由也照抄在那里。
+> `docs/x-query-ids-*.json` 是**采样快照**（文件名自带日期），只作证据链：queryId 会轮换，
+> 禁止当常量用，要现成的值请对接本文 §1.1 的每日真值源。
+
 > 调研日期：**2026-10-02**
 > 目标：评估「拦截 X 自己的 GraphQL 响应」替代纯 DOM 解析的可行性，重点是 queryId 轮换风险。
 

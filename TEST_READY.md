@@ -2,7 +2,7 @@
 
 > Published by: `test_writer_1` (E2E Testing Track)  
 > Date: 2026-09-29  
-> Status: **TEST SUITE READY & 100% PASSING**  
+> Status: **TEST SUITE READY & 100% PASSING**（发布当日快照：下面的用例数与 tier 名是 2026-09-29 那次运行的，现行数字以 `npm test` 输出为准）  
 > Test Runner: `tests/runner.ts` (Node.js 24 Native ESM/TS Runner)  
 
 ---
