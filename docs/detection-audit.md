@@ -82,6 +82,12 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 
 - `article[data-testid="tweet"]`、`tweetText`、`tweetPhoto`、`videoPlayer`、`quoteTweet`
 - `div[data-testid="socialContext"]` —— 承载「转发/置顶/回复」**容器**，容器名稳定、内部文字不稳定
+  - **2026-10-10 实测修正**：详情页会话区里这个容器**不存在**（35 条推文 0 个），
+    也没有「Replying to / 回复」文案，所以那里 `getReplyingToHandle` 只能返回 null。
+    「稳定」目前只对时间线成立过。见 `docs/observed-dom-2026-10-10.md`
+- `div[data-testid="previewInterstitial"]` + `aria-label="嵌入式视频"` —— **2026-10-10 新增**：
+  自动播放关闭时，视频/GIF 在时间线里以「海报 `img` + 这个 interstitial」出现，**没有 `<video>`**；
+  区分 GIF 与视频的是海报 URL（`tweet_video_thumb` vs `amplify_video_thumb`），不是徽标文本
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号
 - `a[href*="/status/"]`、`time[datetime]` —— 结构语义，不会变
