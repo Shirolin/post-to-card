@@ -95,9 +95,11 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
 
 ## 尚未覆盖
 
-- **时间线/搜索结果**：`bridge.ts` 只监听 `TweetDetail` 与 `TweetResultByRestId`，
+- **时间线/搜索结果**：采集时 `bridge.ts` 只监听 `TweetDetail` 与 `TweetResultByRestId`，
   这两个 operation 都不为从首页点开的推文发出，所以那条路径只有 DOM 通道可行。
   本次修的是 DOM 通道，因此时间线路径**应该**已经可用，但**未在真实时间线上验过**。
+  （拦截名单此后已扩到列表类 operation，见 `src/content/graphql/operations.ts`；本快照只记
+  采集当日的事实。）
 - 文章正文里嵌入的视频（`amplify_video_thumb`）在卡片上的呈现：本次判定为文章内容而排除，
   若将来要展示需要单独设计。
 

@@ -96,9 +96,8 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
  实测一条真实自串（`/ShiroLinHime/status/2088178637904531773`）：续条的 `in_reply_to_status_id_str` 就是首发 id。
  DOM 里**没有**任何对应物：同一个串的状态页上 `tweet-thread-indicator` 0、细线（宽 ≤4px 的元素）0、
  `border-left` 0、伪元素 0、「显示此推文串」0，续条就是平铺在回复框下面的一条普通回复。
- 这份 payload 我们**已经在拦**（`graphql/hook.ts` 按 `operations.ts` 的名单拦详情与列表两类
- operation），并且 `graphql/parse.ts` 会把 `in_reply_to_status_id_str` 收进 `graphql/replyLinks.ts`
- 的索引，供列表视图里的 DOM 走查使用。
+ 这份 payload 我们**已经在拦**（名单见 `graphql/operations.ts`），`in_reply_to_status_id_str`
+ 由 `graphql/parse.ts` 收进 `graphql/replyLinks.ts` 的索引，供列表视图里的 DOM 走查使用。
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号
 - `a[href*="/status/"]`、`time[datetime]` —— 结构语义，不会变
