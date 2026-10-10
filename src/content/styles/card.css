@@ -576,6 +576,54 @@
   box-shadow: none;
 }
 
+/* 完整展示: the radius has to sit on the picture, not on the cell.
+   A picture letterboxed inside a rounded box keeps square corners -- its own
+   corners never reach the box's radius, so only the empty bars get cut. Sizing
+   the picture to its own shape, instead of stretching it across the cell, gives
+   the radius an edge to cut; whatever the picture leaves over stays the cell's
+   own background, which is what those bars already showed. The grid plan, the
+   gutters and the card's height do not move.
+
+   One attribute deeper than the per-count and per-ratio blocks below, because
+   those size a *cell* (`width/height: 100%`) and this has to win over them to
+   size the *picture*. Stack mode is deliberately out: its items already take
+   their own height. The video item keeps its cell -- the play badge and the
+   recess hang off it -- so only the poster shrinks inside it. `--media-radius`
+   is the token cover already uses, so both modes round alike. */
+[data-fit="contain"] .media-grid[data-layout="grid"]:not([data-count="1"]) .media-item:not(.media-video-item),
+[data-fit="contain"] .media-grid[data-layout="grid"]:not([data-count="1"]) .media-video-poster {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--media-radius, 0px);
+  place-self: center;
+}
+
+/* A lone picture keeps the material's own height cap, so this path must not
+   declare a max-height: the cap now lands on the picture rather than on a
+   stretched box, which is the same visible height with no bars left over. */
+[data-fit="contain"] .media-grid[data-layout="grid"][data-count="1"] .media-item:not(.media-video-item),
+[data-fit="contain"] .media-grid[data-layout="grid"][data-count="1"] .media-video-poster {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  border-radius: var(--media-radius, 0px);
+  place-self: center;
+}
+
+/* The poster centres inside a video item that stays a cell; the badge is
+   absolutely positioned and does not care. */
+[data-fit="contain"] .media-grid[data-layout="grid"] .media-video-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* A passe-partout: the picture sits inside a thick mount in the material's own
    mat colour, the way a print is hung behind glass. Declared after the fit
    rules and one class deeper, because those reset `background` and would
