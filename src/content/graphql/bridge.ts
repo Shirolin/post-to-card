@@ -13,7 +13,7 @@
 import type { ThreadData } from '../../types/tweet.ts';
 import { parseTweetDetailResponse, parseReplyLinkage, type ParsedGraphQL } from './parse.ts';
 import { rememberReplyLinks } from './replyLinks.ts';
-import { DETAIL_OPERATIONS, LINKAGE_OPERATIONS } from './operations.ts';
+import { DETAIL_OPERATIONS } from './operations.ts';
 
 const MESSAGE_SOURCE = 'post-to-card-graphql';
 const MESSAGE_TYPE = 'post-to-card:graphql-payload';
@@ -51,18 +51,23 @@ function handleMessage(event: MessageEvent): void {
   if (payload?.source !== MESSAGE_SOURCE || payload?.type !== MESSAGE_TYPE) return;
   if (!payload.operationName || !payload.body || payload.status !== 200) return;
 
-  cache.set(payload.operationName, {
-    body: payload.body,
-    queryId: payload.queryId || '',
-    observedAt: Date.now(),
-  });
+  // Only a whole-conversation body is worth keeping: `lookupFromGraphQL` reads
+  // nothing else, and a timeline body is megabytes that would sit here for the
+  // life of the page. The linkage below is read out of every captured payload
+  // before it is dropped, so nothing is lost by not retaining it.
+  if (DETAIL_OPERATIONS[payload.operationName] === true) {
+    cache.set(payload.operationName, {
+      body: payload.body,
+      queryId: payload.queryId || '',
+      observedAt: Date.now(),
+    });
+  }
 
   // A list-view payload is not a conversation, so nothing is built from it. What
   // it does carry is which post each of its posts answers, and that is the fact
-  // a click in a feed has to consult.
-  if (LINKAGE_OPERATIONS[payload.operationName] === true) {
-    rememberReplyLinks(parseReplyLinkage(payload.body));
-  }
+  // a click in a feed has to consult. Read from every captured payload, because
+  // the parser is shape-agnostic and a conversation states the same facts.
+  rememberReplyLinks(parseReplyLinkage(payload.body));
 }
 
 /**

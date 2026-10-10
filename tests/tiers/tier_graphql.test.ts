@@ -329,7 +329,6 @@ test('gql.23: a list-view payload yields the reply linkage X threads by', () => 
 
   assert.equal(links.get('9001')?.inReplyToId, undefined, 'the first post answers nothing');
   assert.equal(links.get('9002')?.inReplyToId, '9001', 'the second answers the first');
-  assert.equal(links.get('9002')?.inReplyToHandle, 'alice');
   assert.equal(links.get('9004')?.inReplyToId, '9002', 'the third answers the second');
   assert.equal(links.size, 3, 'every post in the page is indexed');
 });
@@ -350,6 +349,28 @@ test('gql.25: an unusable payload yields no linkage instead of throwing', () => 
   for (const body of ['', 'not json', '{}', 'null', '[]']) {
     assert.equal(parseReplyLinkage(body).size, 0, `body ${JSON.stringify(body)} must yield nothing`);
   }
+});
+
+test('gql.26: a user object is not indexed as a post', () => {
+  // X ships a `legacy` on user objects too, and on a real payload it carries an
+  // id, so "any object with a legacy and an id" would index every author and
+  // spend the linkage budget on entries that can never prove a thread. A post's
+  // own `legacy` is the one that carries the body.
+  const body = JSON.stringify({
+    data: {
+      user_results: {
+        result: { rest_id: '44196397', legacy: { id_str: '44196397', screen_name: 'elonmusk' } },
+      },
+      tweet_results: {
+        result: { rest_id: '9002', legacy: { id_str: '9002', full_text: 'a post', in_reply_to_status_id_str: '9001' } },
+      },
+    },
+  });
+  const links = parseReplyLinkage(body);
+
+  assert.equal(links.size, 1, 'only the post is indexed');
+  assert.equal(links.get('9002')?.inReplyToId, '9001');
+  assert.equal(links.has('44196397'), false, 'the author object is not a post');
 });
 
 export async function runTierGraphQL(): Promise<{

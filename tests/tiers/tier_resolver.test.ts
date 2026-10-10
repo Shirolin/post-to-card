@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { createDomElement, DomDocument } from '../env/browser.ts';
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { initGraphQLBridge } from '../../src/content/graphql/bridge.ts';
+import { lookupReplyLink } from '../../src/content/graphql/replyLinks.ts';
 import { TWEET_DETAIL_THREAD_JSON, HOME_TIMELINE_SELF_THREAD_JSON, HOME_TIMELINE_UNLINKED_PAIR_JSON } from '../fixtures/graphql.ts';
 import { THREAD_HTML, FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
 
@@ -213,6 +214,46 @@ test('res.6: a click in a feed proves its thread from the captured timeline payl
   assert.equal(unlinked.isSingle, true, 'the payload names someone else, so adjacency proves nothing');
   assert.equal(unlinked.tweets.length, 1);
   assert.equal(unlinked.tweets[0].id, '9002');
+});
+
+test('res.7: a conversation payload feeds the linkage index too', () => {
+  // The index is built from every captured payload, not only from the list
+  // views: the parser is shape-agnostic, and a status page visited before an SPA
+  // navigation is the only payload a later list-view click may have. A
+  // `TweetDetail` body is therefore a source as well, and this pins the wiring
+  // rather than the parser.
+  const body = JSON.stringify({
+    data: {
+      threaded_conversation_with_injections_v2: {
+        instructions: [
+          {
+            entries: [
+              {
+                content: {
+                  itemContent: {
+                    tweet_results: {
+                      result: {
+                        rest_id: '6002',
+                        legacy: {
+                          id_str: '6002',
+                          full_text: 'the continuation',
+                          in_reply_to_status_id_str: '6001',
+                          in_reply_to_screen_name: 'alice',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  seedGraphQLCache(body, 'TweetDetail', 'q_detail_link');
+
+  assert.equal(lookupReplyLink('6002')?.inReplyToId, '6001', 'the conversation states the same fact');
 });
 
 export async function runTierResolver(): Promise<{

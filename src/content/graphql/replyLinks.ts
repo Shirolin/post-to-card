@@ -5,7 +5,9 @@
  * A section is the next one exactly when its
  * `legacy.in_reply_to_status_id_str` names the previous section's id — X's own
  * condition, measured against a real self-thread in `docs/detection-audit.md` —
- * and `legacy.in_reply_to_screen_name` is the author half of the same rule.
+ * and `legacy.in_reply_to_screen_name` is the author half of the same rule. Only
+ * the id is kept: the walk's own author check already establishes the other
+ * half, so a second copy of it would be a field with no reader.
  *
  * The rendered DOM carries no equivalent: on a status page a thread's sections
  * are plainly adjacent posts with no marker at all, and the same holds in the
@@ -21,8 +23,6 @@
 export interface ReplyLink {
   /** `legacy.in_reply_to_status_id_str`: the post this one answers, if any. */
   inReplyToId?: string;
-  /** `legacy.in_reply_to_screen_name`: who it answers, as X states it. */
-  inReplyToHandle?: string;
 }
 
 const MAX_LINKS = 4000;

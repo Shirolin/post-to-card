@@ -666,12 +666,14 @@ export function parseReplyLinkage(body: string): Map<string, ReplyLink> {
 
     const tweet = node as Json;
     const legacy = isObject(tweet.legacy) ? tweet.legacy : undefined;
-    if (legacy) {
+    // A post object carries `full_text`; a user object's `legacy` (X still ships
+    // one, see the avatar note in the parser above) does not, and indexing those
+    // would spend the budget on entries that can never prove a thread.
+    if (legacy && typeof legacy.full_text === 'string') {
       const id = str(tweet.rest_id) || str(legacy.id_str);
       if (id) {
         found.set(id, {
           inReplyToId: str(legacy.in_reply_to_status_id_str),
-          inReplyToHandle: str(legacy.in_reply_to_screen_name),
         });
       }
     }
