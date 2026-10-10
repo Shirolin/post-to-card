@@ -134,6 +134,10 @@ function renderMediaGrid(
   const settleGrid = (imgEl: HTMLImageElement, index: number) => {
     if (!imgEl.naturalWidth || !imgEl.naturalHeight) return;
     const ratio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
+    // The picture's box is the picture's rectangle, so it takes the shape the
+    // browser actually decoded: X's own width/height were only a first guess.
+    const box = imgEl.closest ? (imgEl.closest('.media-box') as HTMLElement | null) : null;
+    if (box) box.style.aspectRatio = String(ratio);
     const settled = recordShape(items, index, ratio);
     if (settled === items) return;
     items = settled;
@@ -158,22 +162,22 @@ function renderMediaGrid(
       {items.map((m, idx) => {
         const isVideo = m.type === 'video' || m.type === 'gif';
 
-        if (isVideo) {
-          return (
-            <div
-              key={idx}
-              class={`media-item media-video-item ${fitClass} ${layoutClass}`}
-              data-fit={imageFit}
-              data-layout={mediaLayout}
-              data-media-type={m.type}
-              style={{
-                aspectRatio: (count === 1 && m.aspectRatio) ? `${m.aspectRatio}` : undefined,
-              }}
-            >
+        return (
+          <div
+            key={idx}
+            class={`media-item ${isVideo ? 'media-video-item ' : ''}${fitClass} ${layoutClass}`}
+            data-fit={imageFit}
+            data-layout={mediaLayout}
+          >
+            {/* The cell is the grid's track. This is the picture's own box: the
+                one the fit mode sizes, and the corner the play badge sits on.
+                Its ratio starts from X's own width/height, when the extractor
+                read them, and is corrected below once the picture has loaded. */}
+            <div class="media-box" style={{ aspectRatio: m.aspectRatio ? `${m.aspectRatio}` : undefined }}>
               <img
                 src={m.url}
                 alt={m.alt || `${altPrefix} ${idx + 1}`}
-                class={`media-picture media-video-poster ${fitClass}`}
+                class={`media-picture ${fitClass}`}
                 data-fit={imageFit}
                 loading="eager"
                 {...imageFallbackAttrs(m)}
@@ -182,7 +186,7 @@ function renderMediaGrid(
               />
               {/* Play badge sits on the poster without a scrim: the pill is
                   opaque, so a gradient would only dim the image. */}
-              {showPlayButton && (
+              {isVideo && showPlayButton && (
                 <div class="video-indicator-badge">
                   {m.type === 'gif' ? (
                     <span class="video-badge-pill gif-badge">GIF</span>
@@ -197,26 +201,6 @@ function renderMediaGrid(
                 </div>
               )}
             </div>
-          );
-        }
-
-        return (
-          <div
-            key={idx}
-            class={`media-item ${fitClass} ${layoutClass}`}
-            data-fit={imageFit}
-            data-layout={mediaLayout}
-          >
-            <img
-              src={m.url}
-              alt={m.alt || `${altPrefix} ${idx + 1}`}
-              class={`media-picture ${fitClass}`}
-              data-fit={imageFit}
-              loading="eager"
-              {...imageFallbackAttrs(m)}
-              onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
-              onError={handleImageError}
-            />
           </div>
         );
       })}

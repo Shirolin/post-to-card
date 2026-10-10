@@ -564,19 +564,17 @@
    silently overrode `完整展示` on every multi-image post.
 
    A cell is a frame, not a picture: the ring, the gutter and the play badge
-   belong to it and stay where the layout put them, while the picture sits inside
-   it. That is what lets 完整展示 round the picture without moving the frame -- a
-   picture stretched over its cell and letterboxed inside it keeps square corners,
-   because its own corners never reach the cell's radius, so only the empty bars
-   get cut. Sized to its own shape, the radius has an edge to cut, and what the
-   picture leaves over is the cell's own background, which is what those bars
-   already showed.
-   Both sizes are `auto` with the two ceilings, because that is the one box CSS
-   can make hug the picture's own rectangle: a definite `width: 100%` makes the
-   browser clamp the height alone and letterbox the picture inside a box of the
-   cell's shape again. A picture smaller than its cell therefore sits at its own
-   size instead of being stretched up to the cell -- contain used to scale it up,
-   as a side effect of the box being the cell.
+   stay where the layout put them, and the picture gets its own box inside the
+   cell (`.media-box`). That is what lets 完整展示 round the picture without
+   moving the frame -- a picture stretched across its cell and letterboxed
+   inside it keeps square corners, because its own corners never reach the
+   cell's radius, so only the empty bars ever got cut.
+   Both of that box's sizes are `fit-content` with the cell's two ceilings,
+   because that is the one box CSS can make hug the picture's own rectangle: a
+   definite `width: 100%` makes the browser clamp the height alone and letterbox
+   the picture inside a box of the cell's shape again. A picture smaller than its
+   cell therefore sits at its own size instead of being stretched up to the cell
+   -- contain used to scale it up, as a side effect of its box being the cell.
    The centring rule carries one attribute more than the per-count blocks below,
    which set a cell's `display`; this has to outrank them or the picture sits in
    the cell's corner instead of its middle. */
@@ -586,36 +584,48 @@
   justify-content: center;
 }
 
-[data-fit="contain"] .media-grid .media-item > .media-picture {
-  object-fit: contain;
-  background: transparent;
-  box-shadow: none;
-  /* Both sizes auto with the two ceilings: the picture lands on the largest
-     rectangle of its own shape that fits its cell, which is the one box a
-     rounded corner can be cut into. (`width: 100%` cannot do this -- with a
-     definite width the browser clamps the height alone and letterboxes the
-     picture inside a box of the cell's shape instead.) */
-  width: auto;
-  height: auto;
+/* The picture's box: contain hands it the picture's own shape, cover hands it
+   the whole cell. Everything here sizes the box; the picture just fills it. */
+[data-fit="contain"] .media-grid .media-item > .media-box {
+  width: fit-content;
+  height: fit-content;
   max-width: 100%;
   max-height: 100%;
 }
 
-[data-fit="cover"] .media-grid .media-item > .media-picture {
-  object-fit: cover;
-  background: transparent;
-  box-shadow: none;
+[data-fit="cover"] .media-grid .media-item > .media-box {
   width: 100%;
   height: 100%;
   max-height: 100%;
 }
 
-/* The radius belongs to the picture in both modes: on cover the picture fills the
-   cell and meets the cell's own corner; on 完整展示 it is the only thing that can
-   round the picture at all. `--media-radius` is the token the cell itself uses,
-   so the two modes round alike and a square material stays square. */
-.media-grid .media-item > .media-picture {
+/* The picture fills its box in both modes. Cover crops it to that box; contain
+   only holds a picture whose real shape has not arrived yet, because the box is
+   already the picture's own rectangle. */
+.media-grid .media-item > .media-box > .media-picture {
   display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+[data-fit="contain"] .media-grid .media-item > .media-box > .media-picture {
+  object-fit: contain;
+}
+[data-fit="cover"] .media-grid .media-item > .media-box > .media-picture {
+  object-fit: cover;
+}
+
+/* The radius belongs to the picture's box in both modes: on cover that box is
+   the cell, so the picture meets the cell's own corner; on 完整展示 it is the
+   only thing that can round the picture at all. `--media-radius` is the token
+   the cell's own ring uses, so the two round alike and a square material stays
+   square. `position: relative` is what makes the box the corner the play badge
+   hangs on. */
+.media-grid .media-item > .media-box {
+  position: relative;
+  display: block;
+  overflow: hidden;
   min-width: 0;
   min-height: 0;
   border-radius: var(--media-radius, 0px);
@@ -646,10 +656,11 @@
 
 /* Single Image in Auto Ratio: natural proportion without harsh limits.
    The ceiling is stated once per variant as `--media-height-cap`, and consumed
-   twice: by the cell, so the ring never stretches past it, and by the picture
-   inside it, so a capped picture is capped rather than left to spill out of the
-   cell that was capped around it. Stack is excluded -- nothing is capped there,
-   which is the cell's `max-height: unset` below, and the picture has to agree. */
+   twice: by the cell, so the ring never stretches past it, and by the picture's
+   box inside it, so a capped picture is capped rather than left to spill out of
+   the cell that was capped around it. Stack is excluded -- nothing is capped
+   there, which is the cell's `max-height: unset` below, and the box has to
+   agree. */
 .media-grid[data-count="1"] {
   --media-height-cap: 520px;
 }
@@ -657,7 +668,7 @@
   height: auto;
 }
 .media-grid[data-count="1"] .media-item,
-.media-grid[data-count="1"]:not([data-layout="stack"]) .media-item > .media-picture {
+.media-grid[data-count="1"]:not([data-layout="stack"]) .media-item > .media-box {
   max-height: var(--media-height-cap);
 }
 
@@ -843,7 +854,6 @@
    Video & Animated GIF Presentation (Non-obstructive Elegant UI)
    ------------------------------------------------------------- */
 .media-item.media-video-item {
-  position: relative;
   overflow: hidden;
   display: block;
   /* A contained poster leaves letterbox bars; they should be the material's
@@ -854,26 +864,14 @@
   width: 100%;
 }
 
-/* In auto ratio with single media, preserve natural proportion */
-.media-grid[data-count="1"] .media-item.media-video-item {
-  max-height: 520px;
-  height: auto;
-}
-
-.media-item.media-video-item .media-video-poster {
-  width: 100%;
-  height: auto;
-  max-height: 520px;
-  min-width: 0;
-  min-height: 0;
-  display: block;
-}
-
 /* No bottom scrim. There used to be a 56px black gradient whose only job was
    to give the translucent play badge something to sit against. The badge is now
    an opaque pill, so the scrim only darkened the poster — and on the many posts
    with burnt-in subtitles it was dimming text the card cannot re-typeset. */
 
+/* The badge hangs on the picture's box, not on the cell: a poster whose shape
+   differs from its cell sits inside it, so a corner taken from the cell would
+   land on the recess beside the picture. */
 .media-video-item .video-indicator-badge {
   position: absolute;
   bottom: 10px;
