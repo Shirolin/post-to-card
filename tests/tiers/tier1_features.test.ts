@@ -1,5 +1,5 @@
 /**
- * Tier 1 Test Suite: Comprehensive Feature Coverage (F1 to F26)
+ * Tier 1 Test Suite: Comprehensive Feature Coverage
  * Authoritative specification tests covering every feature area with >=5 tests each.
  */
 

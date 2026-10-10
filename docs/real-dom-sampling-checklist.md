@@ -1,5 +1,8 @@
 # 真实 DOM 采样清单
 
+> **状态：场景清单仍然可用；「为什么」一列写的是采集当日的判据，不是现行事实。**
+> 已经采到的场景在 `docs/observed-dom-*.md`（每篇开头有状态行），先看那里，再决定还差哪几条。
+
 用于验证推文检测逻辑。每项只要**推文所在 `<article>` 元素**（在 Chrome 检查器里选中
 `article[data-testid="tweet"]` → 右键 → Copy → Copy outerHTML）。
 

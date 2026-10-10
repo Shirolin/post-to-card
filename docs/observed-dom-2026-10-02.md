@@ -1,5 +1,10 @@
 # 实测记录：未登录状态下的 X DOM
 
+> **状态：历史记录，两项「建议的修复」都已落地。** 本文是一次性的实测快照，不是待办清单。
+> `TWEET_ARTICLE_SELECTOR` 的第四级 `main article`（`adapter/thread.ts`）与 `injectAll` 的未登录兜底
+> （`adapter/injection.ts` 第 3 阶段）就是照文末建议做的；同日登录态核验见
+> `observed-dom-2026-10-02-authenticated.md`。**读本文前先看本行。**
+
 > 采集时间：2026-10-02
 > 采集方式：OpenChamber 浏览器面板，真实 `x.com` 页面
 > 页面：`https://x.com/Wikipedia/status/1888944671579078978`（公开推文详情页，**未登录**）

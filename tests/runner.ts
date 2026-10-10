@@ -29,7 +29,7 @@ async function main() {
   const tiersToRun: Array<{ name: string; run: () => Promise<any> }> = [];
 
   if (!targetTier || targetTier === 'tier1' || targetTier === '1') {
-    tiersToRun.push({ name: 'Tier 1: Feature Coverage (F1 to F26)', run: runTier1 });
+    tiersToRun.push({ name: 'Tier 1: Feature Coverage', run: runTier1 });
   }
   if (!targetTier || targetTier === 'tier2' || targetTier === '2') {
     tiersToRun.push({ name: 'Tier 2: Boundary & Corner Cases', run: runTier2 });
