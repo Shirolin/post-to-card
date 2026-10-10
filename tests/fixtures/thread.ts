@@ -126,8 +126,14 @@ export const EXPECTED_THREAD_DATA: ThreadData = {
 /**
  * The same author's consecutive posts as a *list view* renders them: no
  * `thread-*` classes, no "show this thread" link and no `socialContext`, which
- * are the signals the DOM heuristics look for and which a real feed never
+ * are the signals the DOM heuristics look for and which a real list view never
  * provides. This is the shape that used to lose a thread.
+ *
+ * A profile timeline is where this shape is common — measured on a real one:
+ * 12 consecutive posts by one author, 11 adjacent same-author pairs, of which
+ * only the ones the payload links are continuations. The home feed does not
+ * present it at all (54 posts sampled, zero adjacent pairs), which is why a
+ * single-post card there is correct rather than a miss.
  *
  * Ids line up with `HOME_TIMELINE_SELF_THREAD_JSON` (`tests/fixtures/graphql.ts`),
  * and an ad sits after the pair so the walk has to stop where the thread does.
