@@ -168,6 +168,13 @@ export function getReplyingToHandle(article: Element): string | null {
   return null;
 }
 
+/**
+ * Wording X uses to mark a pinned notice. Kept only as a second signal beside
+ * the structural one below: it knows three languages out of the forty-odd X
+ * ships, so on its own it silently reported `none` for most of the world.
+ */
+const PINNED_NOTICE = /pinned|置顶|固定/i;
+
 /** Classifies the entry for diagnostic reporting. */
 export function classifySocial(article: Element): 'retweet' | 'reply' | 'pinned' | 'none' {
   const social = getSocialContext(article);
@@ -176,6 +183,12 @@ export function classifySocial(article: Element): 'retweet' | 'reply' | 'pinned'
   // same container, so the retweet reading has to be ruled out first.
   if (isReplyNotice(social)) return 'reply';
   if (getRetweetedBy(article)) return 'retweet';
-  if (/pinned|置顶|固定/i.test(social.textContent || '')) return 'pinned';
+  // No account named at all. A repost notice always names the reposter (that is
+  // the link the notice *is*, measured 2026-10-11) and a reply names its target,
+  // so a notice holding no handle is a pinned notice -- in every language, which
+  // is the point. The wording above is kept as a second signal for a future
+  // pinned notice that does link its author.
+  if (getSocialContextHandles(article).length === 0) return 'pinned';
+  if (PINNED_NOTICE.test(social.textContent || '')) return 'pinned';
   return 'none';
 }

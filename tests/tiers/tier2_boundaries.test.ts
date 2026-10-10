@@ -562,9 +562,23 @@ test('Tier 2.31c: a real pinned notice is a div with no link, and reads as pinne
 
   const tweet = extractTweetData(article);
   assert.ok(tweet, 'the pinned post must extract');
-  assert.equal(tweet!.diagnostics?.social, 'pinned', 'the notice wording is the only signal');
+  assert.equal(tweet!.diagnostics?.social, 'pinned', 'a notice naming no account is pinned');
   assert.equal(tweet!.retweetedBy, undefined, 'a pinned post is not a repost');
   assert.equal(tweet!.author.handle, '@op7418', 'and the body is its own author');
+
+  // And it must not depend on reading the wording. X localises that notice into
+  // forty-odd languages while the wording list knew three, so a German or Korean
+  // interface silently reported `none` -- which is exactly the drift the
+  // diagnostic exists to surface. The structure is the same in every language:
+  // a pinned notice names no account.
+  for (const wording of ['Angepinnt', 'Épinglé', '고정됨', 'フィン止め']) {
+    const localized = createDomElement(PINNED_HTML.replace('已置顶', wording));
+    assert.equal(
+      extractTweetData(localized)?.diagnostics?.social,
+      'pinned',
+      `a notice reading "${wording}" is still pinned`
+    );
+  }
 });
 
 test('Tier 2.32: a reply target is read structurally from socialContext', () => {
