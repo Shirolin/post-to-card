@@ -30,6 +30,7 @@ import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
 import { RETWEET_HTML } from '../fixtures/retweet.ts';
+import { PINNED_HTML } from '../fixtures/pinned.ts';
 import { withoutTestIds } from '../fixtures/strip-testids.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
@@ -550,6 +551,20 @@ test('Tier 2.31b: a real repost notice is a span, and its handle is the notice o
     '翻译自 英语',
     'the translation notice is still the entry own, not the notice'
   );
+});
+
+test('Tier 2.31c: a real pinned notice is a div with no link, and reads as pinned', () => {
+  // The same testid as a repost, rendered the other way: a `div` here against a
+  // `span` there, and no link at all. That pair is why the lookup matches the
+  // testid and never the tag, and why the handle readers must answer nothing
+  // rather than reaching for the entry's own author.
+  const article = createDomElement(PINNED_HTML);
+
+  const tweet = extractTweetData(article);
+  assert.ok(tweet, 'the pinned post must extract');
+  assert.equal(tweet!.diagnostics?.social, 'pinned', 'the notice wording is the only signal');
+  assert.equal(tweet!.retweetedBy, undefined, 'a pinned post is not a repost');
+  assert.equal(tweet!.author.handle, '@op7418', 'and the body is its own author');
 });
 
 test('Tier 2.32: a reply target is read structurally from socialContext', () => {
