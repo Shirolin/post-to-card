@@ -27,7 +27,7 @@
 
 | # | 形态 | 为什么要 |
 |---|---|---|
-| 6 | **转发（retweet）** | 现有代码**完全没有**转发判定。要确认 X 是否有 `data-testid` 可用 |
+| 6 | **转发（retweet）** | **已答（2026-10-11）**：`data-testid="socialContext"` 在 **`span`** 上（不是 `div`），转帖者 handle 是该 span 自己的外层 `<a>`。据此已修 `adapter/social.ts` 并加真实夹具 `tests/fixtures/retweet.ts`（锁在 `tier2` 2.31b）。 |
 | 7 | **回复** | **已答（2026-10-10）**：详情页会话区 35 条推文里 `socialContext` 为 0 个，也没有「Replying to / 回复」文案——那个容器不是每次都出现，详情页里 `getReplyingToHandle` 只能返回 null。时间线里的回复形态仍未见样本 |
 | 8 | **有链接卡片**（如「来自 nintendo.com」） | `extractLinkCardMedia` 路径 |
 | 9 | **含 hashtag / mention / cashtag** | 验证 token 分类，尤其 `$` cashtag |

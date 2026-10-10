@@ -87,6 +87,12 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
   - **2026-10-10 实测修正**：详情页会话区里这个容器**不存在**（35 条推文 0 个），
     也没有「Replying to / 回复」文案，所以那里 `getReplyingToHandle` 只能返回 null。
     「稳定」目前只对时间线成立过。见 `docs/observed-dom-2026-10-10.md`
+  - **2026-10-11 实测修正（转发帖）**：`data-testid="socialContext"` **不在 `div` 上，而在 `span` 上**，
+    且**转帖者的 handle 是这个 span 自己所在的 `<a>`**，不是容器内的链接：
+    `<a href="/ShiroLinHime"><span data-testid="socialContext">你已转帖</span></a>`。
+    写 `div[...]` 选择器会**一个都匹配不到**，导致转发帖被当成原创（`getRetweetedBy` 返回 null、
+    `classifySocial` 返回 `none`）。**testid 是稳定的，标签不是**——所以判据只认 testid。
+    夹具见 `tests/fixtures/retweet.ts`（真实标记原样保留），锁在 `tier2` 2.31b。
 - `div[data-testid="previewInterstitial"]` + `aria-label="嵌入式视频"` —— **2026-10-10 新增**：
   自动播放关闭时，视频/GIF 在时间线里以「海报 `img` + 这个 interstitial」出现，**没有 `<video>`**；
   这个状态下 GIF 与视频仍然由**徽标文本**区分（容器内有 `<span>GIF</span>`），
