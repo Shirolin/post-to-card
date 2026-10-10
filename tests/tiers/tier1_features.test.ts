@@ -20,7 +20,7 @@ import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, L
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { TRIGGER_BUTTON_SVG } from '../../src/content/adapter/triggerViews.ts';
-import { isThreadConnectedPair, isTemporallyConnected } from '../../src/content/adapter/thread.ts';
+import { isThreadConnectedPair, isTemporallyConnected, getReplyingToHandle } from '../../src/content/adapter/thread.ts';
 import { toggleExcluded, selectCurrentOnly } from '../../src/content/ui/threadScope.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
@@ -1206,6 +1206,31 @@ test('F14.8: a post replying to someone else ends the thread', () => {
     false,
     'a reply aimed at a third party is not the author continuing'
   );
+
+  // The same post with no `socialContext` container, in both arrangements of the
+  // notice: the last-resort path scans the article for a profile link, and the
+  // byline holds the author's own. Reporting that as the reply target reads as
+  // "not a reply" to the caller, so the post would be merged into the thread.
+  const withoutContainer = (noticeFirst: boolean) => {
+    const notice = '<div><span>Replying to </span><a href="/bob"><span>@bob</span></a></div>';
+    const byline = `
+      <div data-testid="User-Name">
+        <a href="/alice"><span>@alice</span></a>
+        <a href="/alice/status/1002"><time datetime="2026-08-14T10:02:00.000Z"></time></a>
+      </div>`;
+    return createDomElement(
+      `<article data-testid="tweet">${noticeFirst ? notice : ''}${byline}${noticeFirst ? '' : notice}` +
+        '<div data-testid="tweetText"><span>Replying to Bob comment</span></div></article>'
+    ) as unknown as Element;
+  };
+
+  for (const [label, noticeFirst] of [['below', false], ['above', true]] as const) {
+    assert.equal(
+      getReplyingToHandle(withoutContainer(noticeFirst)),
+      '@bob',
+      `a notice ${label} the byline must still name the account being replied to`
+    );
+  }
 });
 
 test('F14.9: excluding a post leaves it off the card, and the panel lists what is left', async () => {

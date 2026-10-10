@@ -132,6 +132,11 @@ export function getReplyingToHandle(article: Element): string | null {
   }
 
   for (const link of Array.from(scope.querySelectorAll('a[href^="/"]:not([href*="/status/"])'))) {
+    // The byline holds the author's own profile link, which is never a reply
+    // target. Without this the fallback reported the author as the account being
+    // replied to whenever the notice sat below the byline, which the caller reads
+    // as "not a reply" and merges the post into the thread.
+    if (link.closest('div[data-testid="User-Name"]')) continue;
     const text = link.textContent?.trim() || '';
     if (text.startsWith('@')) return text.toLowerCase();
   }

@@ -48,7 +48,7 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 | # | 位置 | 问题 | 改法 |
 |---|---|---|---|
 | 7 | `thread.ts:100-102` | inline style `width:2px` + 混淆类名 `r-11mg6pl`/`r-14lw9vd`/`r-16y2uox`。社区有实证：同一份 DOM 隔两年抓取，混淆类名**无一相同** | **删除**。改用 snowflake ID 单调性 + `socialContext` + 详情页上下文 |
-| 8 | `thread.ts:55,64` | `getReplyingToHandle` 文案正则仅 3 种语言；`回复` 会误命中引用推文与 bio 文本；`\b` 对 CJK 无效 | 先查 `div[data-testid="socialContext"]` 内的 `a[href^="/"]` 取 handle，文案降为末级 |
+| 8 | `thread.ts:55,64` | `getReplyingToHandle` 文案正则仅 3 种语言；`回复` 会误命中引用推文与 bio 文本；`\b` 对 CJK 无效 | 先查 `div[data-testid="socialContext"]` 内的 `a[href^="/"]` 取 handle，文案降为末级；末级里再排除 byline 内的链接，否则作者自己会被当成回复对象 |
 | 9 | `thread.ts:29` | `/\b(?:Promoted\|赞助)\b/i` 独立触发。`赞助` 会命中用户 bio（bio 与推文同在 article 内），假阳性高 | 必须 `placementTracking` 命中后才允许文案辅助 |
 | 10 | `extractor.ts:615` | `includes('This post is unavailable')` 文案匹配，至少 20 种语言 | 改结构判据：有 `/status/` 链接但缺 `User-Name` 与 `tweetText` |
 | 11 | `extractor.ts:53,90` | `.quote-box` 是 2015 年前老 Twitter 类名，X 从未有过 | 删除死代码 |

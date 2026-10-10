@@ -23,7 +23,7 @@
 | # | 形态 | 为什么要 |
 |---|---|---|
 | 6 | **转发（retweet）** | 现有代码**完全没有**转发判定。要确认 X 是否有 `data-testid` 可用 |
-| 7 | **回复** | 现在靠 `Replying to`/`回复`/`返信先` 文案匹配，要换成结构信号 |
+| 7 | **回复** | 判据已换成结构信号（`socialContext` 容器 + 其中的 handle 链接），文案只作末级兜底。要确认的是：真实回复里那个容器是否每次都在；不在时「Replying to」notice 位于 byline 之上还是之下（末级兜底现在两种顺序都能认，但真样本能省掉这个假设） |
 | 8 | **有链接卡片**（如「来自 nintendo.com」） | `extractLinkCardMedia` 路径 |
 | 9 | **含 hashtag / mention / cashtag** | 验证 token 分类，尤其 `$` cashtag |
 | 10 | **含表情（Twemoji）** | `restoreUnicodeEmojis` 在真实 DOM 的表现 |

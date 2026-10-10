@@ -91,9 +91,11 @@ export interface TweetData {
    */
   truncated?: boolean;
   /**
-   * Which extraction strategy produced this record. Purely diagnostic: a rising
-   * count of `fallback` here is the early warning that X changed its DOM,
-   * ahead of user reports.
+   * Which extraction strategy produced this record. Purely diagnostic: a body or
+   * media count of `none` is the early warning that X changed its DOM, ahead of
+   * user reports. The `fallback` values this once offered are gone because no
+   * path could produce them -- `text` comes from `tweetText` and nowhere else --
+   * so the warning it advertised could never fire.
    */
   diagnostics?: ExtractionDiagnostics;
 }
@@ -108,9 +110,8 @@ export interface ExtractionDiagnostics {
    * rotation is visible in logs; a change here is expected and harmless.
    */
   queryId?: string;
-  tweet?: 'testid' | 'role' | 'structural' | 'none';
-  text?: 'testid' | 'fallback' | 'none';
-  media?: 'testid' | 'fallback' | 'none';
+  text?: 'testid' | 'none';
+  media?: 'testid' | 'none';
   isUnavailable?: boolean;
   /** Which social-context signal classified this entry, if any. */
   social?: 'retweet' | 'reply' | 'pinned' | 'none';

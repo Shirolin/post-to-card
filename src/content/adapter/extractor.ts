@@ -1165,10 +1165,11 @@ export function extractTweetData(article: Element): TweetData | null {
     translatedFrom,
     truncated: truncated || undefined,
     isThreadPart: false,
-    // Diagnostic only. A rising count of fallback/none values is the early
-    // signal that X changed its DOM, ahead of user reports.
+    // Diagnostic only. A rise in `none` is the early signal that X changed its
+    // DOM, ahead of user reports: there is one text path (`tweetText`) and one
+    // media path, so a record either found its anchor or did not.
     diagnostics: {
-      text: validTextEl ? 'testid' : (text ? 'fallback' : 'none'),
+      text: validTextEl ? 'testid' : 'none',
       media: media && media.length > 0 ? 'testid' : 'none',
       isUnavailable: isUnavailableMarker(article),
       social: classifySocial(article),
