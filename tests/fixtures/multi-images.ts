@@ -184,3 +184,52 @@ export const PHOTO_AND_VIDEO_HTML = `
   </div>
 </article>
 `;
+
+/**
+ * The first of the two shapes `isGifMedia` reads a GIF badge from: the video
+ * player's own `aria-label`. The `GIF` token is a technical abbreviation, so it
+ * survives a localized label -- this one is the untranslated variant.
+ *
+ * Which of the two shapes X actually renders is still open (see the sampling
+ * checklist); each of them is a branch the extractor claims to handle.
+ */
+export const GIF_ARIA_LABELED_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8101"><time datetime="2026-07-02T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="videoPlayer" aria-label="Embedded GIF">
+    <video poster="https://pbs.twimg.com/tweet_video_thumb/gif_aria_poster.jpg"></video>
+  </div>
+</article>
+`;
+
+/**
+ * The other shape `isGifMedia` reads: the badge text inside the player. There is
+ * no `gifBadge` testid behind it, and a fixture that invents one proves only
+ * that the invention can be found.
+ */
+export const GIF_BADGE_TEXT_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8102"><time datetime="2026-07-02T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="videoPlayer">
+    <video poster="https://pbs.twimg.com/tweet_video_thumb/gif_text_poster.jpg"></video>
+    <span>GIF</span>
+  </div>
+</article>
+`;
+
+/** A video post whose controls carry a duration, which a GIF never gets. */
+export const VIDEO_WITH_DURATION_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8103"><time datetime="2026-07-02T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="videoPlayer">
+    <video poster="https://pbs.twimg.com/media/duration_poster.jpg"></video>
+    <div><span>1:42</span></div>
+  </div>
+</article>
+`;

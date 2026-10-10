@@ -16,7 +16,7 @@ import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/singl
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
@@ -2473,58 +2473,27 @@ test('F28.6: 3-image layout uses left-hero for square/portrait (ratio < 1.2) wit
 // F29: Non-obstructive Video Presentation
 // -------------------------------------------------------------
 test('F29.1: detects GIF media vs standard video containers', () => {
-  const extractorContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/extractor.ts'), 'utf-8');
-  assert.ok(extractorContent.includes('function isGifMedia'), 'Extractor must implement isGifMedia');
-  assert.ok(extractorContent.includes('type: isGif ? \'gif\' : \'video\''), 'Extractor must differentiate GIF and video');
+  const typeOf = (html: string) =>
+    extractTweetData(createDomElement(html) as unknown as Element)?.media?.[0]?.type;
 
-  function checkGif(container: DomElement): boolean {
-    const aria = container.getAttribute('aria-label') || '';
-    if (aria.toUpperCase().includes('GIF')) return true;
-    if (container.querySelector('[aria-label*="GIF"], [data-testid="gifBadge"]')) return true;
-    for (const el of container.querySelectorAll('span, div')) {
-      if (el.textContent?.trim() === 'GIF') return true;
-    }
-    return false;
-  }
+  // The two shapes the extractor reads a GIF badge from. Neither is a
+  // `gifBadge` testid -- X has no such element, so the copy of the check this
+  // test used to carry could only ever find the fixture built for it.
+  assert.equal(typeOf(GIF_ARIA_LABELED_HTML), 'gif', 'the player aria-label says GIF');
+  assert.equal(typeOf(GIF_BADGE_TEXT_HTML), 'gif', 'the badge text says GIF');
 
-  const gifHtml = `
-    <div data-testid="videoPlayer" aria-label="Embedded GIF">
-      <video poster="https://pbs.twimg.com/media/gif_poster.jpg"></video>
-      <span data-testid="gifBadge">GIF</span>
-    </div>
-  `;
-  const el = createDomElement(gifHtml);
-  assert.equal(checkGif(el), true);
-
-  const videoHtml = `
-    <div data-testid="videoPlayer">
-      <video poster="https://pbs.twimg.com/media/standard_video.jpg"></video>
-    </div>
-  `;
-  const vEl = createDomElement(videoHtml);
-  assert.equal(checkGif(vEl), false);
+  // The same post without either signal stays a video, so the type follows the
+  // signal rather than defaulting to one.
+  assert.equal(typeOf(VIDEO_POSTER_HTML), 'video');
 });
 
 test('F29.2: extracts video duration timestamp from video controls', () => {
-  const extractorContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/extractor.ts'), 'utf-8');
-  assert.ok(extractorContent.includes('function extractVideoDuration'), 'Extractor must implement extractVideoDuration');
+  const media = extractTweetData(createDomElement(VIDEO_WITH_DURATION_HTML) as unknown as Element)?.media;
 
-  function getDuration(container: DomElement): string | undefined {
-    for (const el of container.querySelectorAll('time, span, div')) {
-      const text = el.textContent?.trim() || '';
-      if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(text)) return text;
-    }
-    return undefined;
-  }
-
-  const videoWithTimeHtml = `
-    <div data-testid="videoPlayer">
-      <video poster="https://pbs.twimg.com/media/test_video.jpg"></video>
-      <div><span>1:42</span></div>
-    </div>
-  `;
-  const el = createDomElement(videoWithTimeHtml);
-  assert.equal(getDuration(el), '1:42');
+  // Read off the extractor. This test used to reimplement the scan and assert
+  // against the copy, so it agreed with itself whatever the card did.
+  assert.equal(media?.[0]?.type, 'video');
+  assert.equal(media?.[0]?.duration, '1:42');
 });
 
 test('F29.3: Card.tsx renders a corner video badge, and nothing that dims the poster', () => {
@@ -2560,11 +2529,11 @@ test('F29.5: i18n provides localized videoLabel for zh-CN and en-US', () => {
   assert.equal(TRANSLATIONS['en-US'].videoPlayButton, 'Video Play Button');
 });
 
-test('F29.6: DEFAULT_CARD_CONFIG defines showPlayButton: true and loadUserPreferences parses it', () => {
-  const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
-  assert.ok(themesContent.includes('showPlayButton: true'), 'DEFAULT_CARD_CONFIG must include showPlayButton: true');
-  const prefsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/prefs.ts'), 'utf-8');
-  assert.ok(prefsContent.includes('showPlayButton: saved.showPlayButton !== false'), 'loadUserPreferences must parse showPlayButton');
+test('F29.6: the video play button ships on by default', () => {
+  // The other half of this contract -- that a stored `false` is honoured -- is
+  // in tier 2, beside the storage mock that can hand `loadUserPreferences` a
+  // saved config. Asserting the source text of the parser proved neither half.
+  assert.equal(DEFAULT_CARD_CONFIG.showPlayButton, true);
 });
 
 test('F29.7: Controls.tsx contains toggle for showPlayButton with localized label', () => {

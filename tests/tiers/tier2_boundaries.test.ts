@@ -28,6 +28,9 @@ import {
 import { getTranslation } from '../../src/content/i18n.ts';
 import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
+import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
+import { withoutTestIds } from '../fixtures/strip-testids.ts';
+import { loadUserPreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig, RadiusOption, PaddingOption } from '../../src/types/card.ts';
 import type { ExtensionMessage } from '../../src/types/messages.ts';
@@ -709,22 +712,28 @@ test('Tier 2.37f: a video poster never falls back onto the video file', () => {
 
 test('Tier 2.38: extraction degrades gracefully when no data-testid is present', () => {
   // Logged-out pages carry no data-testid at all, so every testid-based lookup
-  // misses. This must not throw and must report itself as a fallback so the
-  // change is visible in diagnostics rather than failing silently.
-  const article = createDomElement(`
-    <article role="article">
-      <div><a href="/ivy"><span>@ivy</span></a></div>
-      <div><span>no testids here</span></div>
-    </article>
-  `);
+  // misses. The fixture is a real one with its attributes removed, which is what
+  // leaves the permalink and the timestamp as the only signals in the markup.
+  const article = createDomElement(withoutTestIds(SINGLE_TWEET_HTML));
 
   let tweet;
   assert.doesNotThrow(() => {
-    tweet = extractTweetData(article);
+    tweet = extractTweetData(article as unknown as Element);
   }, 'extraction must not throw on a testid-free DOM');
   assert.ok(tweet, 'a record must still be produced');
-  assert.equal(tweet!.text, '', 'text is unavailable without a testid, but must not throw');
-  assert.equal(tweet!.media, undefined, 'media is unavailable without a testid');
+
+  // Identity comes off the permalink and the timestamp rather than a testid, so
+  // it survives the loss. How much of the rest degrades is deliberately not
+  // pinned -- a later pass may recover more of it -- but the action bar must
+  // never become the body.
+  assert.equal(tweet!.id, '20', 'the permalink still identifies the post');
+  assert.equal(tweet!.url, 'https://x.com/jack/status/20');
+  for (const marker of ['48.5K', '120.2K', '1.5M', '32.1K', '18.4M']) {
+    assert.ok(
+      !tweet!.text.includes(marker),
+      `the body must not adopt the action bar's "${marker}"`
+    );
+  }
   assert.equal(tweet!.diagnostics?.text, 'none', 'diagnostics must report the missing anchor');
 });
 
@@ -1489,6 +1498,31 @@ test('Tier 2.66: an emoji after a pic link keeps the link, in both views', () =>
 
   assert.ok(inText, 'an emoji after the link means the link is not the appended tail');
   assert.equal(inTokens, inText, 'the two views must agree about the same link');
+});
+
+test('Tier 2.76: the stored play-button preference is honoured, and its absence means on', async () => {
+  await withInjectionEnv(async ({ chrome }) => {
+    assert.equal(
+      (await loadUserPreferences()).showPlayButton,
+      true,
+      'a storage with nothing saved must come back with the button on'
+    );
+
+    await chrome.storage.local.set({ [STORAGE_KEY]: { showPlayButton: false } });
+    assert.equal(
+      (await loadUserPreferences()).showPlayButton,
+      false,
+      'an explicit false is the only thing that turns the button off'
+    );
+
+    // A config saved before the flag existed has no key for it at all.
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'darkroom' } });
+    assert.equal(
+      (await loadUserPreferences()).showPlayButton,
+      true,
+      'an older config that never mentioned the button leaves it on'
+    );
+  });
 });
 
 // -------------------------------------------------------------
