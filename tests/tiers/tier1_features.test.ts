@@ -16,7 +16,7 @@ import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/singl
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { TRIGGER_BUTTON_SVG } from '../../src/content/adapter/triggerViews.ts';
@@ -2656,6 +2656,12 @@ test('F29.1: detects GIF media vs standard video containers', () => {
   // The same post without either signal stays a video, so the type follows the
   // signal rather than defaulting to one.
   assert.equal(typeOf(VIDEO_POSTER_HTML), 'video');
+
+  // And the state a feed actually shows with autoplay off: a poster and an
+  // interstitial, no `<video>` at all. Captured live on 2026-10-10; the badge
+  // text is what carries the answer there.
+  assert.equal(typeOf(GIF_POSTER_ONLY_HTML), 'gif', 'the badge makes it a GIF with no video element');
+  assert.equal(typeOf(VIDEO_POSTER_ONLY_HTML), 'video', 'and a video poster without one stays a video');
 });
 
 test('F29.2: extracts video duration timestamp from video controls', () => {

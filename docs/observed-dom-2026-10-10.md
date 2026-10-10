@@ -54,15 +54,30 @@
 
 点击后才出现 `div[data-testid="videoPlayer"]`，那时容器的 `aria-label` 是 `嵌入式视频`。
 
-### 对判据的影响
+### 对判据的影响（含一处自我更正）
 
-- `isGifMedia` 读的是**容器自身的 `aria-label`** 或容器内 `span`/`div` 的文本是否等于 `GIF`。
-  实测这个状态下两者都没有（`aria-label` 是「嵌入式视频」，没有 `GIF` 文本，也没有 `gifBadge`）
-  —— 于是**同一张 GIF 会被判成 `video`**，卡片上标成「视频」而不是「GIF」。
-- 而能够区分的那条信号其实已经在仓库里：`tweet_video_thumb`（`isMediaPosterLayer` 正在用它做排除）。
-  也就是说「GIF 徽标」不是稳定标记，**海报 URL 才是**。
-- 清单第 3 条问的「徽标是裸文本节点还是被元素包着」在这一状态里没有答案，因为它根本没渲染；
-  要回答它得让视频真正挂载（点开媒体，或打开自动播放）。
+**徽标是存在的**，形态是媒体容器里的 `<span class="css-1jxf684 …">GIF</span>` 文本节点，
+同容器还有 `button[aria-label="播放这个 GIF"]`。**没有** `gifBadge` testid（这一点审计说得对）。
+
+> 更正：本文初稿写过「这个状态下徽标根本没渲染」。那是我查询取窄了——我只看海报 `img`
+> 的直接父节点（interstitial 内层），而徽标 span 是同一 `tweetPhoto` 容器下的**另一个子树**。
+> 教训：读实测时，查询范围要覆盖你声称在描述的那个容器。
+
+于是判断走的是现有规则，且**实测成立**（用真实嵌套跑过 `extractTweetData`，见 F29.1 的
+`GIF_POSTER_ONLY_HTML` / `VIDEO_POSTER_ONLY_HTML` 两个夹具）：
+
+| 形态 | 判据给出的类型 |
+|---|---|
+| GIF：`tweet_video_thumb` 海报 + `<span>GIF</span>` 徽标，无 `<video>` | `gif` ✓ |
+| 视频：`amplify_video_thumb` 海报，无徽标 | `video` ✓ |
+
+也就是说 **不需要**改用海报 URL 来判 GIF：徽标文本是有效信号，而「`tweet_video_thumb` = GIF」
+这个映射本轮**没能证实**（我唯一抓到的那张 `tweet_video_thumb` 恰好带徽标，所以它无法验证映射本身）。
+如果再叠一条未证实的信号，只会多一个误判来源。
+
+`isGifMedia` 读的是「容器自身 `aria-label` 含 `GIF`」或「容器内 `span`/`div` 文本正好是 `GIF`」；
+`aria-label` 那条在真实页面里不成立（容器上是 `嵌入式视频`，不是英文 `Embedded video`，
+exact-match 的选择器也匹配不到），真正起作用的是文本那条。
 
 ## 4. 详情页的回复：没有 `socialContext`，也没有「回复」文案
 
@@ -87,9 +102,10 @@
 
 | 场景 | 为什么没采到 |
 |---|---|
-| GIF 徽标本身的标记 | 需要媒体真正挂载（点开或开自动播放）；本轮自动播放关闭 |
 | 引用推文（含「引用里有没有 `div[role="group"]`」） | 本轮时间线/搜索/详情页都没出现引用推文 |
 | 转发（retweet）的 `socialContext` 形态 | 同上，没碰到转发 |
 | 推文串（≥3 条同作者） | 详情页未见 `tweet-thread-indicator`，也没碰到独立串 |
 | 图 + GIF 并排 | 需要一个混合媒体帖 |
 | 社区笔记 / 订阅者限定 / 不可见推文 | 需要特定帖子 |
+
+> GIF 徽标本体已采到（见 §3）；视频点开后 `video[loop=false]`、无徽标，两种形态都拿到了。

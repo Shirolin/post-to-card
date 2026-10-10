@@ -87,7 +87,9 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
     「稳定」目前只对时间线成立过。见 `docs/observed-dom-2026-10-10.md`
 - `div[data-testid="previewInterstitial"]` + `aria-label="嵌入式视频"` —— **2026-10-10 新增**：
   自动播放关闭时，视频/GIF 在时间线里以「海报 `img` + 这个 interstitial」出现，**没有 `<video>`**；
-  区分 GIF 与视频的是海报 URL（`tweet_video_thumb` vs `amplify_video_thumb`），不是徽标文本
+  这个状态下 GIF 与视频仍然由**徽标文本**区分（容器内有 `<span>GIF</span>`），
+  容器自身的 `aria-label` 是本地化的 `嵌入式视频`，所以 `div[aria-label="Embedded video"]` 那条精确匹配
+  在 zh-CN 页面上匹配不到。见 `docs/observed-dom-2026-10-10.md`
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号
 - `a[href*="/status/"]`、`time[datetime]` —— 结构语义，不会变

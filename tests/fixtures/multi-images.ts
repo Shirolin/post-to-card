@@ -233,3 +233,58 @@ export const VIDEO_WITH_DURATION_HTML = `
   </div>
 </article>
 `;
+
+/**
+ * A GIF in the state a feed actually shows with autoplay off: a poster `img`
+ * plus the interstitial overlay that stands in for the player, and no `<video>`
+ * anywhere. Captured from a live logged-in feed on 2026-10-10
+ * (`docs/observed-dom-2026-10-10.md`); the class names are the obfuscated ones
+ * X shipped that day, kept because nothing in this state is a stable hook
+ * except the badge text and the poster URL.
+ */
+export const GIF_POSTER_ONLY_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8110"><time datetime="2026-10-10T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="tweetPhoto">
+    <div>
+      <div class="r-1adg3ll r-1udh08x r-pm9dpa">
+        <div class="r-1adg3ll r-13qz1uu" style="padding-bottom: 56.3953%;"></div>
+        <div class="r-1p0dtai r-1pi2tsx r-1d2f490 r-u8s1d r-ipm5af r-13qz1uu">
+          <div aria-label="嵌入式视频" data-testid="previewInterstitial">
+            <div aria-label="嵌入式视频">
+              <img alt="嵌入式视频" src="https://pbs.twimg.com/tweet_video_thumb/HUPRvp-a4AAE2fG?format=jpg&name=small">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div><span class="css-1jxf684 r-poiln3">GIF</span></div>
+    <button data-testid="playButton" aria-label="播放这个 GIF" role="button"></button>
+  </div>
+</article>
+`;
+
+export const VIDEO_POSTER_ONLY_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8111"><time datetime="2026-10-10T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="tweetPhoto">
+    <div>
+      <div class="r-1adg3ll r-1udh08x r-pm9dpa">
+        <div class="r-1adg3ll r-13qz1uu" style="padding-bottom: 56.3953%;"></div>
+        <div class="r-1p0dtai r-1pi2tsx r-1d2f490 r-u8s1d r-ipm5af r-13qz1uu">
+          <div aria-label="嵌入式视频" data-testid="previewInterstitial">
+            <div aria-label="嵌入式视频">
+              <img alt="嵌入式视频" src="https://pbs.twimg.com/amplify_video_thumb/2108784749850255360/img/x.jpg">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <button data-testid="playButton" aria-label="播放" role="button"></button>
+  </div>
+</article>
+`;

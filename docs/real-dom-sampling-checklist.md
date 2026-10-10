@@ -73,7 +73,7 @@ X 连海报 `img` 和 `<video>` 都不挂进 DOM —— 2026-10-10 那轮就这�
 
 1. `div[role="group"]` 是否真的出现在**引用推文内部**？如果有，注入按钮就会误落
 2. ~~媒体链接的域名现在到底是 `pic.twitter.com` 还是 `pic.x.com`？~~ **已答（2026-10-10）**：`pic.x.com`，3/3 条全是它，没有 `pic.twitter.com`。
-3. ~~GIF 徽标的稳定标记是什么？~~ **已答（2026-10-10）**：在时间线的海报状态下，**徽标根本没渲染**——容器只有 `aria-label="嵌入式视频"`，没有 `GIF` 文本、也没有 `gifBadge`。能区分的是**海报 URL**：`tweet_video_thumb` 是 GIF，`amplify_video_thumb` 是视频；而 `tweet_video_thumb` 这条信号 `isMediaPosterLayer` 已经在用了。若徽标在被元素包着的前提下只出现在「点开后」的播放器里，那它对判据没有意义——判据发生在挂载前。
+3. ~~GIF 徽标的稳定标记是什么？~~ **已答（2026-10-10）**：徽标是媒体容器里的 `<span>GIF</span>` 文本节点（**没有** `gifBadge` testid），容器自身的 `aria-label` 是 `嵌入式视频`（本地化，不是英文 `Embedded video`）。用真实嵌套跑过：带徽标的 GIF → `gif`，无徽标的视频海报 → `video`，所以现有判据成立、不需要改用海报 URL。
 4. 转发推文有没有专属 `data-testid`？
 5. ~~混淆类名 `r-11mg6pl` 等在当前版本是否还存在？~~ **已答（2026-10-10）**：还在，6/6 条推文（含详情页回复）都带 `r-*` 类名。
 6. thread 连接线在真实 DOM 里的形态（是 `border-left`？独立 div？还是别的）
