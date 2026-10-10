@@ -16,7 +16,7 @@ importers:
         version: 4.7.0
       preact:
         specifier: ^10.25.4
-        version: 10.29.8
+        version: 10.29.8(preact-render-to-string@6.8.0)
       qrcode-generator:
         specifier: ^2.0.4
         version: 2.0.4
@@ -30,6 +30,9 @@ importers:
       knip:
         specifier: ^6.40.0
         version: 6.40.0
+      preact-render-to-string:
+        specifier: ^6.8.0
+        version: 6.8.0(preact@10.29.8)
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -678,6 +681,11 @@ packages:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
 
+  preact-render-to-string@6.8.0:
+    resolution: {integrity: sha512-2qiMrReQz+MZ5+/bT27kbVnFE7QNCC2fku/Tnc2H5bFUS3I3ASbRy0q72XLZ+2p2KyDE5xMfvSEtkmVo6TRNyA==}
+    peerDependencies:
+      preact: '>=10 || >= 11.0.0-0'
+
   preact@10.29.8:
     resolution: {integrity: sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==}
     peerDependencies:
@@ -1174,7 +1182,7 @@ snapshots:
 
   lucide-preact@1.48.0(preact@10.29.8):
     dependencies:
-      preact: 10.29.8
+      preact: 10.29.8(preact-render-to-string@6.8.0)
 
   modern-screenshot@4.7.0: {}
 
@@ -1238,7 +1246,13 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  preact@10.29.8: {}
+  preact-render-to-string@6.8.0(preact@10.29.8):
+    dependencies:
+      preact: 10.29.8(preact-render-to-string@6.8.0)
+
+  preact@10.29.8(preact-render-to-string@6.8.0):
+    optionalDependencies:
+      preact-render-to-string: 6.8.0(preact@10.29.8)
 
   qrcode-generator@2.0.4: {}
 

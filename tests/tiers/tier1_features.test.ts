@@ -26,9 +26,73 @@ import { TRANSLATIONS } from '../../src/content/i18n.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 
+import { renderComponent } from '../env/render.ts';
+
 import type { TweetData, ThreadData, AuthorInfo, MediaItem } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../src/types/card.ts';
 import type { ExtensionMessage, ExtensionResponse } from '../../src/types/messages.ts';
+
+/**
+ * A video post and a card config, for the tests that render the real card rather
+ * than read its source. The card is the only thing that can answer what a
+ * preference does to the markup, so those tests go through it.
+ */
+const VIDEO_TWEET: TweetData = {
+  id: '90001',
+  url: 'https://x.com/ada/status/90001',
+  author: { name: 'Ada', handle: '@ada' },
+  text: 'shipping the video pass today',
+  timestamp: '2026-10-02T10:00:00.000Z',
+  media: [{ type: 'video', url: 'https://pbs.twimg.com/media/video_poster.jpg', duration: '1:42' }],
+};
+
+const CARD_CONFIG: CardConfig = {
+  theme: 'minimal',
+  padding: '24px',
+  borderRadius: '12px',
+  aspectRatio: 'auto',
+  imageFit: 'contain',
+  mediaLayout: 'grid',
+  showQrCode: true,
+  showStats: true,
+  showTimestamp: true,
+  showWatermark: true,
+  blurAuthor: false,
+  showActionBarButton: true,
+  showPlayButton: true,
+  locale: 'en-US',
+};
+
+/** A two-post thread: the on-card exclude button only exists when there is more
+ * than one post to keep, so claims about it need a thread rather than a tweet. */
+const THREAD: ThreadData = {
+  author: VIDEO_TWEET.author,
+  tweets: [
+    VIDEO_TWEET,
+    { ...VIDEO_TWEET, id: '90002', url: 'https://x.com/ada/status/90002', text: 'and the follow-up' },
+  ],
+  isSingle: false,
+  targetTweetIndex: 0,
+};
+
+function renderCard(
+  args: { data?: ThreadData | TweetData; config?: Partial<CardConfig> } = {}
+): Promise<string> {
+  return renderComponent('/src/content/ui/Card.tsx', 'Card', {
+    data: args.data ?? VIDEO_TWEET,
+    config: { ...CARD_CONFIG, ...args.config },
+    onExcludeTweet: () => {},
+  });
+}
+
+function renderControls(overrides: Partial<CardConfig> = {}): Promise<string> {
+  return renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
+    config: { ...CARD_CONFIG, ...overrides },
+    onChange: () => {},
+    onExportCopy: () => {},
+    onExportDownload: () => {},
+  });
+}
 
 export interface TestResult {
   name: string;
@@ -1935,7 +1999,7 @@ test('F20.5: offline generation functions without internet or external CDN', () 
   assert.equal(isOfflineSafe, true);
 });
 
-test('F20.6: the QR tooltip is localized, not a hard-coded English literal', () => {
+test('F20.6: the QR tooltip is localized, not a hard-coded English literal', async () => {
   // The tooltip used to be spelled inside qrcode.ts, so a zh-CN card still said
   // "Scan to open original tweet" on hover. It is a translation key now and the
   // card passes it down, the same way every other card string travels.
@@ -1950,10 +2014,16 @@ test('F20.6: the QR tooltip is localized, not a hard-coded English literal', () 
     /title:\s*string;/.test(qrSrc),
     'the QR title must be required, not an optional escape hatch'
   );
-  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  // The card has to be the one carrying the translation, so render it and read
+  // the tooltip off the output: a zh-CN card must not say it in English.
+  const zh = await renderCard({ config: { locale: 'zh-CN' } });
   assert.ok(
-    /CardQrCode[^>]*title=\{t\.qrHint\}/.test(card),
-    'the card must pass the localized hint to the QR'
+    zh.includes(TRANSLATIONS['zh-CN'].qrHint),
+    'the card must render the QR tooltip in the active language'
+  );
+  assert.ok(
+    !zh.includes(TRANSLATIONS['en-US'].qrHint),
+    'and not leave it in another language'
   );
   // The exact copy, so a typo in either dictionary fails here rather than
   // shipping a hover text nobody proofread.
@@ -2166,19 +2236,20 @@ test('F24.4: filters out data-export-ignore controls from final render', async (
   assert.equal(filterNode(control), false);
 });
 
-test('F24.4b: the real export filter honours the attribute the card actually emits', () => {
+test('F24.4b: the real export filter honours the attribute the card actually emits', async () => {
   // The card marks its UI-only bits with `data-html2canvas-ignore`, but the
   // filter used to test only `data-export-ignore` — so the on-card exclude
-  // button was silently baked into the PNG. Assert against the real source so a
-  // future rename on either side fails here instead of shipping.
+  // button was silently baked into the PNG. The two spellings live in files that
+  // cannot import each other, so one side is read and the other is rendered: the
+  // filter's literal is asserted here, and the card is asked for its markup.
   const src = fs.readFileSync(path.resolve(__dirname, '../../src/content/engine/export.ts'), 'utf-8');
   assert.ok(
     src.includes("getAttribute('data-html2canvas-ignore')"),
     'export filter must recognise the attribute the card emits'
   );
-  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  const html = await renderCard({ data: THREAD });
   assert.ok(
-    card.includes('data-html2canvas-ignore="true"'),
+    html.includes('data-html2canvas-ignore="true"'),
     'the on-card exclude button must stay marked ignore'
   );
 });
@@ -2505,15 +2576,17 @@ test('F29.2: extracts video duration timestamp from video controls', () => {
   assert.equal(media?.[0]?.duration, '1:42');
 });
 
-test('F29.3: Card.tsx renders a corner video badge, and nothing that dims the poster', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  assert.ok(cardContent.includes('media-video-item'), 'Must render media-video-item class');
-  assert.ok(cardContent.includes('video-indicator-badge'), 'Must render corner video indicator badge');
-  assert.ok(!cardContent.includes('center-play-button'), 'Must NOT include blocking center play button');
-  assert.ok(!cardContent.includes('video-progress-track'), 'Must NOT render the bottom video progress bar');
-  // The badge is an opaque pill, so the scrim that used to back it only darkened
-  // the poster — and dimmed burnt-in subtitles the card cannot re-typeset.
-  assert.ok(!cardContent.includes('video-scrim-overlay'), 'Must NOT render a bottom scrim over the poster');
+test('F29.3: the card renders a corner video badge, and nothing that dims the poster', async () => {
+  const html = await renderCard();
+
+  assert.ok(html.includes('video-indicator-badge'), 'the corner badge is rendered on a video post');
+
+  // The absence half is the feature: a scrim darkens burnt-in subtitles the card
+  // cannot re-typeset, a centre button covers the frame it was drawn over, and a
+  // progress line would claim a position the export does not have.
+  for (const neverRendered of ['center-play-button', 'video-scrim-overlay', 'video-progress-track']) {
+    assert.ok(!html.includes(neverRendered), `the card must not render ${neverRendered}`);
+  }
 });
 
 test('F29.4: card.css styles an opaque pill with no glass and no scrim, and no progress line', () => {
@@ -2545,17 +2618,26 @@ test('F29.6: the video play button ships on by default', () => {
   assert.equal(DEFAULT_CARD_CONFIG.showPlayButton, true);
 });
 
-test('F29.7: Controls.tsx contains toggle for showPlayButton with localized label', () => {
-  const controlsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Controls.tsx'), 'utf-8');
-  assert.ok(controlsContent.includes('showPlayButton'), 'Controls must reference showPlayButton');
-  assert.ok(controlsContent.includes('t.videoPlayButton'), 'Controls must use localized label for videoPlayButton');
+test('F29.7: the controls offer the play-button toggle, labelled in the active language', async () => {
+  const html = await renderControls({ locale: 'zh-CN' });
+  assert.ok(
+    html.includes(TRANSLATIONS['zh-CN'].videoPlayButton),
+    'the toggle must be labelled from the locale, not from a fixed string'
+  );
+  assert.ok(
+    !html.includes(TRANSLATIONS['en-US'].videoPlayButton),
+    'and not left in another language'
+  );
 });
 
-test('F29.8: Card.tsx conditionally renders the video badge based on showPlayButton', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  assert.ok(cardContent.includes('showPlayButton: boolean = true'), 'renderMediaGrid must accept showPlayButton param');
-  assert.ok(cardContent.includes('{showPlayButton && ('), 'Must conditionally render video-indicator-badge');
-  assert.ok(cardContent.includes('config.showPlayButton !== false'), 'Must pass showPlayButton config to renderMediaGrid');
+test('F29.8: the video badge follows the play-button preference', async () => {
+  const on = await renderCard();
+  const off = await renderCard({ config: { showPlayButton: false } });
+
+  assert.ok(on.includes('video-indicator-badge'), 'the badge is on by default');
+  // Off removes the badge itself, not just its label: a badge with no play
+  // affordance is the state the preference exists to avoid.
+  assert.ok(!off.includes('video-indicator-badge'), 'and off takes it off the card');
 });
 
 // -------------------------------------------------------------
@@ -2569,12 +2651,18 @@ test('F30.1: the action-bar button ships on by default', () => {
   assert.equal(DEFAULT_CARD_CONFIG.showActionBarButton, true);
 });
 
-test('F30.2: Controls.tsx contains toggle for showActionBarButton with i18n tweetActionButton', () => {
-  const controlsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Controls.tsx'), 'utf-8');
-  assert.ok(controlsContent.includes('showActionBarButton'), 'Controls must reference showActionBarButton');
-  assert.ok(controlsContent.includes('t.tweetActionButton'), 'Controls must use localized label for button toggle');
-  assert.equal(TRANSLATIONS['zh-CN'].tweetActionButton, '推文卡片按钮');
-  assert.equal(TRANSLATIONS['en-US'].tweetActionButton, 'Tweet Card Button');
+test('F30.2: the controls offer the action-bar toggle, labelled in the active language', async () => {
+  const zh = await renderControls({ locale: 'zh-CN' });
+  const en = await renderControls({ locale: 'en-US' });
+
+  assert.ok(
+    zh.includes(TRANSLATIONS['zh-CN'].tweetActionButton),
+    'the toggle carries the dictation of the active language'
+  );
+  assert.ok(
+    en.includes(TRANSLATIONS['en-US'].tweetActionButton),
+    'and follows the language when it changes'
+  );
 });
 
 test('F30.5: manifest.json declares action popup pointing to popup.html', () => {

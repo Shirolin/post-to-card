@@ -116,6 +116,11 @@ tests/
   3. `PERMISSION_DENIED`: Throws `NotAllowedError: Clipboard permission denied`.
 - Tracks DOM fallback downloads: spies on `document.createElement('a')`, `anchor.click()`, and `URL.createObjectURL(blob)`.
 
+### 3.5 Component Rendering Layer (`tests/env/render.ts`)
+- The one layer that is not hand-rolled: it borrows Vite's SSR pipeline (already a dev dependency, and the same transform the build uses) to load a `.tsx` component in Node, then renders it to HTML with `preact-render-to-string`.
+- This is what lets a claim about the UI be asserted against the markup it produces instead of against the text of the component's source. Vite externalises dependencies in SSR, so the component and the renderer share one Preact instance — without that, `Fragment` and hook identity would not match between them.
+- Used by Tier 1 for the card and controls: the video badge and its preference, the localized toggle labels, the QR tooltip, and the `data-html2canvas-ignore` marker the export filter keys on.
+
 ---
 
 ## 4. Tier Pass Thresholds & Quality Gates
