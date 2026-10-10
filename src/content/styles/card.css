@@ -558,70 +558,67 @@
 }
 
 /* Fit Modes (Contain vs Cover) - Single Attribute Selector
-   The only place `object-fit` is decided. The per-count blocks below size a
-   grid cell but must not pick how the picture meets it: a cell is a fixed box,
-   so a hard-coded `cover` there silently overrode `完整展示` on every
-   multi-image post. */
-[data-fit="contain"] .media-item,
-[data-fit="contain"] .media-video-poster {
-  object-fit: contain;
-  background: transparent;
-  box-shadow: none;
-}
+   The only place `object-fit` is decided, and the only place a picture is sized
+   inside its cell. The per-count blocks below size a *cell* and must not pick how
+   the picture meets it: a cell is a fixed box, so a hard-coded `cover` there
+   silently overrode `完整展示` on every multi-image post.
 
-[data-fit="cover"] .media-item,
-[data-fit="cover"] .media-video-poster {
-  object-fit: cover;
-  background: transparent;
-  box-shadow: none;
-}
-
-/* 完整展示: the radius has to sit on the picture, not on the cell.
-   A picture letterboxed inside a rounded box keeps square corners -- its own
-   corners never reach the box's radius, so only the empty bars get cut. Sizing
-   the picture to its own shape, instead of stretching it across the cell, gives
-   the radius an edge to cut; whatever the picture leaves over stays the cell's
-   own background, which is what those bars already showed. The grid plan, the
-   gutters and the card's height do not move.
-
-   One attribute deeper than the per-count and per-ratio blocks below, because
-   those size a *cell* (`width/height: 100%`) and this has to win over them to
-   size the *picture*. Stack mode is deliberately out: its items already take
-   their own height. The video item keeps its cell -- the play badge and the
-   recess hang off it -- so only the poster shrinks inside it. `--media-radius`
-   is the token cover already uses, so both modes round alike. */
-[data-fit="contain"] .media-grid[data-layout="grid"]:not([data-count="1"]) .media-item:not(.media-video-item),
-[data-fit="contain"] .media-grid[data-layout="grid"]:not([data-count="1"]) .media-video-poster {
-  width: auto;
-  height: auto;
-  min-width: 0;
-  min-height: 0;
-  max-width: 100%;
-  max-height: 100%;
-  border-radius: var(--media-radius, 0px);
-  place-self: center;
-}
-
-/* A lone picture keeps the material's own height cap, so this path must not
-   declare a max-height: the cap now lands on the picture rather than on a
-   stretched box, which is the same visible height with no bars left over. */
-[data-fit="contain"] .media-grid[data-layout="grid"][data-count="1"] .media-item:not(.media-video-item),
-[data-fit="contain"] .media-grid[data-layout="grid"][data-count="1"] .media-video-poster {
-  width: auto;
-  height: auto;
-  min-width: 0;
-  min-height: 0;
-  max-width: 100%;
-  border-radius: var(--media-radius, 0px);
-  place-self: center;
-}
-
-/* The poster centres inside a video item that stays a cell; the badge is
-   absolutely positioned and does not care. */
-[data-fit="contain"] .media-grid[data-layout="grid"] .media-video-item {
+   A cell is a frame, not a picture: the ring, the gutter and the play badge
+   belong to it and stay where the layout put them, while the picture sits inside
+   it. That is what lets 完整展示 round the picture without moving the frame -- a
+   picture stretched over its cell and letterboxed inside it keeps square corners,
+   because its own corners never reach the cell's radius, so only the empty bars
+   get cut. Sized to its own shape, the radius has an edge to cut, and what the
+   picture leaves over is the cell's own background, which is what those bars
+   already showed.
+   Both sizes are `auto` with the two ceilings, because that is the one box CSS
+   can make hug the picture's own rectangle: a definite `width: 100%` makes the
+   browser clamp the height alone and letterbox the picture inside a box of the
+   cell's shape again. A picture smaller than its cell therefore sits at its own
+   size instead of being stretched up to the cell -- contain used to scale it up,
+   as a side effect of the box being the cell.
+   The centring rule carries one attribute more than the per-count blocks below,
+   which set a cell's `display`; this has to outrank them or the picture sits in
+   the cell's corner instead of its middle. */
+[data-fit="contain"] .media-grid[data-layout][data-count] .media-item {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+[data-fit="contain"] .media-grid .media-item > .media-picture {
+  object-fit: contain;
+  background: transparent;
+  box-shadow: none;
+  /* Both sizes auto with the two ceilings: the picture lands on the largest
+     rectangle of its own shape that fits its cell, which is the one box a
+     rounded corner can be cut into. (`width: 100%` cannot do this -- with a
+     definite width the browser clamps the height alone and letterboxes the
+     picture inside a box of the cell's shape instead.) */
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+[data-fit="cover"] .media-grid .media-item > .media-picture {
+  object-fit: cover;
+  background: transparent;
+  box-shadow: none;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+}
+
+/* The radius belongs to the picture in both modes: on cover the picture fills the
+   cell and meets the cell's own corner; on 完整展示 it is the only thing that can
+   round the picture at all. `--media-radius` is the token the cell itself uses,
+   so the two modes round alike and a square material stays square. */
+.media-grid .media-item > .media-picture {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--media-radius, 0px);
 }
 
 /* A passe-partout: the picture sits inside a thick mount in the material's own
@@ -647,17 +644,26 @@
   grid-template-columns: 1fr;
 }
 
-/* Single Image in Auto Ratio: natural proportion without harsh limits */
+/* Single Image in Auto Ratio: natural proportion without harsh limits.
+   The ceiling is stated once per variant as `--media-height-cap`, and consumed
+   twice: by the cell, so the ring never stretches past it, and by the picture
+   inside it, so a capped picture is capped rather than left to spill out of the
+   cell that was capped around it. Stack is excluded -- nothing is capped there,
+   which is the cell's `max-height: unset` below, and the picture has to agree. */
+.media-grid[data-count="1"] {
+  --media-height-cap: 520px;
+}
 .media-grid[data-count="1"] .media-item {
-  max-height: 520px;
   height: auto;
 }
-.post-to-card-target[data-ratio="auto"] .media-grid[data-count="1"] .media-item {
-  max-height: 520px;
+.media-grid[data-count="1"] .media-item,
+.media-grid[data-count="1"]:not([data-layout="stack"]) .media-item > .media-picture {
+  max-height: var(--media-height-cap);
 }
 
 /* Single Image in 3:4 Poster Ratio: expand dynamically to fill vertical canvas & eliminate dead space */
 .post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] {
+  --media-height-cap: 580px;
   flex: 1 1 auto;
   display: flex;
   align-items: center;
@@ -666,7 +672,6 @@
   margin-top: 14px;
 }
 .post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] .media-item {
-  max-height: 580px;
   height: 100%;
   width: 100%;
 }
@@ -676,11 +681,8 @@
   gap: 10px;
 }
 .post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"] {
+  --media-height-cap: 200px;
   margin-top: 8px;
-}
-.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"] .media-item {
-  max-height: 200px;
-  height: auto;
 }
 
 /* ---------------- Multi Images (Count = 2, 3, 4) in Grid Mode ---------------- */
@@ -1102,6 +1104,9 @@
 .post-to-card-target .article-block .media-grid[data-count="1"],
 .post-to-card-target[data-ratio="3:4"] .article-block .media-grid[data-count="1"],
 .post-to-card-target[data-ratio="16:9"] .article-block .media-grid[data-count="1"] {
+  /* The cover's own ceiling, consumed by the cell and by the picture inside it
+     like every other lone picture. */
+  --media-height-cap: 360px;
   flex: 0 0 auto;
   display: grid;
   align-items: stretch;
@@ -1116,9 +1121,7 @@
 .post-to-card-target .article-block .media-grid[data-count="1"] .media-item,
 .post-to-card-target[data-ratio="3:4"] .article-block .media-grid[data-count="1"] .media-item,
 .post-to-card-target[data-ratio="16:9"] .article-block .media-grid[data-count="1"] .media-item {
-  /* Natural proportions, with a ceiling so a portrait cover cannot run away
-     with the card. */
-  max-height: 360px;
+  /* Natural proportions: the ceiling is `--media-height-cap`, set above. */
   height: auto;
   width: 100%;
 }

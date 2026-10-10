@@ -173,7 +173,7 @@ function renderMediaGrid(
               <img
                 src={m.url}
                 alt={m.alt || `${altPrefix} ${idx + 1}`}
-                class={`media-video-poster ${fitClass}`}
+                class={`media-picture media-video-poster ${fitClass}`}
                 data-fit={imageFit}
                 loading="eager"
                 {...imageFallbackAttrs(m)}
@@ -201,18 +201,23 @@ function renderMediaGrid(
         }
 
         return (
-          <img
+          <div
             key={idx}
-            src={m.url}
-            alt={m.alt || `${altPrefix} ${idx + 1}`}
             class={`media-item ${fitClass} ${layoutClass}`}
             data-fit={imageFit}
             data-layout={mediaLayout}
-            loading="eager"
-            {...imageFallbackAttrs(m)}
-            onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
-            onError={handleImageError}
-          />
+          >
+            <img
+              src={m.url}
+              alt={m.alt || `${altPrefix} ${idx + 1}`}
+              class={`media-picture ${fitClass}`}
+              data-fit={imageFit}
+              loading="eager"
+              {...imageFallbackAttrs(m)}
+              onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
+              onError={handleImageError}
+            />
+          </div>
         );
       })}
     </div>
