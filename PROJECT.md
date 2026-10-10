@@ -84,98 +84,24 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 
 ## Interface Contracts
 
-### 1. Extracted Tweet Data Model (`src/types/tweet.ts`)
-```typescript
-export interface AuthorInfo {
-  name: string;
-  handle: string;
-  avatarUrl: string;
-  verified?: boolean;
-}
+契约的唯一定义在各类型文件里（`src/types/`）。这里只给指针与「为什么」，不抄字段表——
+抄一份就多一处会腐的缓存，本节过去正是这样落后于代码的。
 
-export interface MediaItem {
-  type: 'image' | 'video' | 'gif';
-  url: string; // upgraded to large or 400x400
-  originalUrl?: string;
-  posterUrl?: string;
-  alt?: string;
-  aspectRatio?: number;
-}
+### 1. Extracted Tweet Data Model
 
-export interface TweetStats {
-  replies?: string;
-  reposts?: string;
-  likes?: string;
-  views?: string;
-  bookmarks?: string;
-}
+见 `src/types/tweet.ts`。`TweetData` 随功能增长（`retweetedBy`、`translatedFrom`、`truncated`、
+`diagnostics`，以及 `richTokens` 的 `cashtag`），`ThreadData` 另有 `targetTweetIndex`；抄进文档的
+那份已经落后。字段语义与「为什么这么设计」写在类型自身的注释里，那才是唯一来源。
 
-export interface QuoteTweetData {
-  author: AuthorInfo;
-  text: string;
-  media?: MediaItem[];
-  timestamp?: string;
-}
+### 2. Card Customization Configuration
 
-export interface ArticleData {
-  title: string;
-  openingLine?: string; // the article's opening line; the lead only when the post is silent
-  cover?: MediaItem;
-}
+见 `src/types/card.ts`。`ThemeId` 是 12 个在用材质 id（`minimal` … `brutalist`），已退役的旧 id 在
+`LegacyThemeId` 里、经 `sanitizeTheme` 映射；`CardConfig` 还带 `imageFit`、`mediaLayout`、`locale`、
+`showActionBarButton`、`showPlayButton`、`excludedTweetIds`。
 
-export interface TweetData {
-  id: string;
-  url: string;
-  author: AuthorInfo;
-  text: string; // unicode emojis restored
-  richTokens?: Array<{ type: 'text' | 'mention' | 'hashtag' | 'link' | 'emoji'; value: string; href?: string }>;
-  timestamp: string; // ISO or formatted
-  stats?: TweetStats;
-  media?: MediaItem[];
-  quotePost?: QuoteTweetData;
-  article?: ArticleData;
-  isThreadPart?: boolean;
-  threadIndex?: number;
-  threadTotal?: number;
-}
+### 3. Background Proxy Message Protocol
 
-export interface ThreadData {
-  author: AuthorInfo;
-  tweets: TweetData[];
-  isSingle: boolean;
-}
-```
-
-### 2. Card Customization Configuration (`src/types/card.ts`)
-```typescript
-export type ThemeId = 'parchment' | 'nocturne' | 'hairline' | 'kraft' | 'cyanotype' | 'terminal' | 'broadsheet' | 'brutalist';
-export type PaddingOption = '16px' | '32px' | '48px';
-export type RadiusOption = 'theme' | '0px' | '12px' | '20px';
-export type AspectRatioOption = 'auto' | '3:4' | '16:9';
-
-export interface CardConfig {
-  theme: ThemeId;
-  padding: PaddingOption;
-  borderRadius: RadiusOption;
-  aspectRatio: AspectRatioOption;
-  showQrCode: boolean;
-  showStats: boolean;
-  showTimestamp: boolean;
-  showWatermark: boolean;
-  blurAuthor: boolean;
-}
-```
-
-### 3. Background Proxy Message Protocol (`src/types/messages.ts`)
-```typescript
-export type ExtensionMessage =
-  | { type: 'FETCH_IMAGE_BASE64'; url: string }
-  | { type: 'PING' };
-
-export type ExtensionResponse =
-  | { success: true; dataUrl: string; contentType: string }
-  | { success: false; error: string };
-```
+见 `src/types/messages.ts`。
 
 ---
 

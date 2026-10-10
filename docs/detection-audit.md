@@ -4,6 +4,9 @@
 > `TweetData.diagnostics`（`extractor.ts` 末尾），不是本文写的 `_diagnostics`。
 > **P2-16 也已落地**：`tier2` 的 2.38 一直在测「整页无 `data-testid` 的优雅降级」，
 > 只是夹具是手搓的两行；现在换成「真实夹具褪掉属性」，并补上「身份仍在」「正文不吞按钮文字」。
+> **「拦截 GraphQL」曾列为明确不做，但已单独立项并落地**：现在 `src/content/graphql/` 就是那条通道
+> （`hook.ts` MAIN world + `operations.ts` 名单 + `parse.ts`/`replyLinks.ts`/`bridge.ts`），
+> 调研记录在 `docs/x-graphql-research.md`，调度见 `PROJECT.md` 的 Data Channels。故该行已从下表移除。
 > 仍开着的是 **P2-17**：源码字符串断言还在，但它不是一句「都改为断言行为」能收的。
 > 已经换掉的：F27.1、F27.4、F29.1、F29.2、F29.6、F30.1（F29.6 / F30.1 的存储解析半边移到了 `tier2` 2.76）；
 > F30.3 / F30.4 直接删掉——前者是源码文本加一段自己 `classList.add` 再 `contains` 的自证，
@@ -72,7 +75,6 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 |---|---|
 | 引入 `twitter-text` | 3.1.0 自 2020 未更新，API 只处理纯文本字符串，无 DOM 定位能力。X 已把 mention/hashtag 渲染成 `<a>`，直接遍历即可 |
 | 引入 snscrape / nitter / twikit | 它们**都不做 DOM 解析**，全走 API/服务端渲染。用它们等于改成 GraphQL 方案 |
-| 拦截 GraphQL | 架构级变更，queryId 会轮换，需 feature flag 自适应。应单独立项评估 |
 | Community Notes / subscriber-only 判据 | 社区**查不到**任何权威 DOM 选择器。调研明确标注为「未知」，不猜测 |
 | `div[aria-label="Embedded video"]` 之外的视频兜底 | 精确匹配 + `video` 元素兜底已足够，宽松匹配只会引入误报 |
 
