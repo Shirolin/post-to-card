@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { createDomElement, DomDocument } from '../env/browser.ts';
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { initGraphQLBridge } from '../../src/content/graphql/bridge.ts';
-import { TWEET_DETAIL_THREAD_JSON, HOME_TIMELINE_SELF_THREAD_JSON } from '../fixtures/graphql.ts';
+import { TWEET_DETAIL_THREAD_JSON, HOME_TIMELINE_SELF_THREAD_JSON, HOME_TIMELINE_UNLINKED_PAIR_JSON } from '../fixtures/graphql.ts';
 import { THREAD_HTML, FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
 
 export interface TestResult {
@@ -201,6 +201,18 @@ test('res.6: a click in a feed proves its thread from the captured timeline payl
     thread.tweets.every((t) => t.diagnostics?.source === 'dom'),
     'the payload proves the boundary; the content is still the page markup'
   );
+
+  // The payload is not a veto, it is one more signal: a post that answers
+  // someone else falls through to the DOM checks, so a profile's plain
+  // consecutive posts stay separate. On a real profile page 10 of 11 adjacent
+  // same-author pairs are exactly this, which is why the negative half matters
+  // as much as the merge above.
+  seedGraphQLCache(HOME_TIMELINE_UNLINKED_PAIR_JSON, 'HomeTimeline', 'q_feed_unlinked');
+  const unlinked = resolveThread(target);
+
+  assert.equal(unlinked.isSingle, true, 'the payload names someone else, so adjacency proves nothing');
+  assert.equal(unlinked.tweets.length, 1);
+  assert.equal(unlinked.tweets[0].id, '9002');
 });
 
 export async function runTierResolver(): Promise<{

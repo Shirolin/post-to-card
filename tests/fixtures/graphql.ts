@@ -710,8 +710,8 @@ export const TWEET_DETAIL_MEDIA_WITH_LINK_JSON = JSON.stringify({
  * The reply fields are the ones `docs/detection-audit.md` measured X threading
  * by — `in_reply_to_status_id_str` naming the previous post, with
  * `in_reply_to_screen_name` naming its author. Only the fields under test are
- * present. The ids line up with `MIXED_FEED_WITH_ADS_AND_REPLIES_HTML`
- * (`tests/fixtures/ads-replies.ts`), so a click in that feed resolves against
+ * present. The ids line up with `FEED_SELF_THREAD_HTML`
+ * (`tests/fixtures/thread.ts`), so a click in that feed resolves against
  * this payload.
  */
 export const HOME_TIMELINE_SELF_THREAD_JSON = JSON.stringify({
@@ -735,6 +735,40 @@ export const HOME_TIMELINE_SELF_THREAD_JSON = JSON.stringify({
                 id: '9004',
                 text: 'Part 3: Conclusion & summary',
                 repliesTo: { id: '9002', handle: 'alice' },
+              }),
+            ],
+          },
+        ],
+      },
+    },
+  },
+});
+
+/**
+ * One home-timeline page holding two consecutive posts by one author where the
+ * second does *not* answer the first.
+ *
+ * This is the shape a profile timeline is full of, and the one the fix must not
+ * touch: on a real profile page 10 of 11 adjacent same-author pairs are plain
+ * consecutive posts, not continuations. The payload is present, it simply names
+ * someone else, which must fall through to the DOM signals rather than merge.
+ */
+export const HOME_TIMELINE_UNLINKED_PAIR_JSON = JSON.stringify({
+  data: {
+    home: {
+      home_timeline_urt: {
+        instructions: [
+          {
+            type: 'TimelineAddEntries',
+            entries: [
+              timelineTweet('tweet-9001', '2', {
+                id: '9001',
+                text: 'Part 1: The problem with state machines',
+              }),
+              timelineTweet('tweet-9002', '1', {
+                id: '9002',
+                text: 'Part 2: Designing pure transitions',
+                repliesTo: { id: '8888', handle: 'someone_else' },
               }),
             ],
           },
