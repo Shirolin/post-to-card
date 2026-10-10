@@ -28,7 +28,9 @@ export const DETAIL_OPERATIONS: Record<string, true> = {
  *
  * They never carry a conversation, but each post object in them states which
  * post it answers, which is the one fact X itself threads by (see
- * `replyLinks.ts`). That is what lets a click in a feed prove its thread.
+ * `replyLinks.ts`). Forwarding them is what lets a click in a feed prove its
+ * thread; the linkage index itself is fed from every captured payload, so a
+ * conversation contributes to it too.
  *
  * Forwarding their bodies means a copy across the world boundary and a parse per
  * timeline response. Reading the linkage in the hook instead would save the copy

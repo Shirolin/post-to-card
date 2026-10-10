@@ -633,10 +633,10 @@ const MAX_LINKAGE_NODES = 250_000;
  * Deliberately shape-agnostic. A `TweetDetail` conversation, a `HomeTimeline`
  * page, a `UserTweets` page and a `TweetResultByRestId` lookup all nest post
  * objects differently, and the thread fact this project needs -- which post a
- * post answers -- sits on whichever object carries `legacy`. So the walk looks
- * for that shape rather than for a path, and a payload it does not recognise
- * yields an empty map instead of an error, which leaves the DOM channel exactly
- * where it was.
+ * post answers -- sits on whichever post object carries `legacy`. So the walk
+ * looks for a post's own shape rather than for a path, and a payload it does not
+ * recognise yields an empty map instead of an error, which leaves the DOM
+ * channel exactly where it was.
  *
  * This runs once per captured response, and a timeline body is large, so it is
  * bounded by node count and stops early rather than walking a runaway payload.

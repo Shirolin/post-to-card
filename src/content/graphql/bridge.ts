@@ -2,12 +2,13 @@
  * Content-script side of the GraphQL channel.
  *
  * Receives responses forwarded by the MAIN-world hook, keeps the most recent
- * payload per operation, and answers requests for the tweet currently on
- * screen. A miss is not an error: the caller falls back to the DOM adapter.
+ * whole-conversation body per operation, and answers requests for the tweet
+ * currently on screen. A miss is not an error: the caller falls back to the DOM
+ * adapter.
  *
- * Besides the whole-conversation operations it also feeds the reply-linkage
- * index from the list-view operations, which is the only proof of a thread a
- * feed can offer (see `replyLinks.ts`).
+ * Every captured payload also feeds the reply-linkage index, which is the only
+ * proof of a thread a list view can offer (see `replyLinks.ts`). That read
+ * happens before the body is dropped, so only conversation bodies are retained.
  */
 
 import type { ThreadData } from '../../types/tweet.ts';
@@ -51,10 +52,8 @@ function handleMessage(event: MessageEvent): void {
   if (payload?.source !== MESSAGE_SOURCE || payload?.type !== MESSAGE_TYPE) return;
   if (!payload.operationName || !payload.body || payload.status !== 200) return;
 
-  // Only a whole-conversation body is worth keeping: `lookupFromGraphQL` reads
-  // nothing else, and a timeline body is megabytes that would sit here for the
-  // life of the page. The linkage below is read out of every captured payload
-  // before it is dropped, so nothing is lost by not retaining it.
+  // Only a conversation body is retained; everything else is read below and
+  // dropped.
   if (DETAIL_OPERATIONS[payload.operationName] === true) {
     cache.set(payload.operationName, {
       body: payload.body,
@@ -63,10 +62,8 @@ function handleMessage(event: MessageEvent): void {
     });
   }
 
-  // A list-view payload is not a conversation, so nothing is built from it. What
-  // it does carry is which post each of its posts answers, and that is the fact
-  // a click in a feed has to consult. Read from every captured payload, because
-  // the parser is shape-agnostic and a conversation states the same facts.
+  // Which post each post answers is the one fact that proves a thread in a list
+  // view, and every payload states it, so this read is not gated on the list.
   rememberReplyLinks(parseReplyLinkage(payload.body));
 }
 
