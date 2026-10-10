@@ -2392,6 +2392,21 @@ test('F27.5: CSS defines media-layout-stack for 100% full-display of all multi i
   assert.ok(cssContent.includes('max-height: unset'), 'Stack layout must unset max-height constraint for full display');
 });
 
+test('F27.6: the grid layout rules never pick a media object-fit, so the fit toggle reaches every layout', () => {
+  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const css = cssContent.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // A per-count grid rule that sets `object-fit` outranks the `[data-fit]` rules
+  // (it reaches one level deeper) and silently pins every multi-image post to
+  // `cover`, whatever the user chose. The rules are read as blocks rather than
+  // substrings so the check follows the declarations, not the file's prose.
+  const offenders = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector, body]) => selector.includes('data-count=') && body.includes('object-fit'))
+    .map(([, selector]) => selector.trim().replace(/\s+/g, ' '));
+
+  assert.deepEqual(offenders, [], `grid count rules must leave object-fit to the [data-fit] rules: ${offenders.join(' | ')}`);
+});
+
 // -------------------------------------------------------------
 // F28: Intelligent Adaptive Media Grid (Top-Hero / Left-Hero / Stacked / 4:3)
 // -------------------------------------------------------------
