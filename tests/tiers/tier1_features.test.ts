@@ -21,6 +21,7 @@ import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { TRIGGER_BUTTON_SVG } from '../../src/content/adapter/triggerViews.ts';
 import { isThreadConnectedPair, isTemporallyConnected } from '../../src/content/adapter/thread.ts';
+import { toggleExcluded, selectCurrentOnly } from '../../src/content/ui/threadScope.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
@@ -86,12 +87,15 @@ function renderCard(
   });
 }
 
-function renderControls(overrides: Partial<CardConfig> = {}): Promise<string> {
+function renderControls(
+  args: { config?: Partial<CardConfig>; threadData?: ThreadData } = {}
+): Promise<string> {
   return renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
-    config: { ...CARD_CONFIG, ...overrides },
+    config: { ...CARD_CONFIG, ...args.config },
     onChange: () => {},
     onExportCopy: () => {},
     onExportDownload: () => {},
+    threadData: args.threadData,
   });
 }
 
@@ -990,14 +994,13 @@ test('F14.5: flags single tweet as isSingle: true', () => {
   assert.equal(EXPECTED_SINGLE_TWEET_DATA.isThreadPart, false);
 });
 
-test('F17.19: the type scale is a material token, not a block of CSS per material', () => {
+test('F17.19: the type scale is a material token, not a block of CSS per material', async () => {
   // Type was the last part of a material still written by hand, one block per
   // theme. Adding a material meant remembering three rule blocks and a missed
   // one silently inherited another's letterforms. The values live in the token
   // table now, so the failure mode is a compile error rather than a look nobody
   // thought to check.
   const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
 
   // No rule names a material at all any more, for type or anything else.
   assert.ok(
@@ -1005,9 +1008,14 @@ test('F17.19: the type scale is a material token, not a block of CSS per materia
     'card.css must not name a material; every material difference is a token'
   );
 
-  // Every type value the CSS applies has to come from a token.
+  // Every type value the CSS applies has to come from a token, and the card is
+  // where those tokens are declared, so ask the card.
+  const html = await renderCard();
   for (const prop of ['--type-display-size', '--type-body-size', '--type-meta-size']) {
-    assert.ok(card.includes(`'${prop}'`), `${prop} must be injected by Card.tsx`);
+    assert.ok(
+      new RegExp(`${prop}:\\s*[\\d.]+`).test(html),
+      `${prop} must be declared on the card`
+    );
     assert.ok(css.includes(`var(${prop}`), `${prop} must be consumed by card.css`);
   }
 
@@ -1033,14 +1041,13 @@ test('F17.19: the type scale is a material token, not a block of CSS per materia
   }
 });
 
-test('F17.20: the inner corner comes from the resolved radius, not a second table', () => {
+test('F17.20: the inner corner comes from the resolved radius, not a second table', async () => {
   // card.css used to carry its own copy of the radius table: a per-option rule
   // setting the media and quote corners by hand. It had no `theme` row, so the
   // default option left multi-image media at 0px while a single image of the
   // same material took the material's own radius. The copy is gone; the inner
-  // corner is `--media-radius`, which Card.tsx injects from `resolveRadius`.
+  // corner is `--media-radius`, which the card injects from `resolveRadius`.
   const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
 
   assert.ok(
     css.includes('border-radius: var(--media-radius'),
@@ -1056,32 +1063,38 @@ test('F17.20: the inner corner comes from the resolved radius, not a second tabl
     !/\[data-radius="[^"]+"\] \.media-(grid|item)/.test(css),
     'the inner corner must not be set per option again'
   );
+
+  // Injected unconditionally, and carrying the same number the resolver hands
+  // the card corner -- the failure this test exists for was the two disagreeing.
+  const html = await renderCard();
+  const resolved = resolveRadius(CARD_CONFIG.borderRadius, CARD_CONFIG.theme);
   assert.ok(
-    card.includes("'--media-radius': mediaRadius"),
-    '--media-radius must be injected unconditionally, or multi-image falls back'
+    new RegExp(`--media-radius:\\s*${resolved.media}`).test(html),
+    `the card must inject the resolved inner corner (${resolved.media})`
   );
 });
 
-test('F17.18: every card-root option is named once, by its data attribute', () => {
+test('F17.18: every card-root option is named once, by its data attribute', async () => {
   // Each option used to be emitted twice, as a class and as a data attribute,
   // and card.css matched both spellings in every rule. Same element, same
   // specificity, same block, so the class decided nothing; it only meant an
   // option could be renamed in one place and keep its old styling in the other.
+  // Asserted on the rendered root, so a second spelling coming back is caught.
   //
   // `fit-` and `media-layout-` are not in this list on purpose: card.css keys
   // their child rules on the class, on the media grid rather than the card root.
-  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+  const html = await renderCard();
   const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
 
   for (const option of ['theme', 'padding', 'radius', 'ratio']) {
     assert.ok(
-      new RegExp(`data-${option}=`).test(card),
+      new RegExp(`data-${option}=`).test(html),
       `${option} must be carried by its data attribute`
     );
   }
   for (const emitted of ['theme-', 'padding-', 'radius-', 'ratio-']) {
     assert.ok(
-      !new RegExp('`' + emitted + '\\$\\{').test(card),
+      !new RegExp(`class="[^"]*\\b${emitted}\\w`).test(html),
       `${emitted} must not also be emitted as a class, or the two spellings can drift`
     );
     assert.ok(
@@ -1091,21 +1104,23 @@ test('F17.18: every card-root option is named once, by its data attribute', () =
   }
 });
 
-test('F14.6: thread layout isolates connector line in thread-gutter and text in thread-content-col to prevent line-text intersection', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
+test('F14.6: the thread layout keeps the connector and the text in their own columns', async () => {
+  const html = await renderCard({ data: THREAD });
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
 
-  // Verify two-column timeline architecture in Card.tsx
-  assert.ok(cardContent.includes('class="thread-list"'), 'Card must render thread-list container');
-  assert.ok(cardContent.includes('class="thread-item"'), 'Card must render thread-item rows');
-  assert.ok(cardContent.includes('class="thread-gutter"'), 'Card must isolate avatar and connector line in thread-gutter');
-  assert.ok(cardContent.includes('class="thread-content-col"'), 'Card must place text and media in thread-content-col');
+  // The two-column timeline, asserted on the markup it produces: avatar and
+  // connector share the gutter, the body sits beside them.
+  for (const cls of ['thread-list', 'thread-item', 'thread-gutter', 'thread-content-col']) {
+    assert.ok(html.includes(`class="${cls}"`), `the card must render ${cls}`);
+  }
 
-  // Verify connector line is in gutter, while text is in content column
-  assert.ok(cardContent.includes('{renderAuthorAvatar(tweet.author, config.blurAuthor)}'), 'Avatar must render in thread gutter');
-  assert.ok(cardContent.includes('{!isLast && <div class="thread-connector-line" />}'), 'Connector line must render in thread gutter');
+  // And the connector joins the rows: one between them, none trailing.
+  assert.equal(
+    (html.match(/thread-connector-line/g) || []).length,
+    THREAD.tweets.length - 1,
+    'the connector must be drawn between the rows, not after the last'
+  );
 
-  // Verify CSS styles
   assert.ok(cssContent.includes('.thread-item'), 'CSS must style thread-item');
   assert.ok(cssContent.includes('.thread-gutter'), 'CSS must style thread-gutter');
   assert.ok(cssContent.includes('.thread-content-col'), 'CSS must style thread-content-col');
@@ -1193,23 +1208,31 @@ test('F14.8: a post replying to someone else ends the thread', () => {
   );
 });
 
-test('F14.9: Card UI supports excludedTweetIds filtering, quick exclusion and tweet manager', () => {
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  const controlsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Controls.tsx'), 'utf-8');
+test('F14.9: excluding a post leaves it off the card, and the panel lists what is left', async () => {
+  const both = await renderCard({ data: THREAD });
+  const filtered = await renderCard({ data: THREAD, config: { excludedTweetIds: ['90002'] } });
+
+  assert.ok(both.includes('and the follow-up'), 'both posts are on the card by default');
+  // The stored exclusions have to reach the card, not just the panel.
+  assert.ok(!filtered.includes('and the follow-up'), 'an excluded post must not be rendered');
+  assert.ok(filtered.includes('shipping the video pass today'), 'and the rest must stay');
+
+  // The panel's two handlers are these two functions, and nothing drove them
+  // before: they were named by a source-text check instead.
+  assert.deepEqual(toggleExcluded(THREAD, [], '90002'), ['90002'], 'excluding a post stores it');
+  assert.deepEqual(toggleExcluded(THREAD, ['90002'], '90002'), [], 'toggling it back clears it');
+  assert.deepEqual(selectCurrentOnly(THREAD), ['90002'], 'keeping only the current post excludes the rest');
+  assert.deepEqual(
+    toggleExcluded(THREAD, ['90002'], '90001'),
+    ['90002'],
+    'the card may not be emptied: the last showing post stays'
+  );
+
+  const controls = await renderControls({ threadData: THREAD });
+  assert.ok(controls.includes('tweet-manager-section'), 'the panel must list the thread');
+  assert.ok(controls.includes('tweet-manager-item'), 'one row per post');
+
   const modalCss = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/modal.css'), 'utf-8');
-
-  // Verify excludedTweetIds filtering in Card.tsx
-  assert.ok(cardContent.includes('config.excludedTweetIds'), 'Card.tsx must read excludedTweetIds');
-  assert.ok(cardContent.includes('thread-exclude-btn'), 'Card.tsx must render on-card quick exclude button');
-  assert.ok(cardContent.includes('onExcludeTweet'), 'Card.tsx must support onExcludeTweet callback');
-
-  // Verify Tweet Manager UI in Controls.tsx
-  assert.ok(controlsContent.includes('tweet-manager-section'), 'Controls.tsx must render tweet manager section');
-  assert.ok(controlsContent.includes('handleToggleExclude'), 'Controls.tsx must support toggle exclude');
-  assert.ok(controlsContent.includes('handleSelectAll'), 'Controls.tsx must support select all');
-  assert.ok(controlsContent.includes('handleSelectCurrentOnly'), 'Controls.tsx must support select current only');
-
-  // Verify modal styling
   assert.ok(modalCss.includes('.tweet-manager-section'), 'modal.css must style tweet manager section');
   assert.ok(modalCss.includes('.tweet-manager-item'), 'modal.css must style tweet manager items');
 });
@@ -1648,15 +1671,33 @@ test('F17.12: the watermark is footnote ink, never a fade', () => {
   assert.ok(!/opacity\s*:/.test(rule), 'watermark must not fade itself below the contrast floor');
 });
 
-test('F17.13: qrFill reaches the QR, and the quote honours the theme radius', () => {
+test('F17.13: qrFill reaches the QR, and the quote honours the theme radius', async () => {
   // Two tokens that were injected but never consumed: the QR drew in the body
   // ink on Notion (not its token), and the quote media corner was a hard-coded
   // 8px that overrode every square material.
-  const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  assert.ok(
-    /CardQrCode url=\{[^}]+\} fillColor=\{tokens\.qrFill\}/.test(card),
-    'the QR must be filled from the qrFill token'
-  );
+  //
+  // The fill is asserted on the drawn code in two materials whose QR inks
+  // differ, which is what separates "uses the token" from "happens to match it".
+  const asMinimal = await renderCard();
+  const asSumi = await renderCard({ config: { theme: 'sumi' } });
+  const minimalInk = THEMES.minimal.tokens.qrFill;
+  const sumiInk = THEMES.sumi.tokens.qrFill;
+
+  assert.notEqual(minimalInk, sumiInk, 'the two materials must disagree for this to prove anything');
+
+  // Read the fill off the drawn code, not off the document: `--qr-fill` is
+  // declared on the card root either way, so a card that ignored the token would
+  // still carry the material's ink in its style attribute and pass a looser
+  // check. This is how the bug being guarded against would look.
+  const qrOf = (html: string) => {
+    const start = html.indexOf('card-qr-container');
+    return html.slice(start, html.indexOf('</div>', start));
+  };
+
+  assert.ok(qrOf(asMinimal).includes(`fill="${minimalInk}"`), 'the QR must be drawn in the material QR ink');
+  assert.ok(qrOf(asSumi).includes(`fill="${sumiInk}"`), 'and it must follow the material');
+  assert.ok(!qrOf(asSumi).includes(`fill="${minimalInk}"`), 'and not keep the other material ink');
+
   const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
   const rule = css.slice(css.indexOf('.post-to-card-target .quote-card .media-grid'));
   const body = rule.slice(0, rule.indexOf('}'));
@@ -1844,12 +1885,14 @@ test('F17.15: the masthead tick is the accent, but its hairline stays neutral in
     tickBlock.slice(0, tickBlock.indexOf('}')).includes('background: var(--accent)'),
     'masthead tick must be the accent'
   );
-  // The token contract no longer carries a per-signature colour to drift.
-  const themes = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
-  assert.ok(
-    !/signature:\s*\{[^}]*color:/.test(themes),
-    'signature specs must not carry a colour; ink is always `rule`'
-  );
+  // The token contract no longer carries a per-signature colour to drift. Asked
+  // of every material rather than of the file they are written in.
+  for (const id of THEME_IDS) {
+    assert.ok(
+      !('color' in THEMES[id].tokens.signature),
+      `${id}'s signature must not carry a colour; ink is always \`rule\``
+    );
+  }
 });
 
 // -------------------------------------------------------------
@@ -2442,19 +2485,26 @@ test('F27.2: i18n translations contain zero emojis across all supported locales'
   }
 });
 
-test('F27.3: Modal, Card watermark and CSS define zero-emoji and ratio-aware image rules', () => {
-  const modalContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Modal.tsx'), 'utf-8');
-  assert.ok(!modalContent.includes('✨'), 'Modal must not contain sparkle emoji');
-  assert.ok(!modalContent.includes('✕'), 'Modal must use svg close icon');
+test('F27.3: the modal and the card draw no emoji, and the ratio rules stay attribute-keyed', async () => {
+  // Asserted on what the components put on screen. The previous version asked
+  // whether the string "✨" appears in Modal.tsx, which a comment could answer.
+  const card = await renderCard();
+  const modal = await renderComponent('/src/content/ui/Modal.tsx', 'Modal', {
+    onClose: () => {},
+    children: 'preview',
+  });
 
-  const cardContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
-  assert.ok(!cardContent.includes('<span>✨</span>'), 'Card watermark must not contain sparkle emoji');
+  for (const [name, html] of [['card', card], ['modal', modal]] as const) {
+    assert.ok(!html.includes('✨'), `the ${name} must not draw a sparkle`);
+    assert.ok(!html.includes('✕'), `the ${name} must close with an icon, not a glyph`);
+  }
 
+  // Fit and ratio are keyed on the attribute, so a value cannot be spelled two
+  // ways. Those rules live in CSS, which this suite has no engine for.
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  assert.ok(cssContent.includes('data-fit="contain"'), 'CSS must include data-fit="contain" attribute rule');
-  assert.ok(cssContent.includes('data-fit="cover"'), 'CSS must include data-fit="cover" attribute rule');
-  assert.ok(cssContent.includes('data-ratio="3:4"'), 'CSS must include 3:4 ratio rule');
-  assert.ok(cssContent.includes('data-ratio="16:9"'), 'CSS must include 16:9 ratio rule');
+  for (const selector of ['data-fit="contain"', 'data-fit="cover"', 'data-ratio="3:4"', 'data-ratio="16:9"']) {
+    assert.ok(cssContent.includes(selector), `CSS must include ${selector} rule`);
+  }
 });
 
 test('F27.4: mediaLayout configuration supports grid and stack with safe sanitization', () => {
@@ -2635,7 +2685,7 @@ test('F29.6: the video play button ships on by default', () => {
 });
 
 test('F29.7: the controls offer the play-button toggle, labelled in the active language', async () => {
-  const html = await renderControls({ locale: 'zh-CN' });
+  const html = await renderControls({ config: { locale: 'zh-CN' } });
   assert.ok(
     html.includes(TRANSLATIONS['zh-CN'].videoPlayButton),
     'the toggle must be labelled from the locale, not from a fixed string'
@@ -2668,8 +2718,8 @@ test('F30.1: the action-bar button ships on by default', () => {
 });
 
 test('F30.2: the controls offer the action-bar toggle, labelled in the active language', async () => {
-  const zh = await renderControls({ locale: 'zh-CN' });
-  const en = await renderControls({ locale: 'en-US' });
+  const zh = await renderControls({ config: { locale: 'zh-CN' } });
+  const en = await renderControls({ config: { locale: 'en-US' } });
 
   assert.ok(
     zh.includes(TRANSLATIONS['zh-CN'].tweetActionButton),
