@@ -19,6 +19,7 @@ import {
   applyTriggerLocale,
   setInjectedButtonVisibility,
   HIDE_ACTION_BUTTON_CLASS,
+  VISIBILITY_STYLE_ID,
 } from '../../src/content/adapter/triggerViews.ts';
 import {
   injectIntoActionBar,
@@ -1157,7 +1158,12 @@ function fakeWindow(): Record<string, unknown> {
     removeEventListener: (type: string, cb: (e: unknown) => void) => {
       listeners.get(type)?.delete(cb);
     },
-    dispatchEvent: push(''),
+    // A dispatched event goes to the listeners for its own type, which is what
+    // makes a window-level `keydown` reachable from a test.
+    dispatchEvent: (event: { type?: string } | undefined) => {
+      const byType = push(event?.type || '');
+      byType(event);
+    },
     CustomEvent: class {
       type: string;
       detail: unknown;
@@ -1323,6 +1329,15 @@ test('Tier 2.62: hiding the triggers leaves them in the page', async () => {
     assert.ok(
       doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS),
       'the root carries the class the stylesheet keys on'
+    );
+    // The class only hides anything if the rule that reads it was injected too;
+    // without it the buttons stay visible while every assertion above passes.
+    const styleEl = doc.getElementById(VISIBILITY_STYLE_ID);
+    assert.ok(styleEl, 'hiding the buttons must inject the rule that hides them');
+    assert.ok(
+      styleEl!.textContent.includes(`.${HIDE_ACTION_BUTTON_CLASS} [data-post-to-card-btn="true"]`) &&
+        styleEl!.textContent.includes('display: none'),
+      'the injected rule must key on the hide class and actually hide'
     );
     assert.equal(buttons(), 1, 'a hidden trigger is still in the DOM');
 
@@ -1500,28 +1515,87 @@ test('Tier 2.66: an emoji after a pic link keeps the link, in both views', () =>
   assert.equal(inTokens, inText, 'the two views must agree about the same link');
 });
 
-test('Tier 2.76: the stored play-button preference is honoured, and its absence means on', async () => {
+test('Tier 2.76: the stored toggle preferences are honoured, and their absence means on', async () => {
   await withInjectionEnv(async ({ chrome }) => {
-    assert.equal(
-      (await loadUserPreferences()).showPlayButton,
-      true,
-      'a storage with nothing saved must come back with the button on'
+    const toggles = async () => {
+      const prefs = await loadUserPreferences();
+      return { play: prefs.showPlayButton, actionBar: prefs.showActionBarButton };
+    };
+
+    assert.deepEqual(
+      await toggles(),
+      { play: true, actionBar: true },
+      'a storage with nothing saved must come back with both buttons on'
     );
 
     await chrome.storage.local.set({ [STORAGE_KEY]: { showPlayButton: false } });
-    assert.equal(
-      (await loadUserPreferences()).showPlayButton,
-      false,
-      'an explicit false is the only thing that turns the button off'
+    assert.deepEqual(
+      await toggles(),
+      { play: false, actionBar: true },
+      'an explicit false is the only thing that turns a button off, and only its own'
     );
 
-    // A config saved before the flag existed has no key for it at all.
+    // A config saved before either flag existed has no key for them at all.
     await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'darkroom' } });
-    assert.equal(
-      (await loadUserPreferences()).showPlayButton,
-      true,
-      'an older config that never mentioned the button leaves it on'
+    assert.deepEqual(
+      await toggles(),
+      { play: true, actionBar: true },
+      'an older config that never mentioned the buttons leaves them on'
     );
+  });
+});
+
+test('Tier 2.77: Alt+C hands the tweet under the pointer to the card, and nothing else does', async () => {
+  // F30.4's claim, driven rather than read: the shortcut exists so a card can be
+  // opened without reaching for the injected trigger, which only helps if it
+  // follows the pointer instead of the top of the feed.
+  await withInjectionEnv(async ({ doc }) => {
+    const first = createDomElement(TWEET_HTML);
+    first.setAttribute('data-probe', 'first');
+    const second = createDomElement(TWEET_HTML);
+    second.setAttribute('data-probe', 'second');
+    doc.body.appendChild(first);
+    doc.body.appendChild(second);
+
+    const opened: Element[] = [];
+    const controller = initTwitterInjection((article: Element) => {
+      opened.push(article);
+    });
+
+    try {
+      second.dispatchEvent({ type: 'mouseover' });
+
+      const win = (globalThis as Record<string, unknown>).window as {
+        dispatchEvent: (event: unknown) => void;
+      };
+      const keyDown = (init: Record<string, unknown>) => ({
+        type: 'keydown',
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        ...init,
+      });
+
+      win.dispatchEvent(keyDown({ altKey: true, key: 'c' }));
+      assert.equal(opened.length, 1, 'a bare Alt+C must open the card');
+      assert.equal(
+        opened[0].getAttribute('data-probe'),
+        'second',
+        'and for the tweet the pointer is over, not the first in the feed'
+      );
+
+      // The combinations the handler has to leave alone: Ctrl/⌘+Alt+C belong to
+      // the browser or the OS, and a bare C is someone typing.
+      for (const ignored of [
+        { altKey: true, key: 'c', ctrlKey: true },
+        { altKey: true, key: 'c', metaKey: true },
+        { key: 'c' },
+      ]) {
+        win.dispatchEvent(keyDown(ignored));
+      }
+      assert.equal(opened.length, 1, 'only a bare Alt+C opens the card');
+    } finally {
+      controller.disconnect();
+    }
   });
 });
 

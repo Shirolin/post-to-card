@@ -19,10 +19,11 @@ import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_
 import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
+import { TRIGGER_BUTTON_SVG } from '../../src/content/adapter/triggerViews.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme } from '../../src/content/ui/themes.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 
 import type { TweetData, ThreadData, AuthorInfo, MediaItem } from '../../src/types/tweet.ts';
@@ -2341,10 +2342,13 @@ const __dirname = path.dirname(__filename);
 // F27: Image Fit, Ratio-Aware Media Layout & Zero-Emoji UI
 // -------------------------------------------------------------
 test('F27.1: injection module defines SVG vector trigger button without sparkle emoji', () => {
-  const content = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/triggerViews.ts'), 'utf-8');
-  assert.ok(content.includes('TRIGGER_BUTTON_SVG'), 'Must export TRIGGER_BUTTON_SVG');
-  assert.ok(content.includes('<svg'), 'Must define SVG icon');
-  assert.ok(!content.includes("btn.textContent = '✨'"), 'Must not assign sparkle emoji to button');
+  // The icon is an exported constant, so its content is the artifact: whatever
+  // it holds is what the button renders, however the button is assembled.
+  assert.ok(TRIGGER_BUTTON_SVG.includes('<svg'), 'the trigger icon must be a vector');
+  assert.ok(
+    !/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u.test(TRIGGER_BUTTON_SVG),
+    'the trigger icon must not carry an emoji'
+  );
 });
 
 test('F27.2: i18n translations contain zero emojis across all supported locales', async () => {
@@ -2379,10 +2383,15 @@ test('F27.3: Modal, Card watermark and CSS define zero-emoji and ratio-aware ima
 });
 
 test('F27.4: mediaLayout configuration supports grid and stack with safe sanitization', () => {
-  const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
-  assert.ok(themesContent.includes("mediaLayout: 'grid'"), 'DEFAULT_CARD_CONFIG must include mediaLayout grid');
-  assert.ok(themesContent.includes('sanitizeMediaLayout'), 'themes.ts must define sanitizeMediaLayout');
-  assert.ok(themesContent.includes("MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack']"), 'Must export MEDIA_LAYOUT_OPTIONS');
+  assert.equal(DEFAULT_CARD_CONFIG.mediaLayout, 'grid', 'the card opens in the grid layout');
+  assert.deepEqual([...MEDIA_LAYOUT_OPTIONS], ['grid', 'stack']);
+
+  // Anything unrecognised -- including a config saved before the option existed,
+  // which arrives as `undefined` -- lands on the default rather than reaching
+  // the DOM as a class that no stylesheet knows.
+  assert.equal(sanitizeMediaLayout('stack'), 'stack');
+  assert.equal(sanitizeMediaLayout('masonry'), 'grid');
+  assert.equal(sanitizeMediaLayout(undefined), 'grid');
 });
 
 test('F27.5: CSS defines media-layout-stack for 100% full-display of all multi images', () => {
@@ -2552,12 +2561,12 @@ test('F29.8: Card.tsx conditionally renders the video badge based on showPlayBut
 // -------------------------------------------------------------
 // F30: Action Bar Button Visibility & Configurable Toggle
 // -------------------------------------------------------------
-test('F30.1: DEFAULT_CARD_CONFIG defines showActionBarButton: true and themes.ts persists it', () => {
-  const themesContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/themes.ts'), 'utf-8');
-  assert.ok(themesContent.includes('showActionBarButton: true'), 'DEFAULT_CARD_CONFIG must include showActionBarButton: true');
-  const prefsContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/prefs.ts'), 'utf-8');
-  assert.ok(prefsContent.includes('showActionBarButton: saved.showActionBarButton !== false'), 'loadUserPreferences must parse showActionBarButton');
-  assert.ok(prefsContent.includes("STORAGE_KEY = 'post_to_card_user_prefs'"), 'Must export STORAGE_KEY');
+test('F30.1: the action-bar button ships on by default', () => {
+  // The stored-value half lives in tier 2.76, beside the storage mock. The
+  // storage key's literal is deliberately not pinned: what matters is that the
+  // popup and the content script spell it the same, which `tier_hygiene` 2
+  // already checks, so a coordinated rename stays allowed.
+  assert.equal(DEFAULT_CARD_CONFIG.showActionBarButton, true);
 });
 
 test('F30.2: Controls.tsx contains toggle for showActionBarButton with i18n tweetActionButton', () => {
@@ -2566,32 +2575,6 @@ test('F30.2: Controls.tsx contains toggle for showActionBarButton with i18n twee
   assert.ok(controlsContent.includes('t.tweetActionButton'), 'Controls must use localized label for button toggle');
   assert.equal(TRANSLATIONS['zh-CN'].tweetActionButton, '推文卡片按钮');
   assert.equal(TRANSLATIONS['en-US'].tweetActionButton, 'Tweet Card Button');
-});
-
-test('F30.3: injection.ts defines setInjectedButtonVisibility, HIDE_ACTION_BUTTON_CLASS and style injection', () => {
-  const injectionContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/triggerViews.ts'), 'utf-8');
-  assert.ok(injectionContent.includes("HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn'"), 'Must define hide class constant');
-  assert.ok(injectionContent.includes("VISIBILITY_STYLE_ID = 'post-to-card-visibility-style'"), 'Must define visibility style id');
-  assert.ok(injectionContent.includes('function setInjectedButtonVisibility'), 'Must export setInjectedButtonVisibility');
-  assert.ok(injectionContent.includes('display: none !important'), 'Must inject CSS rule to hide action button');
-
-  // Verify DOM behavior using DomDocument
-  const doc = new DomDocument();
-  const root = doc.documentElement;
-  const HIDE_CLASS = 'post-to-card-hide-action-btn';
-
-  // Simulate setInjectedButtonVisibility logic
-  root.classList.add(HIDE_CLASS);
-  assert.ok(root.classList.contains(HIDE_CLASS), 'Hide class should be present when disabled');
-  root.classList.remove(HIDE_CLASS);
-  assert.ok(!root.classList.contains(HIDE_CLASS), 'Hide class should be removed when enabled');
-});
-
-test('F30.4: injection.ts implements Alt+C shortcut and triggerActiveTweet for alternative access', () => {
-  const injectionContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/injection.ts'), 'utf-8');
-  assert.ok(injectionContent.includes('triggerActiveTweet'), 'Must implement triggerActiveTweet');
-  assert.ok(injectionContent.includes("e.altKey && (e.key === 'c' || e.key === 'C')"), 'Must listen for Alt + C keyboard shortcut');
-  assert.ok(injectionContent.includes('lastHoveredArticle'), 'Must track hovered article for shortcut activation');
 });
 
 test('F30.5: manifest.json declares action popup pointing to popup.html', () => {

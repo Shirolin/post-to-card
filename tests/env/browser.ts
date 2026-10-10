@@ -297,7 +297,7 @@ export class DomElement extends DomNode {
     event.target = this;
     let curr: DomNode | null = this;
     while (curr && !event._propagationStopped) {
-      if (curr instanceof DomElement) {
+      if (curr instanceof DomElement || curr instanceof DomDocument) {
         const list = (curr as any).listeners.get(event.type) || [];
         for (const cb of list) {
           cb(event);
