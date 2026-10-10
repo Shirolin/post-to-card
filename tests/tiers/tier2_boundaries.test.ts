@@ -29,6 +29,7 @@ import { getTranslation } from '../../src/content/i18n.ts';
 import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
+import { RETWEET_HTML } from '../fixtures/retweet.ts';
 import { withoutTestIds } from '../fixtures/strip-testids.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
@@ -528,8 +529,27 @@ test('Tier 2.31: a retweet is identified from socialContext without reading its 
   `);
 
   const tweet = extractTweetData(article);
-  assert.equal(tweet?.retweetedBy, 'alice', 'reposting handle must come from the social context link');
+  assert.equal(tweet?.retweetedBy, '@alice', 'reposting handle must come from the social context link');
   assert.equal(tweet?.diagnostics?.social, 'retweet');
+});
+
+test('Tier 2.31b: a real repost notice is a span, and its handle is the notice own link', () => {
+  // The community documentation said `div[data-testid="socialContext"]`, and a
+  // real repost (2026-10-11) puts that testid on a `span` whose *enclosing* link
+  // is the reposter. Both halves were wrong, so every repost read as an original
+  // post. This is the real markup; `RETWEET_HTML` carries it with its provenance.
+  const article = createDomElement(RETWEET_HTML);
+
+  const tweet = extractTweetData(article);
+  assert.ok(tweet, 'the repost must extract');
+  assert.equal(tweet!.retweetedBy, '@shirolinhime', 'the reposter is the notice own link');
+  assert.equal(tweet!.diagnostics?.social, 'retweet', 'and it must classify as a repost');
+  assert.equal(tweet!.author.handle, '@deon_lt', 'the body belongs to the reposted author');
+  assert.equal(
+    tweet!.translatedFrom,
+    '翻译自 英语',
+    'the translation notice is still the entry own, not the notice'
+  );
 });
 
 test('Tier 2.32: a reply target is read structurally from socialContext', () => {
