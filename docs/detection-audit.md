@@ -90,6 +90,14 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
   这个状态下 GIF 与视频仍然由**徽标文本**区分（容器内有 `<span>GIF</span>`），
   容器自身的 `aria-label` 是本地化的 `嵌入式视频`，所以 `div[aria-label="Embedded video"]` 那条精确匹配
   在 zh-CN 页面上匹配不到。见 `docs/observed-dom-2026-10-10.md`
+- **串的判据在 API，不在 DOM** —— **2026-10-10 实测**：X 自己的「这是同一串的下一节」条件是
+ `legacy.in_reply_to_status_id_str === 上一条的 id_str`（同时 `in_reply_to_screen_name` 等于上一条作者，
+ 所以「同作者」是它的推论而不是独立条件），`conversation_id_str` 把整串绑在一起。
+ 实测一条真实自串（`/ShiroLinHime/status/2088178637904531773`）：续条的 `in_reply_to_status_id_str` 就是首发 id。
+ DOM 里**没有**任何对应物：同一个串的状态页上 `tweet-thread-indicator` 0、细线（宽 ≤4px 的元素）0、
+ `border-left` 0、伪元素 0、「显示此推文串」0，续条就是平铺在回复框下面的一条普通回复。
+ 这份 payload 我们**已经在拦**（`graphql/hook.ts` 只拦 `TweetDetail`/`TweetResultByRestId`），
+ 但 `graphql/parse.ts` 没有保留这两个字段。
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号
 - `a[href*="/status/"]`、`time[datetime]` —— 结构语义，不会变
