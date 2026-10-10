@@ -13,8 +13,8 @@ import assert from 'node:assert/strict';
 import { createDomElement, DomDocument } from '../env/browser.ts';
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { initGraphQLBridge } from '../../src/content/graphql/bridge.ts';
-import { TWEET_DETAIL_THREAD_JSON } from '../fixtures/graphql.ts';
-import { THREAD_HTML } from '../fixtures/thread.ts';
+import { TWEET_DETAIL_THREAD_JSON, HOME_TIMELINE_SELF_THREAD_JSON } from '../fixtures/graphql.ts';
+import { THREAD_HTML, FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
 
 export interface TestResult {
   name: string;
@@ -176,6 +176,31 @@ test('res.5: resolveThread safely produces fallback thread for empty or unresolv
   assert.equal(emptyString.tweets.length, 1);
   assert.equal(emptyString.author.handle, '@unknown');
   assert.equal(emptyString.tweets[0].diagnostics?.source, 'dom');
+});
+
+test('res.6: a click in a feed proves its thread from the captured timeline payload', () => {
+  mockWindow.location.pathname = '/home';
+  const feed = createDomElement(FEED_SELF_THREAD_HTML);
+  const target = feed.querySelector('#feed-post-2')!;
+
+  // A list view renders a thread's sections as plainly adjacent posts, so this
+  // is the case that used to lose the thread: no marker, no payload, one post.
+  const alone = resolveThread(target);
+  assert.equal(alone.tweets.length, 1, 'no marker and no payload means no thread');
+  assert.equal(alone.tweets[0].id, '9002');
+
+  // The page's own timeline response says 9002 answers 9001, which is exactly
+  // the condition X threads by.
+  seedGraphQLCache(HOME_TIMELINE_SELF_THREAD_JSON, 'HomeTimeline', 'q_feed');
+  const thread = resolveThread(target);
+
+  assert.equal(thread.isSingle, false, 'the payload names 9002 as answering 9001');
+  assert.deepEqual(thread.tweets.map((t) => t.id), ['9001', '9002']);
+  assert.equal(thread.targetTweetIndex, 1, 'the clicked post is still the target');
+  assert.ok(
+    thread.tweets.every((t) => t.diagnostics?.source === 'dom'),
+    'the payload proves the boundary; the content is still the page markup'
+  );
 });
 
 export async function runTierResolver(): Promise<{

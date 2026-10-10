@@ -122,3 +122,56 @@ export const EXPECTED_THREAD_DATA: ThreadData = {
     },
   ],
 };
+
+/**
+ * The same author's consecutive posts as a *list view* renders them: no
+ * `thread-*` classes, no "show this thread" link and no `socialContext`, which
+ * are the signals the DOM heuristics look for and which a real feed never
+ * provides. This is the shape that used to lose a thread.
+ *
+ * Ids line up with `HOME_TIMELINE_SELF_THREAD_JSON` (`tests/fixtures/graphql.ts`),
+ * and an ad sits after the pair so the walk has to stop where the thread does.
+ */
+export const FEED_SELF_THREAD_HTML = `
+<div id="conversation-container">
+  <article data-testid="tweet" id="feed-post-1">
+    <div data-testid="User-Name">
+      <span>Alice Dev</span>
+      <a href="/alice" role="link"><span>@alice</span></a>
+      <a href="/alice/status/9001" role="link"><time datetime="2026-08-01T10:00:00.000Z">Aug 1</time></a>
+    </div>
+    <div data-testid="tweetText"><span>Part 1: The problem with state machines</span></div>
+    <div role="group"></div>
+  </article>
+
+  <article data-testid="tweet" id="feed-post-2">
+    <div data-testid="User-Name">
+      <span>Alice Dev</span>
+      <a href="/alice" role="link"><span>@alice</span></a>
+      <a href="/alice/status/9002" role="link"><time datetime="2026-08-01T10:02:00.000Z">Aug 1</time></a>
+    </div>
+    <div data-testid="tweetText"><span>Part 2: Designing pure transitions</span></div>
+    <div role="group"></div>
+  </article>
+
+  <!-- An ad: the thread ends here, payload or not. -->
+  <article data-testid="tweet" id="feed-ad" data-testid-placement="ad">
+    <div data-testid="placementTracking"><span>Promoted</span></div>
+    <div data-testid="User-Name">
+      <span>Cloud Sponsor</span>
+      <a href="/cloudsponsor" role="link"><span>@cloudsponsor</span></a>
+    </div>
+    <div data-testid="tweetText"><span>Sign up today</span></div>
+  </article>
+
+  <article data-testid="tweet" id="feed-post-3">
+    <div data-testid="User-Name">
+      <span>Alice Dev</span>
+      <a href="/alice" role="link"><span>@alice</span></a>
+      <a href="/alice/status/9004" role="link"><time datetime="2026-08-01T10:04:00.000Z">Aug 1</time></a>
+    </div>
+    <div data-testid="tweetText"><span>Part 3: Conclusion and summary</span></div>
+    <div role="group"></div>
+  </article>
+</div>
+`;

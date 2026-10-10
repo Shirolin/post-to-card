@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseTweetDetailResponse } from '../../src/content/graphql/parse.ts';
+import { parseTweetDetailResponse, parseReplyLinkage } from '../../src/content/graphql/parse.ts';
 import { applyDomTranslation } from '../../src/content/graphql/bridge.ts';
 import type { ThreadData } from '../../src/types/tweet.ts';
 import {
@@ -24,6 +24,7 @@ import {
   TWEET_DETAIL_ENTITIES_JSON,
   TWEET_DETAIL_MEDIA_PERMALINK_JSON,
   TWEET_DETAIL_MEDIA_WITH_LINK_JSON,
+  HOME_TIMELINE_SELF_THREAD_JSON,
 } from '../fixtures/graphql.ts';
 
 export interface TestResult {
@@ -318,6 +319,37 @@ test('gql.22: an author link inside the range survives the tail strip', () => {
   assert.ok(link, 'the author link must remain as a token');
   assert.equal(link!.value, 'example.com/post', 'and keep its display form');
   assert.equal(link!.href, 'https://example.com/post');
+});
+
+test('gql.23: a list-view payload yields the reply linkage X threads by', () => {
+  // A timeline page is not a conversation, so nothing here builds a card. What
+  // it carries is which post each of its posts answers, and that is the only
+  // proof of a thread a feed can offer.
+  const links = parseReplyLinkage(HOME_TIMELINE_SELF_THREAD_JSON);
+
+  assert.equal(links.get('9001')?.inReplyToId, undefined, 'the first post answers nothing');
+  assert.equal(links.get('9002')?.inReplyToId, '9001', 'the second answers the first');
+  assert.equal(links.get('9002')?.inReplyToHandle, 'alice');
+  assert.equal(links.get('9004')?.inReplyToId, '9002', 'the third answers the second');
+  assert.equal(links.size, 3, 'every post in the page is indexed');
+});
+
+test('gql.24: the linkage is read by shape, not by path', () => {
+  // The same fields sit in a TweetDetail conversation under a different root,
+  // including inside a thread module. All three must be found either way, since
+  // the walk looks for `legacy`, not for a route to it.
+  const links = parseReplyLinkage(TWEET_DETAIL_THREAD_JSON);
+
+  assert.equal(links.size, 3, 'a conversation indexes its posts too');
+  assert.ok(links.has('1001') && links.has('1002') && links.has('1003'));
+});
+
+test('gql.25: an unusable payload yields no linkage instead of throwing', () => {
+  // A body this parser cannot read must leave the DOM channel exactly where it
+  // was, so an empty index is the answer, never an error.
+  for (const body of ['', 'not json', '{}', 'null', '[]']) {
+    assert.equal(parseReplyLinkage(body).size, 0, `body ${JSON.stringify(body)} must yield nothing`);
+  }
 });
 
 export async function runTierGraphQL(): Promise<{

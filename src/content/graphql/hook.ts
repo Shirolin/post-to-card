@@ -12,10 +12,9 @@
  * pinning it would make the extension break on a schedule.
  */
 
-const GRAPHQL_URL_PATTERN = /\/i\/api\/graphql\/[^/]+\/([A-Za-z0-9_]+)/;
+import { WATCHED_OPERATIONS } from './operations.ts';
 
-/** Operations worth parsing. Everything else is ignored to keep the hook cheap. */
-const WATCHED_OPERATIONS = new Set(['TweetDetail', 'TweetResultByRestId']);
+const GRAPHQL_URL_PATTERN = /\/i\/api\/graphql\/[^/]+\/([A-Za-z0-9_]+)/;
 
 /** Namespace for messages crossing from the MAIN world into the content script. */
 const MESSAGE_SOURCE = 'post-to-card-graphql';
@@ -39,7 +38,7 @@ function extractRequestInfo(url: string): { operationName: string; queryId: stri
   if (!pathMatch) return null;
 
   const operationName = pathMatch[1];
-  if (!WATCHED_OPERATIONS.has(operationName)) return null;
+  if (WATCHED_OPERATIONS[operationName] !== true) return null;
 
   // Recover the rotated segment purely so the diagnostics can report a change.
   const queryIdMatch = /\/i\/api\/graphql\/([^/]+)\//.exec(url);

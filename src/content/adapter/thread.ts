@@ -9,6 +9,7 @@
 import type { TweetData, ThreadData } from '../../types/tweet.ts';
 import { extractTweetData } from './extractor.ts';
 import { getReplyingToHandle } from './social.ts';
+import { lookupReplyLink } from '../graphql/replyLinks.ts';
 
 // Re-exported so existing importers keep a single entry point for this signal.
 export { getReplyingToHandle };
@@ -180,7 +181,7 @@ export function isThreadConnectedPair(
   tweetA: TweetData,
   tweetB: TweetData,
   isForward: boolean,
-  _isDetailPage: boolean
+  isDetailPage: boolean
 ): boolean {
   // 1. Author must be identical
   if (tweetA.author.handle.toLowerCase() !== tweetB.author.handle.toLowerCase()) {
@@ -219,9 +220,22 @@ export function isThreadConnectedPair(
   }
 
   // 7. Positive proof of thread connection REQUIRED:
-  // Whether in detail page or profile feed, adjacent tweets MUST have positive thread proof
-  // (thread marker, verified self-reply, or "show this thread").
+  // Adjacent tweets MUST have positive thread proof (the payload's own answer, a
+  // thread marker, a verified self-reply, or "show this thread").
   // Never merge unconnected same-author tweets simply because they share a timeline!
+
+  // X's own answer, when this page has delivered the payload that carries it: the
+  // later post names the earlier one as the post it answers. That is the condition
+  // X itself threads by, and the only proof a list view can offer, because the DOM
+  // renders a thread's sections as plainly adjacent posts with no marker of their
+  // own (docs/detection-audit.md). A payload that names someone else is not a veto:
+  // it falls through to the signals below, so no view that merges today stops.
+  const earlier = isForward ? tweetA : tweetB;
+  const later = isForward ? tweetB : tweetA;
+  if (earlier.id && later.id && lookupReplyLink(later.id)?.inReplyToId === earlier.id) {
+    return true;
+  }
+
   const hasConnectorA = hasNativeThreadConnector(artA, isForward ? 'down' : 'up');
   const hasConnectorB = hasNativeThreadConnector(artB, isForward ? 'up' : 'down');
   const isSelfReply = replyTarget === tweetA.author.handle.toLowerCase();
@@ -236,7 +250,7 @@ export function isThreadConnectedPair(
   // retweets and ID-order contradictions. That is sufficient proof here; on
   // feeds and profiles the algorithmic order says nothing about threading, so
   // still refuse to merge.
-  if (isStatusDetailPage()) {
+  if (isDetailPage) {
     return true;
   }
 

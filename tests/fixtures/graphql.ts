@@ -698,3 +698,84 @@ export const TWEET_DETAIL_MEDIA_WITH_LINK_JSON = JSON.stringify({
     }
   }
 });
+
+/**
+ * One home-timeline page holding three posts by one author, the second and third
+ * of which answer the one before them.
+ *
+ * The nesting follows the timeline's own shape (`data.home.home_timeline_urt`),
+ * which is deliberately not the `TweetDetail` shape above: the reply linkage is
+ * read by shape, not by path, and this fixture is what holds that promise.
+ *
+ * The reply fields are the ones `docs/detection-audit.md` measured X threading
+ * by — `in_reply_to_status_id_str` naming the previous post, with
+ * `in_reply_to_screen_name` naming its author. Only the fields under test are
+ * present. The ids line up with `MIXED_FEED_WITH_ADS_AND_REPLIES_HTML`
+ * (`tests/fixtures/ads-replies.ts`), so a click in that feed resolves against
+ * this payload.
+ */
+export const HOME_TIMELINE_SELF_THREAD_JSON = JSON.stringify({
+  data: {
+    home: {
+      home_timeline_urt: {
+        instructions: [
+          {
+            type: 'TimelineAddEntries',
+            entries: [
+              timelineTweet('tweet-9001', '3', {
+                id: '9001',
+                text: 'Part 1: The problem with state machines',
+              }),
+              timelineTweet('tweet-9002', '2', {
+                id: '9002',
+                text: 'Part 2: Designing pure transitions',
+                repliesTo: { id: '9001', handle: 'alice' },
+              }),
+              timelineTweet('tweet-9004', '1', {
+                id: '9004',
+                text: 'Part 3: Conclusion & summary',
+                repliesTo: { id: '9002', handle: 'alice' },
+              }),
+            ],
+          },
+        ],
+      },
+    },
+  },
+});
+
+/** One timeline entry, in the shape a list view returns it. */
+function timelineTweet(
+  entryId: string,
+  sortIndex: string,
+  post: { id: string; text: string; repliesTo?: { id: string; handle: string } }
+) {
+  return {
+    entryType: 'TimelineTimelineItem',
+    entryId,
+    sortIndex,
+    content: {
+      itemContent: {
+        __typename: 'TimelineTweet',
+        tweet_results: {
+          result: {
+            __typename: 'Tweet',
+            rest_id: post.id,
+            legacy: {
+              id_str: post.id,
+              full_text: post.text,
+              created_at: 'Sat Aug 01 10:00:00 +0000 2026',
+              conversation_id_str: '9001',
+              ...(post.repliesTo
+                ? {
+                    in_reply_to_status_id_str: post.repliesTo.id,
+                    in_reply_to_screen_name: post.repliesTo.handle,
+                  }
+                : {}),
+            },
+          },
+        },
+      },
+    },
+  };
+}

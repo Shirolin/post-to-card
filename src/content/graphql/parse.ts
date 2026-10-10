@@ -13,6 +13,7 @@
 import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../adapter/urls.ts';
 import { isArticlePermalink, stripTrailingArticleToken } from '../adapter/emojis.ts';
+import type { ReplyLink } from './replyLinks.ts';
 
 type Json = Record<string, unknown>;
 
@@ -621,4 +622,62 @@ export function parseTweetDetailResponse(
       targetTweetIndex,
     },
   };
+}
+
+/** Node budget for the linkage walk. Hitting it only ever costs proofs. */
+const MAX_LINKAGE_NODES = 250_000;
+
+/**
+ * Collects X's reply linkage out of any captured payload.
+ *
+ * Deliberately shape-agnostic. A `TweetDetail` conversation, a `HomeTimeline`
+ * page, a `UserTweets` page and a `TweetResultByRestId` lookup all nest post
+ * objects differently, and the thread fact this project needs -- which post a
+ * post answers -- sits on whichever object carries `legacy`. So the walk looks
+ * for that shape rather than for a path, and a payload it does not recognise
+ * yields an empty map instead of an error, which leaves the DOM channel exactly
+ * where it was.
+ *
+ * This runs once per captured response, and a timeline body is large, so it is
+ * bounded by node count and stops early rather than walking a runaway payload.
+ */
+export function parseReplyLinkage(body: string): Map<string, ReplyLink> {
+  const found = new Map<string, ReplyLink>();
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return found;
+  }
+
+  const stack: unknown[] = [payload];
+  let visited = 0;
+
+  while (stack.length > 0 && visited < MAX_LINKAGE_NODES) {
+    const node = stack.pop();
+    visited++;
+    if (!node || typeof node !== 'object') continue;
+
+    if (Array.isArray(node)) {
+      for (const item of node) stack.push(item);
+      continue;
+    }
+
+    const tweet = node as Json;
+    const legacy = isObject(tweet.legacy) ? tweet.legacy : undefined;
+    if (legacy) {
+      const id = str(tweet.rest_id) || str(legacy.id_str);
+      if (id) {
+        found.set(id, {
+          inReplyToId: str(legacy.in_reply_to_status_id_str),
+          inReplyToHandle: str(legacy.in_reply_to_screen_name),
+        });
+      }
+    }
+
+    for (const value of Object.values(tweet)) stack.push(value);
+  }
+
+  return found;
 }

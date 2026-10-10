@@ -4,10 +4,16 @@
  * Receives responses forwarded by the MAIN-world hook, keeps the most recent
  * payload per operation, and answers requests for the tweet currently on
  * screen. A miss is not an error: the caller falls back to the DOM adapter.
+ *
+ * Besides the whole-conversation operations it also feeds the reply-linkage
+ * index from the list-view operations, which is the only proof of a thread a
+ * feed can offer (see `replyLinks.ts`).
  */
 
 import type { ThreadData } from '../../types/tweet.ts';
-import { parseTweetDetailResponse, type ParsedGraphQL } from './parse.ts';
+import { parseTweetDetailResponse, parseReplyLinkage, type ParsedGraphQL } from './parse.ts';
+import { rememberReplyLinks } from './replyLinks.ts';
+import { DETAIL_OPERATIONS, LINKAGE_OPERATIONS } from './operations.ts';
 
 const MESSAGE_SOURCE = 'post-to-card-graphql';
 const MESSAGE_TYPE = 'post-to-card:graphql-payload';
@@ -50,6 +56,13 @@ function handleMessage(event: MessageEvent): void {
     queryId: payload.queryId || '',
     observedAt: Date.now(),
   });
+
+  // A list-view payload is not a conversation, so nothing is built from it. What
+  // it does carry is which post each of its posts answers, and that is the fact
+  // a click in a feed has to consult.
+  if (LINKAGE_OPERATIONS[payload.operationName] === true) {
+    rememberReplyLinks(parseReplyLinkage(payload.body));
+  }
 }
 
 /**
@@ -80,7 +93,7 @@ export interface GraphQLLookup {
  */
 export function lookupFromGraphQL(targetTweetId?: string): GraphQLLookup {
   const id = targetTweetId || currentTweetIdFromUrl();
-  const operations = id ? ['TweetDetail', 'TweetResultByRestId'] : ['TweetDetail'];
+  const operations = id ? Object.keys(DETAIL_OPERATIONS) : ['TweetDetail'];
 
   for (const operationName of operations) {
     const entry = cache.get(operationName);
