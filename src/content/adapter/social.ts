@@ -82,9 +82,9 @@ export function getRetweetedBy(article: Element): string | null {
   const social = getSocialContext(article);
   if (!social) return null;
 
-  // A reply target is not a reposter. Checked first because both render a
-  // profile link in the same notice.
-  if (isReplyNotice(social)) return null;
+  // A reply target is not a reposter. Checked first because both name an
+  // account, and the notice's own structure says which one this is.
+  if (noticeKind(social) === 'reply') return null;
 
   const authorHandle = getArticleAuthorHandle(article);
   for (const handle of getSocialContextHandles(article)) {
@@ -106,25 +106,27 @@ function getArticleAuthorHandle(article: Element): string | null {
 }
 
 /**
- * Distinguishes a reply notice from a retweet notice.
+ * Which notice this is, read from structure alone.
  *
- * X wraps the replied-to handles in a link whose label is the handle itself,
- * while a retweet labels the reposting account the same way. The reliable
- * structural difference is that a reply notice keeps the "Replying to" wording
- * in the same subtree; this check is therefore textual but confined to the
- * small notice container rather than the whole article.
+ * The wording is localized into forty-odd languages and this check used to read
+ * it, so a German or Korean interface reported no reply at all. Structure does
+ * not vary that way, and the three notices are structurally distinct:
+ *
+ *   repost: the notice *is* the reposter's own profile link, so it sits inside
+ *           an `a[href^="/"]` (measured 2026-10-11)
+ *   reply:  the notice *holds* its target as a link inside it
+ *   pinned: the notice names no account at all
+ *
+ * Unverified and deliberately not guessed at: a repost rendered as a container
+ * holding its own link would read as a reply here, and a reply whose notice was
+ * itself wrapped in an anchor would read as a repost. Neither shape has been
+ * seen; the wording below is kept for the no-container fallback, where there is
+ * no structure to read.
  */
-/**
- * The wording X uses to introduce a reply notice, in every interface language
- * the card has seen. One list, because two copies of it already disagreed: the
- * notice check knew the Dutch phrase and the handle fallback did not, so a
- * Dutch reply was reported as a reply by the diagnostics and then not treated
- * as one when the thread was assembled.
- */
-const REPLY_NOTICE = /replying to|replied to|回复|返信先|répondre a|respondeu a|antwoord op/i;
-
-function isReplyNotice(social: Element): boolean {
-  return REPLY_NOTICE.test(social.textContent || '');
+function noticeKind(social: Element): 'reply' | 'repost' | 'pinned' {
+  if (social.closest('a[href^="/"]')) return 'repost';
+  if (social.querySelectorAll('a[href^="/"]').length > 0) return 'reply';
+  return 'pinned';
 }
 
 /**
@@ -141,7 +143,7 @@ export function getReplyingToHandle(article: Element): string | null {
   const social = getSocialContext(article);
   // A repost notice is the reposter's own link, not a reply target. Without this
   // the reposter was reported as the account being replied to.
-  if (social && isReplyNotice(social)) {
+  if (social && noticeKind(social) === 'reply') {
     // Inside a reply notice the linked handles are the replied-to accounts.
     const handles = getSocialContextHandles(article);
     if (handles.length > 0) return `@${handles[0]}`;
@@ -175,20 +177,26 @@ export function getReplyingToHandle(article: Element): string | null {
  */
 const PINNED_NOTICE = /pinned|置顶|固定/i;
 
+/**
+ * Wording X uses to introduce a reply notice, for the no-container fallback
+ * only -- where there is no structure to read. It knows seven languages out of
+ * the forty-odd X ships, so it is never the primary signal.
+ */
+const REPLY_NOTICE = /replying to|replied to|回复|返信先|répondre a|respondeu a|antwoord op/i;
+
 /** Classifies the entry for diagnostic reporting. */
 export function classifySocial(article: Element): 'retweet' | 'reply' | 'pinned' | 'none' {
   const social = getSocialContext(article);
   if (!social) return 'none';
-  // A reply is classified before a retweet: both render a profile link in the
-  // same container, so the retweet reading has to be ruled out first.
-  if (isReplyNotice(social)) return 'reply';
+  // Read from the notice's structure, not its wording: a repost notice is the
+  // reposter's own link, a reply notice holds its target as a link inside it,
+  // and a pinned notice names no account. See `noticeKind`.
+  const kind = noticeKind(social);
+  if (kind === 'reply') return 'reply';
+  if (kind === 'pinned') return 'pinned';
   if (getRetweetedBy(article)) return 'retweet';
-  // No account named at all. A repost notice always names the reposter (that is
-  // the link the notice *is*, measured 2026-10-11) and a reply names its target,
-  // so a notice holding no handle is a pinned notice -- in every language, which
-  // is the point. The wording above is kept as a second signal for a future
-  // pinned notice that does link its author.
-  if (getSocialContextHandles(article).length === 0) return 'pinned';
+  // The wording stays as a second signal: a pinned notice that ever does link
+  // its author would read as a repost above, and this catches it.
   if (PINNED_NOTICE.test(social.textContent || '')) return 'pinned';
   return 'none';
 }

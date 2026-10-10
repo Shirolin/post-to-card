@@ -8,6 +8,7 @@ import { DomElement, DomImageElement, DomDocument, DomMutationObserver, createDo
 import { createChromeMock } from '../env/chrome.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
+import { classifySocial, getReplyingToHandle, getRetweetedBy } from '../../src/content/adapter/social.ts';
 import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { isPicMediaLink } from '../../src/content/adapter/emojis.ts';
@@ -517,20 +518,20 @@ test('Tier 2.30: external link card preview image is extracted as media', () => 
 // -------------------------------------------------------------
 // Structural detection: retweets, replies, ads, and unavailable posts
 // -------------------------------------------------------------
-test('Tier 2.31: a retweet is identified from socialContext without reading its label', () => {
+test('Tier 2.31: a repost is identified from socialContext without reading its label', () => {
+  // The notice is the reposter's own profile link -- that nesting is the signal,
+  // and the label text ("Alice reposted" here) is deliberately arbitrary so a
+  // check that read the wording would have nothing to match on.
   const article = createDomElement(`
     <article data-testid="tweet">
-      <div data-testid="socialContext">
-        <span>Alice reposted</span>
-        <a href="/alice"><span>@alice</span></a>
-      </div>
+      <a href="/alice" role="link"><span data-testid="socialContext">Alice reposted</span></a>
       <div data-testid="User-Name"><a href="/bob"><span>Bob</span></a></div>
       <div data-testid="tweetText"><span>original words</span></div>
     </article>
   `);
 
   const tweet = extractTweetData(article);
-  assert.equal(tweet?.retweetedBy, '@alice', 'reposting handle must come from the social context link');
+  assert.equal(tweet?.retweetedBy, '@alice', 'reposting handle must come from the notice own link');
   assert.equal(tweet?.diagnostics?.social, 'retweet');
 });
 
@@ -596,6 +597,35 @@ test('Tier 2.32: a reply target is read structurally from socialContext', () => 
   const tweet = extractTweetData(article);
   assert.equal(tweet?.retweetedBy, undefined, 'a reply is not a retweet');
   assert.equal(tweet?.diagnostics?.social, 'reply');
+});
+
+test('Tier 2.32b: the notice kind is read from structure, in any language', () => {
+  // The three notices are structurally distinct, and this is the property that
+  // matters: the wording is localized into forty-odd languages while the check
+  // used to know seven, so a German or Korean interface reported no reply at all
+  // (and, through `getRetweetedBy`, could report a reply as a repost).
+  const reply = (wording: string) =>
+    createDomElement(`
+      <article data-testid="tweet">
+        <div data-testid="socialContext"><span>${wording}</span> <a href="/carol" role="link"><span>@carol</span></a></div>
+        <div data-testid="User-Name"><a href="/dave"><span>@dave</span></a></div>
+        <div data-testid="tweetText"><span>a reply</span></div>
+      </article>
+    `);
+
+  for (const wording of ['Replying to', 'Antwort an', 'En réponse à', '답글 대상']) {
+    const article = reply(wording);
+    assert.equal(classifySocial(article), 'reply', `"${wording}" is a reply notice`);
+    assert.equal(getReplyingToHandle(article), '@carol', `and names its target, for "${wording}"`);
+    assert.equal(getRetweetedBy(article), null, `and is not a repost, for "${wording}"`);
+  }
+
+  // A repost keeps working when its own wording is unknown, too.
+  for (const wording of ['reposted', 'Weitergeleitet', '리포스트']) {
+    const article = createDomElement(RETWEET_HTML.replace('你已转帖', wording));
+    assert.equal(classifySocial(article), 'retweet', `"${wording}" is a repost notice`);
+    assert.equal(getRetweetedBy(article), '@shirolinhime', `and names the reposter, for "${wording}"`);
+  }
 });
 
 test('Tier 2.33: the word "reply" inside a quoted post does not classify the outer tweet', () => {
