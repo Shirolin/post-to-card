@@ -1702,29 +1702,61 @@ test('F17.14: the thread layout breathes with the material, and its connector is
   );
 });
 
-test('F17.14b: every material\'s line ink is a real ink, so the drawn lines exist', () => {
+test('F17.14b: every material\'s line ink is a real ink, and separates from its sheet', () => {
   // `transparent` is a *defined* value, so the `var(--rule, …)` fallbacks in
   // card.css never fire: a blank rule token erased the thread connector and the
   // footer rule outright on the four modern materials. "This paper has no
   // furniture" is what `signature.style: 'none'` says; a blank ink says nothing
   // and silently deletes every line that consumes the token.
+  //
+  // The ink also has to *separate*. The first fix for the four themes reused
+  // `mediaBorder`, the photo-mount ink, which is tuned to sit quietly around a
+  // picture -- 1.32-1.38:1, the faintest drawn edge on any sheet, and under the
+  // 1.4:1 floor F17.11 holds a drawn border to. That is a line you have to
+  // hunt for, which is the same defect one step further from invisible.
+  const srgb = (channel: number): number => {
+    const s = channel / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string): number => {
+    const n = parseInt(hex.slice(1), 16);
+    return 0.2126 * srgb((n >> 16) & 255) + 0.7152 * srgb((n >> 8) & 255) + 0.0722 * srgb(n & 255);
+  };
+  const contrast = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
   for (const id of THEME_IDS) {
+    const { rule, surface } = THEMES[id].tokens;
     assert.notEqual(
-      THEMES[id].tokens.rule.toLowerCase(),
+      rule.toLowerCase(),
       'transparent',
       `${id} rule must be an ink, or the thread connector and footer rule vanish`
     );
-  }
-  // And the token still has to reach the two lines that draw with it, so a
-  // future rename cannot leave the contract asserted but unenforced.
-  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  for (const selector of ['.thread-connector-line {', '.card-footer {']) {
-    const rule = css.slice(css.indexOf(selector));
     assert.ok(
-      rule.slice(0, rule.indexOf('}')).includes('var(--rule'),
-      `${selector} must draw in the material line ink`
+      /^#[0-9a-f]{6}$/i.test(rule),
+      `${id} rule must be a resolvable colour, got "${rule}"`
+    );
+    const ratio = contrast(rule, surface);
+    assert.ok(
+      ratio >= 1.4,
+      `${id} rule ${rule} on ${surface} is ${ratio.toFixed(3)}:1, under the 1.4:1 drawn-edge floor`
     );
   }
+
+  // And the token still has to reach the footer rule, so a future rename cannot
+  // leave the contract asserted but unenforced. Only the footer: F17.14 already
+  // asserts the connector, and its `var(--rule, …)` is the declaration whose
+  // fallback the whole bug was about. The footer's `border-top` carries
+  // `var(--rule-style, …)` *and* `var(--rule, …)`, so a bare `includes('var(--rule')`
+  // would pass on the style token alone -- the ink half is named explicitly.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const footer = css.slice(css.indexOf('.card-footer {'));
+  assert.ok(
+    /border-top:[^;]*var\(--rule,\s/.test(footer.slice(0, footer.indexOf('}'))),
+    'the footer rule must take its ink from var(--rule), not from the style token'
+  );
 });
 
 test('F17.15: the masthead tick is the accent, but its hairline stays neutral ink', () => {
@@ -1911,19 +1943,21 @@ test('F20.6: the QR tooltip is localized, not a hard-coded English literal', () 
     !qrSrc.includes('Scan to open'),
     'the QR tooltip must not be hard-coded in the component'
   );
-  assert.ok(qrSrc.includes('title'), 'the QR component must accept a title');
+  // Required, not optional: the card is the only caller and always has a
+  // translator. An optional prop is how the literal survived the first pass.
+  assert.ok(
+    /title:\s*string;/.test(qrSrc),
+    'the QR title must be required, not an optional escape hatch'
+  );
   const card = fs.readFileSync(path.resolve(__dirname, '../../src/content/ui/Card.tsx'), 'utf-8');
   assert.ok(
     /CardQrCode[^>]*title=\{t\.qrHint\}/.test(card),
     'the card must pass the localized hint to the QR'
   );
-  assert.ok(TRANSLATIONS['zh-CN'].qrHint, 'zh-CN has the QR hint');
-  assert.ok(TRANSLATIONS['en-US'].qrHint, 'en-US has the QR hint');
-  assert.notEqual(
-    TRANSLATIONS['zh-CN'].qrHint,
-    TRANSLATIONS['en-US'].qrHint,
-    'the two locales must not share one literal'
-  );
+  // The exact copy, so a typo in either dictionary fails here rather than
+  // shipping a hover text nobody proofread.
+  assert.equal(TRANSLATIONS['zh-CN'].qrHint, '扫码打开原推文');
+  assert.equal(TRANSLATIONS['en-US'].qrHint, 'Scan to open original tweet');
 });
 
 // -------------------------------------------------------------
@@ -2080,10 +2114,16 @@ test('F23.6: a hidden preview toolbar is actually hidden, not just marked', () =
     toolbar.slice(0, toolbar.indexOf('}')).includes('display: flex'),
     'the toolbar is a flex row at rest'
   );
+  // The guard has to be asserted by its body, not merely by finding the
+  // selector: `slice(indexOf(sel))` on a missing selector returns the file's
+  // last character, which is truthy, so an `assert.ok` on it can never fail.
   const hiddenRule = css.slice(css.indexOf('.preview-toolbar[hidden]'));
-  assert.ok(hiddenRule, 'the toolbar needs a [hidden] guard');
   assert.ok(
-    hiddenRule.slice(0, hiddenRule.indexOf('}')).includes('display: none'),
+    hiddenRule.startsWith('.preview-toolbar[hidden]'),
+    'the toolbar needs a [hidden] guard'
+  );
+  assert.ok(
+    hiddenRule.slice(hiddenRule.indexOf('{') + 1, hiddenRule.indexOf('}')).includes('display: none'),
     'a hidden toolbar must not keep occupying its row'
   );
 });

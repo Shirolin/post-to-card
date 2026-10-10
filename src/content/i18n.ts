@@ -312,6 +312,24 @@ export function getTranslation(locale: Locale = 'en-US'): Translations {
 }
 
 /**
+ * The modal header's summary line for a given post count.
+ *
+ * Lives here rather than at the call site because the singular/plural choice is
+ * a property of the templates: English marks the count, and a caller that
+ * picked the plural for a one-post card printed "1 tweets". Keeping the
+ * selection beside the two templates also keeps the `{count}` placeholder's
+ * contract in one place, and makes the choice testable without rendering.
+ *
+ * Takes the resolved dictionary rather than a locale: every caller already has
+ * one in hand (the card's UI resolves it once per render), and a second
+ * `sanitizeLocale` here would be a second derivation of the same value.
+ */
+export function formatPreviewSummary(t: Translations, count: number): string {
+  const template = count === 1 ? t.previewSummarySingular : t.previewSummary;
+  return template.replace('{count}', String(count));
+}
+
+/**
  * Formats a tweet timestamp according to the selected locale.
  */
 export function formatLocaleTimestamp(timestampStr: string, locale: Locale): string {

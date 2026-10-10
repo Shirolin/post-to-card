@@ -13,7 +13,7 @@ import { threadScope, toggleExcluded } from './threadScope.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
 import { DEFAULT_EXPORT_SCALE } from '../engine/index.ts';
 
-import { getTranslation, sanitizeLocale } from '../i18n.ts';
+import { getTranslation, sanitizeLocale, formatPreviewSummary } from '../i18n.ts';
 
 /**
  * Zoom levels the preview offers.
@@ -332,14 +332,15 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
 
   // The summary counts one post as often as it counts several -- opening a
   // single post is the common case -- and English marks the difference, so a
-  // one-count would otherwise read "1 tweets".
-  const summaryTemplate = activeTweetCount === 1 ? t.previewSummarySingular : t.previewSummary;
+  // one-count would otherwise read "1 tweets". The choice lives with the
+  // templates, in `formatPreviewSummary`.
+  const summary = formatPreviewSummary(t, activeTweetCount);
 
   return (
     <Modal
       onClose={onClose}
       locale={config.locale}
-      summary={`${summaryTemplate.replace('{count}', String(activeTweetCount))}`}
+      summary={summary}
     >
       <div class="preview-stage">
         {/* Hidden when the window cannot show even the smallest fixed level: at

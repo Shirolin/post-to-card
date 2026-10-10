@@ -110,6 +110,12 @@ export interface ThemeTokens {
    * *undefined*. A defined `transparent` therefore erased both lines silently —
    * the thread lost its spine and the footer floated without its rule. "No
    * furniture" is expressed by the signature style, not by a blank ink.
+   *
+   * It also has to *separate* from the sheet. The floor the repo holds a drawn
+   * edge to is 1.4:1 (`F17.11`), and this token is what draws the footer rule,
+   * so it is held to it too — `F17.14c` enforces it. That is why it is not
+   * simply `mediaBorder`: the mount ink is tuned to sit quietly around a photo
+   * (1.32–1.38:1 on the four modern sheets) and is too faint to read as a line.
    */
   rule: string;
   /** `solid` or `dashed`; a receipt's rules are torn along a dash. */
@@ -313,7 +319,10 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       mat: '#faf9f5',
       keyline: false,
       texture: 'none',
-      rule: '#dcdbd4',
+      // Its own step off `mediaBorder`: the mount ink is tuned to sit quietly
+      // against the sheet (1.32:1), and a drawn line has to clear the floor the
+      // repo sets for one. 1.51:1.
+      rule: '#cecdc6',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'filled',
@@ -367,7 +376,9 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       mat: '#181b22',
       keyline: false,
       texture: 'none',
-      rule: '#2c3442',
+      // One step lighter than `mediaBorder` so the drawn line clears the
+      // repo's floor on this dark sheet: 1.51:1.
+      rule: '#323a48',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'filled',
@@ -423,7 +434,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       keyline: false,
       texture:
         'radial-gradient(at 0% 0%, rgba(255, 255, 255, 0.8) 0px, transparent 60%), radial-gradient(at 100% 100%, rgba(3, 105, 161, 0.12) 0px, transparent 50%)',
-      rule: '#c0d4ed',
+      // Its own step off `mediaBorder` (1.33:1), to 1.50:1.
+      rule: '#b4c8e1',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'outlined',
@@ -477,7 +489,8 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
       mat: '#f4f6f0',
       keyline: false,
       texture: 'none',
-      rule: '#cbd6c4',
+      // Its own step off `mediaBorder` (1.38:1), to 1.51:1.
+      rule: '#c2cdbb',
       ruleStyle: 'solid',
       signature: { style: 'none', height: '0px' },
       quoteStyle: 'filled',

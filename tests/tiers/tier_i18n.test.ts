@@ -12,6 +12,7 @@ import {
   detectDefaultLocale,
   sanitizeLocale,
   formatLocaleTimestamp,
+  formatPreviewSummary,
   type Locale,
 } from '../../src/content/i18n.ts';
 
@@ -182,19 +183,59 @@ test('i18n.8: trigger button localization uses localized title and aria-label', 
 // 9. Preview summary singular/plural
 test('i18n.9: the preview summary has a singular form for a one-post card', () => {
   // Opening a single post is the common case, and English marks the count, so
-  // the plural template alone read "1 tweets" in the header.
-  const fill = (template: string, count: number) => template.replace('{count}', String(count));
+  // the plural template alone read "1 tweets" in the header. The selection
+  // lives in `formatPreviewSummary`, so this exercises the real path the header
+  // takes -- not a re-implementation of it.
+  //
+  // Deliberately not pinning the phrases: i18n.2 records why an exact-string
+  // assertion fails on every copy edit without protecting behaviour. What has
+  // to hold is the shape.
+  const en = getTranslation('en-US');
+  const zh = getTranslation('zh-CN');
 
-  assert.equal(fill(TRANSLATIONS['en-US'].previewSummarySingular, 1), '1 tweet');
-  assert.equal(fill(TRANSLATIONS['en-US'].previewSummary, 3), '3 tweets');
-  // Chinese does not inflect, so the two templates may read the same; both still
-  // have to exist and interpolate, or a locale could silently lose the count.
-  assert.equal(fill(TRANSLATIONS['zh-CN'].previewSummarySingular, 1), '共 1 条推文');
-  assert.equal(fill(TRANSLATIONS['zh-CN'].previewSummary, 3), '共 3 条推文');
+  assert.equal(formatPreviewSummary(en, 1), '1 tweet');
+  assert.equal(formatPreviewSummary(en, 3), '3 tweets');
+  assert.equal(formatPreviewSummary(zh, 1), '共 1 条推文');
+  assert.equal(formatPreviewSummary(zh, 3), '共 3 条推文');
 
-  for (const locale of ['zh-CN', 'en-US'] as const) {
-    const singular = TRANSLATIONS[locale].previewSummarySingular;
-    assert.ok(singular.includes('{count}'), `${locale} singular template must interpolate the count`);
+  // English inflects: the two counts must not share wording. This is the whole
+  // defect -- one template serving both.
+  const one = formatPreviewSummary(en, 1);
+  const many = formatPreviewSummary(en, 3);
+  assert.notEqual(one, many, 'en-US must not print the plural wording for a count of one');
+  assert.ok(one.endsWith('tweet'), 'the English singular must read as a singular');
+  assert.ok(!one.endsWith('tweets'), 'the English singular must not read as a plural');
+
+  // A count of zero or two still has to interpolate rather than print the
+  // placeholder, whichever template the locale reaches for.
+  for (const [label, dict] of [['zh-CN', zh], ['en-US', en]] as const) {
+    for (const count of [0, 2, 25]) {
+      const line = formatPreviewSummary(dict, count);
+      assert.ok(
+        line.includes(String(count)),
+        `${label} @ ${count} must include the count, got "${line}"`
+      );
+      assert.ok(
+        !line.includes('{count}'),
+        `${label} @ ${count} must substitute the placeholder, got "${line}"`
+      );
+    }
+  }
+
+  // Both templates declare the placeholder. Not a copy assertion -- a template
+  // that hardcodes the numeral ("1 tweet") renders correctly for the only count
+  // the singular is used with, so no rendered-output check can see it, yet the
+  // count parameter it is handed goes ignored and a locale needing another form
+  // would break silently. The placeholder is the template's contract.
+  for (const [label, dict] of [['zh-CN', zh], ['en-US', en]] as const) {
+    assert.ok(
+      dict.previewSummarySingular.includes('{count}'),
+      `${label} singular template must declare {count}`
+    );
+    assert.ok(
+      dict.previewSummary.includes('{count}'),
+      `${label} plural template must declare {count}`
+    );
   }
 });
 

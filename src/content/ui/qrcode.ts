@@ -55,8 +55,12 @@ export interface CardQrCodeProps {
   url: string;
   fillColor?: string;
   className?: string;
-  /** Tooltip text; the card passes the localized string. */
-  title?: string;
+  /**
+   * Tooltip text. Required, not optional: the card is the only caller and always
+   * has a translator in hand, and an optional tooltip is how the hard-coded
+   * English literal grew here in the first place.
+   */
+  title: string;
 }
 
 export function CardQrCode({ url, fillColor = 'currentColor', className, title }: CardQrCodeProps): ComponentChild {
