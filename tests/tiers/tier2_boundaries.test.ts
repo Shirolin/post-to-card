@@ -6,7 +6,6 @@
 import assert from 'node:assert/strict';
 import { DomElement, DomImageElement, DomDocument, DomMutationObserver, createDomElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
-import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/adapter/urls.ts';
@@ -33,7 +32,7 @@ import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
 import { withoutTestIds } from '../fixtures/strip-testids.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
-import type { CardConfig, RadiusOption, PaddingOption } from '../../src/types/card.ts';
+import type { CardConfig } from '../../src/types/card.ts';
 import type { ExtensionMessage } from '../../src/types/messages.ts';
 
 export interface TestResult {

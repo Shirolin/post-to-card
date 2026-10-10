@@ -10,29 +10,29 @@ import { fileURLToPath } from 'node:url';
 
 import { DomDocument, DomElement, DomImageElement, createDomElement, DomMutationObserver } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
-import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
+import { mockDomToBlob } from '../env/canvas.ts';
 import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
 import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/single-tweet.ts';
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
-import { QUOTE_TWEET_HTML, EXPECTED_QUOTE_TWEET_DATA } from '../fixtures/quote-tweet.ts';
-import { EMOJI_TWEET_HTML, EXPECTED_EMOJI_NAME, EXPECTED_EMOJI_TEXT, PURE_EMOJI_HTML, EXPECTED_PURE_EMOJI_TEXT } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, LEGACY_PHOTO_URL_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML } from '../fixtures/multi-images.ts';
+import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
+import { EMOJI_TWEET_HTML, PURE_EMOJI_HTML } from '../fixtures/emojis.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { TRIGGER_BUTTON_SVG } from '../../src/content/adapter/triggerViews.ts';
 import { isThreadConnectedPair, isTemporallyConnected, getReplyingToHandle } from '../../src/content/adapter/thread.ts';
 import { toggleExcluded, selectCurrentOnly } from '../../src/content/ui/threadScope.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
-import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
+import { EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 
 import { renderComponent } from '../env/render.ts';
 
-import type { TweetData, ThreadData, AuthorInfo, MediaItem } from '../../src/types/tweet.ts';
+import type { TweetData, ThreadData, MediaItem } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../src/types/card.ts';
-import type { ExtensionMessage, ExtensionResponse } from '../../src/types/messages.ts';
+import type { ExtensionMessage } from '../../src/types/messages.ts';
 
 /**
  * A video post and a card config, for the tests that render the real card rather

@@ -5,17 +5,12 @@
  */
 
 import assert from 'node:assert/strict';
-import { DomDocument, DomElement, DomImageElement, createDomElement } from '../env/browser.ts';
+import { DomElement, DomImageElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
-import { MockCanvasElement, mockDomToBlob } from '../env/canvas.ts';
-import { MockClipboard, MockClipboardItem } from '../env/clipboard.ts';
-import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
-import { THREAD_HTML } from '../fixtures/thread.ts';
-import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
-import { EMOJI_TWEET_HTML } from '../fixtures/emojis.ts';
+import { mockDomToBlob } from '../env/canvas.ts';
 
-import type { TweetData, ThreadData } from '../../src/types/tweet.ts';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../src/types/card.ts';
+import type { TweetData } from '../../src/types/tweet.ts';
+import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../src/types/card.ts';
 import type { ExtensionMessage } from '../../src/types/messages.ts';
 
 export interface TestResult {

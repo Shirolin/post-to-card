@@ -89,17 +89,6 @@ export const MEDIA_WITH_INNER_GROUP_HTML = `
 </article>
 `;
 
-export const LEGACY_PHOTO_URL_HTML = `
-<article data-testid="tweet">
-  <div data-testid="User-Name">
-    <a href="/user/status/8005"><time datetime="2026-07-01T00:00:00.000Z"></time></a>
-  </div>
-  <div data-testid="tweetPhoto">
-    <img src="https://pbs.twimg.com/media/legacy_photo.jpg:small" alt="Legacy Small">
-  </div>
-</article>
-`;
-
 export const VIDEO_POSTER_HTML = `
 <article data-testid="tweet">
   <div data-testid="User-Name">

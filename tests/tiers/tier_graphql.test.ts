@@ -70,7 +70,12 @@ test('gql.3: media requests the original resolution and records the aspect ratio
 
 test('gql.4: the target tweet index is located by id', () => {
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1', '1001');
-  const target = parsed.thread?.tweets[parsed.thread.targetTweetIndex];
+  const thread = parsed.thread;
+  assert.ok(thread, 'expected a thread');
+  // `targetTweetIndex` is optional on the type, so the lookup needs a value; the
+  // assertion right after is what proves the index was the right one, and a
+  // wrong one fails it loudly rather than silently reading tweet 0.
+  const target = thread.tweets[thread.targetTweetIndex ?? 0];
   assert.equal(target?.id, '1001', 'target index must point at the requested tweet');
 });
 

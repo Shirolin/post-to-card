@@ -15,7 +15,11 @@ const root = resolve(fileURLToPath(import.meta.url), '..', '..');
  */
 export default defineConfig({
   root: resolve(root, 'dev'),
-  server: { port: 5199, strictPort: true },
+  // Bound to IPv4 explicitly. Vite's default resolves `localhost` to `::1` on
+  // this machine, which leaves `127.0.0.1:5199` refusing connections while the
+  // printed URL works -- so anything that probes the port by address (readiness
+  // checks, tooling) fails on a server that is in fact up.
+  server: { host: '127.0.0.1', port: 5199, strictPort: true },
   build: { outDir: resolve(root, 'dist-harness'), emptyOutDir: true },
   define: { __CARD_BUILD__: JSON.stringify(cardBuild()) },
 });

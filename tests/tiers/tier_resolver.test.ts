@@ -15,7 +15,7 @@ import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { initGraphQLBridge } from '../../src/content/graphql/bridge.ts';
 import { lookupReplyLink } from '../../src/content/graphql/replyLinks.ts';
 import { TWEET_DETAIL_THREAD_JSON, HOME_TIMELINE_SELF_THREAD_JSON, HOME_TIMELINE_UNLINKED_PAIR_JSON } from '../fixtures/graphql.ts';
-import { THREAD_HTML, FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
+import { FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
 
 export interface TestResult {
   name: string;

@@ -143,6 +143,62 @@ test('hygiene.3: the popup supports exactly the locales i18n.ts declares', () =>
   );
 });
 
+// 4. Dead imports in the files tsc cannot see.
+//
+// `tests/tiers/**` and `tests/tier5_adversarial.ts` are in no tsconfig (see
+// tsconfig.test-support.json for why: the shim's `DomElement` is not an
+// `Element`), so `noUnusedLocals` never reaches them. knip cannot stand in: it
+// reports unused *exports*, and an import that nothing reads still reads as a
+// use of the exported name. An import left behind by a refactor therefore
+// survives build and lint together -- which is how `THREAD_HTML` sat unused in
+// `tier_resolver.test.ts` after the test that read it moved to another fixture.
+//
+// Only the count of a binding's occurrences outside the import block is read, so
+// a name mentioned in a comment counts as used: this under-reports, and an
+// under-reporting check is the one that can run unattended.
+const IMPORT_STATEMENT =
+  /^import\s+(?:type\s+)?(?:([\w$]+)\s*,\s*)?(?:\{([^}]*)\}|\*\s+as\s+([\w$]+)|([\w$]+))\s+from\s+[^;]+;?/gm;
+
+function importedBindings(src: string): string[] {
+  const names: string[] = [];
+  for (const m of src.matchAll(IMPORT_STATEMENT)) {
+    if (m[1]) names.push(m[1]);
+    if (m[3]) names.push(m[3]);
+    if (m[4]) names.push(m[4]);
+    if (m[2]) {
+      for (const part of m[2].split(',')) {
+        const cleaned = part.trim().replace(/^type\s+/, '');
+        if (!cleaned) continue;
+        names.push(cleaned.split(/\s+as\s+/).pop()!.trim());
+      }
+    }
+  }
+  return names;
+}
+
+test('hygiene.4: no test file imports a name it never reads', () => {
+  const violations: string[] = [];
+
+  for (const root of ['tests']) {
+    for (const file of walk(join(REPO_ROOT, root))) {
+      const src = readFileSync(file, 'utf8');
+      const body = src.replace(IMPORT_STATEMENT, '');
+      for (const name of importedBindings(src)) {
+        const escaped = name.replace(/\$/g, '\\$');
+        if (!new RegExp(`\\b${escaped}\\b`).test(body)) {
+          violations.push(`${relative(REPO_ROOT, file)}  ${name}`);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    violations,
+    [],
+    `imports nothing reads (drop them):\n  ${violations.join('\n  ')}`
+  );
+});
+
 export async function runTierHygiene(): Promise<{
   total: number;
   passed: number;

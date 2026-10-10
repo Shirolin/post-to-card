@@ -27,9 +27,6 @@ export const EMOJI_TWEET_HTML = `
 </article>
 `;
 
-export const EXPECTED_EMOJI_NAME = 'Alex 🚀';
-export const EXPECTED_EMOJI_TEXT = 'Big release today! 🔥 Post to Card is live ✨ 🎉\nTry it offline now 💻';
-
 export const PURE_EMOJI_HTML = `
 <article data-testid="tweet">
   <div data-testid="User-Name">
@@ -47,5 +44,3 @@ export const PURE_EMOJI_HTML = `
   </div>
 </article>
 `;
-
-export const EXPECTED_PURE_EMOJI_TEXT = '😀 😃 😄 😁';

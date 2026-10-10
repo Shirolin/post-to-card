@@ -15,12 +15,11 @@ import path from 'node:path';
 
 import { DomDocument, DomElement, DomImageElement, createDomElement } from './env/browser.ts';
 import { createChromeMock } from './env/chrome.ts';
-import { MockCanvasElement, mockDomToBlob } from './env/canvas.ts';
+import { mockDomToBlob } from './env/canvas.ts';
 import { MockClipboard, MockClipboardItem } from './env/clipboard.ts';
 
 // Export engine & CORS protection (direct TS imports)
 import {
-  fetchImageAsBase64,
   replaceCardImagesWithBase64,
   FALLBACK_PLACEHOLDER_DATA_URL,
 } from '../src/content/engine/export.ts';
@@ -42,7 +41,7 @@ import { runTier2 } from './tiers/tier2_boundaries.test.ts';
 import { runTier3 } from './tiers/tier3_interactions.test.ts';
 import { runTier4 } from './tiers/tier4_workloads.test.ts';
 
-import type { TweetData, ThreadData } from '../src/types/tweet.ts';
+import type { TweetData } from '../src/types/tweet.ts';
 
 const rootDir = process.cwd();
 

@@ -3,8 +3,6 @@
  * Contains main tweet referencing an earlier quote post.
  */
 
-import type { TweetData } from '../../src/types/tweet.ts';
-
 export const QUOTE_TWEET_HTML = `
 <article data-testid="tweet" class="main-quote-tweet">
   <div data-testid="Tweet-User-Avatar">
@@ -49,33 +47,3 @@ export const QUOTE_TWEET_HTML = `
 </article>
 `;
 
-export const EXPECTED_QUOTE_TWEET_DATA: TweetData = {
-  id: '5001',
-  url: 'https://x.com/satyanadella/status/5001',
-  author: {
-    name: 'Satya Nadella',
-    handle: '@satyanadella',
-    avatarUrl: 'https://pbs.twimg.com/profile_images/888/satya_400x400.jpg',
-  },
-  text: 'Excited to welcome the new Copilot features!',
-  timestamp: '2026-05-01T12:00:00.000Z',
-  quotePost: {
-    author: {
-      name: 'Sam Altman',
-      handle: '@sama',
-      avatarUrl: 'https://pbs.twimg.com/profile_images/999/sama_400x400.jpg',
-      verified: true,
-    },
-    text: 'GPT-5.5 is now rolling out to all users. Enjoy!',
-    timestamp: '2026-05-01T11:30:00.000Z',
-    url: 'https://x.com/sama/status/4999',
-    media: [
-      {
-        type: 'image',
-        url: 'https://pbs.twimg.com/media/gpt_launch.png?format=png&name=large',
-        originalUrl: 'https://pbs.twimg.com/media/gpt_launch.png?format=png&name=small',
-        alt: 'GPT Launch',
-      }
-    ],
-  },
-};
