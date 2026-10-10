@@ -20,6 +20,7 @@ import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, L
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar } from '../../src/content/adapter/injection.ts';
 import { TRIGGER_BUTTON_SVG } from '../../src/content/adapter/triggerViews.ts';
+import { isThreadConnectedPair, isTemporallyConnected } from '../../src/content/adapter/thread.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
@@ -1111,18 +1112,12 @@ test('F14.6: thread layout isolates connector line in thread-gutter and text in 
   assert.ok(cssContent.includes('flex-direction: row'), 'thread-item must use horizontal row layout');
 });
 
-test('F14.7: profile feed isolation - prevents misjudging independent same-author tweets as thread', () => {
-  const threadCode = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/thread.ts'), 'utf-8');
-  assert.ok(threadCode.includes('isStatusDetailPage'), 'thread.ts must distinguish status detail page');
-  assert.ok(threadCode.includes('hasNativeThreadConnector'), 'thread.ts must check for native DOM connector');
-  assert.ok(threadCode.includes('isThreadConnectedPair'), 'thread.ts must strictly evaluate tweet pairs');
-  assert.ok(threadCode.includes('isTemporallyConnected'), 'thread.ts must check temporal sequence');
-
-  // Verify that on non-detail pages without positive proof, it does not merge
-  assert.ok(threadCode.includes('hasNativeThreadConnector(artA') && threadCode.includes('In profile or feed without any thread markers, DO NOT merge!'), 'Must treat feed tweets without native connectors as standalone single tweet');
-
-  // Verify DOM pattern: profile feed without connector has no thread-connected SVG/DIV
-  const profileFeedHtml = `
+test('F14.7: independent same-author posts are not merged into a thread', () => {
+  // Two posts by one author, six weeks apart. The previous version of this test
+  // read the source for four function names and then asserted that its own
+  // fixture had no connector, which is a statement about the fixture. This asks
+  // the predicate that decides merging.
+  const container = createDomElement(`
   <div id="timeline">
     <article data-testid="tweet" id="tweet-august">
       <div data-testid="User-Name">
@@ -1141,22 +1136,26 @@ test('F14.7: profile feed isolation - prevents misjudging independent same-autho
       <div data-testid="tweetText"><span>September standalone tweet</span></div>
     </article>
   </div>
-  `;
-  const container = createDomElement(profileFeedHtml);
-  const targetArt = container.querySelector('#tweet-august')!;
-  const nextArt = container.querySelector('#tweet-september')!;
-  
-  // Neither article has native thread connector elements
-  const hasConnector = targetArt.querySelector('[data-testid="tweet"] [style*="width: 2px"]') !== null;
-  assert.equal(hasConnector, false, 'Profile tweets have no native visual thread connector');
+  `);
+  const august = container.querySelector('#tweet-august') as unknown as Element;
+  const september = container.querySelector('#tweet-september') as unknown as Element;
+
+  const first = extractTweetData(august);
+  const second = extractTweetData(september);
+  assert.ok(first && second, 'both posts must extract');
+
+  assert.equal(isTemporallyConnected(first, second), false, 'six weeks apart is not a continuation');
+  assert.equal(
+    isThreadConnectedPair(august, september, first, second, true, false),
+    false,
+    'so the same author posting twice must not be read as one thread'
+  );
 });
 
-test('F14.8: excludes replies by same author targeting third-party users', () => {
-  const threadCode = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/thread.ts'), 'utf-8');
-  assert.ok(threadCode.includes('getReplyingToHandle'), 'thread.ts must extract replying-to handle');
-  assert.ok(threadCode.includes('replyTarget !== tweetA.author.handle.toLowerCase()'), 'thread.ts must break thread when replying to another user');
-
-  const conversationHtml = `
+test('F14.8: a post replying to someone else ends the thread', () => {
+  // Same author, two minutes apart, so only the reply target can separate the
+  // pair -- which is the rule this test exists for.
+  const container = createDomElement(`
   <div id="timeline">
     <article data-testid="tweet" id="tweet-main">
       <div data-testid="User-Name">
@@ -1172,21 +1171,26 @@ test('F14.8: excludes replies by same author targeting third-party users', () =>
         <a href="/alice"><span>@alice</span></a>
         <a href="/alice/status/1002"><time datetime="2026-08-14T10:02:00.000Z"></time></a>
       </div>
-      <div>
+      <div data-testid="socialContext">
         <span>Replying to </span><a href="/bob"><span>@bob</span></a>
       </div>
       <div data-testid="tweetText"><span>Replying to Bob comment</span></div>
     </article>
   </div>
-  `;
-  const container = createDomElement(conversationHtml);
-  const replyTweet = container.querySelector('#tweet-reply-bob')!;
-  
-  // Replying text analysis
-  const hasReplyPrefix = replyTweet.textContent.includes('Replying to') || replyTweet.textContent.includes('回复');
-  assert.ok(hasReplyPrefix, 'Reply tweet must contain reply prefix');
-  const replyingLink = replyTweet.querySelector('a[href^="/bob"]');
-  assert.ok(replyingLink, 'Replying link to bob must exist');
+  `);
+  const main = container.querySelector('#tweet-main') as unknown as Element;
+  const reply = container.querySelector('#tweet-reply-bob') as unknown as Element;
+
+  const first = extractTweetData(main);
+  const second = extractTweetData(reply);
+  assert.ok(first && second, 'both posts must extract');
+
+  assert.equal(isTemporallyConnected(first, second), true, 'this pair is otherwise continuous');
+  assert.equal(
+    isThreadConnectedPair(main, reply, first, second, true, false),
+    false,
+    'a reply aimed at a third party is not the author continuing'
+  );
 });
 
 test('F14.9: Card UI supports excludedTweetIds filtering, quick exclusion and tweet manager', () => {
@@ -2490,11 +2494,23 @@ test('F27.6: the grid layout rules never pick a media object-fit, so the fit tog
 // -------------------------------------------------------------
 // F28: Intelligent Adaptive Media Grid (Top-Hero / Left-Hero / Stacked / 4:3)
 // -------------------------------------------------------------
-test('F28.1: extractor calculates aspectRatio from naturalWidth and naturalHeight', () => {
-  const extractorContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/adapter/extractor.ts'), 'utf-8');
-  assert.ok(extractorContent.includes('naturalWidth'), 'Extractor must read naturalWidth');
-  assert.ok(extractorContent.includes('naturalHeight'), 'Extractor must read naturalHeight');
-  assert.ok(extractorContent.includes('aspectRatio'), 'Extractor must calculate and assign aspectRatio');
+test('F28.1: the extractor reads a picture shape off its own dimensions', () => {
+  // A 16:9 attachment, declared on the element the way X declares it. The ratio
+  // is what the grid planner lays out from, so it has to come back off the media
+  // item rather than out of a second calculation in the UI.
+  const tweet = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <a href="/user/status/8201"><time datetime="2026-07-03T00:00:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetPhoto">
+        <img src="https://pbs.twimg.com/media/shaped_poster.jpg" width="1600" height="900" alt="">
+      </div>
+    </article>
+  `);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
+
+  assert.equal(media?.[0]?.aspectRatio, 1.778, 'a 1600x900 picture is 16:9');
 });
 
 /** A photo of the given shape, for driving the grid planner. */
