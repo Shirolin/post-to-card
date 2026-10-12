@@ -20,8 +20,6 @@ import {
   setInjectedButtonVisibility,
   HIDE_ACTION_BUTTON_CLASS,
   VISIBILITY_STYLE_ID,
-} from '../../src/content/adapter/triggerViews.ts';
-import {
   injectIntoActionBar,
   injectAll,
   initTwitterInjection,
