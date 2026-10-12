@@ -2157,6 +2157,13 @@ test('F21.5: controls state updates reactively without full card remount', () =>
   assert.equal(state.theme, 'gallery');
 });
 
+test('F21.6: Controls renders narrow-screen collapse toggle handle with proper aria attributes', async () => {
+  const html = await renderControls();
+  assert.ok(html.includes('panel-collapse-toggle'), 'must render collapse toggle button');
+  assert.ok(html.includes('collapse-grab-bar'), 'must render grab bar affordance');
+  assert.ok(html.includes('aria-expanded="true"'), 'must declare expanded state initially');
+});
+
 // -------------------------------------------------------------
 // F22: Author Privacy Blurring
 // -------------------------------------------------------------

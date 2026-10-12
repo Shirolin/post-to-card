@@ -18,6 +18,7 @@ import {
   Download,
   ListFilter,
   ChevronDown,
+  ChevronUp,
   Check,
   LayoutGrid,
 } from 'lucide-preact';
@@ -126,6 +127,7 @@ export function Controls({
   const t = getTranslation(sanitizeLocale(config.locale));
   const [showMore, setShowMore] = useState<boolean>(false);
   const [showAllThemes, setShowAllThemes] = useState<boolean>(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const moreId = useId();
   const themeGridId = useId();
 
@@ -196,8 +198,27 @@ export function Controls({
   ];
 
   return (
-    <div class="controls-panel">
-      <div class="controls-scroll">
+    <div class={`controls-panel ${isCollapsed ? 'is-collapsed' : ''}`}>
+      {/* Narrow-screen bottom sheet collapse/expand toggle */}
+      <button
+        type="button"
+        class="panel-collapse-toggle"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        aria-expanded={!isCollapsed}
+        aria-label={isCollapsed ? t.expandPanel : t.collapsePanel}
+      >
+        <span class="collapse-grab-bar" aria-hidden="true" />
+        <span class="collapse-toggle-text">
+          {isCollapsed ? t.expandPanel : t.collapsePanel}
+        </span>
+        {isCollapsed ? (
+          <ChevronUp size={14} strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+        )}
+      </button>
+
+      <div class="controls-scroll" hidden={isCollapsed}>
         {/* 1. Thread scope — highest-value control when a thread is open */}
         {threadData && totalTweets > 1 && (
           <section class="control-section tweet-manager-section">

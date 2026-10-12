@@ -14,6 +14,8 @@ export interface Translations {
   // Controls Sections
   moreSettings: string;
   lessSettings: string;
+  collapsePanel: string;
+  expandPanel: string;
   language: string;
   languageCardHint: string;
   layoutAndStyle: string;
@@ -109,6 +111,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     moreSettings: '更多设置',
     lessSettings: '收起设置',
+    collapsePanel: '收起菜单',
+    expandPanel: '展开菜单',
     language: '界面与卡片语言',
     languageCardHint: '同时决定卡片上的日期格式',
     layoutAndStyle: '版式与样式',
@@ -195,6 +199,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     moreSettings: 'More Settings',
     lessSettings: 'Hide Settings',
+    collapsePanel: 'Collapse panel',
+    expandPanel: 'Expand panel',
     language: 'Language (UI & Card)',
     languageCardHint: 'Also sets the date format on the card',
     layoutAndStyle: 'Layout & Style',

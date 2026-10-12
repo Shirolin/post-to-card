@@ -354,6 +354,11 @@
   overflow: hidden;
 }
 
+/* Narrow-screen collapse toggle handle (hidden on desktop) */
+.panel-collapse-toggle {
+  display: none;
+}
+
 /* Scrolling region sits between the panel edges; the export bar stays pinned. */
 .controls-scroll {
   flex: 1;
@@ -1047,6 +1052,49 @@
     max-height: max(132px, min(52vh, calc(100% - max(168px, 40vh))));
     border-left: none;
     border-top: 1px solid var(--ptc-border);
+    transition: max-height 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .panel-collapse-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 7px 12px 6px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--ptc-border);
+    color: var(--ptc-text-muted);
+    cursor: pointer;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    user-select: none;
+  }
+  .panel-collapse-toggle:hover {
+    color: var(--ptc-text);
+    background: var(--ptc-bg-hover);
+  }
+  .collapse-grab-bar {
+    display: block;
+    width: 32px;
+    height: 3.5px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    margin-right: 2px;
+  }
+  .collapse-toggle-text {
+    letter-spacing: 0.02em;
+  }
+  .controls-panel.is-collapsed {
+    max-height: none;
+    flex-shrink: 0;
+  }
+  .controls-panel.is-collapsed .controls-scroll,
+  .controls-panel .controls-scroll[hidden] {
+    display: none;
   }
   /* Trimming the list's block padding is what lets the panel yield that far: a
      border-box box cannot be shorter than its own padding, so 20px of it became a
@@ -1059,6 +1107,19 @@
   .export-actions {
     padding: 8px 12px 12px;
     gap: 6px;
+  }
+}
+
+@media (min-width: 901px) {
+  .panel-collapse-toggle {
+    display: none !important;
+  }
+  .controls-panel.is-collapsed .controls-scroll,
+  .controls-panel .controls-scroll[hidden] {
+    display: flex !important;
+  }
+  .controls-panel.is-collapsed {
+    max-height: none !important;
   }
 }
 
