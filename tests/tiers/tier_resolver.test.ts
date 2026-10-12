@@ -256,6 +256,69 @@ test('res.7: a conversation payload feeds the linkage index too', () => {
   assert.equal(lookupReplyLink('6002')?.inReplyToId, '6001', 'the conversation states the same fact');
 });
 
+const DETAIL_REPLY_THREAD_HTML = `
+<div id="conversation-container">
+  <article data-testid="tweet" id="root-post">
+    <div data-testid="User-Name">
+      <a href="/bob"><span>Bob</span></a>
+      <span>@bob</span>
+    </div>
+    <div data-testid="tweetText"><span>Original funny meme</span></div>
+    <a href="/bob/status/7001"><time datetime="2026-10-12T10:00:00.000Z">10:00 AM</time></a>
+  </article>
+  <article data-testid="tweet" id="reply-post">
+    <div data-testid="socialContext">
+      <span>Replying to </span><a href="/bob">@bob</a>
+    </div>
+    <div data-testid="User-Name">
+      <a href="/lauren"><span>Lauren</span></a>
+      <span>@lauren</span>
+    </div>
+    <div data-testid="tweetText"><span>tibo is pretty funny sometimes</span></div>
+    <a href="/lauren/status/7002"><time datetime="2026-10-12T10:05:00.000Z">10:05 AM</time></a>
+  </article>
+</div>
+`;
+
+test('res.8: on a status detail page, clicking a reply extracts its ancestor thread context', () => {
+  mockWindow.location.pathname = '/bob/status/7001';
+  const container = createDomElement(DETAIL_REPLY_THREAD_HTML);
+  const replyPost = container.querySelector('#reply-post')!;
+
+  const thread = resolveThread(replyPost);
+  assert.equal(thread.isSingle, false, 'reply must form a thread with its ancestor root post');
+  assert.equal(thread.tweets.length, 2, 'thread should contain [root, reply]');
+  assert.equal(thread.tweets[0].id, '7001');
+  assert.equal(thread.tweets[0].author.handle, '@bob');
+  assert.equal(thread.tweets[1].id, '7002');
+  assert.equal(thread.tweets[1].author.handle, '@lauren');
+  assert.equal(thread.targetTweetIndex, 1, 'targetTweetIndex must point to the clicked reply');
+  assert.equal(thread.author.handle, '@lauren', 'thread author should be the target reply author');
+});
+
+test('res.9: outside a status detail page (feed/profile), cross-author reply stays single', () => {
+  mockWindow.location.pathname = '/home';
+  const container = createDomElement(DETAIL_REPLY_THREAD_HTML);
+  const replyPost = container.querySelector('#reply-post')!;
+
+  const thread = resolveThread(replyPost);
+  assert.equal(thread.isSingle, true, 'feed must never merge cross-author tweets');
+  assert.equal(thread.tweets.length, 1);
+  assert.equal(thread.tweets[0].id, '7002');
+});
+
+test('res.10: on a status detail page, clicking the root post does not merge replies downwards', () => {
+  mockWindow.location.pathname = '/bob/status/7001';
+  const container = createDomElement(DETAIL_REPLY_THREAD_HTML);
+  const rootPost = container.querySelector('#root-post')!;
+
+  const thread = resolveThread(rootPost);
+  assert.equal(thread.isSingle, true, 'clicking root post must not merge replies downwards');
+  assert.equal(thread.tweets.length, 1);
+  assert.equal(thread.tweets[0].id, '7001');
+  assert.equal(thread.tweets[0].author.handle, '@bob');
+});
+
 export async function runTierResolver(): Promise<{
   total: number;
   passed: number;

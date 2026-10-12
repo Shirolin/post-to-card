@@ -378,6 +378,116 @@ test('gql.26: a user object is not indexed as a post', () => {
   assert.equal(links.has('44196397'), false, 'the author object is not a post');
 });
 
+test('gql.27: multi-author conversation payload isolates ancestor branch for target reply', () => {
+  const multiAuthorPayload = JSON.stringify({
+    data: {
+      threaded_conversation_with_injections_v2: {
+        instructions: [
+          {
+            type: 'TimelineAddEntries',
+            entries: [
+              {
+                entryType: 'TimelineTimelineItem',
+                entryId: 'tweet-7001',
+                sortIndex: '10',
+                content: {
+                  itemContent: {
+                    tweet_results: {
+                      result: {
+                        __typename: 'Tweet',
+                        rest_id: '7001',
+                        core: {
+                          user_results: {
+                            result: {
+                              legacy: { screen_name: 'bob', name: 'Bob' },
+                              profile_image_url_https: 'https://pbs.twimg.com/bob.jpg',
+                            },
+                          },
+                        },
+                        legacy: {
+                          id_str: '7001',
+                          full_text: 'Root meme',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                entryType: 'TimelineTimelineItem',
+                entryId: 'tweet-7002',
+                sortIndex: '9',
+                content: {
+                  itemContent: {
+                    tweet_results: {
+                      result: {
+                        __typename: 'Tweet',
+                        rest_id: '7002',
+                        core: {
+                          user_results: {
+                            result: {
+                              legacy: { screen_name: 'alice', name: 'Alice' },
+                              profile_image_url_https: 'https://pbs.twimg.com/alice.jpg',
+                            },
+                          },
+                        },
+                        legacy: {
+                          id_str: '7002',
+                          full_text: 'Haha from alice',
+                          in_reply_to_status_id_str: '7001',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              {
+                entryType: 'TimelineTimelineItem',
+                entryId: 'tweet-7003',
+                sortIndex: '8',
+                content: {
+                  itemContent: {
+                    tweet_results: {
+                      result: {
+                        __typename: 'Tweet',
+                        rest_id: '7003',
+                        core: {
+                          user_results: {
+                            result: {
+                              legacy: { screen_name: 'lauren', name: 'Lauren' },
+                              profile_image_url_https: 'https://pbs.twimg.com/lauren.jpg',
+                            },
+                          },
+                        },
+                        legacy: {
+                          id_str: '7003',
+                          full_text: 'Lauren comment',
+                          in_reply_to_status_id_str: '7001',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  const parsed = parseTweetDetailResponse(multiAuthorPayload, 'TweetDetail', 'q_multi', '7003');
+  assert.ok(parsed.thread, 'expected parsed thread');
+  assert.equal(parsed.thread.isSingle, false);
+  assert.equal(parsed.thread.tweets.length, 2, 'unrelated Alice reply must be excluded');
+  assert.equal(parsed.thread.tweets[0].id, '7001');
+  assert.equal(parsed.thread.tweets[0].author.handle, '@bob');
+  assert.equal(parsed.thread.tweets[1].id, '7003');
+  assert.equal(parsed.thread.tweets[1].author.handle, '@lauren');
+  assert.equal(parsed.thread.targetTweetIndex, 1);
+  assert.equal(parsed.thread.author.handle, '@lauren');
+});
+
 export async function runTierGraphQL(): Promise<{
   total: number;
   passed: number;

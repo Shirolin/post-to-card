@@ -613,12 +613,74 @@ export function parseTweetDetailResponse(
     targetTweetIndex = found;
   }
 
+  const isPureSingleAuthor = tweets.every(
+    (t) => t.author.handle.toLowerCase() === tweets[0].author.handle.toLowerCase()
+  );
+
+  let scopedTweets = tweets;
+  if (targetTweetId && !isPureSingleAuthor) {
+    const replyLinks = parseReplyLinkage(body);
+    const targetTweet = tweets[targetTweetIndex];
+
+    const ancestors: TweetData[] = [];
+    const seenIds = new Set<string>([targetTweet.id]);
+    let currId = targetTweet.id;
+
+    for (let depth = 0; depth < 10; depth++) {
+      const parentId = replyLinks.get(currId)?.inReplyToId;
+      if (parentId && !seenIds.has(parentId)) {
+        const parentTweet = tweets.find((t) => t.id === parentId);
+        if (parentTweet) {
+          seenIds.add(parentId);
+          ancestors.unshift(parentTweet);
+          currId = parentId;
+          continue;
+        }
+      }
+      break;
+    }
+
+    if (
+      targetTweetIndex > 0 &&
+      ancestors.length === 0 &&
+      tweets[0].id !== targetTweet.id &&
+      !seenIds.has(tweets[0].id)
+    ) {
+      ancestors.unshift(tweets[0]);
+    }
+
+    const sameAuthorSuccessors: TweetData[] = [];
+    for (let i = targetTweetIndex + 1; i < tweets.length; i++) {
+      const nextTweet = tweets[i];
+      if (nextTweet.author.handle.toLowerCase() !== targetTweet.author.handle.toLowerCase()) {
+        break;
+      }
+      sameAuthorSuccessors.push(nextTweet);
+    }
+
+    if (ancestors.length > 0 || sameAuthorSuccessors.length > 0) {
+      scopedTweets = [...ancestors, targetTweet, ...sameAuthorSuccessors];
+      targetTweetIndex = ancestors.length;
+    } else {
+      scopedTweets = [targetTweet];
+      targetTweetIndex = 0;
+    }
+  }
+
+  if (scopedTweets.length > 1) {
+    for (let idx = 0; idx < scopedTweets.length; idx++) {
+      scopedTweets[idx].isThreadPart = true;
+      scopedTweets[idx].threadIndex = idx;
+      scopedTweets[idx].threadTotal = scopedTweets.length;
+    }
+  }
+
   return {
     ...base,
     thread: {
-      author: tweets[targetTweetIndex]?.author ?? tweets[0].author,
-      tweets,
-      isSingle: tweets.length === 1,
+      author: scopedTweets[targetTweetIndex]?.author ?? scopedTweets[0].author,
+      tweets: scopedTweets,
+      isSingle: scopedTweets.length === 1,
       targetTweetIndex,
     },
   };

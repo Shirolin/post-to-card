@@ -7,7 +7,7 @@
  */
 
 import type { TweetData, ThreadData } from '../../types/tweet.ts';
-import { extractTweetData } from './extractor.ts';
+import { extractTweetData, extractTweetId } from './extractor.ts';
 import { getReplyingToHandle } from './social.ts';
 import { lookupReplyLink } from '../graphql/replyLinks.ts';
 
@@ -259,6 +259,140 @@ export function isThreadConnectedPair(
 }
 
 /**
+ * Resolves the ancestor conversation chain for a reply on a status detail page.
+ * When a user triggers card generation on a reply, pulling in its ancestor posts
+ * (e.g. root tweet and direct parent replies) provides crucial conversation context.
+ */
+function resolveAncestorChain(
+  headArt: Element,
+  headTweet: TweetData,
+  headIndex: number,
+  allArticles: Element[]
+): TweetData[] {
+  const ancestors: TweetData[] = [];
+  const visitedIndices = new Set<number>();
+
+  let currChildArt = headArt;
+  let currChildTweet = headTweet;
+  let currChildIndex = headIndex;
+
+  for (let depth = 0; depth < 10 && currChildIndex > 0; depth++) {
+    let matchedParentIndex = -1;
+
+    // Signal A: Exact snowflake ID link from captured GraphQL reply linkage
+    const inReplyToId = lookupReplyLink(currChildTweet.id)?.inReplyToId;
+    if (inReplyToId) {
+      for (let p = currChildIndex - 1; p >= 0; p--) {
+        const pArt = allArticles[p];
+        if (isAdOrSponsored(pArt)) continue;
+        const pId = extractTweetId(pArt);
+        if (pId === inReplyToId) {
+          matchedParentIndex = p;
+          break;
+        }
+      }
+    }
+
+    // Signal B: Native visual thread connector with the immediate preceding post
+    if (matchedParentIndex === -1 && currChildIndex > 0) {
+      const prevIndex = currChildIndex - 1;
+      const prevArt = allArticles[prevIndex];
+      if (!isAdOrSponsored(prevArt)) {
+        const hasConnector =
+          hasNativeThreadConnector(currChildArt, 'up') ||
+          hasNativeThreadConnector(prevArt, 'down');
+        if (hasConnector) {
+          const prevTweet = extractTweetData(prevArt);
+          if (prevTweet && isTemporallyConnected(prevTweet, currChildTweet, true)) {
+            matchedParentIndex = prevIndex;
+          }
+        }
+      }
+    }
+
+    // Signal C: Reply handle matching an earlier post
+    if (matchedParentIndex === -1) {
+      const replyHandle = getReplyingToHandle(currChildArt);
+      if (replyHandle) {
+        const targetHandle = replyHandle.toLowerCase().replace(/^@/, '');
+        for (let p = currChildIndex - 1; p >= 0; p--) {
+          const pArt = allArticles[p];
+          if (isAdOrSponsored(pArt)) continue;
+          const pTweet = extractTweetData(pArt);
+          if (
+            pTweet &&
+            pTweet.author.handle.toLowerCase().replace(/^@/, '') === targetHandle &&
+            isTemporallyConnected(pTweet, currChildTweet, true)
+          ) {
+            matchedParentIndex = p;
+            break;
+          }
+        }
+      }
+    }
+
+    // Signal D: Direct top-level reply defaulting to detail page root post (allArticles[0])
+    if (matchedParentIndex === -1 && currChildIndex > 0) {
+      const rootArt = allArticles[0];
+      if (!isAdOrSponsored(rootArt) && !visitedIndices.has(0)) {
+        const rootTweet = extractTweetData(rootArt);
+        const replyHandle = getReplyingToHandle(currChildArt);
+        const rootHandle = rootTweet?.author.handle.toLowerCase().replace(/^@/, '');
+        const targetHandle = replyHandle?.toLowerCase().replace(/^@/, '');
+        if (
+          rootTweet &&
+          (!targetHandle || targetHandle === rootHandle) &&
+          isTemporallyConnected(rootTweet, currChildTweet, true)
+        ) {
+          matchedParentIndex = 0;
+        }
+      }
+    }
+
+    if (matchedParentIndex === -1 || visitedIndices.has(matchedParentIndex)) {
+      break;
+    }
+
+    visitedIndices.add(matchedParentIndex);
+    const parentArt = allArticles[matchedParentIndex];
+    const parentTweet = extractTweetData(parentArt);
+    if (!parentTweet) {
+      break;
+    }
+
+    // If the matched parent has immediately preceding same-author thread tweets,
+    // collect them in order so the parent thread is not cut off.
+    const parentThreadPredecessors: TweetData[] = [];
+    let curPArt = parentArt;
+    let curPTweet = parentTweet;
+    for (let p = matchedParentIndex - 1; p >= 0; p--) {
+      const prevPArt = allArticles[p];
+      const prevPTweet = extractTweetData(prevPArt);
+      if (!prevPTweet) break;
+      if (!isThreadConnectedPair(curPArt, prevPArt, curPTweet, prevPTweet, false, true)) {
+        break;
+      }
+      visitedIndices.add(p);
+      parentThreadPredecessors.unshift(prevPTweet);
+      curPArt = prevPArt;
+      curPTweet = prevPTweet;
+    }
+
+    ancestors.unshift(...parentThreadPredecessors, parentTweet);
+
+    if (matchedParentIndex === 0 || (parentThreadPredecessors.length > 0 && visitedIndices.has(0))) {
+      break;
+    }
+
+    currChildArt = parentArt;
+    currChildTweet = parentTweet;
+    currChildIndex = matchedParentIndex;
+  }
+
+  return ancestors;
+}
+
+/**
  * Traverses the DOM timeline starting from the target tweet article to extract
  * all consecutive tweets authored by the same user that form a verified thread.
  * Halts traversal on ads, third-party replies, temporal disconnections, or missing thread markers.
@@ -323,6 +457,21 @@ export function extractContinuousThread(
     predecessors.unshift(prevTweet);
     currentArt = prevArt;
     currentTweet = prevTweet;
+  }
+
+  // When on a status detail page and the target (or its same-author sequence) is a reply,
+  // pull in its ancestor conversation context (e.g. root post, replied post) so that
+  // the card shows the full conversation rather than an isolated reply.
+  if (isDetailPage) {
+    const headIndex = targetIndex - predecessors.length;
+    if (headIndex > 0) {
+      const headArt = allArticles[headIndex];
+      const headTweet = predecessors.length > 0 ? predecessors[0] : targetTweet;
+      const ancestorChain = resolveAncestorChain(headArt, headTweet, headIndex, allArticles);
+      if (ancestorChain.length > 0) {
+        predecessors.unshift(...ancestorChain);
+      }
+    }
   }
 
   // 2. Trace forwards (successors)

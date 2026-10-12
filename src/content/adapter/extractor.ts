@@ -1083,11 +1083,11 @@ function extractTranslationNotice(tweetTextEl: Element | null | undefined): stri
   // never preceded by an unrelated button.
   if (!notice.querySelector('button')) return undefined;
 
-  const label = Array.from(notice.querySelectorAll('span'))
+  const rawLabel = Array.from(notice.querySelectorAll('span'))
     .find(span => !span.closest('button'))
     ?.textContent?.trim();
 
-  return label || undefined;
+  return rawLabel ? rawLabel.replace(/\s+/g, ' ') : undefined;
 }
 
 /**
