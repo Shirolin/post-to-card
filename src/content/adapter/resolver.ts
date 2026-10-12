@@ -9,7 +9,7 @@
 import type { ThreadData, TweetData } from '../../types/tweet.ts';
 import { extractContinuousThread, TWEET_ARTICLE_SELECTOR } from './thread.ts';
 import { extractTweetData, extractTweetId } from './extractor.ts';
-import { lookupFromGraphQL, applyDomTranslation } from '../graphql/bridge.ts';
+import { lookupFromGraphQL, applyDomTranslation, initGraphQLBridge } from '../graphql/bridge.ts';
 
 export type ResolutionTarget = Element | string;
 
@@ -34,6 +34,9 @@ export function resolveThread(
   target?: ResolutionTarget | null,
   options: ResolveThreadOptions = {}
 ): ThreadData {
+  // Ensure the GraphQL listener is active in browser environment
+  initGraphQLBridge();
+
   let articleElement: Element | null = null;
   let tweetId = options.tweetId;
 

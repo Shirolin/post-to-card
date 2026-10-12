@@ -13,14 +13,40 @@
 
 import type { ThreadData } from '../../types/tweet.ts';
 import { parseTweetDetailResponse, parseReplyLinkage, type ParsedGraphQL } from './parse.ts';
-import { rememberReplyLinks } from './replyLinks.ts';
 import { DETAIL_OPERATIONS } from './operations.ts';
+
+export interface ReplyLink {
+  /** `legacy.in_reply_to_status_id_str`: the post this one answers, if any. */
+  inReplyToId?: string;
+}
 
 const MESSAGE_SOURCE = 'post-to-card-graphql';
 const MESSAGE_TYPE = 'post-to-card:graphql-payload';
 
 /** Only the newest payload per operation is worth keeping. */
 const cache = new Map<string, { body: string; queryId: string; observedAt: number }>();
+
+const MAX_REPLY_LINKS = 4000;
+const replyLinks = new Map<string, ReplyLink>();
+
+/** Records what a payload said. A re-seen id moves to the newest position. */
+function rememberReplyLinks(parsed: Map<string, ReplyLink>): void {
+  for (const [id, link] of parsed) {
+    replyLinks.delete(id);
+    replyLinks.set(id, link);
+  }
+
+  while (replyLinks.size > MAX_REPLY_LINKS) {
+    const oldest = replyLinks.keys().next();
+    if (oldest.done) break;
+    replyLinks.delete(oldest.value);
+  }
+}
+
+/** What X's payload said about this post, or undefined when it was never seen. */
+export function lookupReplyLink(tweetId?: string): ReplyLink | undefined {
+  return tweetId ? replyLinks.get(tweetId) : undefined;
+}
 
 let installCount = 0;
 

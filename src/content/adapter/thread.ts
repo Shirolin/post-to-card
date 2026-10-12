@@ -9,7 +9,7 @@
 import type { TweetData, ThreadData } from '../../types/tweet.ts';
 import { extractTweetData, extractTweetId } from './extractor.ts';
 import { getReplyingToHandle } from './social.ts';
-import { lookupReplyLink } from '../graphql/replyLinks.ts';
+import { lookupReplyLink } from '../graphql/bridge.ts';
 
 // Re-exported so existing importers keep a single entry point for this signal.
 export { getReplyingToHandle };

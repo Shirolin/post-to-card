@@ -15,6 +15,9 @@ A continuous, chronological chain of consecutive tweets authored by the same use
 ### Thread Session
 The active, in-memory editing lifecycle of a specific thread inside the card preview modal. Governs which tweets within the thread are currently included or excluded from the card rendering. It is transient and distinct from user preferences.
 
+### Thread Resolution
+The multi-channel intake pipeline that produces structured `ThreadData` from a target post. Prioritizes intercepted GraphQL conversation trees and client-side translations, falling back to chronological DOM timeline extraction corroborated by snowflake ordering, visual connectors, and GraphQL reply linkage.
+
 ### User Preferences
 The persistent styling and layout configuration (visual theme, padding tier, border radius, aspect ratio, image fit, media layout, interface and card language, and display toggles) stored in extension storage and reused across all card generations.
 

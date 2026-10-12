@@ -13,7 +13,7 @@
 import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../adapter/urls.ts';
 import { isArticlePermalink, stripTrailingArticleToken } from '../adapter/emojis.ts';
-import type { ReplyLink } from './replyLinks.ts';
+import type { ReplyLink } from './bridge.ts';
 
 type Json = Record<string, unknown>;
 
