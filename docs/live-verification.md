@@ -14,7 +14,11 @@ content script 能初始化」，不是「登录态下判据对不对」。
 浏览器由用户提供，页面由你驱动，扩展以真实构建产物注入。本会话用它取得了首页/个人页的真实
 payload 与真实点击结果。
 
-1. 连上用户的 Chrome（`app.relay`），**新开标签页**——不要导航用户正在看的页面。
+1. 连上用户的 Chrome 时**按次**传 `app: { relay: true }`。这个显式选项把 relay 判定直接钉成
+   true，全局开关不参与——所以它自己就够，别去动全局 `browser.relay`：那是**跨项目**的持久
+   设置，改它等于替你所有项目做主（本机已被来回翻过四次）。`omp config set browser.relay`
+   属于越权改动。
+   **新开标签页**——不要导航用户正在看的页面。
 2. 逐条把构建产物注入，顺序不能反：
    - `dist/graphql-hook.js` 必须走 `document_start` 语义（`evaluateOnNewDocument` 或
      `page.addInitScript`）。**用 `addScriptTag` 在 `goto` 之后注入是错的**：X 的时间线请求
