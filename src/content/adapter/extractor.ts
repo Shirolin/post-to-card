@@ -9,7 +9,6 @@ import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, Arti
 import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, stripTrailingArticleLink, stripTrailingArticleToken } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
-import { isInsideArticleReadView, isInsideArticleBody, findArticleReadView, ARTICLE_BODY } from './articleScope.ts';
 
 export type RichTokenType = 'text' | 'mention' | 'hashtag' | 'cashtag' | 'link' | 'emoji';
 
@@ -44,6 +43,41 @@ const SHOW_MORE_MARKER = `[data-testid="${SHOW_MORE_TESTID}"]`;
 
 function isShowMoreMarker(el: Element): boolean {
   return el.getAttribute('data-testid') === SHOW_MORE_TESTID;
+}
+
+/** The article's reading surface: the nested <article> holding the prose. */
+const ARTICLE_READ_VIEW = '[data-testid="twitterArticleReadView"]';
+
+/**
+ * The article's own content region. Media and links inside it belong to the
+ * article, not to the tweet that carries it.
+ */
+const ARTICLE_BODY = '[data-testid="twitterArticleRichTextView"], [data-testid="longformRichTextComponent"]';
+
+/** True when `el` is, or sits inside, the article's reading surface. */
+function isInsideArticleReadView(el: Element | null | undefined): boolean {
+  if (!el) return false;
+  const closest = (el as Element).closest;
+  return typeof closest === 'function' ? Boolean(closest.call(el, ARTICLE_READ_VIEW)) : false;
+}
+
+/**
+ * True when `el` sits inside the article's prose.
+ *
+ * Deliberately narrower than `isInsideArticleReadView`: the cover image and the
+ * title live in the read view but outside the prose, and they are the two parts
+ * of the article the card actually keeps.
+ */
+function isInsideArticleBody(el: Element | null | undefined): boolean {
+  if (!el) return false;
+  const closest = (el as Element).closest;
+  return typeof closest === 'function' ? Boolean(closest.call(el, ARTICLE_BODY)) : false;
+}
+
+/** The article's reading surface inside a tweet, or null when there is none. */
+function findArticleReadView(article: Element): Element | null {
+  if (!article) return null;
+  return article.querySelector(ARTICLE_READ_VIEW);
 }
 
 /**
