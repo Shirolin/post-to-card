@@ -25,7 +25,7 @@ import {
 } from '../src/content/engine/export.ts';
 
 // Clipboard & Fallback engine (direct TS imports)
-import { exportBlobWithFallback } from '../src/content/engine/fallback.ts';
+import { exportBlobWithFallback } from '../src/content/engine/export.ts';
 
 // Background proxy & SSRF shield (direct TS imports)
 import {
