@@ -2161,7 +2161,8 @@ test('F21.6: Controls renders narrow-screen collapse toggle handle with proper a
   const html = await renderControls();
   assert.ok(html.includes('panel-collapse-toggle'), 'must render collapse toggle button');
   assert.ok(html.includes('collapse-grab-bar'), 'must render grab bar affordance');
-  assert.ok(html.includes('aria-expanded="true"'), 'must declare expanded state initially');
+  assert.ok(html.includes('aria-expanded="false"'), 'must declare collapsed state initially');
+  assert.ok(html.includes('controls-panel is-collapsed'), 'must have collapsed panel class initially');
 });
 
 // -------------------------------------------------------------

@@ -127,7 +127,11 @@ export function Controls({
   const t = getTranslation(sanitizeLocale(config.locale));
   const [showMore, setShowMore] = useState<boolean>(false);
   const [showAllThemes, setShowAllThemes] = useState<boolean>(false);
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && typeof window.innerWidth === 'number'
+      ? window.innerWidth <= 900
+      : true;
+  });
   const moreId = useId();
   const themeGridId = useId();
 
