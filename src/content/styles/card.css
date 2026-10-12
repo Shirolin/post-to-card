@@ -661,8 +661,12 @@
    the cell that was capped around it. Stack is excluded -- nothing is capped
    there, which is the cell's `max-height: unset` below, and the box has to
    agree. */
+/* Auto has no absolute ceiling: a 520px one shrank a 1:1 video below the column
+   width and left the recess showing beside it. Height is bounded by shape
+   instead -- Card.tsx floors a lone picture's ratio at 3:4, so the tallest it
+   gets is 4/3 of the column. The poster ratios below keep their own ceilings. */
 .media-grid[data-count="1"] {
-  --media-height-cap: 520px;
+  --media-height-cap: none;
 }
 .media-grid[data-count="1"] .media-item {
   height: auto;

@@ -106,6 +106,9 @@ function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
   advanceImageFallback(event.currentTarget);
 }
 
+/** Narrowest shape (width / height) a lone auto-ratio picture is shown at: 3:4. */
+const MIN_LONE_RATIO = 0.75;
+
 function renderMediaGrid(
   media: MediaItem[] | undefined,
   altPrefix: string = 'Tweet photo',
@@ -129,6 +132,14 @@ function renderMediaGrid(
   const gridOptions = { aspectRatio, mediaLayout };
   const plan = planMediaGrid(items, gridOptions);
 
+  // A lone picture in the auto ratio fills the column, so its height follows
+  // from its shape. Floor that shape at 3:4: anything taller (a 9:16 video, a
+  // long screenshot) is cropped to it, which bounds the card at 4/3 of the
+  // column instead of an absolute ceiling that left the recess showing beside
+  // a picture it had shrunk. Poster ratios and stack have their own rules.
+  const floorsShape = count === 1 && aspectRatio === 'auto' && mediaLayout !== 'stack';
+  const shapeOf = (ratio: number) => (floorsShape ? Math.max(ratio, MIN_LONE_RATIO) : ratio);
+
   // Both an image and a video poster settle the grid the same way: record the
   // shape it reported, re-plan, and write the plan back.
   const settleGrid = (imgEl: HTMLImageElement, index: number) => {
@@ -137,7 +148,8 @@ function renderMediaGrid(
     // The picture's box is the picture's rectangle, so it takes the shape the
     // browser actually decoded: X's own width/height were only a first guess.
     const box = imgEl.closest ? (imgEl.closest('.media-box') as HTMLElement | null) : null;
-    if (box) box.style.aspectRatio = String(ratio);
+    if (box) box.style.aspectRatio = String(shapeOf(ratio));
+    if (shapeOf(ratio) !== ratio) imgEl.style.objectFit = 'cover';
     const settled = recordShape(items, index, ratio);
     if (settled === items) return;
     items = settled;
@@ -173,12 +185,13 @@ function renderMediaGrid(
                 one the fit mode sizes, and the corner the play badge sits on.
                 Its ratio starts from X's own width/height, when the extractor
                 read them, and is corrected below once the picture has loaded. */}
-            <div class="media-box" style={{ aspectRatio: m.aspectRatio ? `${m.aspectRatio}` : undefined }}>
+            <div class="media-box" style={{ aspectRatio: m.aspectRatio ? `${shapeOf(m.aspectRatio)}` : undefined }}>
               <img
                 src={m.url}
                 alt={m.alt || `${altPrefix} ${idx + 1}`}
                 class={`media-picture ${fitClass}`}
                 data-fit={imageFit}
+                style={m.aspectRatio && shapeOf(m.aspectRatio) !== m.aspectRatio ? { objectFit: 'cover' } : undefined}
                 loading="eager"
                 {...imageFallbackAttrs(m)}
                 onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
