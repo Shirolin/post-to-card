@@ -267,12 +267,77 @@ function parseArticle(tweet: Json): ArticleData | undefined {
   };
 }
 
-function parseMedia(tweet: Json): MediaItem[] | undefined {
+/**
+ * Extracts preview media from an external link card (e.g. `summary_large_image`,
+ * "from digitalfoundry.net").
+ *
+ * In GraphQL payloads, external site cards are not listed under `entities.media`
+ * or `extended_entities.media`. Instead, they ride on the tweet as `tweet.card`.
+ * Their image and title live inside `card.legacy.binding_values`.
+ */
+function parseCardMedia(card: unknown): MediaItem | undefined {
+  if (!isObject(card)) return undefined;
+  const legacy = isObject(card.legacy) ? card.legacy : undefined;
+  if (!isObject(legacy)) return undefined;
+
+  const bindings = Array.isArray(legacy.binding_values) ? legacy.binding_values : [];
+  if (bindings.length === 0) return undefined;
+
+  const imageMap = new Map<string, { url: string; width?: number; height?: number }>();
+  let altText: string | undefined;
+
+  for (const entry of bindings) {
+    if (!isObject(entry) || typeof entry.key !== 'string') continue;
+    const val = isObject(entry.value) ? entry.value : undefined;
+    if (!val) continue;
+
+    if (entry.key.includes('alt_text') && typeof val.string_value === 'string' && val.string_value.trim()) {
+      altText = val.string_value.trim();
+    }
+
+    const imageVal = isObject(val.image_value) ? val.image_value : undefined;
+    if (imageVal && typeof imageVal.url === 'string' && imageVal.url) {
+      imageMap.set(entry.key, {
+        url: imageVal.url,
+        width: typeof imageVal.width === 'number' ? imageVal.width : undefined,
+        height: typeof imageVal.height === 'number' ? imageVal.height : undefined,
+      });
+    }
+  }
+
+  // Priority order from X's standard card binding keys:
+  // Full-size original > Summary original > Thumbnail original > Standard fallback
+  const candidateKeys = [
+    'photo_image_full_size_original',
+    'summary_photo_image_original',
+    'thumbnail_image_original',
+    'photo_image_full_size',
+  ];
+
+  let chosen: { url: string; width?: number; height?: number } | undefined;
+  for (const key of candidateKeys) {
+    chosen = imageMap.get(key);
+    if (chosen) break;
+  }
+  if (!chosen) return undefined;
+
+  const width = chosen.width || 0;
+  const height = chosen.height || 0;
+
+  return {
+    type: 'image',
+    url: upgradePhotoUrl(chosen.url),
+    originalUrl: chosen.url,
+    alt: altText,
+    aspectRatio: width > 0 && height > 0 ? Number((width / height).toFixed(3)) : undefined,
+  };
+}
+
+function parseMedia(tweet: Json, hasArticle = false): MediaItem[] | undefined {
   const legacy = isObject(tweet.legacy) ? tweet.legacy : {};
   const extended = isObject(legacy.extended_entities) ? legacy.extended_entities.media : undefined;
   const basic = isObject(legacy.entities) ? legacy.entities.media : undefined;
   const list = Array.isArray(extended) ? extended : (Array.isArray(basic) ? basic : []);
-  if (list.length === 0) return undefined;
 
   const items: MediaItem[] = [];
   for (const entry of list.slice(0, 4)) {
@@ -334,6 +399,13 @@ function parseMedia(tweet: Json): MediaItem[] | undefined {
           : undefined,
       });
     }
+  }
+
+  // External site link card (e.g. "from digitalfoundry.net") only when nothing else.
+  if (items.length === 0 && !hasArticle) {
+    const card = isObject(tweet.card) ? tweet.card : (isObject(legacy.card) ? legacy.card : undefined);
+    const cardMedia = parseCardMedia(card);
+    if (cardMedia) items.push(cardMedia);
   }
 
   return items.length > 0 ? items : undefined;
@@ -470,7 +542,7 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     richTokens,
     timestamp: parseXDate(legacy.created_at),
     stats: parseStats(tweet),
-    media: parseMedia(tweet),
+    media: parseMedia(tweet, Boolean(article)),
     quotePost: parseQuote(tweet),
     article,
     isThreadPart: false,
@@ -497,7 +569,7 @@ function parseTweet(entry: Json, fallbackId: string): TweetData | null {
     data.id = str(original.rest_id) || str(originalLegacy.id_str) || id;
     data.url = `https://x.com/${originalAuthor.handle.replace(/^@/, '')}/status/${data.id}`;
     // Media can be truncated on the outer object, so read the nested original.
-    data.media = parseMedia(original) || data.media;
+    data.media = parseMedia(original, Boolean(originalBody.article)) || data.media;
     data.stats = parseStats(original) || data.stats;
     data.article = originalBody.article || data.article;
     data.retweetedBy = reposter || undefined;

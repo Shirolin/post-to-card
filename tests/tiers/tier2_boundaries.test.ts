@@ -513,6 +513,53 @@ test('Tier 2.30: external link card preview image is extracted as media', () => 
   );
 });
 
+test('Tier 2.30b: external link card with non-div wrapper tag is extracted as media', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>check this link</span></div>
+      <section data-testid="card.wrapper">
+        <div data-testid="card.layoutLarge.media">
+          <img src="https://pbs.twimg.com/card_img/456/switch2?format=jpg&amp;name=900x900" alt="Switch 2 Review">
+        </div>
+      </section>
+    </article>
+  `);
+
+  const media = extractTweetData(article)?.media;
+  assert.ok(media && media.length === 1, 'Tag-agnostic link card preview must yield one media item');
+  assert.ok(media[0].url.includes('card_img'), 'Link card media must point at the card image');
+  assert.equal(media[0].alt, 'Switch 2 Review');
+  assert.ok(
+    getPhotoUrlCandidates(media[0].url)[0].includes('name=orig'),
+    'Link card preview must request the highest resolution variant so exports stay sharp'
+  );
+});
+
+test('Tier 2.30c: quote tweet carrying an external link card is extracted as quote media', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>check this quote</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted article link</span></div>
+        <div data-testid="card.wrapper">
+          <img src="https://pbs.twimg.com/card_img/789/review?format=jpg&amp;name=orig" alt="Quoted Article">
+        </div>
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.ok(tweet, 'expected extracted tweet');
+  assert.ok(!tweet.media, 'main tweet itself has no media');
+  assert.ok(tweet.quotePost, 'expected quote post');
+  assert.ok(tweet.quotePost.media && tweet.quotePost.media.length === 1, 'quoted link card must be extracted as quote media');
+  assert.ok(tweet.quotePost.media[0].url.includes('card_img'), 'quote media points to card image');
+  assert.equal(tweet.quotePost.media[0].alt, 'Quoted Article');
+});
+
 // -------------------------------------------------------------
 // Structural detection: retweets, replies, ads, and unavailable posts
 // -------------------------------------------------------------

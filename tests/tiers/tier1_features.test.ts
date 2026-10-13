@@ -16,7 +16,7 @@ import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/singl
 import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, PURE_EMOJI_HTML } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML, FOUR_GIFS_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isActionBar, TRIGGER_BUTTON_SVG } from '../../src/content/adapter/injection.ts';
 import { isThreadConnectedPair, isTemporallyConnected, getReplyingToHandle } from '../../src/content/adapter/thread.ts';
@@ -820,6 +820,19 @@ test('F11.11: a visible video poster is not also collected as a photo', () => {
   assert.equal(media!.length, 1, 'a video post must yield exactly one item');
   assert.equal(media![0].type, 'video', 'the item must be the video, not its poster');
   assert.match(media![0].url, /video_frame/, 'the poster frame supplies the still');
+});
+
+test('F11.12: extracts all 4 animated GIFs from a multi-GIF post', () => {
+  const tweet = createDomElement(FOUR_GIFS_HTML);
+  const media = extractTweetData(tweet as unknown as Element)?.media;
+
+  assert.ok(media, 'expected media to be extracted');
+  assert.equal(media!.length, 4, 'expected all 4 GIFs to be preserved rather than collapsed to 1');
+  assert.ok(media!.every((m) => m.type === 'gif'), 'all items must be of type gif');
+  assert.match(media![0].url, /gif1/, 'gif 1 url match');
+  assert.match(media![1].url, /gif2/, 'gif 2 url match');
+  assert.match(media![2].url, /gif3/, 'gif 3 url match');
+  assert.match(media![3].url, /gif4/, 'gif 4 url match');
 });
 
 // -------------------------------------------------------------

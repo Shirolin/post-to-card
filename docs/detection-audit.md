@@ -106,6 +106,7 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
  `border-left` 0、伪元素 0、「显示此推文串」0，续条就是平铺在回复框下面的一条普通回复。
  这份 payload 我们**已经在拦**（名单见 `graphql/operations.ts`），`in_reply_to_status_id_str`
  由 `graphql/parse.ts` 收进 `graphql/replyLinks.ts` 的索引，供列表视图里的 DOM 走查使用。
+- **外链卡片媒体在 GraphQL 与 DOM 均须提取** —— **2026-10-13 实测**：外链推文（如 `summary_large_image`）的封面图不走 `entities.media`，而在 `tweet.card.legacy.binding_values`。GraphQL 通道须解析其 `photo_image_full_size_original` 等原图字段，否则权威通道会将其判为无媒体并短路屏蔽 DOM 通道；DOM 端容器以 `[data-testid="card.wrapper"]`（不绑定 `div` 标签）定位，其内标准 `img` 即为卡片封面。
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号
 - `a[href*="/status/"]`、`time[datetime]` —— 结构语义，不会变

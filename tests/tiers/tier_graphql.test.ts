@@ -25,6 +25,7 @@ import {
   TWEET_DETAIL_MEDIA_PERMALINK_JSON,
   TWEET_DETAIL_MEDIA_WITH_LINK_JSON,
   HOME_TIMELINE_SELF_THREAD_JSON,
+  TWEET_DETAIL_CARD_JSON,
 } from '../fixtures/graphql.ts';
 
 export interface TestResult {
@@ -486,6 +487,21 @@ test('gql.27: multi-author conversation payload isolates ancestor branch for tar
   assert.equal(parsed.thread.tweets[1].author.handle, '@lauren');
   assert.equal(parsed.thread.targetTweetIndex, 1);
   assert.equal(parsed.thread.author.handle, '@lauren');
+});
+
+test('gql.28: external link card (summary_large_image) preview image is extracted as media', () => {
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_CARD_JSON, 'TweetDetail', 'q1');
+  assert.ok(parsed.thread, 'expected parsed thread');
+  const tweet = parsed.thread.tweets[0];
+  assert.ok(tweet, 'expected tweet');
+  assert.equal(tweet.author.handle, '@digitalfoundry');
+  assert.ok(tweet.media && tweet.media.length === 1, 'card preview image must be extracted as 1 media item');
+
+  const media = tweet.media![0];
+  assert.equal(media.type, 'image');
+  assert.match(media.url, /name=orig/, 'must request highest available resolution');
+  assert.equal(media.aspectRatio, 1.778, 'aspect ratio must be computed from card image dimensions');
+  assert.equal(media.alt, "Review: Dragon's Dogma 2 On Switch 2");
 });
 
 export async function runTierGraphQL(): Promise<{

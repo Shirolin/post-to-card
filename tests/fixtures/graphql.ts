@@ -813,3 +813,96 @@ function timelineTweet(
     },
   };
 }
+
+/**
+ * A post carrying an external link card (summary_large_image, e.g. digitalfoundry.net).
+ *
+ * Media is in `tweet.card.legacy.binding_values` rather than `extended_entities.media`.
+ */
+export const TWEET_DETAIL_CARD_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-9001',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '9001',
+                      core: {
+                        user_results: {
+                          result: {
+                            legacy: { screen_name: 'digitalfoundry', name: 'Digital Foundry' },
+                            avatar: { image_url: 'https://pbs.twimg.com/profile_images/1/df.jpg' }
+                          }
+                        }
+                      },
+                      card: {
+                        rest_id: 'https://t.co/xyz123',
+                        legacy: {
+                          name: 'summary_large_image',
+                          url: 'https://t.co/xyz123',
+                          binding_values: [
+                            {
+                              key: 'photo_image_full_size_original',
+                              value: {
+                                type: 'IMAGE',
+                                image_value: {
+                                  url: 'https://pbs.twimg.com/card_img/123/switch2?format=jpg&name=orig',
+                                  width: 1280,
+                                  height: 720
+                                }
+                              }
+                            },
+                            {
+                              key: 'photo_image_full_size_alt_text',
+                              value: {
+                                type: 'STRING',
+                                string_value: "Review: Dragon's Dogma 2 On Switch 2"
+                              }
+                            },
+                            {
+                              key: 'title',
+                              value: {
+                                type: 'STRING',
+                                string_value: "Review: Dragon's Dogma 2 On Switch 2: The First \"Impossible Port\" for the New Generation?"
+                              }
+                            },
+                            {
+                              key: 'vanity_url',
+                              value: {
+                                type: 'STRING',
+                                string_value: 'digitalfoundry.net'
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      legacy: {
+                        full_text: "Review: Dragon's Dogma 2 On Switch 2: The First \"Impossible Port\" for the New Generation? https://t.co/xyz123",
+                        created_at: 'Mon Oct 12 15:00:00 +0000 2026',
+                        display_text_range: [0, 89],
+                        favorite_count: 368,
+                        retweet_count: 19,
+                        reply_count: 25
+                      },
+                      views: { count: '47900' }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});
+

@@ -277,3 +277,32 @@ export const VIDEO_POSTER_ONLY_HTML = `
   </div>
 </article>
 `;
+
+/** A post containing four distinct animated GIFs. */
+export const FOUR_GIFS_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8112"><time datetime="2026-10-10T00:00:00.000Z"></time></a>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/tweet_video_thumb/gif1.jpg" alt="GIF 1">
+    <div><span>GIF</span></div>
+    <button data-testid="playButton" aria-label="播放这个 GIF"></button>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/tweet_video_thumb/gif2.jpg" alt="GIF 2">
+    <div><span>GIF</span></div>
+    <button data-testid="playButton" aria-label="播放这个 GIF"></button>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/tweet_video_thumb/gif3.jpg" alt="GIF 3">
+    <div><span>GIF</span></div>
+    <button data-testid="playButton" aria-label="播放这个 GIF"></button>
+  </div>
+  <div data-testid="tweetPhoto">
+    <img src="https://pbs.twimg.com/tweet_video_thumb/gif4.jpg" alt="GIF 4">
+    <div><span>GIF</span></div>
+    <button data-testid="playButton" aria-label="播放这个 GIF"></button>
+  </div>
+</article>
+`;

@@ -319,6 +319,63 @@ test('res.10: on a status detail page, clicking the root post does not merge rep
   assert.equal(thread.tweets[0].author.handle, '@bob');
 });
 
+test('res.11: on a status detail page, clicking reply B preserves all 4 GIFs on root post A', () => {
+  mockWindow.location.pathname = '/alice/status/9001';
+  const html = `
+    <div id="conversation-container">
+      <article data-testid="tweet" id="root-post">
+        <div data-testid="User-Name"><a href="/alice"><span>@alice</span></a></div>
+        <div data-testid="tweetText"><span>Root post with 4 GIFs</span></div>
+        <a href="/alice/status/9001"><time datetime="2026-10-10T00:00:00.000Z"></time></a>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/tweet_video_thumb/g1.jpg" alt="GIF 1">
+          <div><span>GIF</span></div>
+        </div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/tweet_video_thumb/g2.jpg" alt="GIF 2">
+          <div><span>GIF</span></div>
+        </div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/tweet_video_thumb/g3.jpg" alt="GIF 3">
+          <div><span>GIF</span></div>
+        </div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/tweet_video_thumb/g4.jpg" alt="GIF 4">
+          <div><span>GIF</span></div>
+        </div>
+      </article>
+      <article data-testid="tweet" id="reply-post">
+        <div data-testid="User-Name"><a href="/bob"><span>@bob</span></a></div>
+        <div data-testid="tweetText"><span>Reply with 1 photo</span></div>
+        <a href="/bob/status/9002"><time datetime="2026-10-10T00:05:00.000Z"></time></a>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/media/bob_photo.jpg" alt="Bob Photo">
+        </div>
+      </article>
+    </div>
+  `;
+
+  const container = createDomElement(html);
+  const replyPost = container.querySelector('#reply-post')!;
+
+  const thread = resolveThread(replyPost);
+  assert.equal(thread.isSingle, false, 'reply must form a conversation thread with root post');
+  assert.equal(thread.tweets.length, 2, 'thread must contain [root, reply]');
+  assert.equal(thread.targetTweetIndex, 1, 'target tweet must point to reply');
+
+  // Verify Root Post A has all 4 GIFs intact
+  const rootTweet = thread.tweets[0];
+  assert.equal(rootTweet.id, '9001');
+  assert.ok(rootTweet.media && rootTweet.media.length === 4, 'Root post must preserve all 4 GIFs without loss');
+  assert.ok(rootTweet.media.every((m) => m.type === 'gif'), 'All root media must be of type gif');
+
+  // Verify Reply Post B has its 1 photo intact
+  const replyTweet = thread.tweets[1];
+  assert.equal(replyTweet.id, '9002');
+  assert.ok(replyTweet.media && replyTweet.media.length === 1, 'Reply post must retain its own media');
+  assert.equal(replyTweet.media[0].type, 'image');
+});
+
 export async function runTierResolver(): Promise<{
   total: number;
   passed: number;

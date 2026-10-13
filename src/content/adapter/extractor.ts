@@ -546,7 +546,12 @@ function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem
     ? playButton.closest('div[data-testid="tweetPhoto"], div[style*="overflow"], div')
     : null;
 
-  const videoContainer = firstMatch<Element>(
+  const selfMatchesVideo =
+    container.matches?.('div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"], video')
+      ? container
+      : null;
+
+  const videoContainer = selfMatchesVideo || firstMatch<Element>(
     'div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"], video'
   ) || mediaWrapper;
   const videoEl = (firstMatch<HTMLVideoElement>('video') || (videoContainer?.tagName === 'VIDEO' ? videoContainer : null)) as HTMLVideoElement | null;
@@ -556,11 +561,11 @@ function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem
     'img[src*="video_thumb"], img[src*="ext_tw_video_thumb"], img[src*="tweet_video_thumb"], img[src*="amplify_video_thumb"], img[src*="video_preview"]'
   );
 
-  const hasVideo = Boolean(videoContainer || videoEl || videoThumbImg);
-  if (!hasVideo) return null;
-
   const targetContainer = videoContainer || container;
   const isGif = isGifMedia(targetContainer);
+  const hasVideo = Boolean(videoContainer || videoEl || videoThumbImg || isGif);
+  if (!hasVideo) return null;
+
   let duration = isGif ? undefined : extractVideoDuration(targetContainer);
 
   // If duration wasn't found in DOM text, check native video element duration
@@ -609,9 +614,12 @@ function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem
   // sitting beside the video gets adopted as its poster frame and the tweet
   // ends up rendering the same image twice.
   if (!posterUrl && videoContainer) {
+    const targetSlot = (targetContainer.closest ? targetContainer.closest('div[data-testid="tweetPhoto"]') : null) ||
+      (targetContainer.getAttribute?.('data-testid') === 'tweetPhoto' ? targetContainer : null);
     const imgs = Array.from(videoContainer.querySelectorAll('img')).filter(img => {
       if (isInsideQuoteTweet(img)) return false;
-      if (img.closest('div[data-testid="tweetPhoto"]')) return false;
+      const photoWrapper = img.closest('div[data-testid="tweetPhoto"]');
+      if (photoWrapper && photoWrapper !== targetSlot) return false;
       return true;
     });
     for (const img of imgs) {
@@ -696,6 +704,20 @@ function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem
   };
 }
 
+const VIDEO_THUMB_REGEX = /(?:amplify|ext_tw|tweet)_video_thumb|video_preview/;
+
+function pushUniqueMediaItem(items: MediaItem[], candidate: MediaItem): void {
+  const candidateKey = candidate.originalUrl || candidate.url;
+  const duplicateIndex = items.findIndex((item) => (item.originalUrl || item.url) === candidateKey);
+  if (duplicateIndex >= 0) {
+    if (items[duplicateIndex].type === 'image' && candidate.type !== 'image') {
+      items[duplicateIndex] = candidate;
+    }
+  } else if (items.length < 4) {
+    items.push(candidate);
+  }
+}
+
 /**
  * True when an image is a video's poster frame rather than a photo the author
  * attached. Counting one as a photo renders the same asset twice — once through
@@ -708,7 +730,7 @@ function isMediaPosterLayer(img: Element): boolean {
   //    visible (no opacity:0), which is why the structural checks alone missed
   //    it and the same frame rendered twice.
   const src = img.getAttribute('src') || '';
-  if (/(?:amplify|ext_tw|tweet)_video_thumb|video_preview/.test(src)) return true;
+  if (VIDEO_THUMB_REGEX.test(src)) return true;
 
   // 2. A <video> in the same tweetPhoto wrapper means this img is its poster.
   //    `closest('… video')` cannot express this: closest only matches
@@ -729,14 +751,26 @@ function isMediaPosterLayer(img: Element): boolean {
 }
 
 /**
- * Photos plus the video/GIF item for one container.
+ * True when a media slot (e.g. tweetPhoto or player wrapper) exhibits video/GIF traits.
+ */
+function isVideoOrGifSlot(slot: Element): boolean {
+  if (slot.querySelector('video, button[data-testid="playButton"], div[data-testid="previewInterstitial"]')) {
+    return true;
+  }
+  if (isGifMedia(slot)) {
+    return true;
+  }
+  const imgs = Array.from(slot.querySelectorAll('img'));
+  return imgs.some((img) => VIDEO_THUMB_REGEX.test(img.getAttribute('src') || ''));
+}
+
+/**
+ * Photos plus the video/GIF items for one container.
  *
- * A tweet can mix photos and a video, so the two sources are merged rather than
- * letting the video short-circuit the photo pass. The video's poster is also an
- * <img>, so the photo pass can collect the very same asset; listing it twice
- * renders the frame twice — once plain and once with the play badge — so an
- * exact match is dropped in favour of the video item, which carries the
- * duration. `acceptPhoto` lets the main tweet reject the quoted post's photos.
+ * A tweet can mix photos and videos/GIFs, or contain up to 4 distinct animated GIFs.
+ * Scans each tweetPhoto slot individually so that multiple video/GIF items are preserved
+ * without collapsing into a single item, and standalone players are incorporated without
+ * duplicating the poster frames.
  */
 function collectPhotoAndVideoMedia(
   container: Element,
@@ -744,42 +778,77 @@ function collectPhotoAndVideoMedia(
   excludeQuotedVideo = false
 ): MediaItem[] {
   const items: MediaItem[] = [];
-  const photoEls = Array.from(container.querySelectorAll('div[data-testid="tweetPhoto"] img')).filter(acceptPhoto);
 
-  for (const img of photoEls.slice(0, 4)) {
-    const rawSrc = img.getAttribute('src') || '';
-    if (!rawSrc) continue;
+  const isExcluded = (el: Element) =>
+    excludeQuotedVideo && (isInsideQuoteTweet(el) || isInsideArticleReadView(el) || isInsideArticleBody(el));
 
-    const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
-    const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
-    const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
-    const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
-      ? Number((naturalWidth / naturalHeight).toFixed(3))
-      : undefined;
+  // 1. Scan primary media slots (tweetPhoto wrappers).
+  // A tweet can contain multiple photos, GIFs, or a mix of both.
+  const photoSlots = Array.from(container.querySelectorAll('div[data-testid="tweetPhoto"]')).filter(
+    (slot) => !isExcluded(slot)
+  );
 
-    items.push({
-      type: 'image',
-      url: upgradePhotoUrl(rawSrc),
-      originalUrl: rawSrc,
-      alt: img.getAttribute('alt') || undefined,
-      aspectRatio,
-    });
-  }
+  for (const slot of photoSlots.slice(0, 4)) {
+    if (isVideoOrGifSlot(slot)) {
+      const videoItem = extractVideoMedia(slot, excludeQuotedVideo);
+      if (videoItem) {
+        pushUniqueMediaItem(items, videoItem);
+        continue;
+      }
+    }
 
-  // The card renderer caps layouts at 4 items, so a combined set is trimmed whole.
-  if (items.length < 4) {
-    const videoMedia = extractVideoMedia(container, excludeQuotedVideo);
-    if (videoMedia) {
-      const posterKey = videoMedia.originalUrl || videoMedia.url;
-      const duplicateIndex = items.findIndex(
-        (item) => item.type === 'image' && (item.originalUrl || item.url) === posterKey
-      );
-      if (duplicateIndex >= 0) items.splice(duplicateIndex, 1);
-      items.push(videoMedia);
+    // Standard photo item inside slot
+    const imgs = Array.from(slot.querySelectorAll('img')).filter(acceptPhoto);
+    for (const img of imgs) {
+      const rawSrc = img.getAttribute('src') || '';
+      if (!rawSrc) continue;
+
+      const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+      const naturalWidth = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+      const naturalHeight = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+      const aspectRatio = (naturalWidth > 0 && naturalHeight > 0)
+        ? Number((naturalWidth / naturalHeight).toFixed(3))
+        : undefined;
+
+      items.push({
+        type: 'image',
+        url: upgradePhotoUrl(rawSrc),
+        originalUrl: rawSrc,
+        alt: img.getAttribute('alt') || undefined,
+        aspectRatio,
+      });
+      break;
     }
   }
 
-  return items;
+  // 2. Scan standalone video elements outside tweetPhoto slots
+  if (items.length < 4) {
+    const standaloneVideoSlots = Array.from(
+      container.querySelectorAll('div[data-testid="videoPlayer"], div[data-testid="videoComponent"], div[aria-label="Embedded video"]')
+    ).filter((slot) => {
+      if (slot.closest('div[data-testid="tweetPhoto"]')) return false;
+      if (isExcluded(slot)) return false;
+      return true;
+    });
+
+    for (const slot of standaloneVideoSlots) {
+      if (items.length >= 4) break;
+      const videoItem = extractVideoMedia(slot, excludeQuotedVideo);
+      if (videoItem) {
+        pushUniqueMediaItem(items, videoItem);
+      }
+    }
+  }
+
+  // 3. Fallback: whole-container scan for unnested video elements or legacy shapes
+  if (items.length < 4) {
+    const videoMedia = extractVideoMedia(container, excludeQuotedVideo);
+    if (videoMedia) {
+      pushUniqueMediaItem(items, videoMedia);
+    }
+  }
+
+  return items.slice(0, 4);
 }
 
 /**
@@ -814,9 +883,16 @@ function extractTweetMedia(article: Element): MediaItem[] | undefined {
  * Twitter/X renders these inside `div[data-testid="card.wrapper"]`, which the
  * photo/video strategies do not recognise, so the media silently disappeared.
  */
-function extractLinkCardMedia(article: Element): MediaItem | undefined {
-  const card = article.querySelector('div[data-testid="card.wrapper"], div[data-testid="card.layoutLarge.media"]');
-  if (!card || isInsideQuoteTweet(card)) return undefined;
+function extractLinkCardMedia(container: Element, excludeQuoted = true): MediaItem | undefined {
+  const card = container.querySelector('[data-testid="card.wrapper"], [data-testid="card.layoutLarge.media"]');
+  if (!card) return undefined;
+
+  if (excludeQuoted) {
+    if (isInsideQuoteTweet(card)) return undefined;
+  } else {
+    const nestedQuote = findQuoteContainer(container);
+    if (nestedQuote && nestedQuote !== card && nestedQuote.contains(card)) return undefined;
+  }
 
   // Prefer the dedicated card image testid, then any non-avatar image.
   const img = card.querySelector('img[data-testid="card-image"], img[src*="card_img"]') ||
@@ -826,7 +902,7 @@ function extractLinkCardMedia(article: Element): MediaItem | undefined {
     });
   if (!img) return undefined;
 
-  const src = img.getAttribute('src') || '';
+  const src = (img.getAttribute('src') || '').replace(/&amp;/g, '&').trim();
   if (!src || src.includes('profile_images') || src.includes('/emoji/')) return undefined;
 
   const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
@@ -968,7 +1044,7 @@ function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
 
   // Quoted post may itself only carry an external link card.
   if (media.length === 0) {
-    const quoteCardMedia = extractLinkCardMedia(quoteBox);
+    const quoteCardMedia = extractLinkCardMedia(quoteBox, false);
     if (quoteCardMedia) media.push(quoteCardMedia);
   }
 
