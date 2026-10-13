@@ -259,15 +259,17 @@ export function isThreadConnectedPair(
 }
 
 /**
- * Resolves the ancestor conversation chain for a reply on a status detail page.
+ * Resolves the ancestor conversation chain for a reply.
  * When a user triggers card generation on a reply, pulling in its ancestor posts
- * (e.g. root tweet and direct parent replies) provides crucial conversation context.
+ * (e.g. root tweet and direct parent replies) provides crucial conversation context
+ * across both status detail views and timeline feeds.
  */
 function resolveAncestorChain(
   headArt: Element,
   headTweet: TweetData,
   headIndex: number,
-  allArticles: Element[]
+  allArticles: Element[],
+  isDetailPage: boolean = true
 ): TweetData[] {
   const ancestors: TweetData[] = [];
   const visitedIndices = new Set<number>();
@@ -315,7 +317,11 @@ function resolveAncestorChain(
       const replyHandle = getReplyingToHandle(currChildArt);
       if (replyHandle) {
         const targetHandle = replyHandle.toLowerCase().replace(/^@/, '');
-        for (let p = currChildIndex - 1; p >= 0; p--) {
+        // On detail pages, we can search backwards across all previous posts in the conversation.
+        // On feeds/timelines, to avoid accidentally matching unrelated posts from the same handle earlier in the feed,
+        // we restrict Signal C strictly to the immediate predecessor (p === currChildIndex - 1).
+        const minP = isDetailPage ? 0 : currChildIndex - 1;
+        for (let p = currChildIndex - 1; p >= minP; p--) {
           const pArt = allArticles[p];
           if (isAdOrSponsored(pArt)) continue;
           const pTweet = extractTweetData(pArt);
@@ -332,7 +338,8 @@ function resolveAncestorChain(
     }
 
     // Signal D: Direct top-level reply defaulting to detail page root post (allArticles[0])
-    if (matchedParentIndex === -1 && currChildIndex > 0) {
+    // Only valid on status detail pages where allArticles[0] is guaranteed to be the conversation root post!
+    if (isDetailPage && matchedParentIndex === -1 && currChildIndex > 0) {
       const rootArt = allArticles[0];
       if (!isAdOrSponsored(rootArt) && !visitedIndices.has(0)) {
         const rootTweet = extractTweetData(rootArt);
@@ -369,7 +376,7 @@ function resolveAncestorChain(
       const prevPArt = allArticles[p];
       const prevPTweet = extractTweetData(prevPArt);
       if (!prevPTweet) break;
-      if (!isThreadConnectedPair(curPArt, prevPArt, curPTweet, prevPTweet, false, true)) {
+      if (!isThreadConnectedPair(curPArt, prevPArt, curPTweet, prevPTweet, false, isDetailPage)) {
         break;
       }
       visitedIndices.add(p);
@@ -459,18 +466,16 @@ export function extractContinuousThread(
     currentTweet = prevTweet;
   }
 
-  // When on a status detail page and the target (or its same-author sequence) is a reply,
+  // When the target (or its same-author sequence) is a reply,
   // pull in its ancestor conversation context (e.g. root post, replied post) so that
   // the card shows the full conversation rather than an isolated reply.
-  if (isDetailPage) {
-    const headIndex = targetIndex - predecessors.length;
-    if (headIndex > 0) {
-      const headArt = allArticles[headIndex];
-      const headTweet = predecessors.length > 0 ? predecessors[0] : targetTweet;
-      const ancestorChain = resolveAncestorChain(headArt, headTweet, headIndex, allArticles);
-      if (ancestorChain.length > 0) {
-        predecessors.unshift(...ancestorChain);
-      }
+  const headIndex = targetIndex - predecessors.length;
+  if (headIndex > 0) {
+    const headArt = allArticles[headIndex];
+    const headTweet = predecessors.length > 0 ? predecessors[0] : targetTweet;
+    const ancestorChain = resolveAncestorChain(headArt, headTweet, headIndex, allArticles, isDetailPage);
+    if (ancestorChain.length > 0) {
+      predecessors.unshift(...ancestorChain);
     }
   }
 

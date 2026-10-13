@@ -1,3 +1,4 @@
+import { Fragment } from 'preact';
 import type { JSX, Ref } from 'preact';
 import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet.ts';
 import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card.ts';
@@ -61,6 +62,32 @@ function truncationMark(truncated: boolean | undefined) {
   return <span class="truncation-ellipsis">…</span>;
 }
 
+/**
+ * Renders multiline text with controlled paragraph spacing.
+ *
+ * A raw double newline (`\n\n`) inside a `white-space: pre-wrap` element produces
+ * a full-height empty line, which combined with body leading (1.68) inflates to
+ * ~39px of dead air -- exceeding the inter-tweet gap.
+ * Replacing double newlines with a dedicated paragraph-gap marker caps the separation
+ * at a natural typographic paragraph gap (~18px), keeping multi-paragraph tweets cohesive.
+ */
+function renderTextWithParagraphBreaks(text: string, keyPrefix: string | number) {
+  if (!text || !/\n\s*\n/.test(text)) {
+    return text;
+  }
+  const clean = text.replace(/^\s*\n+/, '').replace(/\n+\s*$/, '');
+  if (!/\n\s*\n/.test(clean)) {
+    return text;
+  }
+  const parts = clean.split(/\n\s*\n+/);
+  return parts.map((part, pIdx) => (
+    <Fragment key={`${keyPrefix}-p-${pIdx}`}>
+      {pIdx > 0 && <span class="tweet-paragraph-gap" aria-hidden="true" />}
+      {part}
+    </Fragment>
+  ));
+}
+
 function renderRichTokens(
   tokens: NonNullable<TweetData['richTokens']>,
   className: string,
@@ -90,7 +117,11 @@ function renderRichTokens(
             </span>
           );
         }
-        return <span key={index}>{token.value}</span>;
+        return (
+          <Fragment key={index}>
+            {renderTextWithParagraphBreaks(token.value, index)}
+          </Fragment>
+        );
       })}
       {truncationMark(truncated)}
     </div>
@@ -410,7 +441,7 @@ function renderQuoteCard(
       {richTokens && richTokens.length > 0 ? (
         renderRichTokens(richTokens, 'quote-text')
       ) : text ? (
-        <div class="quote-text">{text}</div>
+        <div class="quote-text">{renderTextWithParagraphBreaks(text, 'quote')}</div>
       ) : null}
       {renderMediaGrid(quotePost.media, t.photoAlt, imageFit, aspectRatio, mediaLayout, t.videoLabel, showPlayButton)}
     </div>
@@ -431,13 +462,13 @@ function renderArticleLead(tweet: TweetData) {
   if (tweet.text) {
     return (
       <div class="tweet-text-content">
-        {tweet.text}
+        {renderTextWithParagraphBreaks(tweet.text, 'article-lead')}
         {truncationMark(tweet.truncated)}
       </div>
     );
   }
   if (tweet.article?.openingLine) {
-    return <div class="tweet-text-content">{tweet.article.openingLine}</div>;
+    return <div class="tweet-text-content">{renderTextWithParagraphBreaks(tweet.article.openingLine, 'article-lead')}</div>;
   }
   return null;
 }
@@ -485,7 +516,7 @@ function renderTweetContent(tweet: TweetData, t: ReturnType<typeof getTranslatio
   } else {
     body = (
       <div class="tweet-text-content">
-        {tweet.text}
+        {renderTextWithParagraphBreaks(tweet.text, 'tweet-body')}
         {truncationMark(tweet.truncated)}
       </div>
     );

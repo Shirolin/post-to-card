@@ -503,6 +503,14 @@
   color: inherit;
 }
 
+/* Paragraph separation marker for multi-paragraph bodies. Caps double newlines
+   to a balanced paragraph gap instead of a full line-height empty line. */
+.tweet-paragraph-gap {
+  display: block;
+  height: 0.45em;
+  line-height: 0;
+}
+
 .token-mention,
 .token-hashtag,
 .token-cashtag,
@@ -1234,13 +1242,22 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  gap: var(--rhythm-gap, 10px);
-  padding-bottom: 16px;
+  /* Intra-tweet spacing: keeps author details tightly grouped with the post's
+     own prose/media, so the reader never confuses which author owns the text. */
+  gap: calc(var(--rhythm-gap, 18px) * 0.4);
+  /* Inter-tweet spacing: clearly separates adjacent tweets in the thread with
+     ample breathing room, through which the continuous timeline connector runs. */
+  padding-bottom: calc(var(--rhythm-gap, 18px) + 18px);
 }
 
 .thread-content-col .author-details {
   min-height: 48px;
   justify-content: center;
+}
+
+.thread-content-col .media-grid,
+.thread-content-col .quote-card {
+  margin-top: calc(var(--rhythm-gap, 18px) * 0.25);
 }
 
 .thread-item:last-child .thread-content-col {

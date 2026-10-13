@@ -296,15 +296,97 @@ test('res.8: on a status detail page, clicking a reply extracts its ancestor thr
   assert.equal(thread.author.handle, '@lauren', 'thread author should be the target reply author');
 });
 
-test('res.9: outside a status detail page (feed/profile), cross-author reply stays single', () => {
+test('res.9: outside a status detail page (feed/profile), verified reply extracts immediate ancestor context', () => {
   mockWindow.location.pathname = '/home';
   const container = createDomElement(DETAIL_REPLY_THREAD_HTML);
   const replyPost = container.querySelector('#reply-post')!;
 
   const thread = resolveThread(replyPost);
-  assert.equal(thread.isSingle, true, 'feed must never merge cross-author tweets');
+  assert.equal(thread.isSingle, false, 'feed reply with verified ancestor context must form a thread');
+  assert.equal(thread.tweets.length, 2, 'thread should contain [root, reply]');
+  assert.equal(thread.tweets[0].id, '7001');
+  assert.equal(thread.tweets[0].author.handle, '@bob');
+  assert.equal(thread.tweets[1].id, '7002');
+  assert.equal(thread.tweets[1].author.handle, '@lauren');
+  assert.equal(thread.targetTweetIndex, 1);
+});
+
+test('res.9b: outside a status detail page (feed/profile), reply without matching predecessor stays single', () => {
+  mockWindow.location.pathname = '/home';
+  const html = `
+    <div id="timeline">
+      <article data-testid="tweet" id="unrelated-post">
+        <div data-testid="User-Name"><a href="/charlie"><span>@charlie</span></a></div>
+        <div data-testid="tweetText"><span>Unrelated timeline post</span></div>
+        <a href="/charlie/status/8001"><time datetime="2026-10-12T10:00:00.000Z">10:00 AM</time></a>
+      </article>
+      <article data-testid="tweet" id="reply-post">
+        <div data-testid="socialContext">
+          <span>Replying to </span><a href="/bob">@bob</a>
+        </div>
+        <div data-testid="User-Name"><a href="/lauren"><span>@lauren</span></a></div>
+        <div data-testid="tweetText"><span>Replying to someone not here</span></div>
+        <a href="/lauren/status/8002"><time datetime="2026-10-12T10:05:00.000Z">10:05 AM</time></a>
+      </article>
+    </div>
+  `;
+  const container = createDomElement(html);
+  const replyPost = container.querySelector('#reply-post')!;
+
+  const thread = resolveThread(replyPost);
+  assert.equal(thread.isSingle, true, 'unmatched feed reply must stay single');
   assert.equal(thread.tweets.length, 1);
-  assert.equal(thread.tweets[0].id, '7002');
+  assert.equal(thread.tweets[0].id, '8002');
+});
+
+test('res.9c: in feed, GraphQL replyLink accurately connects predecessor even across DOM differences', () => {
+  mockWindow.location.pathname = '/home';
+  const html = `
+    <div id="timeline">
+      <article data-testid="tweet" id="post-a">
+        <div data-testid="User-Name"><a href="/alice"><span>@alice</span></a></div>
+        <div data-testid="tweetText"><span>Alice question</span></div>
+        <a href="/alice/status/8101"><time datetime="2026-10-12T10:00:00.000Z">10:00 AM</time></a>
+      </article>
+      <article data-testid="tweet" id="post-b">
+        <div data-testid="User-Name"><a href="/bob"><span>@bob</span></a></div>
+        <div data-testid="tweetText"><span>Bob reply to Alice</span></div>
+        <a href="/bob/status/8102"><time datetime="2026-10-12T10:05:00.000Z">10:05 AM</time></a>
+      </article>
+    </div>
+  `;
+  const feedPayload = JSON.stringify({
+    data: {
+      home: {
+        home_timeline_urt: {
+          instructions: [
+            {
+              entries: [
+                {
+                  entryId: 'tweet-8101',
+                  content: { itemContent: { tweet_results: { result: { rest_id: '8101', legacy: { id_str: '8101', full_text: 'Alice question' } } } } },
+                },
+                {
+                  entryId: 'tweet-8102',
+                  content: { itemContent: { tweet_results: { result: { rest_id: '8102', legacy: { id_str: '8102', full_text: 'Bob reply to Alice', in_reply_to_status_id_str: '8101' } } } } },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  });
+  seedGraphQLCache(feedPayload, 'HomeTimeline', 'q_feed_reply_link');
+
+  const container = createDomElement(html);
+  const postB = container.querySelector('#post-b')!;
+
+  const thread = resolveThread(postB);
+  assert.equal(thread.isSingle, false, 'GraphQL linkage in feed must connect parent post');
+  assert.equal(thread.tweets.length, 2);
+  assert.equal(thread.tweets[0].id, '8101');
+  assert.equal(thread.tweets[1].id, '8102');
 });
 
 test('res.10: on a status detail page, clicking the root post does not merge replies downwards', () => {
