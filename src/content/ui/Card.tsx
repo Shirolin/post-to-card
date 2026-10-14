@@ -35,10 +35,28 @@ function normalizeThreadData(data: ThreadData | TweetData): ThreadData {
   };
 }
 
+/**
+ * Renders one interaction count for the card.
+ *
+ * X hands these over already localised — `4.6万`, `1.2K`, `84.1M` — so the only
+ * job here is to pass those through verbatim and to abbreviate the raw numbers
+ * the API paths still carry. The passthrough is decided by "ends in a unit
+ * suffix", not by an allow-list of Latin letters: `万` and `亿` are units just
+ * like `K`, and a value that falls through to `parseFloat` loses its scale
+ * entirely, so `4.6万` used to print as `4.6` — a count silently four orders of
+ * magnitude low, next to three siblings that were passed through untouched.
+ *
+ * A bare number is the one case worth reformatting, and only into the K/M
+ * abbreviations the card has room for. Thousands separators are left to
+ * `toLocaleString` rather than spelled out, so `12345` reads `12,345`.
+ */
 function formatStat(value?: string | number): string {
   if (value === undefined || value === null || value === '') return '';
   if (typeof value === 'string') {
-    if (/[KkMmBb]/.test(value)) return value;
+    // A unit suffix — Latin (`K`/`M`/`B`) or CJK (`万`/`亿`) — means X has
+    // already rounded for display. Reformatting it again would second-guess a
+    // decision made against the same column width this card is fitting.
+    if (/[A-Za-z\u4e00-\u9fff]$/.test(value.trim())) return value.trim();
     const num = Number.parseFloat(value.replace(/,/g, ''));
     if (!Number.isNaN(num)) return formatStat(num);
     return value;
@@ -358,25 +376,25 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
     <div class="stats-row">
       {replyStr && (
         <span class="stat-item" title={`${replyStr} ${t.replies}`}>
-          <MessageCircle class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
+          <MessageCircle class="stat-icon" size={15} strokeWidth={1.6} aria-hidden="true" />
           {replyStr}
         </span>
       )}
       {repostStr && (
         <span class="stat-item" title={`${repostStr} ${t.reposts}`}>
-          <Repeat2 class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
+          <Repeat2 class="stat-icon" size={15} strokeWidth={1.6} aria-hidden="true" />
           {repostStr}
         </span>
       )}
       {likeStr && (
         <span class="stat-item" title={`${likeStr} ${t.likes}`}>
-          <Heart class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
+          <Heart class="stat-icon" size={15} strokeWidth={1.6} aria-hidden="true" />
           {likeStr}
         </span>
       )}
       {viewsStr && (
         <span class="stat-item" title={`${viewsStr} ${t.views}`}>
-          <ChartNoAxesColumn class="stat-icon" size={15} strokeWidth={2} aria-hidden="true" />
+          <ChartNoAxesColumn class="stat-icon" size={15} strokeWidth={1.6} aria-hidden="true" />
           {viewsStr}
         </span>
       )}

@@ -2133,10 +2133,52 @@ test('F21.1: toggling showQrCode hides or displays QR element in DOM', () => {
   assert.equal(config.showQrCode, false);
 });
 
-test('F21.2: toggling showStats hides like, repost, reply statistics', () => {
-  const showStats = false;
-  const statsDom = showStats ? '<div class="stats-row">1.5M</div>' : '';
-  assert.equal(statsDom, '');
+test('F21.2: toggling showStats hides like, repost, reply statistics', async () => {
+  // VIDEO_TWEET carries no stats, and a footer that has nothing to say is not
+  // rendered at all — so the "on" case needs a post that actually has counts.
+  const withStats = await renderCard({
+    data: { ...VIDEO_TWEET, stats: { replies: '191', reposts: '80', likes: '5.2K', views: '4.6万' } },
+  });
+  assert.ok(withStats.includes('stats-row'), 'the stats row is in the DOM by default');
+
+  const withoutStats = await renderCard({
+    data: { ...VIDEO_TWEET, stats: { replies: '191', reposts: '80', likes: '5.2K', views: '4.6万' } },
+    config: { showStats: false },
+  });
+  assert.ok(!withoutStats.includes('stats-row'), 'no stats row when showStats is off');
+});
+
+test('F21.2b: a CJK count keeps its unit instead of degrading to the mantissa', async () => {
+  // X localises its own counts. On a Chinese timeline `views` arrives as `4.6万`
+  // and `likes` as `1.2亿`, and the three Latin-format siblings (`94.2K`,
+  // `2.4M`) were always passed through untouched — so the row read
+  // `94.2K · 2.4M · 4.6`: one count silently four orders of magnitude low,
+  // printed beside three that were right. The passthrough has to be decided by
+  // "ends in a unit", not by an allow-list of Latin letters, because `万` and
+  // `亿` are units exactly like `K`.
+  const html = await renderCard({
+    data: {
+      ...VIDEO_TWEET,
+      stats: { replies: '191', reposts: '80', likes: '5.2K', views: '4.6万' },
+    },
+  });
+  assert.ok(html.includes('4.6万'), 'a CJK count must keep its unit');
+  assert.ok(!html.includes('>4.6<'), 'a CJK count must not degrade to its mantissa');
+});
+
+test('F21.2c: a raw count is abbreviated, not printed at full length', async () => {
+  // The other half of the contract: the API paths still hand over bare numbers,
+  // and a card has no room for `482000`. Only the numbers need reformatting;
+  // anything already carrying a unit is X's own work and is left alone.
+  const html = await renderCard({
+    data: {
+      ...VIDEO_TWEET,
+      stats: { replies: '128', reposts: '902', likes: '12700', views: '482000' },
+    },
+  });
+  assert.ok(html.includes('12.7K'), 'a raw thousands count is abbreviated to K');
+  assert.ok(html.includes('482K'), 'a raw hundred-thousands count is abbreviated to K');
+  assert.ok(!html.includes('12700') && !html.includes('482000'), 'raw counts are not printed in full');
 });
 
 test('F21.3: toggling showTimestamp hides date and time display', () => {
