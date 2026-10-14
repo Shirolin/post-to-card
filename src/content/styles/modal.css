@@ -315,19 +315,31 @@
     var(--ptc-preview-canvas, #171716);
 }
 
-.preview-viewport::-webkit-scrollbar {
+/* One scrollbar idiom for both scroll regions in the dialog.
+
+   These were two hand-written copies — 10px for the stage, 8px for the panel,
+   with different thumb alphas — which read as two scrollbars that happened to
+   sit adjacent rather than one surface. Both selectors are on elements that
+   already exist, so sharing is a selector list rather than a new class nobody
+   would put on anything. The stage keeps the wider track because it is the
+   region the card actually scrolls in. */
+.preview-viewport::-webkit-scrollbar,
+.controls-scroll::-webkit-scrollbar {
   width: 10px;
 }
-.preview-viewport::-webkit-scrollbar-track {
+.preview-viewport::-webkit-scrollbar-track,
+.controls-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-.preview-viewport::-webkit-scrollbar-thumb {
+.preview-viewport::-webkit-scrollbar-thumb,
+.controls-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 5px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
-.preview-viewport::-webkit-scrollbar-thumb:hover {
+.preview-viewport::-webkit-scrollbar-thumb:hover,
+.controls-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.32);
   background-clip: content-box;
 }
@@ -369,23 +381,6 @@
   padding: 20px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-.controls-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-.controls-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.controls-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-.controls-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.26);
-  background-clip: content-box;
 }
 
 .control-section {
@@ -515,13 +510,11 @@
   font-weight: 600;
 }
 
-/* Reveals the themes the grid holds back. Reuses the "More settings" toggle so
-   the panel has one disclosure idiom, not two. */
-.theme-expand {
-  margin-top: 2px;
-  justify-content: center;
-  font-size: 11.5px;
-}
+/* Reveals the themes the grid holds back. Deliberately carries no styling of
+   its own: it reuses `.more-toggle` whole, so the panel has one disclosure
+   idiom rather than two. It used to override `justify-content` and `font-size`
+   here, which made the theme expansion a centred, smaller variant of the same
+   button — a second idiom by another name. */
 
 /* Button Group (Language, Image Fit, Layout, Padding, Radius, Ratio, Zoom) */
 .btn-group {

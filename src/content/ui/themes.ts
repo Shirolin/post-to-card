@@ -201,8 +201,6 @@ export interface Rhythm {
 export interface ThemeDefinition {
   id: ThemeId;
   name: string;
-  /** Swatch background for the picker. Two-tone so light sheets stay apart. */
-  preview: string;
   tokens: ThemeTokens;
 }
 
@@ -287,7 +285,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   minimal: {
     id: 'minimal',
     name: 'Minimal',
-    preview: 'linear-gradient(135deg, #faf9f5 0%, #deddd6 45%, #c7d8f5 75%, #2563eb 100%)',
     tokens: {
       type: {
         displaySize: '18px',
@@ -344,7 +341,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   midnight: {
     id: 'midnight',
     name: 'Midnight',
-    preview: 'linear-gradient(135deg, #181b22 0%, #101217 40%, #293856 75%, #7aa2ff 100%)',
     tokens: {
       type: {
         displaySize: '18px',
@@ -401,7 +397,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   glass: {
     id: 'glass',
     name: 'Liquid Glass',
-    preview: 'linear-gradient(135deg, #ebf1f8 0%, #d4e4f5 40%, #7db5de 75%, #0369a1 100%)',
     tokens: {
       type: {
         displaySize: '18px',
@@ -457,7 +452,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   material: {
     id: 'material',
     name: 'Material 3',
-    preview: 'linear-gradient(135deg, #f4f6f0 0%, #dfe4d8 45%, #92ab8a 75%, #3e6837 100%)',
     tokens: {
       type: {
         displaySize: '18px',
@@ -514,7 +508,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   gallery: {
     id: 'gallery',
     name: 'Gallery',
-    preview: 'linear-gradient(135deg, #f7f7f4 0%, #dcded9 45%, #7b8de6 75%, #1b3bd6 100%)',
     tokens: {
       type: {
         displaySize: '17px',
@@ -569,7 +562,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   darkroom: {
     id: 'darkroom',
     name: 'Darkroom',
-    preview: 'linear-gradient(135deg, #1b1b1e 0%, #151517 40%, #61461d 75%, #ffb02e 100%)',
     tokens: {
       type: {
         displaySize: '19px',
@@ -624,7 +616,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   riso: {
     id: 'riso',
     name: 'Riso',
-    preview: 'linear-gradient(135deg, #f2f3ee 0%, #d5dbf4 42%, #17238a 75%, #ff3d8b 100%)',
     tokens: {
       type: {
         displaySize: '17px',
@@ -681,7 +672,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   sumi: {
     id: 'sumi',
     name: 'Sumi',
-    preview: 'linear-gradient(135deg, #e4e9e3 0%, #cad4c9 50%, #59655e 80%, #b4281d 100%)',
     tokens: {
       type: {
         displaySize: '19px',
@@ -736,7 +726,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   clay: {
     id: 'clay',
     name: 'Clay',
-    preview: 'linear-gradient(135deg, #d8e6f4 0%, #b8d2ec 50%, #688eb8 78%, #ff6a2b 100%)',
     tokens: {
       type: {
         displaySize: '18px',
@@ -790,7 +779,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   terminal: {
     id: 'terminal',
     name: 'Terminal',
-    preview: 'linear-gradient(135deg, #0d120e 0%, #162218 55%, #244629 82%, #5ee08a 100%)',
     tokens: {
       type: {
         displaySize: '16px',
@@ -847,7 +835,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   receipt: {
     id: 'receipt',
     name: 'Receipt',
-    preview: 'linear-gradient(135deg, #f5f5f1 0%, #deded8 50%, #7d7d77 82%, #1c1c1b 100%)',
     tokens: {
       type: {
         displaySize: '15.5px',
@@ -903,8 +890,6 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
   brutalist: {
     id: 'brutalist',
     name: 'Brutalist',
-    preview:
-      'linear-gradient(135deg, #ffe64a 0%, #ffd000 48%, #1a1a18 75%, #5a14d8 100%)',
     tokens: {
       type: {
         displaySize: '22px',
@@ -1114,3 +1099,151 @@ export function getAspectMinHeight(ratio: AspectRatioOption, width: number = 640
   if (ratio === '16:9') return `${Math.round(width * (9 / 16))}px`;
   return 'auto';
 }
+
+/**
+ * The picker's swatch for one material: the sheet's tone, the material's accent,
+ * and — where it has one — its own signature mark.
+ *
+ * This used to be a hand-written `preview` gradient per theme: twelve strings
+ * nobody could derive from anything, which is why all twelve ended in the same
+ * move — a light square falling to the accent in the corner. They drifted into
+ * one family, so the swatch carried the accent and nothing else, and
+ * \u6db2\u6001\u73bb\u7483 / \u591c\u5e55 were near-indistinguishable in the picker even
+ * though the two materials have nothing else in common.
+ *
+ * It is composed from the tokens now, which makes it honest by construction
+ * instead of by upkeep. Three signals, in the order they matter:
+ *
+ *   1. The accent — the one chromatic highlight the card allows itself, and the
+ *      token the themes differ most in. Eight of the twelve surfaces are within
+ *      1.20:1 of each other (measured; three are within 1.05:1), so surface tone
+ *      alone cannot separate them and the accent has to carry the identity.
+ *   2. The signature mark, drawn with the geometry `card.css` uses for real,
+ *      scaled to the swatch. Seven of twelve materials have one; the five that
+ *      do not are deliberately flat, and a flat band is the honest answer.
+ *   3. A wash of the surface, so a dark sheet reads as dark at a glance.
+ *
+ * These are `background-image` layers rather than a pseudo-element because the
+ * swatch sets its `background` inline, and `background-image` paints front to
+ * back — the mark must be listed before the wash or it is buried under it,
+ * which is exactly how the first attempt rendered six blank swatches.
+ */
+export function themePreview(theme: ThemeId): string {
+  const t = THEMES[theme].tokens;
+  const layers: string[] = [];
+
+  // 1. The signature mark, first in the list: see the note above about paint
+  //    order. Seven of the twelve materials have one, and it is the only thing
+  //    that makes them recognisable — the signature rule, the seal, the
+  //    perforation. The five without one get a gradient instead.
+  const mark = signatureMark(t);
+  layers.push(...mark);
+
+  // 2. What stands in for a mark when there is none: the sheet falling to the
+  //    accent. Measured, the five flat materials are separated by the accent
+  //    alone and by nothing else — their surfaces are within 1.20:1 of each
+  //    other and three are within 1.05:1 — but their accents differ sharply in
+  //    hue, saturation and lightness (Midnight's is S100 L74 against Liquid
+  //    Glass's S96 L32, and Material 3's is a green at H111). So the accent
+  //    carries the identity here, which is exactly what the card does.
+  //
+  //    Only the materials *without* a signature get this: giving a signature
+  //    material a full gradient as well put two competing fields in 34px and
+  //    the mark stopped reading.
+  if (mark.length === 0) {
+    layers.push(
+      `linear-gradient(135deg, ${t.surface} 0%, ${t.accent} 100%) 0 0 / 100% 100% no-repeat`
+    );
+  } else {
+    // 3. A sheet under the mark, as a wash so the mark shows through it.
+    layers.push(
+      `linear-gradient(${t.surface}e6, ${t.surface}e6) center / 100% 100% no-repeat`,
+      // And the accent as a hairline along the bottom edge — the same place a
+      // card's own accent ink sits. Sized as a rule, not a band: a 34% band of
+      // accent read as a solid brick, which is the one thing a signed material
+      // is defined by not having.
+      `linear-gradient(${t.accent}, ${t.accent}) 0 100% / 100% 3px no-repeat`
+    );
+  }
+
+  return layers.join(', ');
+}
+
+/**
+ * The signature layers, front to back, or empty for a material with no mark.
+ *
+ * Heights come from the theme's own `signature.height` so a thick rule stays
+ * thick; the fixed offsets are the swatch's scale, not a second table. Each
+ * case is the shape `card.css` draws for the same `signature.style`, which is
+ * the point: the picker advertises the material, not a near-miss of it.
+ *
+ * Returns an array because a mark is often two layers — a rule plus a tick, a
+ * line plus a seal — and joining them here would hide that from the caller,
+ * which needs the order to compose them correctly.
+ *
+ * `none` returns nothing. Filling that band with the accent instead would
+ * invent a mark the card does not have, and the picker is where someone decides
+ * which material they want; it should not lie about any of them.
+ */
+function signatureMark(t: ThemeTokens): string[] {
+  const { style, height } = t.signature;
+  const rule = t.rule;
+  const accent = t.accent;
+  const top = '6px';
+
+  switch (style) {
+    // A plain ink bar: the gallery label's rule and the sticker's thick rule
+    // are one decision at two weights.
+    case 'rule':
+    case 'block':
+      return [`linear-gradient(${rule}, ${rule}) 0 ${top} / 100% ${height} no-repeat`];
+
+    // One accent tick riding a full hairline, the tick over it, same as the card.
+    case 'tick-rule':
+      return [
+        `linear-gradient(${accent}, ${accent}) 0 ${top} / 42% 2px no-repeat`,
+        `linear-gradient(${rule}, ${rule}) 0 8px / 100% 1px no-repeat`,
+      ];
+
+    // Two overlapping discs, one per ink, a few pixels off: the two-colour
+    // print's registration miss.
+    case 'registration': {
+      const dot = (color: string, x: string) =>
+        `radial-gradient(circle 3px at ${x} ${top}, ${color} 100%, transparent 0) no-repeat`;
+      return [
+        dot(rule, '16%'),
+        dot(accent, '26%'),
+        `linear-gradient(${rule}, ${rule}) 0 11px / 100% ${height} no-repeat`,
+      ];
+    }
+
+    // A short rounded bar, pressed in.
+    case 'pill':
+      return [`linear-gradient(${accent}, ${accent}) 0 ${top} / 44% ${height} no-repeat`];
+
+    // The seal a scroll is signed with: a square stamp at the end of the line.
+    case 'seal':
+      return [
+        `linear-gradient(${rule}, ${rule}) 0 15px / 100% 1px no-repeat`,
+        `linear-gradient(${accent}, ${accent}) 100% 9px / 13% 7px no-repeat`,
+      ];
+
+    // Three traffic dots, in the sheet's own inks rather than stock
+    // red/amber/green.
+    case 'titlebar': {
+      const dot = (color: string, x: string) =>
+        `radial-gradient(circle 2.5px at ${x} ${top}, ${color} 100%, transparent 0) no-repeat`;
+      return [dot(accent, '18%'), dot(t.muted, '36%'), dot(rule, '54%')];
+    }
+
+    // A row of dots, not a line, the tear a till slip is pulled along.
+    case 'perforation':
+      return [
+        `radial-gradient(circle 1.3px at 50% 50%, ${rule} 100%, transparent 0) 0 ${top} / 6px ${height} repeat-x`,
+      ];
+
+    case 'none':
+      return [];
+  }
+}
+

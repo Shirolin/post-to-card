@@ -1,7 +1,7 @@
 import type { JSX } from 'preact';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../types/card.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS, IMAGE_FIT_OPTIONS, MEDIA_LAYOUT_OPTIONS } from './themes.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS, IMAGE_FIT_OPTIONS, MEDIA_LAYOUT_OPTIONS, themePreview } from './themes.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
@@ -331,7 +331,7 @@ export function Controls({
                   }
                   title={displayName}
                 >
-                  <span class="theme-swatch" style={{ background: th.preview }} aria-hidden="true">
+                  <span class="theme-swatch" style={{ background: themePreview(th.id) }} aria-hidden="true">
                     {isActive && (
                       <span class="theme-swatch-check">
                         <Check size={10} strokeWidth={2.8} />
@@ -346,7 +346,7 @@ export function Controls({
           {hiddenThemeCount > 0 && (
             <button
               type="button"
-              class="more-toggle theme-expand"
+              class="more-toggle"
               aria-expanded={showAllThemes}
               aria-controls={themeGridId}
               onClick={() => setShowAllThemes((v) => !v)}
