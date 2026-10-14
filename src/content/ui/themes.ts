@@ -1199,10 +1199,19 @@ function signatureMark(t: ThemeTokens): string[] {
       return [`linear-gradient(${rule}, ${rule}) 0 ${top} / 100% ${height} no-repeat`];
 
     // One accent tick riding a full hairline, the tick over it, same as the card.
+    //
+    // The rule is drawn thinner than the tick's own 2px, and the tick wider,
+    // because a swatch is a reduction and the two invert at this scale: Gallery's
+    // rule is the body ink (#101011, 17.7:1 on its sheet), which across the full
+    // width of 34px reads as a black bar with a blue segment interrupted into it
+    // -- the opposite of what the theme is, per its own note, "one Klein-blue
+    // tick over a black hairline". Darkroom's rule is 1.67:1 on its sheet, so
+    // there the hairline is genuinely a hairline and no adjustment is needed;
+    // the difference is in the ink, not the geometry.
     case 'tick-rule':
       return [
-        `linear-gradient(${accent}, ${accent}) 0 ${top} / 42% 2px no-repeat`,
-        `linear-gradient(${rule}, ${rule}) 0 8px / 100% 1px no-repeat`,
+        `linear-gradient(${accent}, ${accent}) 0 ${top} / 46% 2px no-repeat`,
+        `linear-gradient(${rule}, ${rule}) 0 9px / 100% 1px no-repeat`,
       ];
 
     // Two overlapping discs, one per ink, a few pixels off: the two-colour
