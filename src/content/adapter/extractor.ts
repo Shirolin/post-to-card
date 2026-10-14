@@ -108,20 +108,28 @@ function isInsideNestedArticle(el: Element): boolean {
 /**
  * Locates the quoted-post container inside a tweet article.
  *
+ * `scope` is where the search starts: the tweet's own article at the top level,
+ * or the quote box being read when looking for the quote *it* carries. The one
+ * box that must never be a candidate is the caller's own — a quoted post that
+ * quotes someone renders as two boxes with the same testid, one nested in the
+ * other, and the outer one is the very thing being read. `exclude` names it.
+ *
  * X has changed the marker for this box more than once, and a missed match is
  * silent: the quote is dropped AND its media leaks into the main tweet. So we
  * fall back through progressively weaker structural signals instead of trusting
  * a single data-testid.
  */
-function findQuoteContainer(article: Element): Element | null {
+function findQuoteContainer(article: Element, exclude?: Element | null): Element | null {
   if (!article) return null;
+
+  const isNotSelf = (candidate: Element) => candidate !== exclude;
 
   // 1. Canonical marker used by current X. The article's prose can embed a post
   //    that itself quotes someone, and that quote carries the same testid, so a
   //    document-order search would adopt a stranger's quote as this tweet's.
   //    Scoped past the article body for the same reason step 3 is.
   const byTestId = Array.from(article.querySelectorAll('div[data-testid="quoteTweet"]')).find(
-    (candidate) => !isInsideArticleBody(candidate)
+    (candidate) => !isInsideArticleBody(candidate) && isNotSelf(candidate)
   );
   if (byTestId) return byTestId;
 
@@ -132,7 +140,7 @@ function findQuoteContainer(article: Element): Element | null {
   //    no read view, so skipping that subtree leaves genuine quotes intact —
   //    including a quote inside an article, which keeps its own `quoteTweet`.
   const nestedArticle = Array.from(article.querySelectorAll('article')).find(
-    (candidate) => !isInsideArticleReadView(candidate)
+    (candidate) => !isInsideArticleReadView(candidate) && isNotSelf(candidate)
   );
   if (nestedArticle) return nestedArticle;
 
@@ -148,6 +156,7 @@ function findQuoteContainer(article: Element): Element | null {
 
     let node: Element | null = userName.parentElement;
     while (node && node !== article) {
+      if (node === exclude) break;
       if (node.querySelector('div[data-testid="tweetText"]')) {
         if (!mainUserName || !node.contains(mainUserName)) return node;
         break;
@@ -879,6 +888,18 @@ function extractTweetMedia(article: Element): MediaItem[] | undefined {
 }
 
 /**
+ * The quoted post's own media, as X marks it in the preview shape.
+ *
+ * `nestedQuotePreview` is the container and `nestedQuotePreviewMedia` the media
+ * link inside it. The wrapper has no `tweetPhoto`, so the photo pass — which
+ * scans `div[data-testid="tweetPhoto"]` — finds nothing, and the media silently
+ * disappeared. Neither testid appeared in any earlier snapshot, because every
+ * one of those was captured from a quote that was the outermost level. Measured
+ * 2026-10-14 against a real timeline entry.
+ */
+const NESTED_QUOTE_PREVIEW_MEDIA = '[data-testid="nestedQuotePreviewMedia"]';
+
+/**
  * Extracts the preview image of an external link card (e.g. "来自 nintendo.com").
  * Twitter/X renders these inside `div[data-testid="card.wrapper"]`, which the
  * photo/video strategies do not recognise, so the media silently disappeared.
@@ -998,10 +1019,76 @@ function isUnavailableMarker(container: Element): boolean {
 }
 
 /**
- * Extracts nested Quote Tweet data (author, text, media, timestamp).
+ * How many quote levels the card prints: the tweet's own quote and the one
+ * further post that quote itself quotes.
+ *
+ * A chain deeper than that exists on X, but it does not exist on a card — the
+ * card prints a quote's words and pictures, not a transcript of the chain behind
+ * it. The bound is stated here so the extraction stops where the rendering
+ * stops, rather than recursing until a hand-edited DOM runs out.
  */
-function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
-  const quoteBox = findQuoteContainer(article);
+const QUOTE_LEVELS = 2;
+
+/**
+ * True when `el` lives inside `scope` but not inside a nested quote *within*
+ * `scope`.
+ *
+ * This is what keeps one quote level's own fields its own. X renders a quoted
+ * post's own identity, body, media and permalink in the same box as the quote it
+ * carries, so every `querySelector` on the box would otherwise answer about the
+ * deeper post — and the measured shapes prove it matters: a bodyless outer quote
+ * (quoting a picture-only post) takes the inner quote's words as its own, and
+ * the inner quote's picture lands in the outer's media list.
+ */
+function isOwnedBy(el: Element | null | undefined, scope: Element): boolean {
+  if (!el) return false;
+  if (el === scope) return false;
+  if (!scope.contains(el)) return false;
+  const nested = findQuoteContainer(scope);
+  if (!nested) return true;
+  return !(nested === el || nested.contains(el));
+}
+
+/** True when `el` sits in the quote nested inside `scope`, not in `scope` itself. */
+function isInsideQuoteOf(el: Element, scope: Element): boolean {
+  const nested = findQuoteContainer(scope);
+  if (!nested) return false;
+  return nested === el || nested.contains(el);
+}
+
+/**
+ * The post's own permalink from an href, or undefined.
+ *
+ * X links the quoted post by its status URL; the preview shape may carry only a
+ * link to one of its media (`…/status/<id>/photo/1`), which is a picture inside
+ * the post rather than the post. The status segment is therefore taken and the
+ * rest of the path dropped, so the card links to the post every time. A href
+ * with no status segment yields nothing: without it there is no permalink, and
+ * inventing one from a profile link would point at the account instead.
+ */
+function statusPermalink(href: string): string | undefined {
+  if (!href) return undefined;
+  const match = /^https?:\/\/[^/]+(\/.*)$/.exec(href);
+  const path = match ? match[1] : href;
+  const status = /\/status\/(\d+)/.exec(path);
+  if (!status) return undefined;
+  return `https://x.com${path.slice(0, status.index + status[0].length)}`;
+}
+
+/**
+ * Extracts one Quote Tweet level (author, text, media, timestamp) and the quote
+ * it carries, when it carries one.
+ *
+ * The nesting is read by the same finder the top level uses, seeded with the box
+ * being read and forbidden from selecting it: that is what makes the levels
+ * distinct rather than one box reported twice.
+ */
+function extractQuoteTweet(
+  article: Element,
+  exclude: Element | null | undefined,
+  depth: number = 1
+): QuoteTweetData | undefined {
+  const quoteBox = findQuoteContainer(article, exclude);
 
   if (!quoteBox) return undefined;
 
@@ -1018,29 +1105,66 @@ function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
   }
 
   // Author (scoped to the quote box so the main author never leaks in)
-  const quoteUser = quoteBox.querySelector('div[data-testid="User-Name"]');
-  const quoteAuthor = extractAuthorFrom(quoteUser, quoteBox);
+  const quoteUser = Array.from(quoteBox.querySelectorAll('div[data-testid="User-Name"]')).find(
+    (candidate) => isOwnedBy(candidate, quoteBox)
+  );
+  const quoteAuthor = extractAuthorFrom(quoteUser ?? null, quoteBox);
 
-  // Text
-  const textEl = quoteBox.querySelector('div[data-testid="tweetText"]');
+  // Text. The bodyless outer quote is the case the ownership rule is for: the
+  // first tweetText in the box belongs to the inner quote, and reading it here
+  // printed a stranger's words as this quote's own.
+  const textEl = Array.from(quoteBox.querySelectorAll('div[data-testid="tweetText"]')).find(
+    (candidate) => isOwnedBy(candidate, quoteBox)
+  );
   const text = textEl ? cleanTweetText(textEl, isShowMoreMarker) : '';
   const quoteRichTokens = textEl ? extractRichTokens(textEl) : [];
 
-  // Permalink to the quoted post
-  const quoteStatusLink = quoteBox.querySelector('a[href*="/status/"]');
-  const quoteHref = quoteStatusLink?.getAttribute('href') || '';
-  const quoteUrl = quoteHref
-    ? (quoteHref.startsWith('http') ? quoteHref : `https://x.com${quoteHref}`)
-    : undefined;
+  // Permalink to the quoted post. A previewed quote may carry only a link to
+  // the post's media (`…/photo/1`) rather than to the post itself, so the
+  // status segment is taken from the href and the rest of the path dropped:
+  // the URL the card links to is the post, not one picture inside it.
+  const quoteStatusLink = Array.from(quoteBox.querySelectorAll('a[href*="/status/"]')).find(
+    (candidate) => isOwnedBy(candidate, quoteBox)
+  );
+  const quoteUrl = statusPermalink(quoteStatusLink?.getAttribute('href') || '');
 
   // Timestamp
-  const timeEl = quoteBox.querySelector('time');
+  const timeEl = Array.from(quoteBox.querySelectorAll('time')).find(
+    (candidate) => isOwnedBy(candidate, quoteBox)
+  );
   const timestamp = timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '';
 
   // Media: photos plus any video/GIF, with the video's own poster frame merged
   // away exactly as for the main tweet. Without this the quoted poster rendered
   // twice: once as a photo and again as the video item with its play badge.
-  const media = collectPhotoAndVideoMedia(quoteBox, (img) => !isMediaPosterLayer(img));
+  //
+  // The nested quote's own media is filtered out here, so this level's list
+  // holds only what the quoted post itself attached. The deeper quote is only
+  // read while the card would print it.
+  const nested = depth < QUOTE_LEVELS && findQuoteContainer(quoteBox, quoteBox)
+    ? extractQuoteTweet(quoteBox, quoteBox, depth + 1)
+    : undefined;
+  const media = collectPhotoAndVideoMedia(quoteBox, (img) =>
+    !isMediaPosterLayer(img) && !isInsideQuoteOf(img, quoteBox)
+  );
+
+  // X's preview shape marks a quoted post's own media with its own testid
+  // instead of the `tweetPhoto` wrapper the photo pass scans, so a quote read
+  // from that shape had no media at all. The picture is a 120px thumbnail X
+  // clips beside the clamped body — it is the asset X itself renders, so it is
+  // what gets mounted.
+  const previewMedia = Array.from(quoteBox.querySelectorAll(`${NESTED_QUOTE_PREVIEW_MEDIA} img`));
+  for (const img of previewMedia) {
+    if (isInsideQuoteOf(img, quoteBox)) continue;
+    const src = (img.getAttribute('src') || '').replace(/&amp;/g, '&').trim();
+    if (!src || src.includes('profile_images') || src.includes('/emoji/')) continue;
+    media.push({
+      type: 'image',
+      url: upgradePhotoUrl(src),
+      originalUrl: src,
+      alt: img.getAttribute('alt') || undefined,
+    });
+  }
 
   // Quoted post may itself only carry an external link card.
   if (media.length === 0) {
@@ -1063,6 +1187,7 @@ function extractQuoteTweet(article: Element): QuoteTweetData | undefined {
     timestamp,
     url: quoteUrl,
     media: media.length > 0 ? media : undefined,
+    quotePost: nested,
   };
 }
 
@@ -1113,13 +1238,24 @@ function extractTweetStats(article: Element): TweetStats | undefined {
   return stats;
 }
 
+/**
+ * The main post's own status link, never one belonging to a quoted post.
+ *
+ * Every level of a quote chain carries a `/status/` link, and a quoted post's
+ * link can come first in document order — in the preview shape the deepest
+ * level's is the only one in the whole box. Matching by the `quoteTweet` testid
+ * alone is what left that shape reading a stranger's URL as the main tweet's;
+ * the testid is absent from it entirely. So the boundary is the resolved quote
+ * container, the same one the media and stats passes already draw.
+ */
 function findTweetStatusLink(article: Element): Element | null {
+  const quote = findQuoteContainer(article);
   const links = article.querySelectorAll('a[href*="/status/"]');
   for (let i = 0; i < links.length; i++) {
     const link = links[i];
-    if (!link.closest?.('[data-testid="quoteTweet"]')) {
-      return link;
-    }
+    if (quote && (quote === link || quote.contains(link))) continue;
+    if (link.closest?.('[data-testid="quoteTweet"]')) continue;
+    return link;
   }
   return null;
 }
@@ -1251,7 +1387,7 @@ export function extractTweetData(article: Element): TweetData | null {
   const timestamp = extractTimestamp(article);
   const stats = extractTweetStats(article);
   const media = extractTweetMedia(article);
-  const quotePost = extractQuoteTweet(article);
+  const quotePost = extractQuoteTweet(article, null);
   const retweetedBy = getRetweetedBy(article);
   const translatedFrom = validTextEl ? extractTranslationNotice(validTextEl) : undefined;
   // X showed a preview with its "Show more" control; the rest of the body is not

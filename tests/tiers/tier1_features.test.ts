@@ -954,6 +954,180 @@ test('F13.5: detects deleted or unavailable quote tweet placeholders', () => {
 });
 
 // -------------------------------------------------------------
+// F13b: Nested quote tweets (a quote inside a quote)
+// -------------------------------------------------------------
+test('F13.6: a quote inside a quote renders as a second, nested quote panel', async () => {
+  // The card is the only thing that can answer what a nested quote renders as,
+  // so this goes through it. Before the nesting was modelled, the inner post was
+  // rendered as part of the outer quote — its words and picture attributed to
+  // the wrong author — or dropped.
+  const html = await renderCard({
+    data: {
+      id: '91001',
+      url: 'https://x.com/gkev1n/status/91001',
+      author: { name: 'gKev1n', handle: '@gKev1n' },
+      text: '这把赚大发了',
+      timestamp: '2026-10-14T04:29:00.000Z',
+      quotePost: {
+        author: { name: 'Devin Developers', handle: '@devindevelopers' },
+        text: 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。',
+        quotePost: {
+          author: { name: 'Cognition', handle: '@cognition' },
+          text: 'Gemini 4 Argon is now available in Devin Desktop and CLI.',
+          media: [{ type: 'image', url: 'https://pbs.twimg.com/media/chart.png' }],
+        },
+      },
+    } satisfies TweetData,
+  });
+
+  const panels = [...html.matchAll(/<div class="quote-card" data-quote-depth="(\d)"/g)].map((m) => m[1]);
+  assert.deepEqual(panels, ['1', '2'], 'both quote levels are rendered, nested and in order');
+
+  // The inner post's own byline and body print, and its picture is mounted.
+  assert.ok(html.includes('>Cognition<'), 'the inner author name is on the card');
+  assert.ok(html.includes('@cognition'), 'the inner handle is on the card');
+  assert.ok(
+    html.includes('Gemini 4 Argon is now available in Devin Desktop and CLI.'),
+    'the inner body is on the card'
+  );
+  // The inner picture belongs to the inner panel. Asserting the URL appears
+  // somewhere is not enough — the outer level could carry a picture of its own
+  // and satisfy it — so the grid is counted inside the deepest panel.
+  const innerPanel = html.slice(html.indexOf('data-quote-depth="2"'));
+  assert.ok(
+    /class="media-grid/.test(innerPanel),
+    'the deepest post mounts its own media grid, not just a url somewhere on the card'
+  );
+});
+
+test('F13.6b: the real extractor carries the deepest quote’s media to the card', () => {
+  // The reported bug. The nesting was modelled and the DOM fixture for the
+  // render test had no picture at all, so the deepest level's media was never
+  // exercised on either side of the seam — the extraction always produced it
+  // and the card simply had nothing to draw. This drives the real extractor
+  // and then the real card, so a drop at either end fails here.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/gkev1n"><span>gKev1n</span></a></div>
+      <div data-testid="tweetText"><span>outer words</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/devin"><span>Devin Developers</span></a></div>
+        <div data-testid="tweetText"><span>middle words</span></div>
+        <div data-testid="quoteTweet">
+          <div data-testid="User-Name"><a href="/cognition"><span>Cognition</span></a></div>
+          <div data-testid="tweetText"><span>inner words</span></div>
+          <div data-testid="tweetPhoto">
+            <img src="https://pbs.twimg.com/media/deepest.png?format=png&name=small" alt="chart">
+          </div>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const data = extractTweetData(article)!;
+  const deepest = data.quotePost?.quotePost;
+  assert.ok(deepest?.media?.length, 'the extractor must carry the deepest quote\'s own media');
+
+  // And the card must draw it inside the deepest panel, which is the half the
+  // render-only test could not see.
+  return renderCard({ data }).then((html) => {
+    const innerPanel = html.slice(html.indexOf('data-quote-depth="2"'));
+    assert.ok(
+      innerPanel.includes('deepest.png'),
+      'the deepest post\'s picture must be mounted inside the deepest panel'
+    );
+  });
+});
+
+test('F13.7: the top quote of a chain renders alone when it carries no further quote', async () => {
+  const html = await renderCard({
+    data: {
+      id: '91002',
+      url: 'https://x.com/gkev1n/status/91002',
+      author: { name: 'gKev1n', handle: '@gKev1n' },
+      text: 'plain quote',
+      timestamp: '2026-10-14T04:29:00.000Z',
+      quotePost: {
+        author: { name: 'Devin Developers', handle: '@devindevelopers' },
+        text: 'Gemini 4 Argon is now available.',
+      },
+    } satisfies TweetData,
+  });
+
+  const panels = [...html.matchAll(/<div class="quote-card" data-quote-depth="(\d)"/g)].map((m) => m[1]);
+  assert.deepEqual(panels, ['1'], 'a plain quote still renders exactly one panel');
+});
+
+test('F13.8: the nested quote panel steps down in surface, indent and type', () => {
+  // The regression guard for "层级不够明显". Two levels printed the same panel:
+  // the CSS redefined `--quote-bg` on the nested element, which is a custom
+  // property reading itself — a cycle, invalid at computed-value time — so the
+  // panel fell back to a near-transparent wash, and neither indent nor type
+  // separated the two. All three steps are asserted on the rule itself.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const at = css.indexOf('.quote-card[data-quote-depth="2"] {');
+  assert.ok(at > 0, 'the nested panel must carry its own rule');
+  const block = css.slice(at, css.indexOf('}', at)).replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // A cycle in a custom property is not a fallback: the declaration is dropped
+  // and the element silently renders without the background. So the mix must be
+  // written as a value the element owns, never as `--quote-bg` redefined here.
+  assert.ok(
+    !/--quote-bg\s*:/.test(block),
+    'the nested panel must not redefine --quote-bg: a property that reads itself is invalid at computed-value time'
+  );
+  assert.ok(/background\s*:\s*color-mix\(/.test(block), 'the nested panel owns its background');
+  assert.ok(block.includes('var(--surface)'), 'mixed toward the sheet, so every material recedes the same way');
+  assert.ok(!block.includes('var(--quote-border)\n') || block.includes('border-color'), 'the rule states its own border step');
+
+  // Each step has to be a real step, or the two panels still read as one.
+  const px = (name: string): number => {
+    const m = block.match(new RegExp(`${name}\\s*:\\s*(\\d+(?:\\.\\d+)?)px`));
+    return m ? Number(m[1]) : 0;
+  };
+  assert.ok(px('margin-inline-start') >= 8, `the nested panel is indented (${px('margin-inline-start')}px)`);
+  assert.ok(px('padding-left') < 14, 'and its padding steps down with it');
+  // The step is a calc against the material's own quote size, so it holds on
+  // every material rather than only where the two happen to differ by 1px.
+  // The inner `(`…`)` of the var() default means the expression cannot be read
+  // with a bracket-free character class, so the test allows one nesting level.
+  const nameRule = css.slice(css.indexOf('.quote-card[data-quote-depth="2"] .quote-name'));
+  assert.ok(
+    /font-size\s*:\s*calc\(.+\)/.test(nameRule.slice(0, nameRule.indexOf('}'))) &&
+      /calc\(.+\s-\s[\d.]+px\)/.test(nameRule.slice(0, nameRule.indexOf('}'))),
+    'the nested byline is set a step smaller'
+  );
+  const avatarBlock = css.slice(css.indexOf('.quote-card[data-quote-depth="2"] .quote-avatar'));
+  assert.ok(/width\s*:\s*16px/.test(avatarBlock.slice(0, avatarBlock.indexOf('}'))), 'and its avatar shrinks with it');
+});
+
+test('F13.9: both quote levels reach the card, each carrying its own depth', async () => {
+  const html = await renderCard({
+    data: {
+      id: '91003',
+      url: 'https://x.com/gkev1n/status/91003',
+      author: { name: 'gKev1n', handle: '@gKev1n' },
+      text: 'outer words',
+      timestamp: '2026-10-14T04:29:00.000Z',
+      quotePost: {
+        author: { name: 'Devin Developers', handle: '@devindevelopers' },
+        text: 'middle words',
+        quotePost: {
+          author: { name: 'Cognition', handle: '@cognition' },
+          text: 'inner words',
+        },
+      },
+    } satisfies TweetData,
+  });
+
+  assert.ok(html.includes('data-quote-depth="1"'), 'the outer quote panel is rendered');
+  assert.ok(html.includes('data-quote-depth="2"'), 'and so is the one it quotes');
+  // The depth attribute is what the stylesheet steps on, so a panel without it
+  // is a panel with no hierarchy.
+  assert.ok(!/data-quote-depth="3"/.test(html), 'a third level is not rendered: the card prints two');
+});
+
+// -------------------------------------------------------------
 // F14: Continuous Thread Connector
 // -------------------------------------------------------------
 test('F14.1: extracts multi-tweet continuous chain by same author', () => {

@@ -6,7 +6,7 @@
  * translations, and continuous DOM timeline fallback scraping.
  */
 
-import type { ThreadData, TweetData } from '../../types/tweet.ts';
+import type { ThreadData, TweetData, QuoteTweetData } from '../../types/tweet.ts';
 import { extractContinuousThread, TWEET_ARTICLE_SELECTOR } from './thread.ts';
 import { extractTweetData, extractTweetId } from './extractor.ts';
 import { lookupFromGraphQL, applyDomTranslation, initGraphQLBridge } from '../graphql/bridge.ts';
@@ -19,11 +19,44 @@ export interface ResolveThreadOptions {
 }
 
 /**
+ * Backfills quote levels GraphQL did not carry with what the DOM rendered.
+ *
+ * X's `TweetDetail` payload nests one `quoted_status_result` but, for a quote
+ * of a quote, the inner level carries no further `quoted_status_result` of its
+ * own — the chain stops at depth 1 with no error. The rendered DOM does carry
+ * it (`nestedQuotePreview` + `nestedQuotePreviewMedia`), so a GraphQL hit used
+ * verbatim drops the deepest post and its picture from the card.
+ *
+ * GraphQL stays authoritative wherever it answered: author, body, timestamp
+ * and URL are never overwritten. Only what it left absent is taken from the
+ * DOM — a missing deeper level, missing media, or a missing permalink. Text is
+ * deliberately not merged: the DOM copy may be a truncated preview while
+ * GraphQL holds the full body.
+ */
+function backfillNestedQuote(
+  graphqlQuote: QuoteTweetData | undefined,
+  domQuote: QuoteTweetData | undefined
+): QuoteTweetData | undefined {
+  if (!graphqlQuote) return domQuote;
+  if (!domQuote) return graphqlQuote;
+  const nested = backfillNestedQuote(graphqlQuote.quotePost, domQuote.quotePost);
+  const media = graphqlQuote.media && graphqlQuote.media.length > 0 ? graphqlQuote.media : domQuote.media;
+  return {
+    ...graphqlQuote,
+    media,
+    url: graphqlQuote.url ?? domQuote.url,
+    timestamp: graphqlQuote.timestamp || domQuote.timestamp,
+    quotePost: nested ?? graphqlQuote.quotePost ?? domQuote.quotePost,
+  };
+}
+
+/**
  * Resolves thread data given an article element, tweet ID, or status URL.
  *
  * 1. Checks GraphQL cache (authoritative for conversation tree, entity structure, media ratios).
  * 2. If GraphQL hits:
  *    - Applies client-side translation if present on the target element.
+ *    - Backfills nested-quote levels the payload truncated but the DOM rendered.
  *    - Tags diagnostics with source: 'graphql', queryId, operationName.
  *    - Short-circuits without doing expensive continuous DOM timeline traversal.
  * 3. If GraphQL misses or is unavailable:
@@ -75,17 +108,29 @@ export function resolveThread(
       // Client-side translation only exists in the rendered DOM.
       // If an article element is present, fold in its translation
       // without doing expensive full-timeline thread traversal.
+      // A single-article extract is cheap; the traversal below is not.
       if (articleElement) {
         try {
           const domTweet = extractTweetData(articleElement);
-          if (domTweet && domTweet.translatedFrom) {
-            const domWrapper: ThreadData = {
-              author: domTweet.author,
-              tweets: [domTweet],
-              isSingle: true,
-              targetTweetIndex: 0,
-            };
-            applyDomTranslation(thread, domWrapper);
+          if (domTweet) {
+            if (domTweet.translatedFrom) {
+              const domWrapper: ThreadData = {
+                author: domTweet.author,
+                tweets: [domTweet],
+                isSingle: true,
+                targetTweetIndex: 0,
+              };
+              applyDomTranslation(thread, domWrapper);
+            }
+            // The payload truncates a quote-of-a-quote at depth 1 while the
+            // DOM renders both levels; adopt the DOM's deeper levels so the
+            // card does not lose the innermost post and its picture.
+            const target =
+              thread.tweets.find((tweet) => tweet.id === domTweet.id) ??
+              thread.tweets[thread.targetTweetIndex ?? 0];
+            if (target) {
+              target.quotePost = backfillNestedQuote(target.quotePost, domTweet.quotePost);
+            }
           }
         } catch {
           // Translation fold failures should never drop the authoritative GraphQL result

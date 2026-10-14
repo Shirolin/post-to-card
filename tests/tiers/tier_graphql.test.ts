@@ -26,6 +26,7 @@ import {
   TWEET_DETAIL_MEDIA_WITH_LINK_JSON,
   HOME_TIMELINE_SELF_THREAD_JSON,
   TWEET_DETAIL_CARD_JSON,
+  TWEET_DETAIL_NESTED_QUOTE_JSON,
 } from '../fixtures/graphql.ts';
 
 export interface TestResult {
@@ -502,6 +503,32 @@ test('gql.28: external link card (summary_large_image) preview image is extracte
   assert.match(media.url, /name=orig/, 'must request highest available resolution');
   assert.equal(media.aspectRatio, 1.778, 'aspect ratio must be computed from card image dimensions');
   assert.equal(media.alt, "Review: Dragon's Dogma 2 On Switch 2");
+});
+
+test('gql.29: a quote of a quote is read as a second, nested level', () => {
+  // Both channels carry the nesting; this one used to drop it, so the inner
+  // author, body and media were missing from the card entirely.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_NESTED_QUOTE_JSON, 'TweetDetail', 'q1');
+  const quote = parsed.thread?.tweets[0].quotePost;
+  assert.ok(quote, 'expected a quote');
+  assert.equal(quote!.text, 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。');
+
+  const inner = quote!.quotePost;
+  assert.ok(inner, 'the inner quote must survive as its own level');
+  assert.equal(inner!.author.handle, '@cognition');
+  assert.equal(inner!.text, 'Gemini 4 Argon is now available in Devin Desktop and CLI.');
+  assert.ok(inner!.media && inner!.media.length === 1, 'the inner quote keeps its own media');
+  assert.equal(inner!.media![0].aspectRatio, 2, 'the inner media keeps its shape');
+  // The outer quote's own media list stays its own: the inner picture is not
+  // attributed to it, which is the failure the DOM channel had.
+  assert.equal(quote!.media, undefined, "the inner quote's media is not the outer quote's");
+});
+
+test('gql.30: a chain deeper than the card prints is not extracted', () => {
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_NESTED_QUOTE_JSON, 'TweetDetail', 'q1');
+  const inner = parsed.thread?.tweets[0].quotePost?.quotePost;
+  assert.ok(inner, 'two levels are read');
+  assert.equal(inner!.quotePost, undefined, 'and the third is not: the card prints two');
 });
 
 export async function runTierGraphQL(): Promise<{

@@ -194,6 +194,157 @@ export const TWEET_DETAIL_QUOTE_JSON = JSON.stringify({
   }
 });
 
+/** A tweet quoting a post that itself quotes a third. */
+export const TWEET_DETAIL_NESTED_QUOTE_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-4001',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '4001',
+                      core: {
+                        user_results: {
+                          result: {
+                            legacy: { screen_name: 'gkev1n', name: 'gKev1n' },
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/1/gkev.jpg'
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: '这把赚大发了',
+                        created_at: 'Mon Dec 22 19:20:00 +0000 2025'
+                      },
+                      quoted_status_result: {
+                        result: {
+                          __typename: 'Tweet',
+                          rest_id: '4002',
+                          core: {
+                            user_results: {
+                              result: {
+                                legacy: { screen_name: 'devindevelopers', name: 'Devin Developers' },
+                                profile_image_url_https: 'https://pbs.twimg.com/profile_images/2/devin.jpg'
+                              }
+                            }
+                          },
+                          legacy: {
+                            full_text: 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。',
+                            created_at: 'Mon Dec 22 19:00:00 +0000 2025'
+                          },
+                          quoted_status_result: {
+                            result: {
+                              __typename: 'Tweet',
+                              rest_id: '4003',
+                              core: {
+                                user_results: {
+                                  result: {
+                                    legacy: { screen_name: 'cognition', name: 'Cognition' },
+                                    profile_image_url_https: 'https://pbs.twimg.com/profile_images/3/cog.jpg'
+                                  }
+                                }
+                              },
+                              legacy: {
+                                full_text: 'Gemini 4 Argon is now available in Devin Desktop and CLI.',
+                                created_at: 'Mon Dec 22 18:00:00 +0000 2025',
+                                extended_entities: {
+                                  media: [{
+                                    type: 'photo',
+                                    media_url_https: 'https://pbs.twimg.com/media/chart.png',
+                                    original_info: { width: 800, height: 400 }
+                                  }]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});
+
+/** A tweet whose quote chain the payload truncates at depth 1.
+ *
+ * Mirrors the real `TweetDetail` shape for a quote of a quote: the outer
+ * `quoted_status_result` carries no further `quoted_status_result` of its own,
+ * so the parser cannot produce the innermost level. The DOM still renders it
+ * (`NESTED_QUOTE_PREVIEW_HTML`), which is what the resolver backfill is for.
+ */
+export const TWEET_DETAIL_SHALLOW_QUOTE_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-2110105649778700290',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '2110105649778700290',
+                      core: {
+                        user_results: {
+                          result: {
+                            legacy: { screen_name: 'GKev1n', name: 'gKev1n' },
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/1/gkev.jpg'
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: '这把赚大发了',
+                        created_at: 'Tue Oct 14 04:29:25 +0000 2026'
+                      },
+                      quoted_status_result: {
+                        result: {
+                          __typename: 'Tweet',
+                          rest_id: '2110043905010053185',
+                          core: {
+                            user_results: {
+                              result: {
+                                legacy: { screen_name: 'devindevelopers', name: 'Devin Developers' },
+                                profile_image_url_https: 'https://pbs.twimg.com/profile_images/2/devin.jpg'
+                              }
+                            }
+                          },
+                          legacy: {
+                            full_text: 'Gemini 4 Argon is now available in Devin Desktop and CLI.',
+                            created_at: 'Tue Oct 14 00:24:04 +0000 2026',
+                            is_quote_status: true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});
 /** A retweet: the visible body belongs to the nested original. */
 export const TWEET_DETAIL_RETWEET_JSON = JSON.stringify({
   data: {

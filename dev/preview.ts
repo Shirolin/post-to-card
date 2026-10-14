@@ -347,6 +347,52 @@ const truncatedThreadData: ThreadData = {
   ],
 };
 
+/**
+ * A post quoting a post that itself quotes a third — the reported case.
+ *
+ * Mirrors the real one: the outer quote carries a short bilingual body, the
+ * inner carries a longer multi-paragraph English body. Exists so the nested
+ * panel's depth can be reviewed on its own (?nested=1), which is the only place
+ * the two-level hierarchy is visible: the test DOM has no layout engine, so
+ * `color-mix` and indentation cannot be judged there.
+ *
+ * The inner quote deliberately has no avatar-independent marker of its own: it
+ * must read as a deeper level from surface and spacing alone.
+ */
+const nestedQuoteThreadData: ThreadData = {
+  author: { name: 'gKev1n', handle: '@GKev1n', avatarUrl: avatar, verified: true },
+  isSingle: true,
+  targetTweetIndex: 0,
+  tweets: [
+    {
+      id: '9001',
+      url: 'https://x.com/GKev1n/status/9001',
+      author: { name: 'gKev1n', handle: '@GKev1n', avatarUrl: avatar, verified: true },
+      timestamp: '2026-10-14T04:29:00.000Z',
+      text: '这把赚大发了，开通 Devin 的有福了！Gemini 4 Argon 目前多了一种访问方式，第一种，开通 Google AI Ultra，99$。第二种，开通 Devin，20$。\n\n还好这几天用 Devin 调用 Opus 5.5 省着点用了，哈哈哈，剩下的可以试 Gemini Argon 了！',
+      stats: { replies: '4', reposts: '0', likes: '15', views: '3K' },
+      quotePost: {
+        author: { name: 'Devin Developers', handle: '@devindevelopers', avatarUrl: avatar, verified: true },
+        text: 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。',
+        timestamp: '2026-10-14T00:24:00.000Z',
+        url: 'https://x.com/devindevelopers/status/9002',
+        quotePost: {
+          author: { name: 'Cognition', handle: '@cognition', avatarUrl: avatar, verified: true },
+          text: 'Gemini 4 Argon is now available in Devin Desktop and CLI.\n\nOn FrontierCode 1.1, Gemini 4 Argon scores 60.5%, making it the highest performing Gemini model on the leaderboard.\n\nThrough October 27th it is available at 75% off for Devin users.',
+          timestamp: '2026-10-14T00:22:00.000Z',
+          url: 'https://x.com/cognition/status/9003',
+          // The deepest post's own picture. It used to be missing from the card
+          // because this fixture carried none, so nothing exercised it. Keep it:
+          // the automated tests lock the extraction and the rendering, but this
+          // fixture is the only way to *see* the deepest picture on a card, and
+          // a harness that cannot show the case is not a harness for it.
+          media: [{ type: 'image', url: photo1, aspectRatio: 1.6 }],
+        },
+      },
+    },
+  ],
+};
+
 const container = document.querySelector('post-to-card-container') as HTMLElement & {
   shadow: ShadowRoot;
   mountPoint: HTMLDivElement;
@@ -432,6 +478,7 @@ const gridThreadData = (count: 2 | 3 | 4): ThreadData => {
  */
 const FIXTURE_BY_PARAM: Record<string, ThreadData> = {
   quote: quoteThreadData,
+  nested: nestedQuoteThreadData,
   article: articleThreadData,
   translated: translatedThreadData,
   truncated: truncatedThreadData,

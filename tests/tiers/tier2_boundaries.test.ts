@@ -27,6 +27,7 @@ import {
 import { getTranslation } from '../../src/content/i18n.ts';
 import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
+import { NESTED_QUOTE_PREVIEW_HTML } from '../fixtures/nested-quote-preview.ts';
 import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
 import { RETWEET_HTML } from '../fixtures/retweet.ts';
 import { PINNED_HTML } from '../fixtures/pinned.ts';
@@ -1720,6 +1721,175 @@ test('Tier 2.77: Alt+C hands the tweet under the pointer to the card, and nothin
       controller.disconnect();
     }
   });
+});
+
+test('Tier 2.79: a quote of a quote is extracted as a second, nested quote', () => {
+  // The reported bug. A quoted post that itself quotes someone rendered as one
+  // flat level: the inner author, body and media were attributed to the outer
+  // quote, and the inner post vanished as a distinct entry.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/gkev1n"><span>gKev1n</span></a><a href="/gkev1n"><span>@gkev1n</span></a>
+        <a href="/gkev1n/status/100"><time datetime="2026-10-14T04:29:00.000Z">6h</time></a></div>
+      <div data-testid="tweetText"><span>这把赚大发了</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/devindevelopers"><span>Devin Developers</span></a><a href="/devindevelopers"><span>@devindevelopers</span></a>
+          <a href="/devindevelopers/status/200"><time datetime="2026-10-14T00:24:00.000Z">10h</time></a></div>
+        <div data-testid="tweetText"><span>Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。</span></div>
+        <div data-testid="quoteTweet">
+          <div data-testid="User-Name"><a href="/cognition"><span>Cognition</span></a><a href="/cognition"><span>@cognition</span></a>
+            <a href="/cognition/status/300"><time datetime="2026-10-14T00:20:00.000Z">10h</time></a></div>
+          <div data-testid="tweetText"><span>Gemini 4 Argon is now available in Devin Desktop and CLI.</span></div>
+          <div data-testid="tweetPhoto">
+            <img src="https://pbs.twimg.com/media/chart.png?format=png&name=small" alt="chart">
+          </div>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote, 'the outer quote must be extracted');
+  assert.equal(quote.author.handle, '@devindevelopers');
+  assert.equal(quote.text, 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。');
+
+  const inner = quote.quotePost;
+  assert.ok(inner, 'the inner quote must be extracted as a nested level, not folded into the outer');
+  assert.equal(inner.author.handle, '@cognition');
+  assert.equal(inner.text, 'Gemini 4 Argon is now available in Devin Desktop and CLI.');
+  assert.equal(inner.url, 'https://x.com/cognition/status/300');
+  assert.equal(inner.media?.length, 1, 'the inner quote keeps its own media');
+  assert.ok(inner.media![0].url.includes('chart.png'), 'the inner media is the chart, not anything of the outer\'s');
+
+  // The outer quote's own media list holds only its own pictures. Before the
+  // fix the inner chart was attributed to it.
+  assert.equal(quote.media, undefined, 'the inner quote\'s media must not be attributed to the outer quote');
+  assert.equal(
+    extractTweetData(article)?.media,
+    undefined,
+    'and none of it belongs to the main tweet either'
+  );
+});
+
+test('Tier 2.80: a bodyless outer quote keeps its own text empty instead of the inner quote\'s', () => {
+  // An outer quote of a picture-only post carries no tweetText of its own, so
+  // the first tweetText inside the box belongs to the inner quote. Reading it by
+  // document order printed the inner body as the outer's.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/outer"><span>Outer</span></a><a href="/outer"><span>@outer</span></a>
+          <a href="/outer/status/2"><time datetime="2026-10-14T00:20:00.000Z">10h</time></a></div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/media/outer.png?format=png&name=small" alt="pic">
+        </div>
+        <div data-testid="quoteTweet">
+          <div data-testid="User-Name"><a href="/inner"><span>Inner</span></a><a href="/inner"><span>@inner</span></a></div>
+          <div data-testid="tweetText"><span>inner words that must not be printed as the outer's</span></div>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote);
+  assert.equal(quote.text, '', 'the bodyless outer quote has no text of its own');
+  assert.equal(quote.media?.length, 1, 'its own picture is still its media');
+  assert.ok(quote.media![0].url.includes('outer.png'));
+  assert.equal(quote.quotePost?.text, 'inner words that must not be printed as the outer\'s');
+});
+
+test('Tier 2.81: a quote inside a quote is bounded, so a chain stays finite', () => {
+  // Guard against a cycle in a hand-edited DOM, and against a chain long enough
+  // to matter. The extraction must stop somewhere rather than recurse forever.
+  let html = `
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>`;
+  const depth = 8;
+  for (let i = 0; i < depth; i++) {
+    html += `
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/l${i}"><span>Level ${i}</span></a><a href="/l${i}"><span>@l${i}</span></a></div>`;
+  }
+  for (let i = depth - 1; i >= 0; i--) {
+    html += `
+        <div data-testid="tweetText"><span>level ${i} body</span></div>
+        </div>`;
+  }
+  html += `
+    </article>
+  `;
+
+  let current = extractTweetData(createDomElement(html))?.quotePost;
+  let levels = 0;
+  while (current) {
+    levels += 1;
+    current = current.quotePost;
+  }
+  assert.ok(levels >= 1, 'a quote chain must still yield its outer levels');
+  assert.ok(levels < depth, `a quote chain must be bounded, but ${levels} levels were extracted from a ${depth}-deep one`);
+});
+
+// -------------------------------------------------------------
+// Nested quotes in the shape X actually renders
+//
+// The `quoteTweet` fixtures above never appear for a quote inside a quote on a
+// real timeline: both levels are `role="link"` containers and the deepest is
+// `nestedQuotePreview`, whose media is its own testid. `NESTED_QUOTE_PREVIEW_HTML`
+// is that markup verbatim, so every assertion below is against what X sends.
+// -------------------------------------------------------------
+test('Tier 2.82: a nested quote in X’s preview shape yields both levels', () => {
+  // The article as the injection layer hands it over: the element the action
+  // bar's `closest(TWEET_ARTICLE_SELECTOR)` resolves to, which the browser probe
+  // confirmed is the `<article>` itself.
+  const data = extractTweetData(createDomElement(NESTED_QUOTE_PREVIEW_HTML));
+
+  assert.equal(data?.author.handle, '@GKev1n');
+  assert.equal(data?.author.verified, true, 'the main author keeps its badge');
+  assert.equal(data?.timestamp, '2026-10-13T20:29:25.000Z');
+  assert.deepEqual(data?.stats, { replies: '4', reposts: '1', likes: '16', bookmarks: '3', views: '6,638' });
+
+  const outer = data?.quotePost;
+  assert.ok(outer, 'the outer quote is found without a quoteTweet testid');
+  assert.equal(outer.author.handle, '@devindevelopers');
+  assert.equal(outer.author.verified, true, 'the outer quote keeps its own badge');
+  assert.equal(outer.text, 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。');
+  assert.equal(outer.timestamp, '2026-10-13T16:24:04.000Z');
+  assert.equal(outer.media, undefined, 'the outer quote carries no media of its own');
+
+  const inner = outer.quotePost;
+  assert.ok(inner, 'the deepest post is found as its own level');
+  assert.equal(inner.author.handle, '@cognition');
+  assert.equal(inner.author.verified, true);
+  assert.match(inner.text, /^Gemini 4 Argon is now available in Devin Desktop and CLI\./);
+  assert.equal(inner.timestamp, '2026-10-13T16:22:52.000Z');
+  assert.equal(data?.media, undefined, 'none of it belongs to the main tweet');
+});
+
+test('Tier 2.83: the previewed deepest post’s media is its own testid, and is read', () => {
+  // Why this test exists: the media lives in nestedQuotePreviewMedia, not the
+  // tweetPhoto the photo pass scans, so the deepest post's picture was absent.
+  const data = extractTweetData(createDomElement(NESTED_QUOTE_PREVIEW_HTML));
+
+  const inner = data?.quotePost?.quotePost;
+  assert.ok(inner?.media?.length, 'the previewed media must be read');
+  assert.match(inner!.media![0].originalUrl || '', /HUhftVoasAAzqss/);
+  assert.equal(inner!.media![0].type, 'image');
+  assert.equal(
+    data?.quotePost?.media,
+    undefined,
+    'the deepest picture belongs to the deepest level, not to the outer quote'
+  );
+});
+
+test('Tier 2.84: a preview permalink points at the post, not at one of its pictures', () => {
+  // The only link inside the preview is `/status/<id>/photo/1`; the card's
+  // timestamp links to the post, so the status segment is taken from it.
+  const url = extractTweetData(createDomElement(NESTED_QUOTE_PREVIEW_HTML))?.quotePost?.quotePost?.url;
+  assert.equal(url, 'https://x.com/cognition/status/2110043605528408110');
 });
 
 // -------------------------------------------------------------

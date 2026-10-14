@@ -402,6 +402,16 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
   );
 }
 
+/**
+ * How deep in the quote chain a rendered quote panel sits.
+ *
+ * Only the post's own quote and the one it in turn quotes are extracted and
+ * printed, so there are exactly two. It reaches the DOM as a data attribute so
+ * card.css can step the recess one level deeper per level — the component
+ * chooses the structure, the material chooses how it reads.
+ */
+type QuoteDepth = 1 | 2;
+
 function renderQuoteCard(
   quotePost: NonNullable<TweetData['quotePost']>,
   t: ReturnType<typeof getTranslation>,
@@ -409,7 +419,8 @@ function renderQuoteCard(
   aspectRatio: AspectRatioOption,
   mediaLayout: MediaLayoutOption,
   showPlayButton: boolean,
-  locale: Locale
+  locale: Locale,
+  depth: QuoteDepth = 1
 ) {
   const { author, text, richTokens, timestamp, url } = quotePost;
   const timestampText = timestamp ? formatLocaleTimestamp(timestamp, locale) : '';
@@ -423,7 +434,7 @@ function renderQuoteCard(
   }
 
   return (
-    <div class="quote-card">
+    <div class="quote-card" data-quote-depth={depth}>
       <div class="quote-author">
         <img
           src={author.avatarUrl || defaultAvatar}
@@ -462,6 +473,21 @@ function renderQuoteCard(
         <div class="quote-text">{renderTextWithParagraphBreaks(text, 'quote')}</div>
       ) : null}
       {renderMediaGrid(quotePost.media, t.photoAlt, imageFit, aspectRatio, mediaLayout, t.videoLabel, showPlayButton)}
+      {/* A quoted post can itself quote someone. That further post renders as
+          its own quote panel inside this one, so the chain reads as the nesting
+          it is rather than as one flat list of bodies. Two levels, no more: the
+          card prints a quote's words and pictures, not a transcript of the chain
+          behind it. */}
+      {quotePost.quotePost && renderQuoteCard(
+        quotePost.quotePost,
+        t,
+        imageFit,
+        aspectRatio,
+        mediaLayout,
+        showPlayButton,
+        locale,
+        2
+      )}
     </div>
   );
 }

@@ -411,7 +411,26 @@ function parseMedia(tweet: Json, hasArticle = false): MediaItem[] | undefined {
   return items.length > 0 ? items : undefined;
 }
 
-function parseQuote(tweet: Json): QuoteTweetData | undefined {
+/**
+ * How many quote levels the card prints: the tweet's own quote and the one
+ * further post that quote itself quotes.
+ *
+ * Stated once and shared by both data channels so they cannot disagree about
+ * where a chain stops — which is exactly how the nesting stayed broken in the
+ * first place: the DOM channel attributed one level of quote and the GraphQL
+ * channel dropped everything below its own, so neither matched the other.
+ */
+const QUOTE_LEVELS = 2;
+
+/**
+ * One quote level, plus the quote it carries.
+ *
+ * A quoted post is a full tweet, so it can itself quote: X nests the payload
+ * the same way. Reading only the first level was silent data loss — the inner
+ * author, body and media were absent from the card altogether, so this channel
+ * and the DOM channel disagreed about the same post.
+ */
+function parseQuote(tweet: Json, depth: number = 1): QuoteTweetData | undefined {
   const quotedUnion = isObject(tweet.quoted_status_result) ? tweet.quoted_status_result : undefined;
   const quoted = unwrapTweetUnion(quotedUnion?.result ?? quotedUnion);
   if (!quoted.tweet) return undefined;
@@ -427,6 +446,7 @@ function parseQuote(tweet: Json): QuoteTweetData | undefined {
     url: inner.rest_id
       ? `https://x.com/${parseAuthor(inner).handle.replace(/^@/, '')}/status/${inner.rest_id}`
       : undefined,
+    quotePost: depth < QUOTE_LEVELS ? parseQuote(inner, depth + 1) : undefined,
   };
 }
 

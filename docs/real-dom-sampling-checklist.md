@@ -16,6 +16,7 @@
 | 1 | **图 + GIF 并排** | 当前 bug：视频检测短路导致图片丢失 | ���（左侧截图 + 右侧 GIF） |
 | 2 | **纯图片（1~4 张）** | 基线，确认照片提取没被改坏 | 你截图里那个是混合，需另找一个纯图的 |
 | 3 | **引用推文** | 验证 `findQuoteContainer` 4 级 fallback + 媒体不串味 | ✅（红框「查看引用」那条） |
+| 3b | **嵌套引用（引用里的引用）** | 两级引用的容器形态**不同**：外层是 `role=link` 无 testid，内层是 `nestedQuotePreview`，媒体是 `nestedQuotePreviewMedia` 而非 `tweetPhoto` | ✅（2026-10-14，`observed-dom-2026-10-14-nested-quote.md`） |
 | 4 | **纯视频** | 确认修复合并后仍只返回 1 项 | 需另找 |
 | 5 | **推文串（≥3 条同作者）** | 验证 thread 边界判定 | 需另找 |
 

@@ -23,6 +23,17 @@ export interface TweetStats {
   bookmarks?: string;
 }
 
+/**
+ * A quoted post, as the card renders it: one author, one body, one media set —
+ * and, when the quoted post itself quotes someone, one further quote.
+ *
+ * The nesting is self-referential rather than a `QuoteChain` list: X renders the
+ * quoted post as a full tweet article, and that article may itself quote. A
+ * quoted post that quotes is still exactly one quote box, containing one further
+ * quote box, which is what this type says. The DOM finder proves the nesting by
+ * walking out of the current box, so the two shapes agree by construction rather
+ * than by both being maintained.
+ */
 export interface QuoteTweetData {
   author: AuthorInfo;
   text: string;
@@ -32,6 +43,15 @@ export interface QuoteTweetData {
   url?: string;
   /** Post was deleted, private, or otherwise not renderable. */
   isUnavailable?: boolean;
+  /**
+   * The post this quote itself quotes, when it does.
+   *
+   * Absent for a plain quote. Its presence is the whole point of the field: the
+   * extraction reads one level of quote and nothing deeper, because a card is
+   * read for the quote's own words and its media, not for a transcript of the
+   * chain behind it.
+   */
+  quotePost?: QuoteTweetData;
 }
 
 /**
@@ -66,6 +86,7 @@ export interface TweetData {
   timestamp: string; // ISO or formatted
   stats?: TweetStats;
   media?: MediaItem[];
+  /** A further quote this one quotes, extracted as its own level. */
   quotePost?: QuoteTweetData;
   article?: ArticleData;
   isThreadPart?: boolean;

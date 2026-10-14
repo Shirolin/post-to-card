@@ -1054,6 +1054,50 @@
   border-radius: var(--media-radius, 8px);
 }
 
+/* A quote inside a quote. X renders this chain, so the card draws it as the
+   nesting it is: a second panel one step deeper into the sheet, not the same
+   panel twice with no hierarchy between them.
+
+   The step is carried by three things, in order of how much each says:
+
+     indentation  the panel is set in from the outer one's left edge, so the two
+                  read as stacked surfaces rather than two paragraphs. This is
+                  the only cue an outlined material gets, because a fill on a
+                  ruled sheet is the smudge its `quoteStyle` refuses.
+     surface      one step nearer the sheet's own colour. Mixed toward `--surface`
+                  because that is the colour the recess is a recess *in*, and it
+                  is direction-agnostic: a light paper's deeper panel lightens
+                  and a dark one's darkens, and both read as further in. Mixed
+                  toward `--quote-border` instead would make the depth track a
+                  theme's decorative border colour — on Riso that is Klein blue,
+                  so the nested panel came out outlined in 45% accent.
+     type         the nested byline steps down and its avatar shrinks with it,
+                  so the deeper post's identity does not compete with the one
+                  the card is about.
+
+   The background is written as its own declaration, never by redefining
+   `--quote-bg` on this element. A custom property that reads itself is a cycle
+   and is invalid at computed-value time, which is not a fallback: the element
+   silently lost its background and both panels printed the same beige. */
+.quote-card[data-quote-depth="2"] {
+  background: color-mix(in srgb, var(--quote-bg) 55%, var(--surface));
+  border-color: color-mix(in srgb, var(--quote-border) 55%, var(--surface));
+  margin-inline-start: 14px;
+  padding: 9px 11px 10px;
+  gap: 5px;
+}
+
+/* One step of type as well, so the deeper byline does not shout over the
+   panel it sits in. The media inside keeps its own framing. */
+.quote-card[data-quote-depth="2"] .quote-name {
+  font-size: calc(var(--type-quote-size, 14.5px) - 1.5px);
+}
+
+.quote-card[data-quote-depth="2"] .quote-avatar {
+  width: 16px;
+  height: 16px;
+}
+
 /* -------------------------------------------------------------
    Long-form post (article)
 

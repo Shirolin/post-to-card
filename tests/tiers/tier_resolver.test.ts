@@ -14,7 +14,8 @@ import { createDomElement, DomDocument } from '../env/browser.ts';
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { initGraphQLBridge } from '../../src/content/graphql/bridge.ts';
 import { lookupReplyLink } from '../../src/content/graphql/bridge.ts';
-import { TWEET_DETAIL_THREAD_JSON, HOME_TIMELINE_SELF_THREAD_JSON, HOME_TIMELINE_UNLINKED_PAIR_JSON } from '../fixtures/graphql.ts';
+import { TWEET_DETAIL_THREAD_JSON, TWEET_DETAIL_SHALLOW_QUOTE_JSON, HOME_TIMELINE_SELF_THREAD_JSON, HOME_TIMELINE_UNLINKED_PAIR_JSON } from '../fixtures/graphql.ts';
+import { NESTED_QUOTE_PREVIEW_HTML } from '../fixtures/nested-quote-preview.ts';
 import { FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
 
 export interface TestResult {
@@ -456,6 +457,30 @@ test('res.11: on a status detail page, clicking reply B preserves all 4 GIFs on 
   assert.equal(replyTweet.id, '9002');
   assert.ok(replyTweet.media && replyTweet.media.length === 1, 'Reply post must retain its own media');
   assert.equal(replyTweet.media[0].type, 'image');
+});
+
+test('res.12: a GraphQL quote truncated at depth 1 is backfilled from the DOM', () => {
+  // Real `TweetDetail` shape for a quote of a quote: the outer
+  // `quoted_status_result` carries no deeper `quoted_status_result`, so the
+  // parser can only produce one level. The DOM still renders both
+  // (`nestedQuotePreview` + `nestedQuotePreviewMedia`), and the resolver must
+  // adopt the DOM's deeper levels instead of dropping the innermost post.
+  seedGraphQLCache(TWEET_DETAIL_SHALLOW_QUOTE_JSON, 'TweetDetail', 'q_shallow_quote');
+
+  const article = createDomElement(NESTED_QUOTE_PREVIEW_HTML);
+  const thread = resolveThread(article);
+  const target = thread.tweets[thread.targetTweetIndex ?? 0];
+
+  assert.equal(target.id, '2110105649778700290');
+  assert.equal(target.diagnostics?.source, 'graphql', 'GraphQL stays authoritative where it answered');
+  assert.equal(target.quotePost?.author.handle, '@devindevelopers');
+
+  const inner = target.quotePost?.quotePost;
+  assert.ok(inner, 'the DOM’s deeper level must survive the GraphQL hit');
+  assert.equal(inner!.author.handle, '@cognition');
+  assert.ok(inner!.text.includes('FrontierCode'), 'the innermost body comes along');
+  assert.ok(inner!.media && inner!.media.length === 1, 'and so does its picture');
+  assert.match(inner!.media![0].originalUrl || '', /HUhftVoasAAzqss/);
 });
 
 export async function runTierResolver(): Promise<{
