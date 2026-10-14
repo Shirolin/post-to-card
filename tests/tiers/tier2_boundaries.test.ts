@@ -1892,6 +1892,84 @@ test('Tier 2.84: a preview permalink points at the post, not at one of its pictu
   assert.equal(url, 'https://x.com/cognition/status/2110043605528408110');
 });
 
+test('Tier 2.84b: a preview permalink keeps the link’s own host', () => {
+  // `statusPermalink` must not rewrite the host: the card links where the
+  // author linked. A `twitter.com` media permalink stays on `twitter.com`.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+        <div data-testid="nestedQuotePreview">
+          <div data-testid="User-Name"><a href="/deep"><span>@deep</span></a></div>
+          <div data-testid="tweetText"><span>deep body</span></div>
+          <a href="https://twitter.com/deep/status/4242/photo/1" data-testid="nestedQuotePreviewMedia">
+            <img src="https://pbs.twimg.com/media/x.png" alt="">
+          </a>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const url = extractTweetData(article)?.quotePost?.quotePost?.url;
+  assert.equal(url, 'https://twitter.com/deep/status/4242');
+});
+
+test('Tier 2.85: a text-only nested preview still yields its own level', () => {
+  // The sampled preview always carried a picture, but a quoted text post
+  // renders the same container without the media link. The level must exist
+  // with body and identity even when there is nothing to mount.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div role="link" tabindex="0">
+        <div data-testid="User-Name"><a href="/outer"><span>Outer</span></a></div>
+        <div data-testid="tweetText"><span>outer body</span></div>
+        <div data-testid="nestedQuotePreview">
+          <div data-testid="User-Name"><a href="/inner"><span>Inner</span></a></div>
+          <div data-testid="tweetText"><span>inner words, no picture</span></div>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  const inner = data?.quotePost?.quotePost;
+  assert.ok(inner, 'the text-only inner quote is its own level');
+  assert.equal(inner!.author.handle, '@inner');
+  assert.equal(inner!.text, 'inner words, no picture');
+  assert.equal(inner!.media, undefined, 'no picture means no media, not a dropped level');
+  assert.equal(data?.quotePost?.text, 'outer body', 'the outer level keeps its own words');
+});
+
+test('Tier 2.86: the nested-preview fixture’s markup is balanced', () => {
+  // A hand-written fixture once carried one extra `</div>`, which collapsed the
+  // tree: the action bar vanished and two `<time>` elements with it, and the
+  // symptoms read exactly like an extractor bug. Count the tags so a future
+  // edit that unbalances the fixture fails here instead of misdirecting the
+  // next investigation.
+  const tagBalance = (html: string, tag: string): number => {
+    // Split-based counting: no regex escapes involved. `<div` also prefixes
+    // nothing else checked here (`<article` does not start `<a ` or `<a>`),
+    // and the fixture carries no self-closing div/a/span/article tags.
+    const opens =
+      html.split(`<${tag} `).length - 1 + (html.split(`<${tag}>`).length - 1);
+    const closes = html.split(`</${tag}>`).length - 1;
+    return opens - closes;
+  };
+
+  for (const tag of ['div', 'a', 'span', 'article']) {
+    assert.equal(
+      tagBalance(NESTED_QUOTE_PREVIEW_HTML, tag),
+      0,
+      `<${tag}> opens must match closes in the nested-preview fixture`
+    );
+  }
+});
+
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 2
 // -------------------------------------------------------------

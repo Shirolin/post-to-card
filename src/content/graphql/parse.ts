@@ -11,6 +11,7 @@
  */
 
 import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
+import { QUOTE_LEVELS } from '../../types/tweet.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../adapter/urls.ts';
 import { isArticlePermalink, stripTrailingArticleToken } from '../adapter/emojis.ts';
 import type { ReplyLink } from './bridge.ts';
@@ -410,17 +411,6 @@ function parseMedia(tweet: Json, hasArticle = false): MediaItem[] | undefined {
 
   return items.length > 0 ? items : undefined;
 }
-
-/**
- * How many quote levels the card prints: the tweet's own quote and the one
- * further post that quote itself quotes.
- *
- * Stated once and shared by both data channels so they cannot disagree about
- * where a chain stops — which is exactly how the nesting stayed broken in the
- * first place: the DOM channel attributed one level of quote and the GraphQL
- * channel dropped everything below its own, so neither matched the other.
- */
-const QUOTE_LEVELS = 2;
 
 /**
  * One quote level, plus the quote it carries.

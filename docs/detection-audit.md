@@ -83,13 +83,13 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 ## 社区确认可依赖的信号
 
 - `article[data-testid="tweet"]`、`tweetText`、`tweetPhoto`、`videoPlayer`
-- `div[data-testid="quoteTweet"]` —— **只对 outermost 一级成立**。2026-10-14 实测
-  （`observed-dom-2026-10-14-nested-quote.md`）：两级嵌套引用里一个 `quoteTweet`
-  都没有，外层引用是 `role=link` 无 testid 容器，内层是 `nestedQuotePreview`。
-  嵌套场景靠 `findQuoteContainer` 第 2/3 级回退（嵌套 `<article>` 或第二个
-  `User-Name` + `tweetText`），本轮确认回退仍然有效。
-- `div[data-testid="nestedQuotePreview"]` —— **2026-10-14 新增**：嵌套引用的容器标记
-- `a[data-testid="nestedQuotePreviewMedia"]` —— **2026-10-14 新增**：嵌套引用自己的
+- `div[data-testid="quoteTweet"]` —— 本轮观察只在 outermost 一级出现。2026-10-14
+  样本（`observed-dom-2026-10-14-nested-quote.md`）的两级嵌套引用里一个 `quoteTweet`
+  都没有：外层引用是 `role=link` 无 testid 容器，内层是 `nestedQuotePreview`。
+  该样本下嵌套定位走 `findQuoteContainer` 第 2/3 级回退；`nestedQuotePreview`
+  另有显式分支（见该函数 1b 级），外层无 testid 容器仍走结构回退。
+- `div[data-testid="nestedQuotePreview"]` —— **2026-10-14 新增**：本轮样本中嵌套引用的容器标记
+- `a[data-testid="nestedQuotePreviewMedia"]` —— **2026-10-14 新增**：本轮样本中嵌套引用自己的
   媒体，不在 `tweetPhoto` 里，所以照片扫描通道看不到它
 - `div[data-testid="socialContext"]` —— 承载「转发/置顶/回复」**容器**，容器名稳定、内部文字不稳定
   - **2026-10-10 实测修正**：详情页会话区里这个容器**不存在**（35 条推文 0 个），

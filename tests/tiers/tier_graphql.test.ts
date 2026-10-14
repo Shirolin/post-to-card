@@ -525,6 +525,8 @@ test('gql.29: a quote of a quote is read as a second, nested level', () => {
 });
 
 test('gql.30: a chain deeper than the card prints is not extracted', () => {
+  // The two-level bound is the card's print decision (`QUOTE_LEVELS`), not a
+  // claim about X: no chain deeper than two has been sampled.
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_NESTED_QUOTE_JSON, 'TweetDetail', 'q1');
   const inner = parsed.thread?.tweets[0].quotePost?.quotePost;
   assert.ok(inner, 'two levels are read');

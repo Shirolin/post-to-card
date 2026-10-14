@@ -24,6 +24,22 @@ export interface TweetStats {
 }
 
 /**
+ * How many quote levels the card prints: the tweet's own quote and the one
+ * further post that quote itself quotes.
+ *
+ * A card-print bound, not a claim about X: chains deeper than two exist on X
+ * in principle, but no sample deeper than two has been collected (see
+ * `docs/observed-dom-2026-10-14-nested-quote.md` §尚未核验), and the card
+ * prints a quote's words and pictures rather than a transcript of the chain
+ * behind it. One shared constant so the DOM channel, the GraphQL channel and
+ * the renderer cannot disagree about where the chain stops.
+ */
+export const QUOTE_LEVELS = 2;
+
+/** How deep in the quote chain a rendered quote panel sits. */
+export type QuoteDepth = 1 | 2;
+
+/**
  * A quoted post, as the card renders it: one author, one body, one media set —
  * and, when the quoted post itself quotes someone, one further quote.
  *
@@ -86,7 +102,7 @@ export interface TweetData {
   timestamp: string; // ISO or formatted
   stats?: TweetStats;
   media?: MediaItem[];
-  /** A further quote this one quotes, extracted as its own level. */
+  /** The tweet's own quote, if it quotes another post. Its own nested quote, if any, lives on `QuoteTweetData.quotePost`. */
   quotePost?: QuoteTweetData;
   article?: ArticleData;
   isThreadPart?: boolean;

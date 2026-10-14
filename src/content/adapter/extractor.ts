@@ -6,6 +6,7 @@
  */
 
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
+import { QUOTE_LEVELS } from '../../types/tweet.ts';
 import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, stripTrailingArticleLink, stripTrailingArticleToken } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
@@ -133,6 +134,19 @@ function findQuoteContainer(article: Element, exclude?: Element | null): Element
   );
   if (byTestId) return byTestId;
 
+  // 1b. Preview marker for a quote inside a quote. `nestedQuotePreview` is the
+  //     only testid X renders for the inner level (measured 2026-10-14; the
+  //     whole page carries zero `quoteTweet`). It is matched explicitly — but
+  //     only when looking for the quote a quote carries (`exclude` is set):
+  //     at the top level the outer box has no testid of its own, and matching
+  //     the inner box there would promote the inner post to level 1.
+  const byPreviewTestId = exclude
+    ? Array.from(article.querySelectorAll('[data-testid="nestedQuotePreview"]')).find(
+      (candidate) => !isInsideArticleBody(candidate) && isNotSelf(candidate)
+    )
+    : undefined;
+  if (byPreviewTestId) return byPreviewTestId;
+
   // 2. Nested <article> — the quoted post rendered as its own article. The
   //    article's reading surface is a nested <article> as well, and a bare
   //    `querySelector('article')` matched it every time, turning a long-form
@@ -172,7 +186,7 @@ function findQuoteContainer(article: Element, exclude?: Element | null): Element
  * Checks if a given DOM element is nested inside a Quote Tweet box.
  */
 function isInsideQuoteTweet(el: Element): boolean {
-  if (el.closest('div[data-testid="quoteTweet"]')) {
+  if (el.closest('div[data-testid="quoteTweet"], [data-testid="nestedQuotePreview"]')) {
     return true;
   }
 
@@ -1019,17 +1033,6 @@ function isUnavailableMarker(container: Element): boolean {
 }
 
 /**
- * How many quote levels the card prints: the tweet's own quote and the one
- * further post that quote itself quotes.
- *
- * A chain deeper than that exists on X, but it does not exist on a card — the
- * card prints a quote's words and pictures, not a transcript of the chain behind
- * it. The bound is stated here so the extraction stops where the rendering
- * stops, rather than recursing until a hand-edited DOM runs out.
- */
-const QUOTE_LEVELS = 2;
-
-/**
  * True when `el` lives inside `scope` but not inside a nested quote *within*
  * `scope`.
  *
@@ -1039,21 +1042,31 @@ const QUOTE_LEVELS = 2;
  * deeper post — and the measured shapes prove it matters: a bodyless outer quote
  * (quoting a picture-only post) takes the inner quote's words as its own, and
  * the inner quote's picture lands in the outer's media list.
+ *
+ * `nestedInScope` is the quote box nested inside `scope`, resolved once by the
+ * caller: these predicates run once per candidate element, and re-resolving the
+ * container on every call repeats the same walk for every `User-Name`,
+ * `tweetText`, link and `time` in the box.
  */
-function isOwnedBy(el: Element | null | undefined, scope: Element): boolean {
+function isOwnedBy(
+  el: Element | null | undefined,
+  scope: Element,
+  nestedInScope: Element | null
+): boolean {
   if (!el) return false;
   if (el === scope) return false;
   if (!scope.contains(el)) return false;
-  const nested = findQuoteContainer(scope);
-  if (!nested) return true;
-  return !(nested === el || nested.contains(el));
+  if (!nestedInScope) return true;
+  return !(nestedInScope === el || nestedInScope.contains(el));
 }
 
-/** True when `el` sits in the quote nested inside `scope`, not in `scope` itself. */
-function isInsideQuoteOf(el: Element, scope: Element): boolean {
-  const nested = findQuoteContainer(scope);
-  if (!nested) return false;
-  return nested === el || nested.contains(el);
+/** True when `el` sits in the quote nested inside the box being read, not in the box itself. */
+function isInsideQuoteOf(
+  el: Element,
+  nestedInScope: Element | null
+): boolean {
+  if (!nestedInScope) return false;
+  return nestedInScope === el || nestedInScope.contains(el);
 }
 
 /**
@@ -1065,14 +1078,18 @@ function isInsideQuoteOf(el: Element, scope: Element): boolean {
  * rest of the path dropped, so the card links to the post every time. A href
  * with no status segment yields nothing: without it there is no permalink, and
  * inventing one from a profile link would point at the account instead.
+ *
+ * The link's own host is kept: rewriting it would point the card at a host the
+ * author never linked.
  */
 function statusPermalink(href: string): string | undefined {
   if (!href) return undefined;
-  const match = /^https?:\/\/[^/]+(\/.*)$/.exec(href);
-  const path = match ? match[1] : href;
+  const absolute = /^https?:\/\/[^/]+(\/.*)$/.exec(href);
+  const host = absolute ? href.slice(0, href.length - absolute[1].length) : 'https://x.com';
+  const path = absolute ? absolute[1] : href;
   const status = /\/status\/(\d+)/.exec(path);
   if (!status) return undefined;
-  return `https://x.com${path.slice(0, status.index + status[0].length)}`;
+  return `${host}${path.slice(0, status.index + status[0].length)}`;
 }
 
 /**
@@ -1082,15 +1099,26 @@ function statusPermalink(href: string): string | undefined {
  * The nesting is read by the same finder the top level uses, seeded with the box
  * being read and forbidden from selecting it: that is what makes the levels
  * distinct rather than one box reported twice.
+ *
+ * `exclude` names the caller's own box (see `findQuoteContainer`); the top
+ * level passes nothing and the default applies.
  */
 function extractQuoteTweet(
   article: Element,
-  exclude: Element | null | undefined,
+  exclude: Element | null = null,
   depth: number = 1
 ): QuoteTweetData | undefined {
   const quoteBox = findQuoteContainer(article, exclude);
 
   if (!quoteBox) return undefined;
+
+  // The quote nested inside this box, resolved once: every ownership check
+  // below asks about the same container, so resolving it per candidate would
+  // repeat the identical walk for each `User-Name`, `tweetText`, link, `time`
+  // and image in the box. (`findQuoteContainer` never returns the scope
+  // itself, so resolving with or without the self-exclusion answers the same
+  // here — and the same value guards the recursion below.)
+  const nestedInScope = findQuoteContainer(quoteBox);
 
   // Handle deleted or unavailable quote post tombstone. Detected structurally
   // (a permalink with neither identity nor body) rather than by matching the
@@ -1106,7 +1134,7 @@ function extractQuoteTweet(
 
   // Author (scoped to the quote box so the main author never leaks in)
   const quoteUser = Array.from(quoteBox.querySelectorAll('div[data-testid="User-Name"]')).find(
-    (candidate) => isOwnedBy(candidate, quoteBox)
+    (candidate) => isOwnedBy(candidate, quoteBox, nestedInScope)
   );
   const quoteAuthor = extractAuthorFrom(quoteUser ?? null, quoteBox);
 
@@ -1114,7 +1142,7 @@ function extractQuoteTweet(
   // first tweetText in the box belongs to the inner quote, and reading it here
   // printed a stranger's words as this quote's own.
   const textEl = Array.from(quoteBox.querySelectorAll('div[data-testid="tweetText"]')).find(
-    (candidate) => isOwnedBy(candidate, quoteBox)
+    (candidate) => isOwnedBy(candidate, quoteBox, nestedInScope)
   );
   const text = textEl ? cleanTweetText(textEl, isShowMoreMarker) : '';
   const quoteRichTokens = textEl ? extractRichTokens(textEl) : [];
@@ -1124,13 +1152,13 @@ function extractQuoteTweet(
   // status segment is taken from the href and the rest of the path dropped:
   // the URL the card links to is the post, not one picture inside it.
   const quoteStatusLink = Array.from(quoteBox.querySelectorAll('a[href*="/status/"]')).find(
-    (candidate) => isOwnedBy(candidate, quoteBox)
+    (candidate) => isOwnedBy(candidate, quoteBox, nestedInScope)
   );
   const quoteUrl = statusPermalink(quoteStatusLink?.getAttribute('href') || '');
 
   // Timestamp
   const timeEl = Array.from(quoteBox.querySelectorAll('time')).find(
-    (candidate) => isOwnedBy(candidate, quoteBox)
+    (candidate) => isOwnedBy(candidate, quoteBox, nestedInScope)
   );
   const timestamp = timeEl?.getAttribute('datetime') || timeEl?.textContent?.trim() || '';
 
@@ -1141,11 +1169,11 @@ function extractQuoteTweet(
   // The nested quote's own media is filtered out here, so this level's list
   // holds only what the quoted post itself attached. The deeper quote is only
   // read while the card would print it.
-  const nested = depth < QUOTE_LEVELS && findQuoteContainer(quoteBox, quoteBox)
+  const nested = depth < QUOTE_LEVELS && nestedInScope
     ? extractQuoteTweet(quoteBox, quoteBox, depth + 1)
     : undefined;
   const media = collectPhotoAndVideoMedia(quoteBox, (img) =>
-    !isMediaPosterLayer(img) && !isInsideQuoteOf(img, quoteBox)
+    !isMediaPosterLayer(img) && !isInsideQuoteOf(img, nestedInScope)
   );
 
   // X's preview shape marks a quoted post's own media with its own testid
@@ -1155,7 +1183,7 @@ function extractQuoteTweet(
   // what gets mounted.
   const previewMedia = Array.from(quoteBox.querySelectorAll(`${NESTED_QUOTE_PREVIEW_MEDIA} img`));
   for (const img of previewMedia) {
-    if (isInsideQuoteOf(img, quoteBox)) continue;
+    if (isInsideQuoteOf(img, nestedInScope)) continue;
     const src = (img.getAttribute('src') || '').replace(/&amp;/g, '&').trim();
     if (!src || src.includes('profile_images') || src.includes('/emoji/')) continue;
     media.push({
@@ -1387,7 +1415,7 @@ export function extractTweetData(article: Element): TweetData | null {
   const timestamp = extractTimestamp(article);
   const stats = extractTweetStats(article);
   const media = extractTweetMedia(article);
-  const quotePost = extractQuoteTweet(article, null);
+  const quotePost = extractQuoteTweet(article);
   const retweetedBy = getRetweetedBy(article);
   const translatedFrom = validTextEl ? extractTranslationNotice(validTextEl) : undefined;
   // X showed a preview with its "Show more" control; the rest of the body is not

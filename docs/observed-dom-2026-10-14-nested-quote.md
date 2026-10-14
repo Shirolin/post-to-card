@@ -90,9 +90,23 @@ article[data-testid="tweet"]
 
 ## 尚未核验
 
-- **更深层（第三级引用）**：本轮只采到两级。`QUOTE_LEVELS = 2` 之外还有什么形态，
-  未采到样本；若 X 实际渲染第三级，需补采。
+- **更深层（第三级引用）**：本轮只采到两级。卡片只印两层（`QUOTE_LEVELS = 2`，见
+  `src/types/tweet.ts`），那是卡片幅面的取舍，不是关于 X 的断言；
+  若采到第三级的真实样本，需补采并重估该上限。
 - **timeline 之外的来源**：只从时间线采到一条。详情页/搜索结果的嵌套引用
   容器是否同样用 `nestedQuotePreview`，未验。
 - **`nestedQuotePreview` 里如果没有图**（纯文字内层引用）时容器长什么样，未采。
+  该形态的提取按同一容器规则处理，见 `tier2` 2.85，但仍缺真实标记对照。
 - **`data-app-version`**：本轮忘记记录，无法与前几轮快照的版本对照。
+
+## GraphQL 通道对同一条推文的说法（2026-10-14 补记）
+
+> 来源：本页 Console 实测（`TweetDetail` / `TweetResultByRestId`，登录态）。
+> 同一条推文（`/GKev1n/status/2110105649778700290`）的 payload 里，
+> 外层引用的 `quoted_status_result`（`rest_id=2110043905010053185`）**不带更深的
+> `quoted_status_result`**（`deeper=false`）。即 GraphQL 只给出一层引用，
+> 第二层只存在于 DOM（`nestedQuotePreview` + `nestedQuotePreviewMedia`）。
+>
+> 因此 `parseQuote` 的递归只覆盖「payload 真嵌套」的形态；payload 截断的形态
+> 由 `resolver.ts` 的回填补：GraphQL 已答的字段（作者、正文、时间、链接）不动，
+> 只取 DOM 缺的那层、缺的媒体与缺的链接。锁在 `res.12`。

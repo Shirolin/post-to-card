@@ -1,6 +1,6 @@
 import { Fragment } from 'preact';
 import type { JSX, Ref } from 'preact';
-import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats } from '../../types/tweet.ts';
+import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats, QuoteDepth } from '../../types/tweet.ts';
 import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card.ts';
 import { CardQrCode } from './qrcode.ts';
 import { resolveRadius, getAspectMinHeight, THEMES } from './themes.ts';
@@ -403,14 +403,12 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
 }
 
 /**
- * How deep in the quote chain a rendered quote panel sits.
- *
- * Only the post's own quote and the one it in turn quotes are extracted and
- * printed, so there are exactly two. It reaches the DOM as a data attribute so
- * card.css can step the recess one level deeper per level — the component
- * chooses the structure, the material chooses how it reads.
+ * How deep in the quote chain a rendered quote panel sits. Bounded by the
+ * shared `QUOTE_LEVELS`: the renderer never prints a level the channels never
+ * extract. It reaches the DOM as a data attribute so card.css can step the
+ * recess one level deeper per level — the component chooses the structure, the
+ * material chooses how it reads.
  */
-type QuoteDepth = 1 | 2;
 
 function renderQuoteCard(
   quotePost: NonNullable<TweetData['quotePost']>,

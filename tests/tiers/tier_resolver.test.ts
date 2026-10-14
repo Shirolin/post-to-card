@@ -481,6 +481,14 @@ test('res.12: a GraphQL quote truncated at depth 1 is backfilled from the DOM', 
   assert.ok(inner!.text.includes('FrontierCode'), 'the innermost body comes along');
   assert.ok(inner!.media && inner!.media.length === 1, 'and so does its picture');
   assert.match(inner!.media![0].originalUrl || '', /HUhftVoasAAzqss/);
+
+  // The backfill only fills what GraphQL left absent: the outer level keeps
+  // the payload's own words even though the DOM renders a translation.
+  assert.equal(
+    target.quotePost?.text,
+    'Gemini 4 Argon is now available in Devin Desktop and CLI.',
+    'GraphQL stays authoritative for the levels it answered'
+  );
 });
 
 export async function runTierResolver(): Promise<{
