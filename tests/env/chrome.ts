@@ -3,6 +3,10 @@
  * Provides faithful emulation of runtime messaging, storage, and host permissions.
  */
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import type { ExtensionMessage, ExtensionResponse } from '../../src/types/messages.ts';
 
 type MessageListener = (
@@ -205,9 +209,44 @@ class ChromeStorageMock {
   }
 }
 
+/**
+ * Whether this extension can read a tab's `url` at all.
+ *
+ * A tab's `url` is present only when the extension holds the "tabs" permission or
+ * host permission for that page (developer.chrome.com/docs/extensions/reference/api/tabs).
+ * `activeTab` counts too: it grants temporary host permission for the current tab
+ * on user invocation. Read from manifest.json rather than hard-coded so the mock
+ * cannot drift more permissive than the extension actually is.
+ */
+function manifestGrantsTabUrl(): boolean {
+  const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    permissions?: string[];
+    host_permissions?: string[];
+  };
+
+  const permissions = manifest.permissions || [];
+  if (permissions.includes('tabs') || permissions.includes('activeTab')) return true;
+  return (manifest.host_permissions || []).some((pattern) => /x\.com|twitter\.com/.test(pattern));
+}
+
 class ChromeTabsMock {
-  public async query(_queryInfo: any): Promise<Array<{ id: number; url: string }>> {
-    return [{ id: 1, url: 'https://x.com/jack/status/20' }];
+  private readonly canReadUrl: boolean;
+
+  constructor(canReadUrl: boolean) {
+    this.canReadUrl = canReadUrl;
+  }
+
+  /**
+   * `url` is omitted when the manifest cannot grant it, which is the shape real
+   * Chrome returns. The mock used to always answer with an x.com URL, so a test
+   * gating on `activeTab.url` passed here while the shipped popup rejected every
+   * tab including X -- the mock was more capable than the extension.
+   */
+  public async query(_queryInfo: any): Promise<Array<{ id: number; url?: string }>> {
+    const tab: { id: number; url?: string } = { id: 1 };
+    if (this.canReadUrl) tab.url = 'https://x.com/jack/status/20';
+    return [tab];
   }
 }
 
@@ -221,6 +260,6 @@ export function createChromeMock(): ChromeMockEnv {
   return {
     runtime: new ChromeRuntimeMock(),
     storage: new ChromeStorageMock(),
-    tabs: new ChromeTabsMock(),
+    tabs: new ChromeTabsMock(manifestGrantsTabUrl()),
   };
 }

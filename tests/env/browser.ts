@@ -18,12 +18,53 @@
  * deserves a second look at whether the browser agrees.
  */
 
+/**
+ * The event-handler IDL attributes every real node carries.
+ *
+ * Not decoration: Preact decides whether `onClick` is a DOM property or a plain
+ * attribute by asking `'onclick' in node`, and only the property branch lowers
+ * the name to the `click` a dispatched event actually carries. With the check
+ * failing here the shim registered `Click` — capitalised — so every handler on a
+ * client-rendered element was unreachable and a click on the modal's backdrop
+ * did nothing while looking, from the test, like the modal had simply stayed
+ * open. The list is the standard set; a name outside it is treated as an
+ * attribute, exactly as a browser would treat it.
+ */
+const EVENT_HANDLER_ATTRIBUTES = [
+  'onabort', 'onanimationcancel', 'onanimationend', 'onanimationiteration', 'onanimationstart',
+  'onauxclick', 'onbeforeinput', 'onbeforetoggle', 'onblur', 'oncancel', 'oncanplay',
+  'oncanplaythrough', 'onchange', 'onclick', 'onclose', 'oncontextlost', 'oncontextmenu',
+  'oncontextrestored', 'oncopy', 'oncuechange', 'oncut', 'ondblclick', 'ondrag', 'ondragend',
+  'ondragenter', 'ondragleave', 'ondragover', 'ondragstart', 'ondrop', 'ondurationchange',
+  'onemptied', 'onended', 'onerror', 'onfocus', 'onformdata', 'ongotpointercapture', 'oninput',
+  'oninvalid', 'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onloadeddata', 'onloadedmetadata',
+  'onloadstart', 'onlostpointercapture', 'onmousedown', 'onmouseenter', 'onmouseleave',
+  'onmousemove', 'onmouseout', 'onmouseover', 'onmouseup', 'onpaste', 'onpause', 'onplay',
+  'onplaying', 'onpointercancel', 'onpointerdown', 'onpointerenter', 'onpointerleave',
+  'onpointermove', 'onpointerout', 'onpointerover', 'onpointerup', 'onprogress', 'onratechange',
+  'onreset', 'onresize', 'onscroll', 'onscrollend', 'onsecuritypolicyviolation', 'onseeked',
+  'onseeking', 'onselect', 'onselectionchange', 'onselectstart', 'onslotchange', 'onstalled',
+  'onsubmit', 'onsuspend', 'ontimeupdate', 'ontoggle', 'ontouchcancel', 'ontouchend',
+  'ontouchmove', 'ontouchstart', 'ontransitioncancel', 'ontransitionend', 'ontransitionrun',
+  'ontransitionstart', 'onvolumechange', 'onwaiting', 'onwheel',
+  // Document and window level, which a real `Document` also answers for.
+  'onafterprint', 'onbeforeprint', 'onbeforeunload', 'onhashchange', 'onlanguagechange',
+  'onmessage', 'onmessageerror', 'onoffline', 'ononline', 'onpagehide', 'onpageshow',
+  'onpopstate', 'onrejectionhandled', 'onstorage', 'onunhandledrejection', 'onunload',
+];
+
 export class DomNode {
   public static readonly ELEMENT_NODE = 1;
   public static readonly TEXT_NODE = 3;
   public static readonly COMMENT_NODE = 8;
   public static readonly DOCUMENT_NODE = 9;
   public static readonly DOCUMENT_FRAGMENT_NODE = 11;
+
+  constructor() {
+    for (const name of EVENT_HANDLER_ATTRIBUTES) {
+      (this as unknown as Record<string, null>)[name] = null;
+    }
+  }
 
   public nodeType: number = DomNode.ELEMENT_NODE;
   public nodeName: string = '';
@@ -33,6 +74,81 @@ export class DomNode {
 
   get parentElement(): DomElement | null {
     return this.parentNode instanceof DomElement ? this.parentNode : null;
+  }
+
+  /** The document that created this node, when one did. */
+  public ownerDocumentRef: DomDocument | null = null;
+
+  /**
+   * The document this node belongs to.
+   *
+   * A node inside a shadow root belongs to the document its *host* is in, so the
+   * tree is walked rather than trusting the node's own record. Stopping at the
+   * fragment reported `null` for every element the card renders, and the export
+   * engine's clone then fell back to a bare tag — an `img` that was no longer an
+   * image element, with no `decode` to wait for.
+   *
+   * A detached node still belongs to the document that made it: a browser
+   * answers `document` for `document.createElement('div')`, not `null`. Falling
+   * back to the record is what covers that, and it is the case `modern-screenshot`
+   * hits when it builds a `<style>` of its own.
+   */
+  get ownerDocument(): DomDocument | null {
+    let node: DomNode = this;
+    while (node.parentNode) node = node.parentNode;
+    if (node instanceof DomShadowRoot) return node.host.ownerDocument;
+    if (node.nodeType === DomNode.DOCUMENT_NODE) return node as DomDocument;
+    return this.ownerDocumentRef;
+  }
+
+  /**
+   * True while this node is in a document's tree.
+   *
+   * A node in a shadow root is connected when its host is, which is the case
+   * that matters here: the card lives in a shadow root and its elements have to
+   * answer as connected.
+   */
+  get isConnected(): boolean {
+    const root = this.getRootNode();
+    if (root.nodeType === DomNode.DOCUMENT_NODE) return true;
+    if (root instanceof DomShadowRoot) return root.host.isConnected;
+    return false;
+  }
+
+  /** The root of this node's tree — a shadow root if it lives in one. */
+  getRootNode(): DomNode {
+    let node: DomNode = this;
+    while (node.parentNode) node = node.parentNode;
+    return node;
+  }
+
+  remove(): void {
+    if (this.parentNode) this.parentNode.removeChild(this);
+  }
+
+  /**
+   * A copy of this node.
+   *
+   * The export engine builds the off-screen card from one, and the copy is the
+   * node that actually gets rasterized — the live preview never is. Without this
+   * a test could only assert that the engine meant to clone, which is precisely
+   * the assertion that let a shrunk export ship.
+   */
+  cloneNode(deep: boolean = false): DomNode {
+    const copy = this.copySelf();
+    if (deep) {
+      for (const child of this.childNodes) {
+        copy.appendChild(child.cloneNode(true));
+      }
+    }
+    return copy;
+  }
+
+  /** The empty shell `cloneNode` fills in. Subclasses restore their own state. */
+  protected copySelf(): DomNode {
+    const copy = new (this.constructor as unknown as new () => DomNode)();
+    copy.nodeValue = this.nodeValue;
+    return copy;
   }
 
   get previousElementSibling(): DomElement | null {
@@ -169,16 +285,112 @@ export class DomShadowRoot extends DomNode {
 export class DomElement extends DomNode {
   public tagName: string;
   public attributes: Map<string, string> = new Map();
-  public style: Record<string, string> = {};
+  /**
+   * Answers `''` for a property that was never set, the way a real
+   * `CSSStyleDeclaration` does.
+   *
+   * A plain object answers `undefined` instead, and code that captures a value
+   * and writes it back then stores `undefined`: the scroll lock read the host
+   * page's overflow, found `undefined` where the browser would have said `''`,
+   * and restored `undefined` — which is not a value the browser can produce, so
+   * the test was disagreeing with production about a case that cannot happen.
+   */
+  public style: Record<string, string> = new Proxy(
+    {
+      // A real CSSStyleDeclaration carries these, and Preact's DOM renderer
+      // calls `setProperty` for every style it writes. Without them the only way
+      // to mount a component into this shim was to hand-build the markup.
+      setProperty(this: Record<string, string>, name: string, value: string) {
+        this[name] = value;
+      },
+      getPropertyValue(this: Record<string, string>, name: string) {
+        return this[name] ?? '';
+      },
+      removeProperty(this: Record<string, string>, name: string) {
+        const previous = this[name] ?? '';
+        delete this[name];
+        return previous;
+      },
+      cssText: '',
+      // The declaration is read and written as a bag of strings, but it also has
+      // to carry the real methods, so the cast goes through `unknown`.
+    } as unknown as Record<string, string>,
+    {
+      get: (target, prop) => {
+        if (typeof prop !== 'string') return undefined;
+        return target[prop] ?? '';
+      },
+      set: (target, prop, value: string) => {
+        target[prop as string] = value;
+        return true;
+      },
+    }
+  );
   public dataset: Record<string, string> = {};
   public shadowRoot: DomShadowRoot | null = null;
+  /**
+   * Set by the test, not measured: there is no layout engine here. It exists
+   * because the shipped scroll lock derives the scrollbar width from
+   * `window.innerWidth - documentElement.clientWidth`, and a mock that always
+   * answers 0 cannot describe a page that has a scrollbar — the compensation it
+   * writes would look like a no-op.
+   */
+  public clientWidth: number = 0;
   private listeners: Map<string, Array<(evt: any) => void>> = new Map();
 
-  constructor(tagName: string) {
+  /**
+   * Moves focus here, the way the real method does.
+   *
+   * Components focus themselves on mount -- the modal focuses its dialog and
+   * restores the trigger on close -- so without this the only way to render one
+   * under this shim was to avoid it.
+   */
+  public focus(): void {
+    const doc = this.ownerDocument;
+    if (doc) doc.activeElement = this;
+    this.dispatchEvent({ type: 'focus' });
+  }
+
+  public blur(): void {
+    const doc = this.ownerDocument;
+    if (doc && doc.activeElement === this) doc.activeElement = null;
+    this.dispatchEvent({ type: 'blur' });
+  }
+
+  /**
+   * `tagName` is optional because a real custom element's constructor runs
+   * `super()` with no argument -- the tag comes from the registry, not from the
+   * subclass. Requiring one here made `HTMLElement` unusable as the base for a
+   * production custom element under this shim.
+   */
+  constructor(tagName: string = '') {
     super();
     this.nodeType = DomNode.ELEMENT_NODE;
     this.tagName = tagName.toUpperCase();
     this.nodeName = this.tagName;
+  }
+
+  /**
+   * Copied through the document's own factory, so an `img` stays an image
+   * element with a `src` and a `decode` rather than degrading to a bare tag.
+   */
+  protected copySelf(): DomNode {
+    const doc = this.ownerDocument;
+    const copy = (doc ? doc.createElement(this.tagName) : new DomElement(this.tagName)) as DomElement;
+    copy.nodeValue = this.nodeValue;
+    for (const [name, value] of this.attributes) {
+      copy.attributes.set(name, value);
+    }
+    copy.dataset = { ...this.dataset };
+    // Inline styles live on the declaration object here rather than in a
+    // `style` attribute, so the entries are what a copy has to carry over.
+    for (const key of Object.keys(this.style)) {
+      const value = (this.style as Record<string, unknown>)[key];
+      if (typeof value === 'string') {
+        (copy.style as Record<string, unknown>)[key] = value;
+      }
+    }
+    return copy;
   }
 
   get children(): DomElement[] {
@@ -199,6 +411,35 @@ export class DomElement extends DomNode {
 
   set className(val: string) {
     this.setAttribute('class', val);
+  }
+
+  /**
+   * Reflected, as the real element reflects them: the property and the attribute
+   * are two views of one value.
+   *
+   * The radio group's keyboard handler reads both — `disabled` to skip a level
+   * that cannot be selected, `tabIndex` to decide where focus goes back — so a
+   * shim answering `undefined` for both made every level look selectable and
+   * none look like the tab stop.
+   */
+  get disabled(): boolean {
+    return this.attributes.has('disabled');
+  }
+
+  set disabled(val: boolean) {
+    if (val) this.attributes.set('disabled', '');
+    else this.attributes.delete('disabled');
+  }
+
+  get tabIndex(): number {
+    const raw = this.attributes.get('tabindex');
+    if (raw === undefined || raw.trim() === '') return 0;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? -1 : parsed;
+  }
+
+  set tabIndex(val: number) {
+    this.attributes.set('tabindex', String(val));
   }
 
   get classList() {
@@ -300,11 +541,26 @@ export class DomElement extends DomNode {
       if (curr instanceof DomElement || curr instanceof DomDocument) {
         const list = (curr as any).listeners.get(event.type) || [];
         for (const cb of list) {
-          cb(event);
+          // Called with `this` bound to the node whose listener fired, as the
+          // real `addEventListener` does. Preact's own listener wrapper reads
+          // `this.l` to find the vnode handler it stored there, so calling
+          // through unbound made every `onClick` on a client-rendered element
+          // throw instead of dispatching.
+          //
+          // `currentTarget` is the node whose listener is running, which is not
+          // the same node as `target` once the event has bubbled. Four shipped
+          // handlers read it -- the modal's backdrop test (`e.target ===
+          // e.currentTarget`), the radio group's `e.currentTarget.parentElement`
+          // and two in the card. Leaving it unset made the radio group throw and
+          // left the backdrop test relying only on its id fallback.
+          event.currentTarget = curr;
+          cb.call(curr, event);
         }
       }
       curr = curr.parentNode;
     }
+    // Cleared once dispatch is over, as a browser does.
+    event.currentTarget = null;
     return !event.defaultPrevented;
   }
 
@@ -438,9 +694,18 @@ export class DomDocument extends DomNode {
   public head: DomElement;
   public body: DomElement;
   public documentElement: DomElement;
+  /**
+   * Settled by default, because every caller of this shim runs after load. A
+   * test that wants the pre-load path sets it to `'loading'` and fires
+   * `DOMContentLoaded` itself.
+   */
+  public readyState: 'loading' | 'interactive' | 'complete' = 'complete';
   public customElements: DomCustomElementRegistry;
   private _focused: boolean = true;
   private listeners: Map<string, Array<(evt: any) => void>> = new Map();
+
+  /** The element holding focus, or null. Written by `DomElement.focus()`. */
+  public activeElement: DomElement | null = null;
 
   constructor() {
     super();
@@ -456,16 +721,47 @@ export class DomDocument extends DomNode {
   }
 
   public createElement(tagName: string): DomElement {
+    return this.adopt(this.createElementFor(tagName));
+  }
+
+  private createElementFor(tagName: string): DomElement {
     const tag = tagName.toLowerCase();
     const CustomCtor = this.customElements.get(tag);
     if (CustomCtor) {
-      return new CustomCtor();
+      const el: DomElement = new CustomCtor();
+      // A custom element's constructor runs `super()` with no tag, so the name
+      // is assigned by whoever creates it -- the parser in a browser, this mock
+      // here. Without it the element has no tag for a selector to match, and
+      // `document.querySelector('my-element')` could never find its own node.
+      if (!el.tagName) {
+        el.tagName = tag.toUpperCase();
+        el.nodeName = el.tagName;
+      }
+      return el;
     }
     if (tag === 'img') return new DomImageElement();
     if (tag === 'a') return new DomAnchorElement();
     if (tag === 'video') return new DomVideoElement();
     if (tag === 'style') return new DomStyleElement();
     return new DomElement(tagName);
+  }
+
+  /** Records `this` as the node's document, the way a real constructor would. */
+  private adopt<T extends DomNode>(node: T): T {
+    node.ownerDocumentRef = this;
+    return node;
+  }
+
+  public createTextNode(text: string): DomTextNode {
+    return this.adopt(new DomTextNode(text));
+  }
+
+  public createComment(text: string): DomTextNode {
+    return this.adopt(new DomTextNode(text));
+  }
+
+  public createDocumentFragment(): DomNode {
+    return this.adopt(new DomNode());
   }
 
   public createElementNS(_ns: string, tagName: string): DomElement {
@@ -508,7 +804,7 @@ export class DomDocument extends DomNode {
   public dispatchEvent(event: any): boolean {
     const list = this.listeners.get(event.type) || [];
     for (const cb of list) {
-      cb(event);
+      cb.call(this, event);
     }
     return !event.defaultPrevented;
   }

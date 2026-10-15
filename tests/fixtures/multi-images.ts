@@ -227,7 +227,7 @@ export const VIDEO_WITH_DURATION_HTML = `
  * A GIF in the state a feed actually shows with autoplay off: a poster `img`
  * plus the interstitial overlay that stands in for the player, and no `<video>`
  * anywhere. Captured from a live logged-in feed on 2026-10-10
- * (`docs/observed-dom-2026-10-10.md`); the class names are the obfuscated ones
+ * (`docs/observed-dom-2026-10-10-authenticated.md`); the class names are the obfuscated ones
  * X shipped that day, kept because nothing in this state is a stable hook
  * except the badge text and the poster URL.
  */

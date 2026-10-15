@@ -17,13 +17,13 @@ To guarantee infallible quality without reliance on brittle manual testing, our 
 Tests are derived exclusively from the authoritative specifications (`ORIGINAL_REQUEST.md`, `PROJECT.md`, and technical mining surveys), never reverse-engineered from incomplete implementation quirks. Every test treats components as opaque-box units with verifiable input/output contracts.
 
 ### 1.2 Zero Facade & Zero Tautology Guarantee
-No test shall ever be written as a "pass-through facade" that asserts tautologies (e.g. `assert(true)` or mocking away the exact logic under test). Every assertion must exercise actual parsing logic, DOM state transitions, styling computation, SVG generation, canvas context operations, or error catch-and-fallback cascades.
+No test shall ever be written as a "pass-through facade" that asserts tautologies (e.g. `assert(true)` or mocking away the exact logic under test). Every assertion must exercise actual parsing logic, DOM state transitions, styling computation, SVG generation, what the export engine hands the rasterizer, or error catch-and-fallback cascades.
 
 ### 1.3 Progressive Testability & Milestones Isolation
 Tests are organized into 4 distinct progressive tiers. While Tier 1 verifies isolated atomic features, Tiers 2–4 progressively verify boundary stress, combinatorial interactions, and complete real-world user workflows.
 
 ### 1.4 High-Fidelity Environmental Emulation
-The test infrastructure provides a dedicated in-memory DOM, Shadow DOM, Chrome Extension Messaging & Storage, Canvas 2D Context (with CORS taint simulation), and Asynchronous Clipboard API emulator. This ensures tests run with 100% determinism, millisecond execution speeds, and zero flaky network calls.
+The test infrastructure provides a dedicated in-memory DOM, Shadow DOM, Chrome Extension Messaging & Storage, and Asynchronous Clipboard API emulator, and substitutes the one boundary Node cannot host — the rasterizer. This ensures tests run with 100% determinism, millisecond execution speeds, and zero flaky network calls.
 
 ---
 
@@ -35,12 +35,12 @@ Every feature identified in `PROJECT.md` is covered with a minimum of 5 rigorous
 |:---|:---|:---|:---|:---:|:---|
 | **F1** | Multi-Entry Build Pipeline | Output IIFE for `content.js`, ESM for `background.js`, zero top-level export in IIFE | `tier1_features.test.ts` § F1 | 5 | IIFE structure, ESM format, TS build pass, bundle independence, syntax safety |
 | **F2** | Manifest V3 Packaging | Valid manifest_version 3, twimg host permissions, service worker declaration | `tier1_features.test.ts` § F2 | 5 | MV3 schema, host_permissions, service_worker type, content_scripts match, icons |
-| **F3** | Minimal Dependencies | Only `preact`, `modern-screenshot`, `qrcode-generator` runtime dependencies | `tier1_features.test.ts` § F3 | 5 | Dependency count, zero wrapper bloat, devDependencies separation, clean package.json, runtime offline |
+| **F3** | Minimal Dependencies | Only `preact`, `modern-screenshot`, `qrcode-generator`, `lucide-preact` runtime dependencies | `tier1_features.test.ts` § F3 | 5 | Dependency count, zero wrapper bloat, devDependencies separation, clean package.json, runtime offline |
 | **F4** | Background CORS Image Proxy | Service worker `FETCH_IMAGE_BASE64` message handler returns Base64 Data URL | `tier1_features.test.ts` § F4 | 5 | Message type dispatch, Data URL encoding, content type resolution, error handling, cache replay |
 | **F5** | Offline & Security Guarantee | Zero external telemetries, no third-party HTTP requests, pure offline rendering | `tier1_features.test.ts` § F5 | 5 | Zero external network calls, offline QR generation, local CSS inline, strict domain scoping, no eval |
 | **F6** | Tweet Action Bar Injection | Inject "✨" button into `div[role="group"]` with `data-post-to-card-injected` flag | `tier1_features.test.ts` § F6 | 5 | Button creation, group selector matching, injection attribute tagging, deduplication, click dispatch |
 | **F7** | Debounced MutationObserver | 150ms debounce window prevents UI thrashing during rapid DOM mutations | `tier1_features.test.ts` § F7 | 5 | Timer debounce, rapid bursts coalescing, disconnected cleanup, subtree observation, batch injection |
-| **F8** | SPA Route Navigation Handling | Handle Twitter SPA route transitions (`/home`, `/status/:id`, `/:username`) | 无专属用例（见备注） | 0 | **未验证**：F8.1–F8.5 曾在此，各自定义本地函数再断言它刚设的标志，不触及任何生产代码；已删除而非留作占位（不能失败的测试比缺失的测试更糟，它会让下一个读者以为该区域已验证）。导航接线本身仍未验证；`tier2` 的 `fakeWindow` 只让生命周期管理器能装上自己 |
+| **F8** | SPA Route Navigation Handling | Handle Twitter SPA route transitions (`/home`, `/status/:id`, `/:username`) | `tier2_boundaries.test.ts` Tier 2.87 | 1 | **F8.1–F8.5 已删除**：各自定义本地函数再断言它刚设的标志，不触及任何生产代码。导航接线改由 Tier 2.87 覆盖——它装载 `src/content/index.ts` 本体、派发真实 `popstate`，断言重扫发生且 `popstate` 是唯一接线 |
 | **F9** | Native Emoji Restoration | Convert Twemoji `<img alt="🔥">` to native Unicode string in text and names | `tier1_features.test.ts` § F9 | 5 | `img[alt]` extraction, childNodes recursion, multiple emojis preservation, username emojis, zero text truncation |
 | **F10** | Mention & Hashtag Preservation | Preserve `@mentions`, `#hashtags`, `$cashtags`, and URLs as styled tokens | `tier1_features.test.ts` § F10 | 5 | Mention tokenization, hashtag regex parsing, cashtag detection, t.co link rewriting, token array output |
 | **F11** | High-Res Media Upgrade | Rewrite avatars to `_400x400`, photos to `name=large`, extract video posters | `tier1_features.test.ts` § F11 | 5 | `_normal` to `_400x400`, `name=small` to `name=large`, legacy `:small` format, video poster extraction, fallback thumbnail |
@@ -72,8 +72,9 @@ tests/
 ├── env/
 │   ├── browser.ts                # Lightweight DOM, Custom Elements, ShadowRoot & MutationObserver
 │   ├── chrome.ts                 # Chrome Extension Manifest V3 runtime, messaging, tabs, storage mocks
-│   ├── canvas.ts                 # HTMLCanvasElement, 2D Context, CORS taint tracker & toBlob emulator
-│   └── clipboard.ts              # Async Clipboard API emulator with focus & permission failure modes
+│   ├── clipboard.ts              # Async Clipboard API emulator with focus & permission failure modes
+│   ├── render.ts                 # Vite SSR loader, and the `modern-screenshot` alias the export engine runs against
+│   └── modern-screenshot-stub.ts # The rasterizer stand-in: records what the engine asked it to draw
 ├── fixtures/
 │   ├── single-tweet.ts           # Realistic DOM fixture for single tweet
 │   ├── thread.ts                 # Multi-tweet continuous author thread DOM fixture
@@ -84,9 +85,14 @@ tests/
 │   └── rich-tokens.ts            # Rich text with mentions, hashtags, cashtags and t.co URLs
 └── tiers/
     ├── tier1_features.test.ts     # Feature Coverage Suite
-    ├── tier2_boundaries.test.ts   # Boundary & Corner Case Suite (20+ tests)
-    ├── tier3_interactions.test.ts # Combinatorial & Cross-Feature Interaction Suite (25+ tests)
-    └── tier4_workloads.test.ts    # End-to-End Real-World User Workflows Suite (15+ tests)
+    ├── tier2_boundaries.test.ts   # Boundary & Corner Case Suite
+    ├── tier3_interactions.test.ts # Combinatorial & Cross-Feature Interaction Suite
+    ├── tier4_workloads.test.ts    # End-to-End Real-World User Workflows Suite
+    ├── tier_i18n.test.ts          # Localization Suite
+    ├── tier_graphql.test.ts       # Structured Response Parsing Suite
+    ├── tier_resolver.test.ts      # Deep Unified Thread Resolution Suite
+    ├── tier_article.test.ts       # Long-form Post Suite
+    └── tier_hygiene.test.ts       # Mechanical Repository Invariants Suite
 ```
 
 ### 3.1 Browser & DOM Emulation Layer (`tests/env/browser.ts`)
@@ -101,12 +107,12 @@ tests/
 - `chrome.storage.local`: In-memory persistent key-value store for user preferences (`CardConfig`).
 - `chrome.tabs`: Tab URL resolution and message forwarding simulation.
 
-### 3.3 Canvas 2D & CORS Taint Emulation Layer (`tests/env/canvas.ts`)
-- Tracks canvas `originClean` state.
-- If an image drawn to canvas via `drawImage` has a remote origin without Base64 encoding or CORS clearance, marks `originClean = false`.
-- Calling `canvas.toBlob()` or `canvas.toDataURL()` on a tainted canvas immediately throws:
-  `DOMException: Failed to execute 'toBlob' on 'HTMLCanvasElement': Tainted canvases may not be exported.`
-- Validates scale multiplication: `width * scale` and `height * scale`.
+### 3.3 Rasterizer Stand-In (`tests/env/modern-screenshot-stub.ts`)
+- `tests/env/render.ts` aliases the bare specifier `modern-screenshot` to this module in the SSR graph, so the shipped export engine runs unmodified and `domToBlob` is the only replaced call.
+- It records `{ target, options }` for every rasterization, which is how a claim about the export is checked: an unproxied remote `src` surviving into `target` is what would taint a real canvas, and keeping it out is the export engine's job.
+- It can be told to reject the next call, for the export-failure path.
+- Reach it through `loadModule('/tests/env/modern-screenshot-stub.ts')`, never a relative import: the SSR module graph holds the instance the production code sees, and Node's would stay empty.
+- There is deliberately no canvas emulator. One existed and re-implemented taint checking, so tests asserting "the canvas throws on a remote URL" were asserting that emulator rather than the extension; `renderCardToBlob` plus the recorder above puts the real code back on the hook.
 
 ### 3.4 Clipboard & Fallback Emulation Layer (`tests/env/clipboard.ts`)
 - Simulates `navigator.clipboard.write([ClipboardItem])`.
@@ -114,11 +120,12 @@ tests/
   1. `DOCUMENT_UNFOCUSED`: Throws `DOMException: Document is not focused`.
   2. `USER_GESTURE_EXPIRED`: Throws `NotAllowedError: Must be handling a user gesture to use the Clipboard API`.
   3. `PERMISSION_DENIED`: Throws `NotAllowedError: Clipboard permission denied`.
-- Tracks DOM fallback downloads: spies on `document.createElement('a')`, `anchor.click()`, and `URL.createObjectURL(blob)`.
+- The download side is not emulated here: a download spy used to sit alongside the clipboard mock, and the tiers that named it were asserting the spy's own bookkeeping. `exportBlobWithFallback` is production code and is driven directly instead.
 
 ### 3.5 Component Rendering Layer (`tests/env/render.ts`)
 - The one layer that is not hand-rolled: it borrows Vite's SSR pipeline (already a dev dependency, and the same transform the build uses) to load a `.tsx` component in Node, then renders it to HTML with `preact-render-to-string`.
 - This is what lets a claim about the UI be asserted against the markup it produces instead of against the text of the component's source. Vite externalises dependencies in SSR, so the component and the renderer share one Preact instance — without that, `Fragment` and hook identity would not match between them.
+- `loadModule` exposes the same pipeline for modules that export functions rather than components, which is how `Modal.tsx`'s real `lockScroll` and the real export engine are reached. Anything from `src/` that a test drives must come through here, or the test gets Node's second copy of the module and its side effects land in the wrong registry.
 - Used by Tier 1 for the card and controls: the video badge and its preference, the localized toggle labels, the QR tooltip, and the `data-html2canvas-ignore` marker the export filter keys on.
 
 ---

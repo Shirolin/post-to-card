@@ -4,14 +4,14 @@
  */
 
 import assert from 'node:assert/strict';
-import { DomElement, DomImageElement, DomDocument, DomMutationObserver, createDomElement } from '../env/browser.ts';
+import { DomElement, DomImageElement, DomDocument, DomMutationObserver, DomShadowRoot, createDomElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
-import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
+import { renderComponent, rasterizer, exportEngine } from '../env/render.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { classifySocial, getReplyingToHandle, getRetweetedBy } from '../../src/content/adapter/social.ts';
 import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
-import { isPicMediaLink } from '../../src/content/adapter/emojis.ts';
+import { isPicMediaLink, normalizeTweetWhitespace, restoreUnicodeEmojis } from '../../src/content/adapter/emojis.ts';
 import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
 import { imageFallbackAttrs, advanceImageFallback } from '../../src/content/ui/imageFallback.ts';
 import {
@@ -24,6 +24,7 @@ import {
   injectAll,
   initTwitterInjection,
 } from '../../src/content/adapter/injection.ts';
+import { handleRadioKeyDown } from '../../src/content/ui/radioGroup.ts';
 import { getTranslation } from '../../src/content/i18n.ts';
 import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
@@ -35,7 +36,6 @@ import { withoutTestIds } from '../fixtures/strip-testids.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig } from '../../src/types/card.ts';
-import type { ExtensionMessage } from '../../src/types/messages.ts';
 
 export interface TestResult {
   name: string;
@@ -52,77 +52,98 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
+const CARD_CONFIG: CardConfig = {
+  theme: 'minimal',
+  padding: '24px',
+  borderRadius: '12px',
+  aspectRatio: 'auto',
+  imageFit: 'contain',
+  mediaLayout: 'grid',
+  showQrCode: true,
+  showStats: true,
+  showTimestamp: true,
+  showWatermark: true,
+  blurAuthor: false,
+  showActionBarButton: true,
+  showPlayButton: true,
+  locale: 'en-US',
+};
+
+/** The card, rendered from data, so a boundary claim is made against markup. */
+function renderCard(data: TweetData | ThreadData): Promise<string> {
+  return renderComponent('/src/content/ui/Card.tsx', 'Card', {
+    data,
+    config: CARD_CONFIG,
+    onExcludeTweet: () => {},
+  });
+}
+
+const MEDIA_ONLY_TWEET: TweetData = {
+  id: '20001',
+  url: 'https://x.com/artist/status/20001',
+  author: { name: 'Artist', handle: '@artist', avatarUrl: 'https://pbs.twimg.com/avatar.jpg' },
+  text: '',
+  timestamp: '2026-02-01T10:00:00.000Z',
+  media: [{ type: 'image', url: 'https://pbs.twimg.com/media/art.jpg' }],
+};
+
 // -------------------------------------------------------------
 // Boundary 1: Empty and Whitespace-Only Text
 // -------------------------------------------------------------
-test('Tier 2.1: empty text tweet (media-only) renders without crashing', () => {
-  const tweetData: TweetData = {
-    id: '20001',
-    url: 'https://x.com/artist/status/20001',
-    author: { name: 'Artist', handle: '@artist', avatarUrl: 'avatar.jpg' },
-    text: '',
-    timestamp: '2026-02-01T10:00:00.000Z',
-    media: [{ type: 'image', url: 'https://pbs.twimg.com/media/art.jpg' }],
-  };
+test('Tier 2.1: a media-only post renders its picture and leaves the text block empty', async () => {
+  const html = await renderCard(MEDIA_ONLY_TWEET);
 
-  assert.equal(tweetData.text.length, 0);
-  assert.equal(tweetData.media?.length, 1);
+  assert.equal((html.match(/class="media-box"/g) || []).length, 1, 'the picture did not reach the card');
+  const textBlock = html.match(/class="tweet-text-content"[^>]*>([\s\S]*?)<\/div>/);
+  assert.ok(textBlock, 'the card no longer renders a text block at all');
+  assert.equal(textBlock![1].replace(/<[^>]*>/g, '').trim(), '', 'a post with no words rendered words');
+  assert.ok(!html.includes('undefined'), 'an absent field leaked into the markup as "undefined"');
 });
 
-test('Tier 2.2: whitespace-only tweet collapses cleanly without ghost spacing', () => {
-  const rawText = '   \n\t   \n ';
-  const trimmed = rawText.trim();
-  assert.equal(trimmed, '');
+test('Tier 2.2: a whitespace-only node collapses without ghost spacing and keeps its break', () => {
+  // Pure indentation between two inline elements: one separator, no padding.
+  assert.equal(normalizeTweetWhitespace('    '), ' ');
+  // A node that carries a line break is the paragraph break X split out, so the
+  // break has to survive; only the spaces around it are noise.
+  const withBreak = normalizeTweetWhitespace('   \n\t   \n ');
+  assert.ok(withBreak.includes('\n'), 'the paragraph break was flattened away');
+  assert.equal(withBreak.replace(/\n/g, ''), '', `spaces survived as ghost spacing: ${JSON.stringify(withBreak)}`);
+  // Ordinary runs of spaces still collapse to one.
+  assert.equal(normalizeTweetWhitespace('  hi  there '), ' hi there ');
 });
 
 // -------------------------------------------------------------
 // Boundary 2: Extreme Length Content (4000+ Characters)
 // -------------------------------------------------------------
-test('Tier 2.3: 4000+ character long post expands card height without clipping or stack overflow', () => {
+test('Tier 2.3: a 4500-character post reaches the card whole, with no truncation', async () => {
   const longText = 'A'.repeat(4500);
-  assert.equal(longText.length, 4500);
+  const html = await renderCard({ ...MEDIA_ONLY_TWEET, text: longText });
 
-  // Layout calculation
-  const baseHeight = 300;
-  const estimatedTextHeight = Math.ceil(longText.length / 50) * 24; // 50 chars per line, 24px line-height
-  const totalHeight = baseHeight + estimatedTextHeight;
-
-  assert.ok(totalHeight > 2000, 'Total card height should exceed 2000px without clipping');
+  assert.ok(
+    html.includes(longText),
+    'the card truncated or mangled a long post on the way to the markup'
+  );
 });
 
-test('Tier 2.4: deep nested thread of 25 consecutive tweets parsed safely', () => {
-  const tweets: TweetData[] = [];
-  for (let i = 0; i < 25; i++) {
-    tweets.push({
-      id: `thread_${i}`,
-      url: `https://x.com/author/status/${i}`,
-      author: { name: 'Author', handle: '@author', avatarUrl: 'avatar.jpg' },
-      text: `Part ${i + 1} of long essay`,
-      timestamp: '2026-03-01T12:00:00.000Z',
-      isThreadPart: true,
-      threadIndex: i,
-      threadTotal: 25,
-    });
-  }
-
-  assert.equal(tweets.length, 25);
-  assert.equal(tweets[0].threadIndex, 0);
-  assert.equal(tweets[24].threadIndex, 24);
-  assert.equal(tweets[24].threadTotal, 25);
-});
+// Tier 2.4 (a 25-post thread parsed from a hand-built TweetData array) was
+// removed: it asserted its own array. Continuous-thread extraction is driven for
+// real by `tier_resolver.test.ts` res.3 (via `resolveThread`) and by tier1 F14
+// (3-post chaining, plus sponsored-post and outsider-reply exclusion). There is
+// no thread-length cap in `adapter/thread.ts` for a 25-post case to exercise.
 
 // -------------------------------------------------------------
 // Boundary 3: Emoji Edge Cases
 // -------------------------------------------------------------
-test('Tier 2.5: complex multi-codepoint ZWJ emojis (family, rainbow flag, skin tones) preserved', () => {
-  const complexEmojiText = '👨‍👩‍👧‍👦 🏳️‍🌈 🧑🏽‍💻 🦸🏻‍♀️';
-  assert.ok(complexEmojiText.includes('👨‍👩‍👧‍👦'));
-  assert.ok(complexEmojiText.includes('🏳️‍🌈'));
-  assert.ok(complexEmojiText.includes('🧑🏽‍💻'));
-  assert.ok(complexEmojiText.includes('🦸🏻‍♀️'));
+test('Tier 2.5: multi-codepoint ZWJ emojis survive restoration as single graphemes', () => {
+  const el = createDomElement('<div><span>👨‍👩‍👧‍👦 🏳️‍🌈 🧑🏽‍💻 🦸🏻‍♀️</span></div>');
+  const restored = restoreUnicodeEmojis(el);
+
+  for (const emoji of ['👨‍👩‍👧‍👦', '🏳️‍🌈', '🧑🏽‍💻', '🦸🏻‍♀️']) {
+    assert.ok(restored.includes(emoji), `${emoji} was broken apart by restoration`);
+  }
 });
 
-test('Tier 2.6: 50 consecutive Twemoji images restored without separator explosion', () => {
+test('Tier 2.6: 50 consecutive Twemoji images restore with no separator between them', () => {
   const el = new DomElement('DIV');
   for (let i = 0; i < 50; i++) {
     const img = new DomImageElement();
@@ -130,192 +151,126 @@ test('Tier 2.6: 50 consecutive Twemoji images restored without separator explosi
     el.appendChild(img);
   }
 
-  let text = '';
-  for (const child of el.childNodes) {
-    if (child instanceof DomImageElement) text += child.alt;
-  }
-
-  assert.equal(text.length, 50 * '🔥'.length);
+  const restored = restoreUnicodeEmojis(el);
+  assert.equal([...restored].length, 50, `a separator appeared between the emojis: ${JSON.stringify(restored.slice(0, 20))}`);
+  assert.equal(restored, '🔥'.repeat(50));
 });
 
 // -------------------------------------------------------------
 // Boundary 4: Missing & Corrupt Media
 // -------------------------------------------------------------
-test('Tier 2.7: missing avatar URL falls back to default avatar placeholder SVG', () => {
-  function getSafeAvatar(url?: string): string {
-    if (url && url.trim().length > 0) return url;
-    return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#71767b"/></svg>';
-  }
-
-  assert.ok(getSafeAvatar('').startsWith('data:image/svg+xml;utf8,<svg'));
-  assert.equal(getSafeAvatar('https://pbs.twimg.com/avatar.jpg'), 'https://pbs.twimg.com/avatar.jpg');
-});
-
-test('Tier 2.8: broken image load failure in modern-screenshot caught gracefully', async () => {
-  const card = new DomElement('DIV');
-  const img = new DomImageElement();
-  img.src = 'data:image/jpeg;base64,broken';
-  img.decode = async () => { throw new Error('Image decoding failed'); };
-
-  // Resilient decode wrapper
-  const decodeResult = await img.decode().catch(() => 'fallback');
-  assert.equal(decodeResult, 'fallback');
-});
-
-// -------------------------------------------------------------
-// Boundary 5: CORS Network Failure Mock
-// -------------------------------------------------------------
-test('Tier 2.9: network failure during Base64 proxy falls back to placeholder data URL', async () => {
-  const chromeMock = createChromeMock();
-  chromeMock.runtime.onMessage.addListener((msg: ExtensionMessage, _s, sendResponse) => {
-    if (msg.type === 'FETCH_IMAGE_BASE64') {
-      sendResponse({ success: false, error: 'Network timeout: 504 Gateway' });
-      return true;
-    }
+test('Tier 2.7: a post with no avatar URL renders the inline placeholder, not a broken image', async () => {
+  const html = await renderCard({
+    ...MEDIA_ONLY_TWEET,
+    author: { name: 'Artist', handle: '@artist' },
   });
 
-  const res = await chromeMock.runtime.sendMessage({
-    type: 'FETCH_IMAGE_BASE64',
-    url: 'https://pbs.twimg.com/media/failed.jpg',
-  });
+  assert.ok(
+    /<img src="data:image\/svg\+xml;utf8,/.test(html),
+    'a missing avatar did not fall back to the inline placeholder'
+  );
+  assert.ok(!html.includes('src="undefined"'), 'the absent URL leaked into the markup');
 
-  assert.equal(res.success, false);
-  const fallbackUrl = res.success ? res.dataUrl : 'data:image/svg+xml;utf8,<svg><rect fill="#333"/></svg>';
-  assert.ok(fallbackUrl.startsWith('data:image/svg+xml'));
+  const withAvatar = await renderCard(MEDIA_ONLY_TWEET);
+  assert.ok(
+    withAvatar.includes('https://pbs.twimg.com/avatar.jpg'),
+    'a real avatar was replaced by the placeholder'
+  );
 });
+
+// Tier 2.8 (a throwing `img.decode` caught by the test's own `.catch`) was
+// removed: it asserted its own error handling. The shipped catch is inside
+// `renderCardToBlob`, which tier1 F24/F25 and tier5 T5.1.3 drive for real.
+
+// Tier 2.9 (a test-registered `onMessage` listener answering the failure the
+// test itself wrote) was removed. The proxy's own failure handling is covered by
+// `tier1_features.test.ts` F4 and `tier5_adversarial.ts` T5.1.6/T5.1.7, and the
+// client-side fallback to the placeholder by T5.1.3 through the real engine.
 
 // -------------------------------------------------------------
 // Boundary 6: Clipboard Denial & Fallbacks
 // -------------------------------------------------------------
-test('Tier 2.10: clipboard write failure with DOMException triggers instant download', async () => {
-  const clipboard = new MockClipboard();
-  clipboard.failureMode = 'unfocused';
+// Tiers 2.10 and 2.11 (a test-written try/catch around `clipboard.write`, with a
+// `DownloadTracker` standing in for the shipped decision) were removed. The real
+// decision is `exportBlobWithFallback`, driven in `tier1_features.test.ts` F26
+// (per failure mode), `tier4_workloads.test.ts` W2 (a real unfocused refusal)
+// and `tier5_adversarial.ts` T5.2.
 
-  const tracker = new DownloadTracker();
-  let fallbackInvoked = false;
-
-  try {
-    await clipboard.write([new MockClipboardItem({ 'image/png': new Blob([]) })]);
-  } catch (err: any) {
-    if (err.message.includes('Document is not focused')) {
-      tracker.trackDownload(new Blob([]), 'post-to-card-unfocused.png');
-      fallbackInvoked = true;
-    }
-  }
-
-  assert.equal(fallbackInvoked, true);
-  assert.equal(tracker.downloads.length, 1);
-  assert.equal(tracker.downloads[0].filename, 'post-to-card-unfocused.png');
-});
-
-test('Tier 2.11: clipboard write failure with NotAllowedError triggers instant download', async () => {
-  const clipboard = new MockClipboard();
-  clipboard.failureMode = 'gesture_expired';
-
-  const tracker = new DownloadTracker();
-  let fallbackInvoked = false;
-
-  try {
-    await clipboard.write([new MockClipboardItem({ 'image/png': new Blob([]) })]);
-  } catch (err: any) {
-    if (err.message.includes('Must be handling a user gesture')) {
-      tracker.trackDownload(new Blob([]), 'post-to-card-gesture-expired.png');
-      fallbackInvoked = true;
-    }
-  }
-
-  assert.equal(fallbackInvoked, true);
-  assert.equal(tracker.downloads.length, 1);
-});
 
 // -------------------------------------------------------------
 // Boundary 7: Deleted and Unavailable Quote Tweets
 // -------------------------------------------------------------
-test('Tier 2.12: deleted quote tweet renders clean tombstone placeholder', () => {
-  const tombstoneTweet: TweetData = {
-    id: '4001',
-    url: 'https://x.com/user/status/4001',
-    author: { name: 'User', handle: '@user', avatarUrl: 'avatar.jpg' },
+test('Tier 2.12: an unavailable quoted post renders the tombstone, not an empty quote card', async () => {
+  const html = await renderCard({
+    ...MEDIA_ONLY_TWEET,
     text: 'What do you think of this?',
-    timestamp: '2026-04-01T00:00:00.000Z',
     quotePost: {
       author: { name: '', handle: '', avatarUrl: '' },
-      text: 'This post is unavailable.',
+      text: '',
       timestamp: '',
+      isUnavailable: true,
     },
-  };
+  });
 
-  assert.equal(tombstoneTweet.quotePost?.text, 'This post is unavailable.');
-  assert.equal(tombstoneTweet.quotePost?.author.handle, '');
+  assert.ok(html.includes('quote-card-unavailable'), 'the tombstone branch was not taken');
+  assert.ok(html.includes('quote-unavailable-text'), 'the tombstone rendered without its label');
+  assert.ok(
+    !html.includes('class="quote-card"'),
+    'an unavailable quote also rendered as a real quote card'
+  );
 });
 
-// -------------------------------------------------------------
-// Boundary 8: Statistics Extremes (0 vs Millions)
-// -------------------------------------------------------------
-test('Tier 2.13: zero interaction stats omit zeros or show clean 0', () => {
-  const stats = { replies: '0', reposts: '0', likes: '0', views: '0', bookmarks: '0' };
-  assert.equal(stats.likes, '0');
-});
+// Tiers 2.13 and 2.14 (zero stats, viral stats) were removed: both asserted a
+// stats object literal the test had just written. `formatStat` is driven for
+// real by `tier1_features.test.ts` F21.2b (a CJK count keeps its unit) and
+// F21.2c (a raw count is abbreviated).
 
-test('Tier 2.14: massive viral stats (1.2M, 50.4M, 1.1B) format without wrapping or layout break', () => {
-  const viralStats = { replies: '94.2K', reposts: '315.6K', likes: '2.4M', views: '84.1M' };
-  assert.ok(viralStats.likes.endsWith('M'));
-  assert.ok(viralStats.views.endsWith('M'));
-});
+// Tiers 2.15 and 2.16 (0px/48px and 20px/16px config pairs) were removed: both
+// asserted their own config literal. `sanitizePadding`/`sanitizeRadius` and the
+// style they produce are driven for real by `tier1_features.test.ts` F18.1-F18.4.
 
-// -------------------------------------------------------------
-// Boundary 9: Extreme Styling & Layout Combinations
-// -------------------------------------------------------------
-test('Tier 2.15: 0px border-radius with 48px padding creates crisp brutalist card', () => {
-  const config: CardConfig = {
-    theme: 'darkroom',
-    padding: '48px',
-    borderRadius: '0px',
-    aspectRatio: 'auto',
-    showQrCode: true,
-    showStats: true,
-    showTimestamp: true,
-    showWatermark: true,
-    blurAuthor: false,
-  };
-  assert.equal(config.borderRadius, '0px');
-  assert.equal(config.padding, '48px');
-});
-
-test('Tier 2.16: 20px soft border-radius with 16px compact padding renders cleanly', () => {
-  const config: CardConfig = {
-    theme: 'gallery',
-    padding: '16px',
-    borderRadius: '20px',
-    aspectRatio: '16:9',
-    showQrCode: false,
-    showStats: false,
-    showTimestamp: true,
-    showWatermark: false,
-    blurAuthor: true,
-  };
-  assert.equal(config.borderRadius, '20px');
-  assert.equal(config.padding, '16px');
-});
+// Tier 2.17 (a hostile name round-tripped through `textContent`) was removed: it
+// asserted the DOM emulator's own setter. The shipped escaping is driven for real
+// by `tier1_features.test.ts` F5.3, which renders the card and reads the markup.
 
 // -------------------------------------------------------------
-// Boundary 10: Special Characters & XSS Escaping Integrity
+// Boundary 10: Control Characters & RTL Text
 // -------------------------------------------------------------
-test('Tier 2.17: author name with HTML tags and quotes escapes properly', () => {
-  const maliciousName = '<script>alert("pwned")</script> & "Jack"';
-  const el = new DomElement('SPAN');
-  el.textContent = maliciousName;
+test('Tier 2.18: control-character removal is asked of the rasterizer, and RTL text is left alone', async () => {
+  // The extension does not strip control characters itself: the rasterizer is
+  // told to, through the options the export engine hands it. That flag is the
+  // contract, so it is what gets asserted.
+  const scope = globalThis as Record<string, unknown>;
+  const saved = { document: scope.document, HTMLElement: scope.HTMLElement, ShadowRoot: scope.ShadowRoot };
+  scope.document = new DomDocument();
+  scope.HTMLElement = DomElement;
+  scope.ShadowRoot = DomShadowRoot;
 
-  assert.equal(el.textContent, maliciousName);
-  assert.equal(el.querySelector('script'), null);
-});
+  try {
+    const stub = await rasterizer();
+    stub.resetRasterizer();
 
-test('Tier 2.18: tweet text with control characters and RTL characters handled safely', () => {
-  const rtlText = 'مرحبا بالعالم \u202Ereversed\u202C \x00\x08';
-  // Sanitization strips control characters below \x20 except \t and \n
-  const sanitized = rtlText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-  assert.ok(!sanitized.includes('\x00'));
-  assert.ok(!sanitized.includes('\x08'));
+    const doc = scope.document as DomDocument;
+    const card = doc.createElement('div');
+    doc.body.appendChild(card);
+    card.textContent = 'مرحبا ‮reversed‬ \x00\x08';
+
+    const engine = await exportEngine();
+    await engine.renderCardToBlob(card, { scale: 2 });
+
+    const options = stub.rasterizerCalls[0]?.options as Record<string, any> | undefined;
+    assert.ok(options, 'the export engine never reached the rasterizer');
+    assert.equal(options.features.removeControlCharacter, true, 'control characters would reach the canvas');
+    assert.equal(options.features.removeAbnormalAttributes, true);
+    assert.equal(options.features.copyScrollbar, false, 'a scrollbar would be baked into the picture');
+
+    // The RTL text is the author's own writing and is not the export's to rewrite.
+    assert.equal(card.textContent, 'مرحبا ‮reversed‬ \x00\x08');
+  } finally {
+    scope.document = saved.document;
+    scope.HTMLElement = saved.HTMLElement;
+    scope.ShadowRoot = saved.ShadowRoot;
+  }
 });
 
 // -------------------------------------------------------------
@@ -1138,7 +1093,6 @@ test('Tier 2.50: a settled plan does not change when it is planned again', () =>
   // an average wide enough to be called tall. The render rule is the only one.
   const mixed = [picture(0.7), picture(1.1)];
   assert.equal(planMediaGrid(mixed, AUTO_GRID).layout, 'columns');
-  assert.equal(planMediaGrid(mixed, AUTO_GRID).layout, planMediaGrid(mixed, AUTO_GRID).layout);
 });
 
 test('Tier 2.51: a re-plan replaces the previous layout instead of adding to it', () => {
@@ -1707,16 +1661,55 @@ test('Tier 2.77: Alt+C hands the tweet under the pointer to the card, and nothin
         'and for the tweet the pointer is over, not the first in the feed'
       );
 
+      // macOS Option+C produces 'ç', not 'c', so the shortcut is matched on the
+      // physical key as well. Without that the shortcut is dead on every Mac.
+      win.dispatchEvent(keyDown({ altKey: true, key: 'ç', code: 'KeyC' }));
+      assert.equal(opened.length, 2, 'Option+C on macOS must open the card');
+
       // The combinations the handler has to leave alone: Ctrl/⌘+Alt+C belong to
       // the browser or the OS, and a bare C is someone typing.
       for (const ignored of [
         { altKey: true, key: 'c', ctrlKey: true },
         { altKey: true, key: 'c', metaKey: true },
         { key: 'c' },
+        { altKey: true, key: 'ç', code: 'KeyV' },
       ]) {
         win.dispatchEvent(keyDown(ignored));
       }
-      assert.equal(opened.length, 1, 'only a bare Alt+C opens the card');
+      assert.equal(opened.length, 2, 'only a bare Alt+C opens the card');
+    } finally {
+      controller.disconnect();
+    }
+  });
+});
+
+test('Tier 2.87: a route change rescans the page, and the popstate hook is the only wiring for it', async () => {
+  // `injection.ts` hooks `popstate` and nothing else: a `history.pushState`
+  // wrapper used to live there too, but this script runs in the isolated world,
+  // so the wrapper it installed was one X's own scripts never called. What is
+  // left has to work, because a route change in the same tab is a back/forward
+  // press or a link X navigates itself.
+  await withInjectionEnv(async ({ doc }) => {
+    const controller = initTwitterInjection(() => {});
+    try {
+      const win = (globalThis as Record<string, unknown>).window as {
+        dispatchEvent: (event: unknown) => void;
+      };
+
+      assert.equal(
+        doc.querySelector('[data-post-to-card-btn="true"]'),
+        null,
+        'the page starts with nothing to inject into'
+      );
+
+      // The new route's column, mounted after the controller was wired.
+      doc.body.appendChild(createDomElement(TWEET_HTML));
+      win.dispatchEvent({ type: 'popstate' });
+
+      assert.ok(
+        doc.querySelector('[data-post-to-card-btn="true"]'),
+        'a popstate navigation must rescan the page it landed on'
+      );
     } finally {
       controller.disconnect();
     }
@@ -1967,6 +1960,197 @@ test('Tier 2.86: the nested-preview fixture’s markup is balanced', () => {
       0,
       `<${tag}> opens must match closes in the nested-preview fixture`
     );
+  }
+});
+
+// -------------------------------------------------------------
+// Boundary: keyboard navigation of a radiogroup
+// -------------------------------------------------------------
+
+/**
+ * The group `Controls.tsx` renders — a `<div role="radiogroup">` of
+ * `<button role="radio">` — with each button wired the way the component wires
+ * it, against a tree that can actually receive and bubble a keydown.
+ *
+ * `renderComponent` answers a string, so the markup is assembled here instead.
+ * The handler, the roving tabindex and the disabled-level skipping all come from
+ * the shipped module; only the wiring around them is repeated.
+ */
+function radioGroupFixture(
+  doc: DomDocument,
+  values: string[],
+  options: { disabled?: number[]; selected?: number } = {}
+) {
+  const group = doc.createElement('div');
+  group.setAttribute('role', 'radiogroup');
+  const chosen: string[] = [];
+  const buttons: DomElement[] = [];
+  let selected = options.selected ?? 0;
+
+  const select = (next: string) => {
+    selected = values.indexOf(next);
+    chosen.push(next);
+    // The component re-renders on selection and Preact moves the roving
+    // tabindex; a fixture that skipped this would leave two tab stops behind.
+    buttons.forEach((button, index) => {
+      button.tabIndex = index === selected ? 0 : -1;
+    });
+  };
+
+  values.forEach((_, index) => {
+    const button = doc.createElement('button');
+    button.setAttribute('role', 'radio');
+    button.tabIndex = index === selected ? 0 : -1;
+    if (options.disabled?.includes(index)) button.disabled = true;
+    button.addEventListener('keydown', (e: any) =>
+      handleRadioKeyDown(e, values, values[selected], select)
+    );
+    group.appendChild(button);
+    buttons.push(button);
+  });
+
+  doc.body.appendChild(group);
+  return { buttons, chosen, selected: () => values[selected] };
+}
+
+/** A keydown the way the shim's `dispatchEvent` expects one. */
+function keyDown(key: string) {
+  return {
+    type: 'keydown',
+    key,
+    bubbles: true,
+    cancelable: true,
+    defaultPrevented: false,
+    _propagationStopped: false,
+    preventDefault() { this.defaultPrevented = true; },
+    stopPropagation() { this._propagationStopped = true; },
+  };
+}
+
+/**
+ * Runs `body` against a document whose `requestAnimationFrame` fires on the
+ * spot: the handler defers its focus move by a frame, and a queued callback
+ * would have to be pumped by every assertion.
+ */
+function withRadioGroup(
+  values: string[],
+  options: { disabled?: number[]; selected?: number },
+  body: (env: ReturnType<typeof radioGroupFixture> & { doc: DomDocument; fire: (index: number, key: string) => any }) => void
+): void {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = { document: scope.document, requestAnimationFrame: scope.requestAnimationFrame };
+  const doc = new DomDocument();
+  scope.document = doc;
+  scope.requestAnimationFrame = (cb: (t: number) => void) => { cb(0); return 0; };
+
+  try {
+    const fixture = radioGroupFixture(doc, values, options);
+    const fire = (index: number, key: string) => {
+      const event = keyDown(key);
+      fixture.buttons[index].dispatchEvent(event);
+      return event;
+    };
+    body({ ...fixture, doc, fire });
+  } finally {
+    scope.document = saved.document;
+    scope.requestAnimationFrame = saved.requestAnimationFrame;
+  }
+}
+
+test('Tier 2.88: arrow keys move the selection and skip a level that cannot be selected', () => {
+  // The middle level is disabled the way the preview zoom disables one that
+  // does not fit: selecting it would do nothing, and a disabled button cannot
+  // hold focus, so focus would be dumped on the body.
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [1], selected: 0 }, ({ fire, chosen, selected, doc, buttons }) => {
+    const right = fire(0, 'ArrowRight');
+    assert.deepEqual(chosen, ['3x'], 'the disabled level is stepped over, not selected');
+    assert.equal(selected(), '3x');
+    assert.equal(right.defaultPrevented, true, 'an arrow key must not also scroll the page');
+    assert.equal(doc.activeElement, buttons[2], 'focus follows the selection');
+
+    const left = fire(2, 'ArrowLeft');
+    assert.deepEqual(chosen, ['3x', '1x'], 'and back the other way, over the same level');
+    assert.equal(left.defaultPrevented, true);
+    assert.equal(doc.activeElement, buttons[0]);
+  });
+});
+
+test('Tier 2.89: Home and End reach the ends of the group, over disabled levels', () => {
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [0], selected: 2 }, ({ fire, selected, doc, buttons }) => {
+    fire(2, 'Home');
+    assert.equal(selected(), '2x', 'Home lands on the first level that can actually be selected');
+    assert.equal(doc.activeElement, buttons[1]);
+  });
+
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [2], selected: 0 }, ({ fire, selected, doc, buttons }) => {
+    fire(0, 'End');
+    assert.equal(selected(), '2x', 'End lands on the last level that can be selected');
+    assert.equal(doc.activeElement, buttons[1]);
+  });
+});
+
+test('Tier 2.90: an unhandled key leaves the group alone, and an unmovable one is still consumed', () => {
+  withRadioGroup(['1x', '2x'], { selected: 0 }, ({ fire, chosen, selected }) => {
+    const other = fire(0, 'a');
+    assert.deepEqual(chosen, [], 'only the arrow keys, Home and End move the selection');
+    assert.equal(other.defaultPrevented, false, 'and any other key keeps its default behaviour');
+    assert.equal(selected(), '1x');
+  });
+
+  // Every level but this one is disabled, so the selection cannot move. The key
+  // is consumed all the same: returning early would let the browser's default
+  // arrow handling scroll the page and drop focus off the control.
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [1, 2], selected: 0 }, ({ fire, chosen, selected }) => {
+    const right = fire(0, 'ArrowRight');
+    assert.deepEqual(chosen, [], 'there is nowhere to move to');
+    assert.equal(selected(), '1x');
+    assert.equal(right.defaultPrevented, true, 'and the key is still consumed');
+  });
+});
+
+test('Tier 2.91: focus stays in the group when the level just chosen turns out to be unavailable', () => {
+  // Picking a higher zoom can push the card past the window and disable the
+  // level that was just picked, which is why the focus move waits a frame and
+  // re-reads the buttons. Without the fallback, focus lands on the body and the
+  // next Tab restarts from the top of the host page.
+  const scope = globalThis as Record<string, unknown>;
+  const saved = { document: scope.document, requestAnimationFrame: scope.requestAnimationFrame };
+  const doc = new DomDocument();
+  scope.document = doc;
+  scope.requestAnimationFrame = (cb: (t: number) => void) => { cb(0); return 0; };
+
+  try {
+    const group = doc.createElement('div');
+    group.setAttribute('role', 'radiogroup');
+    const buttons = ['1x', '2x', '3x'].map((_, index) => {
+      const button = doc.createElement('button');
+      button.setAttribute('role', 'radio');
+      button.tabIndex = index === 0 ? 0 : -1;
+      group.appendChild(button);
+      return button;
+    });
+    doc.body.appendChild(group);
+
+    buttons[0].addEventListener('keydown', (e: any) =>
+      handleRadioKeyDown(e, ['1x', '2x', '3x'], '1x', (next) => {
+        // The re-render this triggers disables the level that was chosen.
+        buttons.forEach((button, index) => {
+          button.disabled = index > 0;
+          button.tabIndex = index === 0 ? 0 : -1;
+        });
+        assert.equal(next, '2x', 'the selection still moved to the level that was picked');
+      })
+    );
+
+    buttons[0].dispatchEvent(keyDown('ArrowRight'));
+    assert.equal(
+      doc.activeElement,
+      buttons[0],
+      'focus falls back to the reachable radio instead of leaving the group'
+    );
+  } finally {
+    scope.document = saved.document;
+    scope.requestAnimationFrame = saved.requestAnimationFrame;
   }
 });
 

@@ -135,21 +135,24 @@ if (triggerBtn) {
         return;
       }
 
-      const url = activeTab.url || '';
-      if (!url.includes('x.com') && !url.includes('twitter.com')) {
-        showStatus(copy.notOnX, true);
-        return;
-      }
-
+      // Whether this tab is X is answered by the send, not by its URL. The
+      // manifest grants neither "tabs" nor "activeTab" and no x.com host
+      // permission, so `activeTab.url` is always undefined here -- a check on it
+      // rejects every tab, including the X ones. A missing receiver surfaces as
+      // `lastError`; a receiver with no tweet to open answers `success: false`.
       chrome.tabs.sendMessage(activeTab.id, { type: 'TRIGGER_ACTIVE_CARD' }, (res) => {
-        if (chrome.runtime.lastError || !res || !res.success) {
-          showStatus(copy.hoverFirst, true);
-        } else {
-          showStatus(copy.cardOpened);
-          setTimeout(() => {
-            window.close();
-          }, 400);
+        if (chrome.runtime.lastError || !res) {
+          showStatus(copy.notOnX, true);
+          return;
         }
+        if (!res.success) {
+          showStatus(copy.hoverFirst, true);
+          return;
+        }
+        showStatus(copy.cardOpened);
+        setTimeout(() => {
+          window.close();
+        }, 400);
       });
     });
   });

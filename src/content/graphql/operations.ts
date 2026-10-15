@@ -14,8 +14,13 @@
  */
 
 /**
- * Operations that carry a whole conversation. On a status page these are the
- * card's own content: every post of the thread, in order, with its author.
+ * Operations whose body is the card's own content on a status page.
+ *
+ * `TweetDetail` carries the whole conversation — every post of the thread, in
+ * order, with its author. `TweetResultByRestId` carries the one post it was
+ * asked for, with no instruction list, so `parse.ts` reshapes it into a
+ * one-post thread; it is watched because a status page load that goes through
+ * it would otherwise have no GraphQL channel at all.
  */
 export const DETAIL_OPERATIONS: Record<string, true> = {
   TweetDetail: true,

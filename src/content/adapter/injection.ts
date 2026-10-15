@@ -275,7 +275,15 @@ export function injectAll(onTrigger?: (article: Element) => void, locale?: Local
   //    match therefore attaches the trigger to the photo or video block instead
   //    of the action row. Only a group that actually holds the engagement
   //    controls qualifies, and each tweet contributes exactly one candidate.
-  const selector = `${TWEET_ARTICLE_SELECTOR} div[role="group"]:not([data-post-to-card-injected="true"])`;
+  //
+  //    The descendant has to be appended to every alternative, not to the
+  //    joined string. `TWEET_ARTICLE_SELECTOR` is a list, and `a, b div` parses
+  //    as `a or (b div)` — so appending to the whole string made this query match
+  //    tweet *articles* and put the trigger on the post root, below the media,
+  //    instead of in the action row.
+  const selector = TWEET_ARTICLE_SELECTOR.split(',')
+    .map((part) => `${part.trim()} div[role="group"]:not([data-post-to-card-injected="true"])`)
+    .join(', ');
   const actionBars = findActionBars(selector);
 
   let count = 0;
@@ -407,7 +415,8 @@ function isTopLevelActionBar(el: Element): boolean {
  * Initializes continuous dynamic injection on Twitter/X Web App:
  * 1. Executes immediate initial injection scan.
  * 2. Establishes a 150ms debounced MutationObserver on document.body for virtual scrolling.
- * 3. Hooks popstate and history pushState/replaceState for SPA transitions.
+ * 3. Hooks popstate for SPA transitions. A history pushState/replaceState wrapper
+ *    is deliberately not installed -- see the note at the hook itself.
  */
 export function initTwitterInjection(
   onCardTrigger: (article: Element) => void
@@ -496,7 +505,11 @@ export function initTwitterInjection(
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.altKey && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
+    // `code` carries the physical key, `key` the produced character. macOS
+    // Option+C produces 'ç', so matching on `key` alone loses the shortcut on
+    // every Mac; the modifier is still reported as altKey there.
+    const isC = e.key === 'c' || e.key === 'C' || e.code === 'KeyC';
+    if (e.altKey && isC && !e.ctrlKey && !e.metaKey) {
       const activeEl = document.activeElement as HTMLElement | null;
       if (activeEl) {
         const tag = activeEl.tagName?.toLowerCase();
@@ -540,46 +553,20 @@ export function initTwitterInjection(
     });
   }
 
-  // SPA route transition handling
+  // SPA route transition handling.
+  //
+  // Only `popstate` is hooked. A `history.pushState` wrapper used to live here and
+  // dispatched a `locationchange` event, but this script runs in the isolated
+  // world: the wrapper it installs is the one X's own scripts never call, so the
+  // event never fired and the wrapper's only effect was to shadow two native
+  // methods. Route changes reach `scan` through the observer above instead -- a
+  // route change replaces the main column, which is a childList mutation on body.
   const handleNavigation = () => {
     scan();
   };
 
-  let unhookHistory: (() => void) | null = null;
-
   if (typeof window !== 'undefined') {
     window.addEventListener('popstate', handleNavigation);
-    window.addEventListener('locationchange', handleNavigation as EventListener);
-
-    if (window.history) {
-      const originalPushState = window.history.pushState;
-      const originalReplaceState = window.history.replaceState;
-
-      window.history.pushState = function (data: unknown, unused: string, url?: string | URL | null) {
-        const ret = originalPushState.call(this, data, unused, url);
-        try {
-          window.dispatchEvent(new Event('locationchange'));
-        } catch {
-          // Ignore
-        }
-        return ret;
-      };
-
-      window.history.replaceState = function (data: unknown, unused: string, url?: string | URL | null) {
-        const ret = originalReplaceState.call(this, data, unused, url);
-        try {
-          window.dispatchEvent(new Event('locationchange'));
-        } catch {
-          // Ignore
-        }
-        return ret;
-      };
-
-      unhookHistory = () => {
-        window.history.pushState = originalPushState;
-        window.history.replaceState = originalReplaceState;
-      };
-    }
   }
 
   return {
@@ -593,13 +580,9 @@ export function initTwitterInjection(
         observer = null;
       }
       window.removeEventListener('popstate', handleNavigation);
-      window.removeEventListener('locationchange', handleNavigation as EventListener);
       window.removeEventListener('keydown', handleKeyDown as EventListener);
       document.removeEventListener('mouseover', handleMouseOver);
       unsubscribePrefs();
-      if (unhookHistory) {
-        unhookHistory();
-      }
     },
     injectAll: () => {
       scan();

@@ -13,16 +13,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { DomDocument, DomElement, DomImageElement, createDomElement } from './env/browser.ts';
+import { DomDocument, DomElement, DomImageElement, DomShadowRoot, createDomElement } from './env/browser.ts';
 import { createChromeMock } from './env/chrome.ts';
-import { mockDomToBlob } from './env/canvas.ts';
+import { loadModule, renderComponent, rasterizer, exportEngine } from './env/render.ts';
 import { MockClipboard, MockClipboardItem } from './env/clipboard.ts';
 
-// Export engine & CORS protection (direct TS imports)
-import {
-  replaceCardImagesWithBase64,
-  FALLBACK_PLACEHOLDER_DATA_URL,
-} from '../src/content/engine/export.ts';
+// The export engine is loaded through the SSR pipeline so it is the copy wired
+// to the rasterizer stand-in; a direct import would be Node's second copy,
+// talking to the real `modern-screenshot` and failing for want of a canvas.
 
 // Clipboard & Fallback engine (direct TS imports)
 import { exportBlobWithFallback } from '../src/content/engine/export.ts';
@@ -67,6 +65,152 @@ async function captureDownloads(body: () => Promise<void>): Promise<HTMLAnchorEl
     return Array.from(doc.body.querySelectorAll<HTMLAnchorElement>('a[download]'));
   } finally {
     scope.document = previous;
+  }
+}
+
+/**
+ * Runs `body` with a document, a background proxy in the state named, and a card
+ * builder that attaches its images where the export engine can find them.
+ *
+ * The card has to be built through the document and left in it: the engine
+ * clones the live card, and a clone of an element that never had a document
+ * rebuilds its images as plain tags with no `src` to hand the rasterizer.
+ */
+async function withExportEnv(
+  proxy: 'working' | 'failing' | 'absent',
+  body: (env: { doc: DomDocument; card: (urls: string[]) => DomImageElement[] }) => Promise<void>
+): Promise<void> {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = {
+    document: scope.document,
+    chrome: scope.chrome,
+    ShadowRoot: scope.ShadowRoot,
+    HTMLElement: scope.HTMLElement,
+  };
+
+  const doc = new DomDocument();
+  scope.document = doc;
+  scope.ShadowRoot = DomShadowRoot;
+  scope.HTMLElement = DomElement;
+
+  if (proxy === 'absent') {
+    delete scope.chrome;
+  } else {
+    const chromeMock = createChromeMock();
+    chromeMock.runtime.onMessage.addListener((msg: any, _s: unknown, sendResponse: (r: unknown) => void) => {
+      if (msg.type === 'FETCH_IMAGE_BASE64') {
+        if (proxy === 'failing') {
+          sendResponse({ success: false, error: '504 Gateway Timeout' });
+        } else {
+          sendResponse({
+            success: true,
+            dataUrl: `data:image/jpeg;base64,proxied_${Buffer.from(msg.url).toString('base64')}`,
+            contentType: 'image/jpeg',
+          });
+        }
+        return true;
+      }
+    });
+    scope.chrome = chromeMock;
+  }
+
+  const card = (urls: string[]): DomImageElement[] => {
+    const host = doc.createElement('div');
+    host.id = 'post-to-card-export-target';
+    doc.body.appendChild(host);
+    return urls.map((url) => {
+      const img = doc.createElement('img') as DomImageElement;
+      img.src = url;
+      host.appendChild(img);
+      return img;
+    });
+  };
+
+  try {
+    await body({ doc, card });
+  } finally {
+    scope.document = saved.document;
+    scope.chrome = saved.chrome;
+    scope.ShadowRoot = saved.ShadowRoot;
+    scope.HTMLElement = saved.HTMLElement;
+  }
+}
+
+/**
+ * Exports the card at `#post-to-card-export-target` and returns the image
+ * sources the rasterizer was handed.
+ *
+ * A canvas cannot exist in Node, so the rasterizer is the one stubbed step (see
+ * `tests/env/modern-screenshot-stub.ts`). What the export is judged on is what
+ * it handed that rasterizer: an unproxied remote `src` surviving into it is what
+ * would taint a real canvas, and that is production code's decision, not the
+ * stand-in's.
+ */
+async function rasterizedSources(scale: number = 2): Promise<string[]> {
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+
+  const engine = await exportEngine();
+  const card = document.getElementById('post-to-card-export-target');
+  assert.ok(card, 'the card was not attached to the document');
+  const blob = await engine.renderCardToBlob(card, { scale });
+  assert.equal(blob.type, 'image/png');
+
+  const target = stub.rasterizerCalls[0]?.target as DomElement | undefined;
+  assert.ok(target, 'the export engine never reached the rasterizer');
+  return Array.from(target.querySelectorAll<DomImageElement>('img')).map((img) => img.src);
+}
+
+/**
+ * The shipped scroll lock, loaded through the SSR pipeline.
+ *
+ * Node cannot import a `.tsx` (`ERR_UNKNOWN_FILE_EXTENSION`), which is how this
+ * suite came to declare its own `lockScroll`/`unlockScroll` and assert against
+ * those — a re-implementation that keeps passing after the shipped one breaks.
+ * The loaded module runs in Node, so it reads the same `globalThis.document` and
+ * `globalThis.window` installed here.
+ */
+let modalModule: Promise<Record<string, unknown>> | null = null;
+
+async function withScrollLock(
+  viewport: { innerWidth: number; clientWidth: number; scrollY?: number },
+  body: (env: { doc: DomDocument; lock: () => void; unlock: () => void }) => void | Promise<void>
+): Promise<void> {
+  const scope = globalThis as { document?: unknown; window?: unknown };
+  const saved = { document: scope.document, window: scope.window };
+
+  const doc = new DomDocument();
+  doc.documentElement.clientWidth = viewport.clientWidth;
+
+  scope.document = doc;
+  scope.window = {
+    location: { origin: 'https://x.com', pathname: '/' },
+    innerWidth: viewport.innerWidth,
+    scrollY: viewport.scrollY ?? 0,
+    scrollTo: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => {},
+  };
+
+  try {
+    if (!modalModule) modalModule = loadModule('/src/content/ui/Modal.tsx');
+    const mod = await modalModule;
+    const lock = mod.lockScroll as () => void;
+    const unlock = mod.unlockScroll as () => void;
+    assert.equal(typeof lock, 'function', 'Modal.tsx no longer exports lockScroll');
+    assert.equal(typeof unlock, 'function', 'Modal.tsx no longer exports unlockScroll');
+
+    // The lock counter is module state shared by every challenge in this file, so
+    // an unbalanced one would silently skip the styles in the next test. Drain it
+    // before the body sets the page up; the drain's own restore is harmless
+    // because the body writes its styles afterwards.
+    for (let i = 0; i < 4; i++) unlock();
+
+    await body({ doc, lock, unlock });
+  } finally {
+    scope.document = saved.document;
+    scope.window = saved.window;
   }
 }
 
@@ -120,117 +264,67 @@ async function runAdversarialSuite() {
   // -------------------------------------------------------------
   console.log('\n[Group 1] Canvas Taint Prevention & Origin-Clean Export Stress...');
 
-  await challenge('T5.1.1: Unproxied twimg URL strictly taints canvas and triggers SecurityError', async () => {
-    const card = new DomElement('DIV');
-    const taintedImg = new DomImageElement();
-    taintedImg.src = 'https://pbs.twimg.com/media/unproxied_leak.jpg';
-    card.appendChild(taintedImg);
+  await challenge('T5.1.1: With no proxy at all, no remote URL reaches the rasterizer', async () => {
+    // The worst case: a twimg URL that nothing can fetch. Whatever the export
+    // does with it, it must not be handed to the rasterizer as-is, because a
+    // remote source on a canvas is exactly what taints it.
+    await withExportEnv('absent', async ({ card }) => {
+      card(['https://pbs.twimg.com/media/unproxied_leak.jpg']);
 
-    await assert.rejects(
-      async () => {
-        await mockDomToBlob(card);
-      },
-      /SecurityError/,
-      'Must throw SecurityError on unproxied image'
-    );
+      const sources = await rasterizedSources();
+      assert.equal(sources.length, 1);
+      assert.ok(
+        sources[0].startsWith('data:'),
+        `a remote URL reached the rasterizer and would have tainted the canvas: ${sources[0]}`
+      );
+    });
   });
 
   await challenge('T5.1.2: Multi-media card with mixed schemes: replacement guarantees zero canvas taint', async () => {
-    const chromeMock = createChromeMock();
-    chromeMock.runtime.onMessage.addListener((msg: any, _s, sendResponse) => {
-      if (msg.type === 'FETCH_IMAGE_BASE64') {
-        sendResponse({
-          success: true,
-          dataUrl: `data:image/jpeg;base64,proxied_${Buffer.from(msg.url).toString('base64')}`,
-          contentType: 'image/jpeg',
-        });
-        return true;
-      }
-    });
+    await withExportEnv('working', async ({ card }) => {
+      const [img1, img2, img3, img4] = card([
+        'https://pbs.twimg.com/avatar_400x400.jpg',
+        'https://pbs.twimg.com/media/photo_1.jpg:large',
+        'data:image/png;base64,already_base64_data',
+        'blob:https://x.com/local-blob-url',
+      ]);
 
-    const card = new DomElement('DIV');
-    
-    // Add images of various schemes
-    const img1 = new DomImageElement();
-    img1.src = 'https://pbs.twimg.com/avatar_400x400.jpg';
-    card.appendChild(img1);
+      const sources = await rasterizedSources(2);
 
-    const img2 = new DomImageElement();
-    img2.src = 'https://pbs.twimg.com/media/photo_1.jpg:large';
-    card.appendChild(img2);
+      // The two remote sources went through the background proxy; the two that
+      // were already origin-clean were left exactly as they were.
+      assert.equal(sources.length, 4);
+      assert.equal(sources.filter((s) => s.startsWith('data:image/jpeg;base64,proxied_')).length, 2);
+      assert.equal(sources.filter((s) => s === 'data:image/png;base64,already_base64_data').length, 1);
+      assert.equal(sources.filter((s) => s === 'blob:https://x.com/local-blob-url').length, 1);
+      assert.equal(sources.filter((s) => s.startsWith('http')).length, 0, 'a remote source survived into the rasterizer');
 
-    const img3 = new DomImageElement();
-    img3.src = 'data:image/png;base64,already_base64_data';
-    card.appendChild(img3);
-
-    const img4 = new DomImageElement();
-    img4.src = 'blob:https://x.com/local-blob-url';
-    card.appendChild(img4);
-
-    const originalChrome = (globalThis as any).chrome;
-    (globalThis as any).chrome = chromeMock;
-
-    try {
-      // 1. Before proxying: unproxied twimg images would taint canvas
-      await assert.rejects(async () => {
-        await mockDomToBlob(card);
-      }, /SecurityError/);
-
-      // 2. Run Base64 image substitution
-      const restore = await replaceCardImagesWithBase64(card as unknown as HTMLElement);
-
-      // Verify all non-data/blob images are now Base64
-      assert.ok(img1.src.startsWith('data:image/jpeg;base64,proxied_'));
-      assert.ok(img2.src.startsWith('data:image/jpeg;base64,proxied_'));
-      assert.equal(img3.src, 'data:image/png;base64,already_base64_data');
-      assert.equal(img4.src, 'blob:https://x.com/local-blob-url');
-
-      // 3. Render snapshot with zero canvas taint
-      const blob = await mockDomToBlob(card, { scale: 2 });
-      assert.ok(blob, 'Blob must be created without SecurityError');
-      assert.equal(blob.type, 'image/png');
-
-      // 4. Restore original sources
-      restore();
+      // And the card behind the modal is whole again once the export is over.
       assert.equal(img1.src, 'https://pbs.twimg.com/avatar_400x400.jpg');
       assert.equal(img2.src, 'https://pbs.twimg.com/media/photo_1.jpg:large');
-    } finally {
-      (globalThis as any).chrome = originalChrome;
-    }
+      assert.equal(img3.src, 'data:image/png;base64,already_base64_data');
+      assert.equal(img4.src, 'blob:https://x.com/local-blob-url');
+    });
   });
 
   await challenge('T5.1.3: Background Proxy 504 failure falls back to clean SVG placeholder, avoiding taint', async () => {
-    const chromeMock = createChromeMock();
-    chromeMock.runtime.onMessage.addListener((msg: any, _s, sendResponse) => {
-      if (msg.type === 'FETCH_IMAGE_BASE64') {
-        sendResponse({ success: false, error: '504 Gateway Timeout' });
-        return true;
-      }
+    await withExportEnv('failing', async ({ card }) => {
+      const [failingImg] = card(['https://pbs.twimg.com/media/corrupt_or_timed_out.jpg']);
+
+      const sources = await rasterizedSources(2);
+      const engine = await exportEngine();
+      assert.equal(
+        sources[0],
+        engine.FALLBACK_PLACEHOLDER_DATA_URL,
+        'a proxy that could not fetch the picture must still yield something origin-clean'
+      );
+
+      assert.equal(
+        failingImg.src,
+        'https://pbs.twimg.com/media/corrupt_or_timed_out.jpg',
+        'the placeholder is for the canvas, not for the card on screen'
+      );
     });
-
-    const card = new DomElement('DIV');
-    const failingImg = new DomImageElement();
-    failingImg.src = 'https://pbs.twimg.com/media/corrupt_or_timed_out.jpg';
-    card.appendChild(failingImg);
-
-    const originalChrome = (globalThis as any).chrome;
-    (globalThis as any).chrome = chromeMock;
-
-    try {
-      const restore = await replaceCardImagesWithBase64(card as unknown as HTMLElement);
-      // Replaced with fallback placeholder data URL
-      assert.equal(failingImg.src, FALLBACK_PLACEHOLDER_DATA_URL);
-
-      // Renders cleanly without taint
-      const blob = await mockDomToBlob(card, { scale: 2 });
-      assert.ok(blob);
-      assert.equal(blob.type, 'image/png');
-
-      restore();
-      assert.equal(failingImg.src, 'https://pbs.twimg.com/media/corrupt_or_timed_out.jpg');
-    } finally {
-      (globalThis as any).chrome = originalChrome;
-    }
   });
 
   await challenge('T5.1.4: Pre-export Base64 replacement restores original image src in finally block', async () => {
@@ -250,7 +344,7 @@ async function runAdversarialSuite() {
     (globalThis as any).chrome = chromeMock;
 
     try {
-      const restore = await replaceCardImagesWithBase64(card as unknown as HTMLElement);
+      const restore = await (await exportEngine()).replaceCardImagesWithBase64(card as unknown as HTMLElement);
       assert.equal(img.src, 'data:image/jpeg;base64,swapped_clean_data');
 
       restore();
@@ -295,7 +389,7 @@ async function runAdversarialSuite() {
     (globalThis as any).chrome = chromeMock;
 
     try {
-      const restore = await replaceCardImagesWithBase64(card as unknown as HTMLElement);
+      const restore = await (await exportEngine()).replaceCardImagesWithBase64(card as unknown as HTMLElement);
 
       assert.equal(rawTweet.author.avatarUrl, 'https://pbs.twimg.com/avatar.jpg');
       assert.equal(
@@ -589,37 +683,13 @@ async function runAdversarialSuite() {
   // -------------------------------------------------------------
   console.log('\n[Group 3] Modal Shadow DOM Style Isolation & Scroll Lock/Restore...');
 
-  await challenge('T5.3.1: Shadow DOM encapsulation shields modal from hostile Twitter host CSS', () => {
-    const doc = new DomDocument();
-    
-    // Inject hostile global styles into host document head
-    const hostileStyle = doc.createElement('style');
-    hostileStyle.textContent = `
-      * { display: none !important; color: #ff0000 !important; font-size: 0px !important; }
-      div { margin: 1000px !important; }
-    `;
-    doc.head.appendChild(hostileStyle);
-
-    // Create modal container
-    const container = new DomElement('POST-TO-CARD-CONTAINER');
-    const shadow = container.attachShadow({ mode: 'open' });
-    
-    const internalStyle = new DomElement('STYLE');
-    internalStyle.textContent = ':host { all: initial; display: block; position: fixed; inset: 0; }';
-    shadow.appendChild(internalStyle);
-
-    const dialog = new DomElement('DIV');
-    dialog.id = 'post-to-card-dialog';
-    shadow.appendChild(dialog);
-
-    doc.body.appendChild(container);
-
-    // Verify shadow root boundary
-    assert.equal(shadow.childNodes.length, 2);
-    assert.equal(dialog.parentElement, null); // Parent is shadowRoot, not host body
-    assert.equal(container.shadowRoot, shadow);
-    assert.equal(shadow.host, container);
-  });
+  // T5.3.1 used to build its own container, shadow root, style and dialog and
+  // then assert the emulator's facts back (childNodes count, parentElement,
+  // shadowRoot identity). Nothing shipped ran, so no regression in the modal
+  // could fail it. The claim is covered where the real code is driven: tier1
+  // F15.1 (the container upgrades through the registry) and F16.1 (its
+  // stylesheet is in the shadow root and absent from the page), with the
+  // stylesheet's own :host reset asserted by T5.3.2 below.
 
   await challenge('T5.3.2: Modal and Card CSS files declare 100% isolated scoped selectors with :host all:initial', () => {
     const modalCssPath = path.resolve(rootDir, 'src/content/styles/modal.css');
@@ -648,204 +718,100 @@ async function runAdversarialSuite() {
     assert.ok(!cardCss.includes(':root'), 'card.css must not target global :root');
   });
 
-  await challenge('T5.3.3: Scroll lock saves and restores default body overflow & compensates scrollbar width', () => {
-    let activeScrollLocks = 0;
-    let previousOverflow = '';
-    let previousPaddingRight = '';
+  await challenge('T5.3.3: Scroll lock saves and restores default body overflow & compensates scrollbar width', async () => {
+    await withScrollLock({ innerWidth: 1200, clientWidth: 1185 }, ({ doc, lock, unlock }) => {
+      lock();
+      assert.equal(doc.documentElement.style.overflow, 'hidden', 'the scrolling element on an X page is documentElement');
+      assert.equal(doc.body.style.overflow, 'hidden');
+      assert.equal(doc.body.style.paddingRight, '15px');
 
-    function lockScroll(doc: DomDocument, winWidth: number, clientWidth: number) {
-      if (activeScrollLocks === 0) {
-        const body = doc.body;
-        const scrollbarWidth = winWidth - clientWidth;
-        previousOverflow = body ? body.style.overflow : '';
-        previousPaddingRight = body ? body.style.paddingRight : '';
-
-        if (body) {
-          body.style.overflow = 'hidden';
-          if (scrollbarWidth > 0) {
-            body.style.paddingRight = `${scrollbarWidth}px`;
-          }
-        }
-      }
-      activeScrollLocks++;
-    }
-
-    function unlockScroll(doc: DomDocument) {
-      activeScrollLocks = Math.max(0, activeScrollLocks - 1);
-      if (activeScrollLocks === 0 && doc.body) {
-        doc.body.style.overflow = previousOverflow;
-        doc.body.style.paddingRight = previousPaddingRight;
-      }
-    }
-
-    const doc = new DomDocument();
-    doc.body.style.overflow = '';
-    doc.body.style.paddingRight = '';
-
-    lockScroll(doc, 1200, 1185); // 15px scrollbar
-    assert.equal(doc.body.style.overflow, 'hidden');
-    assert.equal(doc.body.style.paddingRight, '15px');
-
-    unlockScroll(doc);
-    assert.equal(doc.body.style.overflow, '');
-    assert.equal(doc.body.style.paddingRight, '');
+      unlock();
+      assert.equal(doc.documentElement.style.overflow, '');
+      assert.equal(doc.body.style.overflow, '');
+      assert.equal(doc.body.style.paddingRight, '');
+    });
   });
 
-  await challenge('T5.3.4: Scroll lock preserves pre-existing non-empty overflow and paddingRight styles', () => {
-    let activeScrollLocks = 0;
-    let previousOverflow = '';
-    let previousPaddingRight = '';
+  await challenge('T5.3.4: Scroll lock adds to a pre-existing paddingRight and gives it back on release', async () => {
+    await withScrollLock({ innerWidth: 1200, clientWidth: 1180 }, ({ doc, lock, unlock }) => {
+      doc.documentElement.style.overflow = 'auto';
+      doc.body.style.overflow = 'scroll';
+      doc.body.style.paddingRight = '12px';
 
-    function lockScroll(doc: DomDocument, winWidth: number, clientWidth: number) {
-      if (activeScrollLocks === 0) {
-        const body = doc.body;
-        const scrollbarWidth = winWidth - clientWidth;
-        previousOverflow = body ? body.style.overflow : '';
-        previousPaddingRight = body ? body.style.paddingRight : '';
+      lock();
+      assert.equal(doc.documentElement.style.overflow, 'hidden');
+      assert.equal(doc.body.style.overflow, 'hidden');
+      // The padding stands in for the scrollbar that just disappeared, so it is
+      // 12 + 20. Writing 20 over the page's own 12 leaves the content 12px short
+      // and it jumps sideways as the modal opens.
+      assert.equal(doc.body.style.paddingRight, '32px');
 
-        if (body) {
-          body.style.overflow = 'hidden';
-          if (scrollbarWidth > 0) {
-            body.style.paddingRight = `${scrollbarWidth}px`;
-          }
-        }
-      }
-      activeScrollLocks++;
-    }
-
-    function unlockScroll(doc: DomDocument) {
-      activeScrollLocks = Math.max(0, activeScrollLocks - 1);
-      if (activeScrollLocks === 0 && doc.body) {
-        doc.body.style.overflow = previousOverflow;
-        doc.body.style.paddingRight = previousPaddingRight;
-      }
-    }
-
-    const doc = new DomDocument();
-    doc.body.style.overflow = 'scroll';
-    doc.body.style.paddingRight = '12px';
-
-    lockScroll(doc, 1200, 1180);
-    assert.equal(doc.body.style.overflow, 'hidden');
-    assert.equal(doc.body.style.paddingRight, '20px');
-
-    unlockScroll(doc);
-    assert.equal(doc.body.style.overflow, 'scroll');
-    assert.equal(doc.body.style.paddingRight, '12px');
+      unlock();
+      assert.equal(doc.documentElement.style.overflow, 'auto');
+      assert.equal(doc.body.style.overflow, 'scroll');
+      assert.equal(doc.body.style.paddingRight, '12px');
+    });
   });
 
-  await challenge('T5.3.5: Reentrant nested scroll locks require matching unlock count to release', () => {
-    let activeScrollLocks = 0;
-    let previousOverflow = '';
-    let previousPaddingRight = '';
+  await challenge('T5.3.5: Reentrant nested scroll locks require matching unlock count to release', async () => {
+    await withScrollLock({ innerWidth: 1200, clientWidth: 1200 }, ({ doc, lock, unlock }) => {
+      doc.body.style.overflow = 'auto';
 
-    function lockScroll(doc: DomDocument) {
-      if (activeScrollLocks === 0) {
-        previousOverflow = doc.body ? doc.body.style.overflow : '';
-        previousPaddingRight = doc.body ? doc.body.style.paddingRight : '';
-        if (doc.body) doc.body.style.overflow = 'hidden';
-      }
-      activeScrollLocks++;
-    }
+      lock();
+      assert.equal(doc.body.style.overflow, 'hidden');
 
-    function unlockScroll(doc: DomDocument) {
-      activeScrollLocks = Math.max(0, activeScrollLocks - 1);
-      if (activeScrollLocks === 0 && doc.body) {
-        doc.body.style.overflow = previousOverflow;
-        doc.body.style.paddingRight = previousPaddingRight;
-      }
-    }
+      lock();
+      assert.equal(doc.body.style.overflow, 'hidden');
 
-    const doc = new DomDocument();
-    doc.body.style.overflow = 'auto';
+      unlock();
+      assert.equal(doc.body.style.overflow, 'hidden', 'a modal is still open, so the page must stay locked');
 
-    lockScroll(doc); // Count: 1
-    assert.equal(doc.body.style.overflow, 'hidden');
-
-    lockScroll(doc); // Count: 2
-    assert.equal(doc.body.style.overflow, 'hidden');
-
-    unlockScroll(doc); // Count: 1
-    assert.equal(doc.body.style.overflow, 'hidden', 'Should still be locked with active locks = 1');
-
-    unlockScroll(doc); // Count: 0
-    assert.equal(doc.body.style.overflow, 'auto', 'Should restore original overflow when active locks = 0');
+      unlock();
+      assert.equal(doc.body.style.overflow, 'auto', 'the last release must restore what the page had');
+    });
   });
 
-  await challenge('T5.3.6: Over-unlocking does not cause counter underflow or corrupt subsequent locks', () => {
-    let activeScrollLocks = 0;
-    let previousOverflow = '';
-    let previousPaddingRight = '';
+  await challenge('T5.3.6: Over-unlocking does not cause counter underflow or corrupt subsequent locks', async () => {
+    await withScrollLock({ innerWidth: 1200, clientWidth: 1200 }, ({ doc, lock, unlock }) => {
+      doc.body.style.overflow = '';
 
-    function lockScroll(doc: DomDocument) {
-      if (activeScrollLocks === 0) {
-        previousOverflow = doc.body ? doc.body.style.overflow : '';
-        previousPaddingRight = doc.body ? doc.body.style.paddingRight : '';
-        if (doc.body) doc.body.style.overflow = 'hidden';
-      }
-      activeScrollLocks++;
-    }
+      // Excessive unlocks when the counter is already zero
+      unlock();
+      unlock();
+      unlock();
 
-    function unlockScroll(doc: DomDocument) {
-      activeScrollLocks = Math.max(0, activeScrollLocks - 1);
-      if (activeScrollLocks === 0 && doc.body) {
-        doc.body.style.overflow = previousOverflow;
-        doc.body.style.paddingRight = previousPaddingRight;
-      }
-    }
+      // The next lock must still take effect
+      lock();
+      assert.equal(doc.body.style.overflow, 'hidden');
 
-    const doc = new DomDocument();
-    doc.body.style.overflow = '';
-
-    // Excessive unlocks when count is 0
-    unlockScroll(doc);
-    unlockScroll(doc);
-    unlockScroll(doc);
-
-    // Next lock must work immediately
-    lockScroll(doc);
-    assert.equal(doc.body.style.overflow, 'hidden');
-
-    unlockScroll(doc);
-    assert.equal(doc.body.style.overflow, '');
+      unlock();
+      assert.equal(doc.body.style.overflow, '');
+    });
   });
 
-  await challenge('T5.3.7: Modal dismissals: Escape key and backdrop click invoke onClose while dialog click stops propagation', () => {
-    let closeTriggered = false;
-    const onClose = () => { closeTriggered = true; };
-
-    // 1. Escape key
-    const escEvent = { key: 'Escape', stopPropagation() {} };
-    if (escEvent.key === 'Escape') {
-      onClose();
-    }
-    assert.equal(closeTriggered, true);
-
-    // 2. Backdrop click
-    closeTriggered = false;
-    const backdrop = new DomElement('DIV');
-    backdrop.id = 'post-to-card-backdrop';
-    const dialog = new DomElement('DIV');
-    dialog.id = 'post-to-card-dialog';
-    backdrop.appendChild(dialog);
-
-    backdrop.addEventListener('click', (e: any) => {
-      if (e.target === backdrop || e.target.id === 'post-to-card-backdrop') {
-        onClose();
-      }
+  await challenge('T5.3.7: The dismissal surfaces the modal actually renders', async () => {
+    // What a click or an Escape key does is wired by Preact's event system inside
+    // the component, and SSR runs no effects — so the handlers themselves are only
+    // observable in a browser (docs/live-verification.md). What is checkable here
+    // is that the surfaces they attach to exist in the shipped markup and that the
+    // backdrop covers the viewport, which is what makes a click outside reach it.
+    const modal = await renderComponent('/src/content/ui/Modal.tsx', 'Modal', {
+      isOpen: true,
+      locale: 'en-US',
+      summary: 'Ada · @ada',
+      onClose: () => {},
+      children: 'card',
     });
 
-    dialog.addEventListener('click', (e: any) => {
-      e.stopPropagation();
-    });
+    assert.ok(modal.includes('card'), 'the modal dropped its children');
+    const backdropIndex = modal.indexOf('post-to-card-backdrop');
+    assert.ok(backdropIndex > -1, 'the modal renders no backdrop to click');
 
-    // Click inside dialog
-    dialog.click();
-    assert.equal(closeTriggered, false, 'Clicking inside dialog must not trigger close');
-
-    // Click on backdrop
-    backdrop.click();
-    assert.equal(closeTriggered, true, 'Clicking on backdrop must trigger close');
+    const modalCss = fs.readFileSync(path.resolve(rootDir, 'src/content/styles/modal.css'), 'utf8');
+    const backdropRule = modalCss.slice(modalCss.indexOf('#post-to-card-backdrop'));
+    const declaration = backdropRule.slice(0, backdropRule.indexOf('}'));
+    assert.ok(/position:\s*fixed/.test(declaration), 'the backdrop must be fixed to the viewport');
+    assert.ok(/inset:\s*0|top:\s*0/.test(declaration), 'the backdrop must cover the viewport to receive a click');
   });
 
   await challenge('T5.3.8: Auditing compiled dist/content.js for Shadow DOM, Custom Elements, and Style Injection', () => {

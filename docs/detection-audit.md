@@ -94,7 +94,7 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 - `div[data-testid="socialContext"]` —— 承载「转发/置顶/回复」**容器**，容器名稳定、内部文字不稳定
   - **2026-10-10 实测修正**：详情页会话区里这个容器**不存在**（35 条推文 0 个），
     也没有「Replying to / 回复」文案，所以那里 `getReplyingToHandle` 只能返回 null。
-    「稳定」目前只对时间线成立过。见 `docs/observed-dom-2026-10-10.md`
+    「稳定」目前只对时间线成立过。见 `docs/observed-dom-2026-10-10-authenticated.md`
   - **2026-10-11 实测修正（转发帖）**：`data-testid="socialContext"` **不在 `div` 上，而在 `span` 上**，
     且**转帖者的 handle 是这个 span 自己所在的 `<a>`**，不是容器内的链接：
     `<a href="/ShiroLinHime"><span data-testid="socialContext">你已转帖</span></a>`。
@@ -105,7 +105,7 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
   自动播放关闭时，视频/GIF 在时间线里以「海报 `img` + 这个 interstitial」出现，**没有 `<video>`**；
   这个状态下 GIF 与视频仍然由**徽标文本**区分（容器内有 `<span>GIF</span>`），
   容器自身的 `aria-label` 是本地化的 `嵌入式视频`，所以 `div[aria-label="Embedded video"]` 那条精确匹配
-  在 zh-CN 页面上匹配不到。见 `docs/observed-dom-2026-10-10.md`
+  在 zh-CN 页面上匹配不到。见 `docs/observed-dom-2026-10-10-authenticated.md`
 - **串的判据在 API，不在 DOM** —— **2026-10-10 实测**：X 自己的「这是同一串的下一节」条件是
  `legacy.in_reply_to_status_id_str === 上一条的 id_str`（同时 `in_reply_to_screen_name` 等于上一条作者，
  所以「同作者」是它的推论而不是独立条件），`conversation_id_str` 把整串绑在一起。

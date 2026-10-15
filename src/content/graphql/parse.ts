@@ -422,8 +422,21 @@ function parseMedia(tweet: Json, hasArticle = false): MediaItem[] | undefined {
  */
 function parseQuote(tweet: Json, depth: number = 1): QuoteTweetData | undefined {
   const quotedUnion = isObject(tweet.quoted_status_result) ? tweet.quoted_status_result : undefined;
-  const quoted = unwrapTweetUnion(quotedUnion?.result ?? quotedUnion);
-  if (!quoted.tweet) return undefined;
+  // No `quoted_status_result` at all means the post quotes nobody. One that is
+  // present but carries a tombstone means it quotes a post that is gone, and the
+  // two must not collapse into the same answer: the DOM channel renders the
+  // second as a tombstone box, so dropping it here made the channels disagree
+  // about the same post depending on which one answered.
+  if (!quotedUnion) return undefined;
+  const quoted = unwrapTweetUnion(quotedUnion.result ?? quotedUnion);
+  if (!quoted.tweet) {
+    return {
+      author: { name: '', handle: '', avatarUrl: '' },
+      text: '',
+      timestamp: '',
+      isUnavailable: true,
+    };
+  }
   const inner = quoted.tweet;
   const legacy = isObject(inner.legacy) ? inner.legacy : {};
   const quoteText = displayedText(legacy) || '';
@@ -671,11 +684,30 @@ export function parseTweetDetailResponse(
   }
 
   const data = payload.data;
-  const instructions =
-    (isObject(data.threaded_conversation_with_injections_v2) ? data.threaded_conversation_with_injections_v2.instructions : undefined) ??
-    (isObject(data.tweet) && isObject(data.tweet.result) ? undefined : undefined);
+  const instructions = isObject(data.threaded_conversation_with_injections_v2)
+    ? data.threaded_conversation_with_injections_v2.instructions
+    : undefined;
 
-  const tweets = collectTweets(instructions);
+  // `TweetResultByRestId` answers with one post and no instruction list, so it
+  // has to be reshaped into the entry `parseTweet` reads rather than dropped:
+  // the operation is watched and cached by name (`operations.ts`), and without
+  // this branch every payload it ever delivers reports "no tweets in response"
+  // and falls through to the DOM channel.
+  const singleTweet =
+    !instructions && isObject(data.tweet) && isObject(data.tweet.result)
+      ? [
+          {
+            entries: [
+              {
+                entryId: '',
+                content: { itemContent: { tweet_results: { result: data.tweet.result } } },
+              },
+            ],
+          },
+        ]
+      : undefined;
+
+  const tweets = collectTweets(instructions ?? singleTweet);
   if (tweets.length === 0) {
     return { ...base, parseError: 'no tweets in response' };
   }

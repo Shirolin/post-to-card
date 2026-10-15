@@ -18,7 +18,7 @@ The suite exercises all requirements from `ORIGINAL_REQUEST.md` and `PROJECT.md`
 ===============================================================
        POST-TO-CARD OPAQUE-BOX E2E TEST SUITE RUNNER            
 ===============================================================
-▶ Tier 1: Feature Coverage (F1 to F26)       :  130 / 130 PASSED (100%)
+▶ Tier 1: Feature Coverage                  :  130 / 130 PASSED (100%)
 ▶ Tier 2: Boundary & Corner Cases           :   18 /  18 PASSED (100%)
 ▶ Tier 3: Cross-Feature Interactions        :   10 /  10 PASSED (100%)
 ▶ Tier 4: Real-World Scenarios & Workflows  :    4 /   4 PASSED (100%)
@@ -35,14 +35,14 @@ The suite exercises all requirements from `ORIGINAL_REQUEST.md` and `PROJECT.md`
 
 ## 2. Test Execution Commands
 
-### Run Full Test Suite (All 4 Tiers)
+### Run Full Test Suite (all tiers)
 ```powershell
 node tests/runner.ts
 ```
 
 ### Run Individual Test Tiers
 ```powershell
-# Tier 1: Feature Coverage (F1 to F26)
+# Tier 1: Feature Coverage
 node tests/runner.ts tier1
 
 # Tier 2: Boundary & Corner Cases
@@ -68,8 +68,9 @@ d:/Project/post-to-card/
     ├── env/                         # Environmental emulation & isolation mocks
     │   ├── browser.ts               # DOM, Custom Elements, Shadow DOM, MutationObserver
     │   ├── chrome.ts                # Chrome Extension MV3 messaging, tabs, storage mocks
-    │   ├── canvas.ts                # Canvas 2D context, CORS taint simulation, modern-screenshot
-    │   └── clipboard.ts             # Async Clipboard API with fault injection & download fallback
+    │   ├── render.ts                # Vite SSR loader, and the modern-screenshot alias the export engine runs against
+    │   ├── clipboard.ts             # Async Clipboard API with fault injection & download fallback
+    │   └── modern-screenshot-stub.ts # The rasterizer stand-in: records what the engine asked it to draw
     ├── fixtures/                    # Production-fidelity Twitter/X DOM fixtures
     │   ├── single-tweet.ts          # Single tweet DOM & expected TweetData
     │   ├── thread.ts                # 3-tweet continuous author thread DOM & ThreadData
@@ -78,27 +79,33 @@ d:/Project/post-to-card/
     │   ├── multi-images.ts          # 1, 2, 3, 4 photos & video poster fixtures
     │   ├── ads-replies.ts           # Interleaved ads & outsider replies filtering fixture
     │   └── rich-tokens.ts           # @mentions, #hashtags, $cashtags, t.co URLs fixture
-    └── tiers/                       # 4 Progressive Test Tiers
-        ├── tier1_features.test.ts   # 130 tests covering F1 through F26 (>=5 per feature)
-        ├── tier2_boundaries.test.ts # 18 tests for stress, boundaries, fault injection
-        ├── tier3_interactions.test.ts# 10 combinatorial cross-feature tests (54 matrix states)
-        └── tier4_workloads.test.ts  # 4 full end-to-end real-world user workflows
+    ├── tier5_adversarial.ts         # Adversarial stress & forensic suite (separate gate: npm run test:tier5)
+    └── tiers/                       # 4 progressive tiers plus 5 focused ones
+        ├── tier1_features.test.ts   # Feature coverage, >=5 checks per feature area
+        ├── tier2_boundaries.test.ts # Stress, boundaries, fault injection
+        ├── tier3_interactions.test.ts# Combinatorial cross-feature interactions
+        ├── tier4_workloads.test.ts  # Full end-to-end real-world user workflows
+        ├── tier_i18n.test.ts        # Localization
+        ├── tier_graphql.test.ts     # Structured response parsing
+        ├── tier_resolver.test.ts    # Deep unified thread resolution
+        ├── tier_article.test.ts     # Long-form posts
+        └── tier_hygiene.test.ts     # Mechanical repository invariants
 ```
 
 ---
 
 ## 4. Coverage Breakdown by Tier
 
-### Tier 1: Feature Coverage (F1 – F26)
+### Tier 1: Feature Coverage (F1 – F32; F8 was removed with its tautological tests)
 Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specification tests:
 - **F1 (Build Pipeline)**: IIFE content bundle, ESM background bundle, isolatedModules, lib DOM, wrapper-free.
 - **F2 (Manifest V3)**: MV3 schema, twimg host permissions, service worker module, content_scripts matches, document_idle.
-- **F3 (Minimal Dependencies)**: Strictly 3 dependencies (preact, modern-screenshot, qrcode-generator), zero react bloat, devDeps separation, semver integrity.
+- **F3 (Minimal Dependencies)**: Strictly 4 dependencies (preact, modern-screenshot, qrcode-generator, lucide-preact), zero react bloat, devDeps separation, semver integrity.
 - **F4 (CORS Proxy)**: FETCH_IMAGE_BASE64 message handling, PING healthcheck, error handling, memory caching, twimg domain constraint.
 - **F5 (Offline & Security)**: Zero telemetry, offline vector QR, script tag safety, local storage isolation, zero remote CSS.
 - **F6 (Button Injection)**: Role button & ✨ icon, group selector matching, data-post-to-card-injected flag, deduplication guard, click dispatch.
 - **F7 (MutationObserver)**: ChildList mutations, 150ms debounce coalescing, layout thrashing prevention, disconnect cleanup, virtual scroll subtree.
-- **F8 (SPA Navigation)**: Popstate listener, pushState hook, scan on route transition, modal reset on navigation, status ID extraction.
+- **F8 (SPA Navigation)**: *removed* — its five tests each defined a local function, called it, and asserted the result. The wiring itself is covered by tier2 Tier 2.87, which loads `src/content/index.ts` and dispatches a real `popstate`.
 - **F9 (Emoji Restoration)**: Twemoji img[alt] restoration, display name emoji support, BR tag to newline, pure emoji tweets, textContent loss proof.
 - **F10 (Rich Tokens)**: @mention links, #hashtag search, $cashtags, t.co display text, trailing pic.twitter.com link stripping.
 - **F11 (Media Upgrades)**: Avatar _400x400 upgrade, photo name=large upgrade, legacy :small to :large, video poster extraction, empty media resilience.
@@ -115,10 +122,10 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - **F22 (Author Privacy Blur)**: CSS filter blur(6px), blurred display name class, blurred handle class, avatar overflow clipping, clean toggle removal.
 - **F23 (Modal UX & Scroll Lock)**: Esc key dismissal, backdrop click dismiss, dialog click stopPropagation, body overflow scroll lock, scrollbar width compensation.
 - **F24 (Retina Export)**: scale: 2 Retina export, scale: 3 Ultra-HD export, image decoding wait, data-export-ignore filter, transparent background.
-- **F25 (Canvas CORS Taint)**: Canvas taint SecurityError simulation on unproxied URLs, Base64 clean canvas export, avatar substitution immutability, media substitution, quote media substitution.
+- **F25 (Canvas CORS Taint)**: Every image the rasterizer is handed is a Base64 data URL (avatar, media, quoted media), the live card is restored afterwards, and a proxy that cannot fetch falls back to an origin-clean placeholder.
 - **F26 (Clipboard & Fallback)**: Direct clipboard copy, unfocused document download fallback, gesture expired download fallback, permission denied fallback, anchor download tracking.
 
-### Tier 2: Boundary & Corner Cases (18 tests)
+### Tier 2: Boundary & Corner Cases
 - Empty text tweet (media-only)
 - Whitespace-only text collapsing
 - Extreme 4500+ character post downward expansion

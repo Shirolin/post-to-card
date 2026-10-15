@@ -62,31 +62,3 @@ export class MockClipboard {
   }
 }
 
-export interface TrackedDownload {
-  filename: string;
-  blob: Blob;
-  clicked: boolean;
-  revoked: boolean;
-}
-
-export class DownloadTracker {
-  public downloads: TrackedDownload[] = [];
-
-  public trackDownload(blob: Blob, filename: string): void {
-    this.downloads.push({
-      filename,
-      blob,
-      clicked: true,
-      revoked: false,
-    });
-  }
-
-  public markRevoked(filename: string): void {
-    const item = this.downloads.find(d => d.filename === filename);
-    if (item) item.revoked = true;
-  }
-
-  public clear(): void {
-    this.downloads = [];
-  }
-}

@@ -18,8 +18,10 @@ import {
   TWEET_DETAIL_QUOTE_JSON,
   TWEET_DETAIL_RETWEET_JSON,
   TWEET_DETAIL_TOMBSTONE_JSON,
+  TWEET_DETAIL_QUOTE_TOMBSTONE_JSON,
   TWEET_DETAIL_CURSOR_ONLY_JSON,
   TWEET_DETAIL_VISIBILITY_JSON,
+  TWEET_RESULT_BY_REST_ID_JSON,
   TWEET_DETAIL_NEW_USER_SHAPE_JSON,
   TWEET_DETAIL_ENTITIES_JSON,
   TWEET_DETAIL_MEDIA_PERMALINK_JSON,
@@ -531,6 +533,41 @@ test('gql.30: a chain deeper than the card prints is not extracted', () => {
   const inner = parsed.thread?.tweets[0].quotePost?.quotePost;
   assert.ok(inner, 'two levels are read');
   assert.equal(inner!.quotePost, undefined, 'and the third is not: the card prints two');
+});
+
+test('gql.31: a TweetResultByRestId body is read as a one-post thread', () => {
+  // The operation is watched and cached by name, so a body it delivers has to
+  // be usable. It carries no instruction list -- only `data.tweet.result` --
+  // and before this branch existed every such payload reported "no tweets in
+  // response" and the status page silently lost its GraphQL channel.
+  const parsed = parseTweetDetailResponse(TWEET_RESULT_BY_REST_ID_JSON, 'TweetResultByRestId', 'q1');
+  assert.ok(parsed.thread, `expected a thread, got ${parsed.parseError}`);
+  assert.equal(parsed.thread!.tweets.length, 1, 'this operation carries exactly the post it was asked for');
+  assert.equal(parsed.thread!.isSingle, true);
+  assert.equal(parsed.thread!.tweets[0].id, '6001');
+  assert.equal(parsed.thread!.tweets[0].author.handle, '@rest');
+
+  // And the target-id contract still holds: a different id is a miss, not a
+  // card for whatever post the payload happened to hold.
+  const miss = parseTweetDetailResponse(TWEET_RESULT_BY_REST_ID_JSON, 'TweetResultByRestId', 'q1', '6002');
+  assert.equal(miss.thread, null);
+});
+
+test('gql.32: a quote of a deleted post is a tombstone, not the absence of a quote', () => {
+  // `quoted_status_result` present with a tombstone result and no
+  // `quoted_status_result` at all are different posts, and the DOM channel
+  // answers them differently (`extractor.ts` `isUnavailableMarker` ->
+  // `Card.tsx` tombstone branch). Collapsing both to `undefined` made the card
+  // depend on which channel answered.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_QUOTE_TOMBSTONE_JSON, 'TweetDetail', 'q1');
+  const quote = parsed.thread?.tweets[0].quotePost;
+  assert.ok(quote, 'a quoted-but-deleted post still produces a quote level');
+  assert.equal(quote!.isUnavailable, true);
+  assert.equal(quote!.text, '', 'the tombstone carries no body to print');
+
+  // The control: the same post without the field quotes nobody.
+  const noQuote = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1');
+  assert.equal(noQuote.thread?.tweets[0].quotePost, undefined);
 });
 
 export async function runTierGraphQL(): Promise<{
