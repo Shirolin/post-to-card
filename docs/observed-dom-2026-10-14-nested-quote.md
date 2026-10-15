@@ -8,7 +8,7 @@
 
 ## 为什么必须重新采
 
-前几轮快照（`observed-dom-2026-10-02*.md`、`-10-09.md`、`-10-10.md`）**全都只采到
+前几轮快照（`observed-dom-2026-10-02*.md`、`-10-09.md`、`-10-10-authenticated.md`）**全都只采到
  outermost 一级的引用**，所以 `docs/real-dom-sampling-checklist.md` 第 3 条虽然打了勾，
 那份样本里的引用本身没有再引用别人。于是代码里所有引用判据都是按「单层引用」写的，
 `quoteTweet` 这个 testid 就是那时确立的主判据——**而它在「引用里的引用」这一级上根本不存在**。

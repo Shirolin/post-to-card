@@ -11,7 +11,7 @@
  */
 
 import type { ThreadData, TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
-import { QUOTE_LEVELS } from '../../types/tweet.ts';
+import { QUOTE_LEVELS, unavailableQuote } from '../../types/tweet.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../adapter/urls.ts';
 import { isArticlePermalink, stripTrailingArticleToken } from '../adapter/emojis.ts';
 import type { ReplyLink } from './bridge.ts';
@@ -96,24 +96,36 @@ function entitySourceFor(noteResult: unknown, legacy: Json): unknown {
 }
 
 /**
+ * Why a `TweetUnion` did not yield a tweet.
+ *
+ * `gone` and `unreadable` have to stay apart. `gone` is X telling us the post
+ * exists but cannot be shown — a `TweetTombstone` or `TweetUnavailable` — and
+ * the card has a tombstone box for exactly that. `unreadable` is a payload this
+ * parser does not understand, which is a miss to fall back on the DOM channel
+ * for, not a claim that the post was deleted. Collapsing them made a
+ * visibility-wrapped quote print "post unavailable" instead of falling back.
+ */
+type UnionReason = 'ok' | 'gone' | 'unreadable';
+
+/**
  * Unwraps a `TweetUnion`: results can be a plain Tweet, a visibility wrapper
  * around one, a tombstone, unavailable, or missing entirely.
  */
-function unwrapTweetUnion(value: unknown): { tweet?: Json; unavailable: boolean } {
-  if (!isObject(value)) return { unavailable: true };
+function unwrapTweetUnion(value: unknown): { tweet?: Json; reason: UnionReason } {
+  if (!isObject(value)) return { reason: 'unreadable' };
   const type = str(value.__typename);
   if (type === 'TweetTombstone' || type === 'TweetUnavailable') {
-    return { unavailable: true };
+    return { reason: 'gone' };
   }
   if (isObject(value.tweet)) {
     // TweetWithVisibilityResults keeps the real payload under `tweet`.
     const inner = unwrapTweetUnion(value.tweet);
-    return inner.tweet ? inner : { unavailable: true };
+    return inner.tweet ? inner : { reason: inner.reason };
   }
   if (type === 'Tweet' && str(value.rest_id)) {
-    return { tweet: value, unavailable: false };
+    return { tweet: value, reason: 'ok' };
   }
-  return { unavailable: true };
+  return { reason: 'unreadable' };
 }
 
 function parseAuthor(tweet: Json): AuthorInfo {
@@ -427,15 +439,15 @@ function parseQuote(tweet: Json, depth: number = 1): QuoteTweetData | undefined 
   // two must not collapse into the same answer: the DOM channel renders the
   // second as a tombstone box, so dropping it here made the channels disagree
   // about the same post depending on which one answered.
+  //
+  // The third answer, `unreadable`, is neither: it is a payload this parser does
+  // not understand, and it must stay a miss so the DOM channel answers instead.
+  // Reading it as a tombstone would print "post unavailable" over a quote that
+  // is merely a shape this build has not seen.
   if (!quotedUnion) return undefined;
   const quoted = unwrapTweetUnion(quotedUnion.result ?? quotedUnion);
   if (!quoted.tweet) {
-    return {
-      author: { name: '', handle: '', avatarUrl: '' },
-      text: '',
-      timestamp: '',
-      isUnavailable: true,
-    };
+    return quoted.reason === 'gone' ? unavailableQuote() : undefined;
   }
   const inner = quoted.tweet;
   const legacy = isObject(inner.legacy) ? inner.legacy : {};

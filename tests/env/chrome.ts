@@ -230,11 +230,32 @@ function manifestGrantsTabUrl(): boolean {
   return (manifest.host_permissions || []).some((pattern) => /x\.com|twitter\.com/.test(pattern));
 }
 
+/**
+ * What `chrome.tabs.sendMessage` should do when the popup calls it.
+ *
+ * The two are the whole distinction the popup has to draw: a tab with no
+ * content script is a missing receiver, which Chrome reports by setting
+ * `runtime.lastError` and handing the callback `undefined`; a tab that has one
+ * but no tweet under the pointer answers `{ success: false }` with no error.
+ * Only a *successful* send is the third case.
+ */
+export type SendOutcome =
+  | { kind: 'no-receiver' }
+  | { kind: 'response'; response: unknown };
+
 class ChromeTabsMock {
   private readonly canReadUrl: boolean;
+  private readonly runtime: ChromeRuntimeMock;
 
-  constructor(canReadUrl: boolean) {
+  /** What the next `sendMessage` does. Defaults to a receiver that answers `{success:false}`. */
+  public outcome: SendOutcome = { kind: 'response', response: { success: false } };
+
+  /** Every message the popup sent, in order. */
+  public sent: Array<{ tabId: number; message: any }> = [];
+
+  constructor(canReadUrl: boolean, runtime: ChromeRuntimeMock) {
     this.canReadUrl = canReadUrl;
+    this.runtime = runtime;
   }
 
   /**
@@ -243,10 +264,45 @@ class ChromeTabsMock {
    * gating on `activeTab.url` passed here while the shipped popup rejected every
    * tab including X -- the mock was more capable than the extension.
    */
-  public async query(_queryInfo: any): Promise<Array<{ id: number; url?: string }>> {
+  public query(
+    _queryInfo: any,
+    callback?: (tabs: Array<{ id: number; url?: string }>) => void
+  ): Promise<Array<{ id: number; url?: string }>> {
     const tab: { id: number; url?: string } = { id: 1 };
     if (this.canReadUrl) tab.url = 'https://x.com/jack/status/20';
-    return [tab];
+    const tabs = [tab];
+    // The popup uses the callback form, as the real API's own docs do for a
+    // fire-and-forget query. Answering only the Promise would leave the popup's
+    // handler unreachable from a test.
+    if (callback) callback(tabs);
+    return Promise.resolve(tabs);
+  }
+
+  /**
+   * Answers the callback form the popup uses.
+   *
+   * `runtime.lastError` is set for the duration of the callback and cleared
+   * after, which is how Chrome scopes it -- a listener that reads it later sees
+   * `undefined` and would mistake a missing receiver for a successful send.
+   */
+  public sendMessage(
+    tabId: number,
+    message: any,
+    callback?: (response: any) => void
+  ): Promise<unknown> {
+    this.sent.push({ tabId, message });
+    const { outcome } = this;
+    if (outcome.kind === 'no-receiver') {
+      this.runtime.lastError = { message: 'Could not establish connection. Receiving end does not exist.' };
+      try {
+        if (callback) callback(undefined);
+      } finally {
+        this.runtime.lastError = null;
+      }
+      return Promise.resolve(undefined);
+    }
+    if (callback) callback(outcome.response);
+    return Promise.resolve(outcome.response);
   }
 }
 
@@ -257,9 +313,10 @@ export interface ChromeMockEnv {
 }
 
 export function createChromeMock(): ChromeMockEnv {
+  const runtime = new ChromeRuntimeMock();
   return {
-    runtime: new ChromeRuntimeMock(),
+    runtime,
     storage: new ChromeStorageMock(),
-    tabs: new ChromeTabsMock(manifestGrantsTabUrl()),
+    tabs: new ChromeTabsMock(manifestGrantsTabUrl(), runtime),
   };
 }

@@ -22,6 +22,7 @@ import {
   RADIUS_OPTIONS,
   resolveRadius,
   getAspectMinHeight,
+  DEFAULT_CARD_CONFIG,
 } from '../../src/content/ui/themes.ts';
 import { replaceCardImagesWithBase64 } from '../../src/content/engine/export.ts';
 import { isAllowedHost } from '../../src/background/proxy.ts';
@@ -49,22 +50,9 @@ function test(name: string, fn: TestFn) {
 // The card under test
 // -------------------------------------------------------------
 
-const BASE_CONFIG: CardConfig = {
-  theme: 'gallery',
-  padding: '32px',
-  borderRadius: '12px',
-  aspectRatio: 'auto',
-  imageFit: 'contain',
-  mediaLayout: 'grid',
-  showQrCode: true,
-  showStats: true,
-  showTimestamp: true,
-  showWatermark: true,
-  blurAuthor: false,
-  showActionBarButton: true,
-  showPlayButton: true,
-  locale: 'en-US',
-};
+/** Production's default with the theme swapped for the one this tier's claims
+ * are about, and the locale pinned so the copy does not follow the machine. */
+const BASE_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, theme: 'gallery', locale: 'en-US' };
 
 const TWEET: TweetData = {
   id: '30001',

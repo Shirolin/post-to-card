@@ -23,7 +23,7 @@
  * an isolated world.
  */
 
-import { TWEET_ARTICLE_SELECTOR } from './thread.ts';
+import { TWEET_ARTICLE_SELECTOR, TWEET_ARTICLE_SELECTORS, withDescendant } from './thread.ts';
 import { loadUserPreferences, subscribePreferences } from '../prefs.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import type { Locale } from '../../types/card.ts';
@@ -276,14 +276,14 @@ export function injectAll(onTrigger?: (article: Element) => void, locale?: Local
   //    of the action row. Only a group that actually holds the engagement
   //    controls qualifies, and each tweet contributes exactly one candidate.
   //
-  //    The descendant has to be appended to every alternative, not to the
-  //    joined string. `TWEET_ARTICLE_SELECTOR` is a list, and `a, b div` parses
-  //    as `a or (b div)` — so appending to the whole string made this query match
-  //    tweet *articles* and put the trigger on the post root, below the media,
-  //    instead of in the action row.
-  const selector = TWEET_ARTICLE_SELECTOR.split(',')
-    .map((part) => `${part.trim()} div[role="group"]:not([data-post-to-card-injected="true"])`)
-    .join(', ');
+  //    The descendant goes on every alternative, not on the joined string —
+  //    `a, b div` parses as `a or (b div)`, which matched tweet *articles* and
+  //    put the trigger on the post root, below the media, instead of in the
+  //    action row. `withDescendant` is the one place that knows this.
+  const selector = withDescendant(
+    TWEET_ARTICLE_SELECTORS,
+    'div[role="group"]:not([data-post-to-card-injected="true"])'
+  );
   const actionBars = findActionBars(selector);
 
   let count = 0;
@@ -295,16 +295,31 @@ export function injectAll(onTrigger?: (article: Element) => void, locale?: Local
 
   // 2. Secondary fallback: only runs when the primary selector matched nothing
   //    anywhere on the page, so it cannot double-inject alongside stage 1.
+  //
+  //    Same list rule as stage 1: each control selector is appended to every
+  //    article alternative, not to the joined string. Interpolating the joined
+  //    form here matched tweet *articles*, and `closest('div[role="group"]')`
+  //    then answered null, so the anchor fell through to
+  //    `parentElement.parentElement` — the post root, or `<body>` itself.
   if (count === 0) {
-    const actionButtons = Array.from(
-      document.querySelectorAll(
-        `${TWEET_ARTICLE_SELECTOR} button[data-testid="reply"], ${TWEET_ARTICLE_SELECTOR} button[data-testid="like"]`
-      )
-    ).filter(btn => isTopLevelActionBar(btn));
+    const selector = TWEET_ARTICLE_SELECTORS.flatMap((part) => [
+      `${part.trim()} button[data-testid="reply"]`,
+      `${part.trim()} button[data-testid="like"]`,
+    ]).join(', ');
+    const actionButtons = Array.from(document.querySelectorAll(selector)).filter(btn =>
+      isTopLevelActionBar(btn)
+    );
     for (const btn of actionButtons) {
+      const article = btn.closest(TWEET_ARTICLE_SELECTOR);
       let group: Element | null = btn.closest('div[role="group"]');
       if (!group && btn.parentElement) {
-        group = btn.parentElement.parentElement || btn.parentElement;
+        // The fallback only applies to a control that is *not* wrapped in a
+        // role=group, and it must still land inside the owning tweet on
+        // something that holds the engagement controls. Without both guards the
+        // walk reached `<body>` and appended the trigger to the page.
+        const candidate = btn.parentElement.parentElement || btn.parentElement;
+        const insideOwnArticle = !article || article.contains(candidate);
+        if (insideOwnArticle && isActionBar(candidate)) group = candidate;
       }
       if (group && injectIntoActionBar(group, onTrigger, locale)) {
         count++;

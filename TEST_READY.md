@@ -105,7 +105,7 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - **F5 (Offline & Security)**: Zero telemetry, offline vector QR, script tag safety, local storage isolation, zero remote CSS.
 - **F6 (Button Injection)**: Role button & ✨ icon, group selector matching, data-post-to-card-injected flag, deduplication guard, click dispatch.
 - **F7 (MutationObserver)**: ChildList mutations, 150ms debounce coalescing, layout thrashing prevention, disconnect cleanup, virtual scroll subtree.
-- **F8 (SPA Navigation)**: *removed* — its five tests each defined a local function, called it, and asserted the result. The wiring itself is covered by tier2 Tier 2.87, which loads `src/content/index.ts` and dispatches a real `popstate`.
+- **F8 (SPA Navigation)**: *removed* — its five tests each defined a local function, called it, and asserted the result. The navigation wiring is covered by tier2 Tier 2.87, which calls the shipped `initTwitterInjection` and dispatches a real `popstate`; the entry module's own wiring is F31.1–F31.5.
 - **F9 (Emoji Restoration)**: Twemoji img[alt] restoration, display name emoji support, BR tag to newline, pure emoji tweets, textContent loss proof.
 - **F10 (Rich Tokens)**: @mention links, #hashtag search, $cashtags, t.co display text, trailing pic.twitter.com link stripping.
 - **F11 (Media Upgrades)**: Avatar _400x400 upgrade, photo name=large upgrade, legacy :small to :large, video poster extraction, empty media resilience.
@@ -125,42 +125,41 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - **F25 (Canvas CORS Taint)**: Every image the rasterizer is handed is a Base64 data URL (avatar, media, quoted media), the live card is restored afterwards, and a proxy that cannot fetch falls back to an origin-clean placeholder.
 - **F26 (Clipboard & Fallback)**: Direct clipboard copy, unfocused document download fallback, gesture expired download fallback, permission denied fallback, anchor download tracking.
 
-### Tier 2: Boundary & Corner Cases
-- Empty text tweet (media-only)
-- Whitespace-only text collapsing
-- Extreme 4500+ character post downward expansion
-- Deep thread of 25 continuous tweets
-- Multi-codepoint ZWJ emojis (👨‍👩‍👧‍👦, 🏳️‍🌈, 🧑🏽‍💻, 🦸🏻‍♀️)
-- 50 consecutive Twemojis
-- Missing avatar fallback to default SVG
-- Corrupted image decode catch-and-continue
-- Background proxy 504 network error fallback
-- Clipboard unfocused fallback
-- Clipboard gesture expiration fallback
-- Deleted quote tweet placeholder
-- Zero stats (0 likes/replies) vs viral stats (2.4M, 84.1M)
-- Brutalist 0px radius + 48px padding
-- Soft 20px radius + 16px padding
-- XSS tag injection and escaping in author name
-- Control character sanitization (\x00, \x08) and RTL text
+### Tier 2: Boundary & Corner Cases (84 tests)
+- Empty / whitespace-only / 4500-character bodies, and line breaks inside a text node
+- ZWJ emoji restoration and 50 consecutive Twemojis
+- Missing avatar fallback to the inline placeholder
+- Quote extraction: author identity, rich tokens, media isolation, permalinks, nested
+  and previewed quotes, an unavailable quote rendered as a tombstone
+- External link cards, in their div and non-div wrapper shapes
+- Social context: repost / reply / pinned read structurally, in any language
+- Media URL resolution and the picture fallback chain, one step per error
+- Extraction with no `data-testid` present, and the article selector's fallback
+- Translated-post notice present and absent; pic.x.com permalinks kept or stripped
+- Media-grid planning thresholds and idempotence
+- Thread-scope exclusion accounting
+- Trigger injection: one per tweet, hidden-not-removed, preference and locale changes
+  reaching triggers that already exist
+- The Alt+C shortcut, and the popstate rescan
+- Radiogroup keyboard navigation: disabled levels skipped, Home/End, deferred focus
+- Control-character removal asked of the rasterizer, RTL text left alone
 
 ### Tier 3: Cross-Feature Interactions (10 tests)
-- 6 Themes root CSS class mapping
-- 3 Padding pixel options without style collapse
-- 3 Radius options with media corner synchronization
-- 54-state combinatorial configuration matrix (6 Themes x 3 Paddings x 3 Radii)
-- Composite mega-card: Thread + Quote Tweet + 4-image grid + Twemojis
-- Author privacy blur active concurrently with sharp QR code
-- 3:4 Aspect ratio fluid downward expansion past 853px min-height
-- 16:9 Banner ratio fluid downward expansion past 360px min-height
-- Full Background Proxy -> Base64 Replacement -> Clean Canvas Export Pipeline
-- Chrome storage preference saving and modal rehydration
+- Every material renders its own `data-theme` and injects that material's accent
+- Every padding option reaches the root as both attribute and inline padding
+- Every radius option lands on the card and the media, through `resolveRadius`
+- The full material x padding x radius matrix renders every combination
+- A thread carrying a quote, a four-photo grid and emoji renders every part at once
+- The privacy blur lands on the author block only, never on the QR code
+- 3:4 and 16:9 each set a min-height floor and stay free to grow past it
+- Every image the card paints is one the background proxy is allowed to fetch
+- Preferences saved through the store come back sanitized on the next launch
 
 ### Tier 4: Real-World Scenarios (4 End-to-End Workflows)
-- **Workflow 1**: Single Viral Tweet with 4 photos converted to Nocturne card and copied to clipboard.
-- **Workflow 2**: 3-Tweet thread with author blur fails clipboard (unfocused) and gracefully downloads PNG.
-- **Workflow 3**: Quote tweet rendered in Parchment at Ultra-HD (scale: 3, 288 DPI).
-- **Workflow 4**: SPA navigation clears modal, Esc dismisses modal, and body scroll unlocks.
+- **Workflow 1**: A four-photo tweet extracts, renders, rasterizes clean, and reaches the clipboard.
+- **Workflow 2**: A three-post thread resolves, blurs its author, and falls back to a download.
+- **Workflow 3**: A quote tweet extracts its quote, renders it, and downloads on request.
+- **Workflow 4**: The scroll lock is reentrant, restores what it found, and a closed modal renders nothing.
 
 ---
 

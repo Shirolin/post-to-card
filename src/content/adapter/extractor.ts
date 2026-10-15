@@ -6,7 +6,7 @@
  */
 
 import type { TweetData, AuthorInfo, MediaItem, TweetStats, QuoteTweetData, ArticleData } from '../../types/tweet.ts';
-import { QUOTE_LEVELS } from '../../types/tweet.ts';
+import { QUOTE_LEVELS, unavailableQuote } from '../../types/tweet.ts';
 import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, stripTrailingArticleLink, stripTrailingArticleToken } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
@@ -1124,12 +1124,10 @@ function extractQuoteTweet(
   // (a permalink with neither identity nor body) rather than by matching the
   // notice text, which exists in many languages and drifts with X's copy.
   if (isUnavailableMarker(quoteBox)) {
-    return {
-      author: { name: '', handle: '', avatarUrl: '' },
-      text: '',
-      timestamp: '',
-      isUnavailable: true,
-    };
+    // The same shape the GraphQL channel builds for a tombstone, from one
+    // constructor: the point of answering this state at all is that the two
+    // channels must not disagree about the same post.
+    return unavailableQuote();
   }
 
   // Author (scoped to the quote box so the main author never leaks in)

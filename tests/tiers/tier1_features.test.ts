@@ -11,7 +11,7 @@ import { h } from 'preact';
 import { renderToStaticMarkup } from 'preact-render-to-string';
 
 import { DomAnchorElement, DomDocument, DomElement, DomImageElement, DomShadowRoot, createDomElement, DomMutationObserver } from '../env/browser.ts';
-import { createChromeMock } from '../env/chrome.ts';
+import { createChromeMock, type SendOutcome } from '../env/chrome.ts';
 import { MockClipboard, MockClipboardItem, type ClipboardFailureMode } from '../env/clipboard.ts';
 import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
 import { THREAD_HTML } from '../fixtures/thread.ts';
@@ -59,22 +59,16 @@ const VIDEO_TWEET: TweetData = {
   media: [{ type: 'video', url: 'https://pbs.twimg.com/media/video_poster.jpg', duration: '1:42' }],
 };
 
-const CARD_CONFIG: CardConfig = {
-  theme: 'minimal',
-  padding: '24px',
-  borderRadius: '12px',
-  aspectRatio: 'auto',
-  imageFit: 'contain',
-  mediaLayout: 'grid',
-  showQrCode: true,
-  showStats: true,
-  showTimestamp: true,
-  showWatermark: true,
-  blurAuthor: false,
-  showActionBarButton: true,
-  showPlayButton: true,
-  locale: 'en-US',
-};
+/**
+ * The config a card is rendered with here.
+ *
+ * Spread from production's own default rather than re-listing the fields: the
+ * hand-written copy had drifted (24px padding and a fixed 12px radius, neither
+ * of which is what the extension ships), so the markup under test was not the
+ * markup the card produces. Only the locale is pinned, because the copy has to
+ * be deterministic while `detectDefaultLocale` reads the machine's language.
+ */
+const CARD_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, locale: 'en-US' };
 
 /** A two-post thread: the on-card exclude button only exists when there is more
  * than one post to keep, so claims about it need a thread rather than a tweet. */
@@ -3224,6 +3218,47 @@ test('F24.6: the node rasterized is an off-screen copy, not the live card', asyn
   assert.ok(target.querySelectorAll('.media-box').length > 0, 'the copy is the card, not an empty shell');
 });
 
+test('F24.7: a rasterizer failure reaches the user as the reason, not as a silent no-op', async () => {
+  // `exportCard` deliberately lets the rasterizer's own failure through -- a
+  // screenshot that never happened is a defect, not an outcome -- so the preview
+  // is the only thing that can tell the user. This drives that hand-off end to
+  // end: the stand-in rejects, and the string the user ends up reading is the
+  // reason it gave.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  stub.failNextRasterization('canvas exploded');
+  const engine = await exportEngine();
+
+  await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+    // A stand-in for the real hand-off in `content/index.ts`, which is exactly
+    // `exportCard(target, { action })`. Whether the engine resolves or throws is
+    // what the preview has to cope with.
+    let settled = false;
+    const container = openCardModal(EXPORT_THREAD, (target: HTMLElement, action: string) =>
+      engine.exportCard(target, { action }).finally(() => { settled = true; })
+    );
+    await flushEffects();
+
+    const download = container.shadow.querySelector('.export-actions .btn-secondary');
+    assert.ok(download, 'the preview has no download control to press');
+    download.click();
+    // The rejection travels back through the engine and the preview's own catch
+    // before it becomes a status line, which is several ticks after the click.
+    for (let i = 0; i < 40; i++) {
+      await flushEffects();
+      const shown = container.shadow.querySelector('.status-message');
+      if (settled && shown && shown.className.includes('is-error')) break;
+    }
+
+    const status = container.shadow.querySelector('.status-message');
+    assert.ok(status, 'a failed export said nothing at all');
+    assert.equal(status.textContent, 'canvas exploded',
+      'the reason the export failed never reached the user');
+    assert.ok(status.className.includes('is-error'),
+      'a failure was announced as an ordinary status');
+  });
+});
+
 // -------------------------------------------------------------
 // F25: Canvas CORS Taint Prevention
 //
@@ -3781,6 +3816,141 @@ test('F30.6: the popup switch paints a focus ring on the control that is visible
   );
 });
 
+
+/**
+ * The popup's own copy table, read out of the shipped file.
+ *
+ * The popup cannot export anything: it is a plain script loaded by a `<script>`
+ * tag, not a build entry. Its user-facing strings are data in that file, so the
+ * test reads them from the source rather than restating them — a rewording stays
+ * allowed, and the assertion is still about what the popup actually shows.
+ */
+const POPUP_SOURCE = fs.readFileSync(path.resolve(__dirname, '../../public/popup.js'), 'utf-8');
+
+function popupCopy(key: string, locale: string): string {
+  const block = POPUP_SOURCE.slice(POPUP_SOURCE.indexOf(`'${locale}':`));
+  const match = new RegExp(`${key}:\\s*'([^']*)'`).exec(block);
+  assert.ok(match, `public/popup.js has no ${locale} copy for ${key}`);
+  return match![1];
+}
+
+/**
+ * Loads the real popup against a document holding its markup, then clicks the
+ * quick-trigger button with `chrome.tabs.sendMessage` answering `outcome`.
+ *
+ * The popup is the one shipped file nothing loaded: `node --check` only parses
+ * it, and no test drove it, so its three send outcomes could collapse into one
+ * branch without failing anything. It goes through the SSR pipeline the way
+ * `index.ts` does — with a distinct query per load, since a plain script has no
+ * exports and the module cache would otherwise make the second load a no-op.
+ *
+ * The locale comes from the popup itself (`documentElement.lang`, which it
+ * writes from the browser's language) rather than being assumed: the copy table
+ * is per locale, and a test that hard-coded `en-US` would fail on a machine
+ * whose browser is not English.
+ */
+let popupLoads = 0;
+
+function popupMarkup(): string {
+  return `
+    <span id="toggle-title"></span><span id="toggle-desc"></span><span id="tip-text"></span>
+    <input id="toggle-button" type="checkbox"><span id="btn-text"></span>
+    <button id="btn-trigger-now"></button><div id="status-text"></div>`;
+}
+
+async function withPopup(
+  outcome: SendOutcome,
+  body: (env: {
+    status: () => string;
+    closed: () => boolean;
+    locale: string;
+    sent: () => unknown;
+    /** Lets the popup's own deferred work (its status timer, its close) run. */
+    settle: (ms: number) => Promise<void>;
+  }) => Promise<void>
+): Promise<void> {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = { document: scope.document, chrome: scope.chrome, window: scope.window };
+  const doc = new DomDocument();
+  doc.body.innerHTML = popupMarkup();
+
+  const chromeMock = createChromeMock();
+  chromeMock.tabs.outcome = outcome;
+  let didClose = false;
+
+  scope.document = doc;
+  scope.chrome = chromeMock;
+  scope.window = { close: () => { didClose = true; } };
+
+  const savedLog = console.log;
+  console.log = () => {};
+  try {
+    popupLoads++;
+    await loadModule(`/public/popup.js?load=${popupLoads}`);
+    doc.getElementById('btn-trigger-now')!.click();
+    await body({
+      status: () => doc.getElementById('status-text')!.textContent,
+      closed: () => didClose,
+      locale: doc.documentElement.lang,
+      sent: () => chromeMock.tabs.sent,
+      settle: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
+  } finally {
+    console.log = savedLog;
+    scope.document = saved.document;
+    scope.chrome = saved.chrome;
+    scope.window = saved.window;
+  }
+}
+
+test('F30.7: the popup tells a missing receiver apart from a receiver that found no tweet', async () => {
+  // The two are different problems with different fixes -- "open X" versus
+  // "hover a tweet" -- and the manifest grants neither "tabs" nor "activeTab",
+  // so `activeTab.url` cannot tell them apart. Only the send can: Chrome sets
+  // `runtime.lastError` when there is no content script to receive at all.
+  await withPopup({ kind: 'no-receiver' }, ({ status, closed, locale }) => {
+    assert.equal(
+      status(),
+      popupCopy('notOnX', locale),
+      'a send with no receiver is the tab not being X, not a missing hover'
+    );
+    assert.equal(closed(), false, 'the popup stays open when nothing was opened');
+  });
+
+  await withPopup({ kind: 'response', response: { success: false } }, ({ status, closed, locale }) => {
+    assert.equal(
+      status(),
+      popupCopy('hoverFirst', locale),
+      'a receiver that has no tweet under the pointer asks for a hover instead'
+    );
+    assert.equal(closed(), false);
+  });
+
+  await withPopup({ kind: 'response', response: { success: true } }, async ({ status, closed, locale, settle }) => {
+    assert.equal(status(), popupCopy('cardOpened', locale));
+    assert.equal(closed(), false, 'the popup lingers for a moment so the message is readable');
+    await settle(450);
+    // The popup gets out of the way once the card is open, which is the point
+    // of the button. Waited for rather than asserted immediately: the close is
+    // on a 400ms timer, and asserting before it fires would be asserting the
+    // absence of the behaviour.
+    assert.equal(closed(), true, 'a card that opened closes the popup');
+  });
+});
+
+test('F30.8: the popup asks the content script for the active tab, with the trigger message', async () => {
+  // The send is the thing that decides all three outcomes above, so what it
+  // carries is part of the contract: the content script answers
+  // `TRIGGER_ACTIVE_CARD` and nothing else, and it is addressed to the tab the
+  // query returned rather than to the extension.
+  await withPopup({ kind: 'response', response: { success: false } }, ({ sent }) => {
+    assert.deepEqual(
+      sent(),
+      [{ tabId: 1, message: { type: 'TRIGGER_ACTIVE_CARD' } }],
+      'the popup must ask the active tab for its card, once'
+    );
+  });
+});
 
 // -------------------------------------------------------------
 // F32: Truncated Post Indicator

@@ -250,6 +250,23 @@ export class DomTextNode extends DomNode {
     this.nodeName = '#text';
     this.nodeValue = text;
   }
+
+  /**
+   * The characters this node holds, under the name a real `Text` exposes them.
+   *
+   * Preact rewrites a text vnode by assigning `dom.data`, so without this a
+   * re-render set the property on the shim node and left `nodeValue` — which is
+   * what `textContent` reads — holding the previous string. Every dynamic text
+   * update in a re-rendered component silently showed the old value because of
+   * it.
+   */
+  get data(): string {
+    return this.nodeValue || '';
+  }
+
+  set data(val: string) {
+    this.nodeValue = val;
+  }
 }
 
 export class DomShadowRoot extends DomNode {

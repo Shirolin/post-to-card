@@ -34,6 +34,7 @@ import { RETWEET_HTML } from '../fixtures/retweet.ts';
 import { PINNED_HTML } from '../fixtures/pinned.ts';
 import { withoutTestIds } from '../fixtures/strip-testids.ts';
 import { loadUserPreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
+import { DEFAULT_CARD_CONFIG } from '../../src/content/ui/themes.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig } from '../../src/types/card.ts';
 
@@ -52,22 +53,9 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
-const CARD_CONFIG: CardConfig = {
-  theme: 'minimal',
-  padding: '24px',
-  borderRadius: '12px',
-  aspectRatio: 'auto',
-  imageFit: 'contain',
-  mediaLayout: 'grid',
-  showQrCode: true,
-  showStats: true,
-  showTimestamp: true,
-  showWatermark: true,
-  blurAuthor: false,
-  showActionBarButton: true,
-  showPlayButton: true,
-  locale: 'en-US',
-};
+/** The config a card is rendered with here — production's default, with the
+ * locale pinned so the copy does not follow the machine's language. */
+const CARD_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, locale: 'en-US' };
 
 /** The card, rendered from data, so a boundary claim is made against markup. */
 function renderCard(data: TweetData | ThreadData): Promise<string> {
@@ -1311,6 +1299,116 @@ const TWEET_HTML = `
     </div>
   </article>
 `;
+
+test('Tier 2.59b: the fallback scan anchors to the action row, never to the page', async () => {
+  // The stage-2 fallback runs when no `div[role="group"]` action bar was found.
+  // It builds its own selector by appending the control selectors to the article
+  // list, and the same precedence rule applies there: appending to the *joined*
+  // string matched tweet articles, `closest('div[role="group"]')` then answered
+  // null, and the anchor walked up to `<body>` — the trigger was appended to the
+  // page instead of the tweet.
+  //
+  // The post here has no `role="group"` at all, and its engagement row is the
+  // div holding the reply button, which is what the fallback must find.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`
+        <article data-testid="tweet">
+          <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+          <div class="action-row">
+            <button data-testid="reply" aria-label="64 replies">64</button>
+            <button data-testid="like" aria-label="8.1K likes">8.1K</button>
+          </div>
+        </article>
+      `)
+    );
+
+    const count = injectAll(() => {});
+    assert.equal(count, 1, 'the fallback has to inject exactly one trigger');
+
+    const article = doc.querySelector('article') as unknown as Element;
+    assert.ok(
+      article.querySelector('[data-post-to-card-btn="true"]'),
+      'the trigger belongs inside the tweet'
+    );
+    assert.equal(
+      doc.body.querySelector(':scope > [data-post-to-card-btn="true"]'),
+      null,
+      'and never appended to the page body, which is what the walk-up used to do'
+    );
+  });
+});
+
+test('Tier 2.59c: a quote with no role=group does not pull the trigger onto the outer post', async () => {
+  // `isTopLevelActionBar` rejects a control inside a quoted post, and the
+  // fallback's own guards must agree: a quoted post's engagement row is not the
+  // outer tweet's action bar, and anchoring to it would put the outer card's
+  // trigger inside the quote.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`
+        <article data-testid="tweet">
+          <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+          <div data-testid="tweetText"><span>outer body</span></div>
+          <div data-testid="quoteTweet">
+            <article data-testid="tweet">
+              <div data-testid="User-Name"><a href="/grace"><span>Grace</span></a></div>
+              <div class="quote-row">
+                <button data-testid="reply" aria-label="2 replies">2</button>
+                <button data-testid="like" aria-label="3 likes">3</button>
+              </div>
+            </article>
+          </div>
+        </article>
+      `)
+    );
+
+    injectAll(() => {});
+
+    const outer = doc.querySelectorAll('article')[0] as unknown as Element;
+    const quote = doc.querySelector('[data-testid="quoteTweet"]') as unknown as Element;
+    assert.equal(
+      quote.querySelector('[data-post-to-card-btn="true"]'),
+      null,
+      "a quoted post's own row is not the outer tweet's action bar"
+    );
+    assert.equal(
+      outer.querySelector('[data-post-to-card-btn="true"]'),
+      null,
+      'and with no outer action bar there is nothing to anchor to'
+    );
+  });
+});
+
+test('Tier 2.59d: a control with no wrapping row never anchors the trigger to the page', async () => {
+  // The fallback's second half is a walk up from the control to its row, and the
+  // walk has to stop inside the tweet. With the control as a direct child of the
+  // article, `parentElement.parentElement` is `<body>` — and `injectIntoActionBar`
+  // would then append the trigger to the page, because a body has no owning
+  // article to mark and its dedup guard never trips.
+  //
+  // Stage 1 already refuses a candidate with no owning article
+  // (`findActionBars`), so this is the same rule applied to the fallback.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`
+        <article data-testid="tweet">
+          <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+          <button data-testid="reply" aria-label="64 replies">64</button>
+          <button data-testid="like" aria-label="8.1K likes">8.1K</button>
+        </article>
+      `)
+    );
+
+    injectAll(() => {});
+
+    assert.equal(
+      doc.body.querySelector('[data-post-to-card-btn="true"]'),
+      null,
+      'the walk-up must not escape the tweet and append the trigger to the page'
+    );
+  });
+});
 
 test('Tier 2.59: a tweet gets one trigger, and asking twice does not add another', async () => {
   // Deduplication is anchored to the tweet, not to the element that was handed

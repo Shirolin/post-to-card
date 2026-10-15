@@ -27,6 +27,7 @@ import { renderComponent, loadModule, rasterizer, exportEngine } from '../env/re
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { isAllowedHost } from '../../src/background/proxy.ts';
+import { DEFAULT_CARD_CONFIG } from '../../src/content/ui/themes.ts';
 
 import { THREAD_HTML } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
@@ -129,22 +130,9 @@ async function withSandbox(body: (s: Sandbox) => Promise<void>): Promise<void> {
   }
 }
 
-const CARD_CONFIG: CardConfig = {
-  theme: 'darkroom',
-  padding: '32px',
-  borderRadius: '12px',
-  aspectRatio: 'auto',
-  imageFit: 'contain',
-  mediaLayout: 'grid',
-  showQrCode: true,
-  showStats: true,
-  showTimestamp: true,
-  showWatermark: true,
-  blurAuthor: false,
-  showActionBarButton: true,
-  showPlayButton: true,
-  locale: 'en-US',
-};
+/** Production's default with the theme swapped for the one these workflows are
+ * about, and the locale pinned so the copy does not follow the machine. */
+const CARD_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, theme: 'darkroom', locale: 'en-US' };
 
 function renderCard(data: ThreadData | TweetData, config: Partial<CardConfig> = {}): Promise<string> {
   return renderComponent('/src/content/ui/Card.tsx', 'Card', {
