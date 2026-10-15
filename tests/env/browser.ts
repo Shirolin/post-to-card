@@ -13,7 +13,9 @@
  *     (`dev/preview.ts`), never here.
  *
  * Selector behaviour is meant to match a browser: `querySelectorAll` returns
- * document order, and a query never matches the node it is called on. Both were
+ * document order, a query never matches the node it is called on, `closest`
+ * honours the descendant combinators in a list member, and a space inside a
+ * quoted attribute value does not split the selector. Every one of them was
  * once wrong here and let a real bug pass, so a change to the selector engine
  * deserves a second look at whether the browser agrees.
  */
@@ -53,7 +55,7 @@ const EVENT_HANDLER_ATTRIBUTES = [
   'onpopstate', 'onrejectionhandled', 'onstorage', 'onunhandledrejection', 'onunload',
 ];
 
-export class DomNode {
+class DomNode {
   public static readonly ELEMENT_NODE = 1;
   public static readonly TEXT_NODE = 3;
   public static readonly COMMENT_NODE = 8;
@@ -161,16 +163,6 @@ export class DomNode {
     return null;
   }
 
-  get nextElementSibling(): DomElement | null {
-    if (!this.parentNode) return null;
-    const siblings = this.parentNode.childNodes;
-    const index = siblings.indexOf(this);
-    for (let i = index + 1; i < siblings.length; i++) {
-      if (siblings[i] instanceof DomElement) return siblings[i] as DomElement;
-    }
-    return null;
-  }
-
   get textContent(): string {
     if (this.nodeType === DomNode.TEXT_NODE) {
       return this.nodeValue || '';
@@ -220,18 +212,6 @@ export class DomNode {
     return newNode;
   }
 
-  public replaceChild<T extends DomNode>(newChild: T, oldChild: DomNode): T {
-    const idx = this.childNodes.indexOf(oldChild);
-    if (idx !== -1) {
-      this.removeChild(oldChild);
-      if (newChild.parentNode) newChild.parentNode.removeChild(newChild);
-      newChild.parentNode = this;
-      this.childNodes.splice(idx, 0, newChild);
-      notifyMutation(this, [newChild], [oldChild]);
-    }
-    return newChild;
-  }
-
   public contains(other: DomNode | null): boolean {
     if (!other) return false;
     let curr: DomNode | null = other;
@@ -243,7 +223,7 @@ export class DomNode {
   }
 }
 
-export class DomTextNode extends DomNode {
+class DomTextNode extends DomNode {
   constructor(text: string) {
     super();
     this.nodeType = DomNode.TEXT_NODE;
@@ -368,12 +348,6 @@ export class DomElement extends DomNode {
     this.dispatchEvent({ type: 'focus' });
   }
 
-  public blur(): void {
-    const doc = this.ownerDocument;
-    if (doc && doc.activeElement === this) doc.activeElement = null;
-    this.dispatchEvent({ type: 'blur' });
-  }
-
   /**
    * `tagName` is optional because a real custom element's constructor runs
    * `super()` with no argument -- the tag comes from the registry, not from the
@@ -471,14 +445,6 @@ export class DomElement extends DomNode {
         const current = new Set(this.className.split(/\s+/).filter(Boolean));
         classes.forEach(c => current.delete(c));
         this.className = Array.from(current).join(' ');
-      },
-      toggle: (cls: string, force?: boolean) => {
-        const current = new Set(this.className.split(/\s+/).filter(Boolean));
-        const shouldAdd = force !== undefined ? force : !current.has(cls);
-        if (shouldAdd) current.add(cls);
-        else current.delete(cls);
-        this.className = Array.from(current).join(' ');
-        return shouldAdd;
       },
     };
   }
@@ -628,17 +594,17 @@ export class DomAnchorElement extends DomElement {
   set download(val: string) { this.setAttribute('download', val); }
 }
 
-export class DomVideoElement extends DomElement {
+class DomVideoElement extends DomElement {
   constructor() { super('VIDEO'); }
   get poster(): string { return this.getAttribute('poster') || ''; }
   set poster(val: string) { this.setAttribute('poster', val); }
 }
 
-export class DomStyleElement extends DomElement {
+class DomStyleElement extends DomElement {
   constructor() { super('STYLE'); }
 }
 
-export class DomCustomElementRegistry {
+class DomCustomElementRegistry {
   private registry = new Map<string, { new(): any }>();
   public define(name: string, constructor: { new(): any }): void {
     if (this.registry.has(name)) {
@@ -649,15 +615,12 @@ export class DomCustomElementRegistry {
   public get(name: string): { new(): any } | undefined {
     return this.registry.get(name.toLowerCase());
   }
-  public clear(): void {
-    this.registry.clear();
-  }
 }
 
 // Global active mutation observers
 const activeObservers: DomMutationObserver[] = [];
 
-export interface MutationRecord {
+interface MutationRecord {
   type: 'childList' | 'attributes';
   target: DomNode;
   addedNodes: DomNode[];
@@ -718,7 +681,6 @@ export class DomDocument extends DomNode {
    */
   public readyState: 'loading' | 'interactive' | 'complete' = 'complete';
   public customElements: DomCustomElementRegistry;
-  private _focused: boolean = true;
   private listeners: Map<string, Array<(evt: any) => void>> = new Map();
 
   /** The element holding focus, or null. Written by `DomElement.focus()`. */
@@ -773,14 +735,6 @@ export class DomDocument extends DomNode {
     return this.adopt(new DomTextNode(text));
   }
 
-  public createComment(text: string): DomTextNode {
-    return this.adopt(new DomTextNode(text));
-  }
-
-  public createDocumentFragment(): DomNode {
-    return this.adopt(new DomNode());
-  }
-
   public createElementNS(_ns: string, tagName: string): DomElement {
     return this.createElement(tagName);
   }
@@ -795,14 +749,6 @@ export class DomDocument extends DomNode {
 
   public querySelectorAll<E extends DomElement = DomElement>(selector: string): E[] {
     return querySelectorAllInternal(this, selector) as unknown as E[];
-  }
-
-  public hasFocus(): boolean {
-    return this._focused;
-  }
-
-  public setFocus(focused: boolean): void {
-    this._focused = focused;
   }
 
   public addEventListener(type: string, cb: (evt: any) => void): void {
@@ -828,13 +774,100 @@ export class DomDocument extends DomNode {
 }
 
 // Selector matching engine
-function matchesSelector(el: DomElement, selector: string): boolean {
-  // Support comma-separated selectors
-  const parts = selector.split(',').map(s => s.trim());
-  for (const part of parts) {
-    if (matchSingleSelector(el, part)) return true;
+
+/**
+ * Splits a selector list on its top-level commas.
+ *
+ * A comma inside a quoted attribute value separates nothing, so the split has
+ * to track bracket depth and quotes rather than trusting every `,`.
+ */
+function splitSelectorList(selector: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let bracketDepth = 0;
+  let quote = '';
+
+  for (const ch of selector) {
+    if (quote) {
+      current += ch;
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === '[') bracketDepth++;
+    else if (ch === ']') bracketDepth--;
+    else if (ch === ',' && bracketDepth === 0) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
   }
-  return false;
+
+  parts.push(current.trim());
+  return parts.filter(Boolean);
+}
+
+/**
+ * Splits one member of a selector list into its whitespace-separated compounds,
+ * treating a space inside an attribute value as part of that value.
+ *
+ * `div[aria-label="Embedded video"]` is one compound. A plain `split(/\s+/)`
+ * produced `['div[aria-label="Embedded', 'video"]']`, whose first half has no
+ * closing `]` and therefore matched nothing — so the video-container selector
+ * production hands to `querySelectorAll` was dead in this shim, and a fixture
+ * marking a video with the aria-label instead of the testid extracted no video.
+ */
+function splitSelectorTokens(selector: string): string[] {
+  return selector.match(/(?:\[[^\]]*\]|[^\s\[])+/g) ?? [];
+}
+
+function matchesSelector(el: DomElement, selector: string): boolean {
+  return splitSelectorList(selector).some(member => matchesCompoundChain(el, member));
+}
+
+/**
+ * Whether `el` is the subject of one member of a selector list.
+ *
+ * A member carrying a descendant combinator (`main article`) is matched the way
+ * a browser matches it: `el` itself must be the last compound, and the part in
+ * front must match one of its ancestors. Feeding the whole member to the
+ * compound-only matcher instead — as this did — made `main article` and
+ * `[data-testid="cellInnerDiv"] article` dead alternatives, because the matcher
+ * saw the space as an unparsable tail and returned false. Production relies on
+ * `closest(TWEET_ARTICLE_SELECTOR)`, so on an article that carries no
+ * `data-testid="tweet"` the shim answered "no owning article" where a browser
+ * answers the article, and nothing was injected.
+ */
+function matchesCompoundChain(el: DomElement, member: string): boolean {
+  const tokens = splitSelectorTokens(member);
+  if (tokens.length === 0) return false;
+
+  let i = tokens.length - 1;
+  if (!matchSingleSelector(el, tokens[i])) return false;
+  i--;
+
+  let descendant: DomElement = el;
+  while (i >= 0) {
+    let ancestor = descendant.parentElement;
+    let matched: DomElement | null = null;
+    while (ancestor) {
+      if (matchSingleSelector(ancestor, tokens[i])) {
+        matched = ancestor;
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    if (!matched) return false;
+    descendant = matched;
+    i--;
+  }
+
+  return true;
 }
 
 function matchSingleSelector(el: DomElement, selector: string): boolean {
@@ -899,7 +932,7 @@ function querySelectorInternal(root: DomNode, selector: string): DomElement | nu
 
 function querySelectorAllInternal(root: DomNode, selector: string): DomElement[] {
   if (selector.includes(',')) {
-    const subSelectors = selector.split(',').map(s => s.trim()).filter(Boolean);
+    const subSelectors = splitSelectorList(selector);
     const matched = new Set<DomElement>();
     for (const sub of subSelectors) {
       for (const el of querySelectorAllInternal(root, sub)) {
@@ -920,7 +953,7 @@ function querySelectorAllInternal(root: DomNode, selector: string): DomElement[]
   }
 
   // Support descendant combinators (e.g. "div[role='group'] button")
-  const tokens = selector.split(/\s+/).filter(Boolean);
+  const tokens = splitSelectorTokens(selector);
   if (tokens.length === 1) {
     const results: DomElement[] = [];
     walkTree(root, node => {
@@ -992,7 +1025,7 @@ function serializeNodesToHtml(nodes: DomNode[]): string {
   return html;
 }
 
-export function parseHtmlInto(parent: DomNode, html: string): void {
+function parseHtmlInto(parent: DomNode, html: string): void {
   // Simple regex-based HTML tree builder for test fixtures
   const tagRegex = /<(\/)?([a-zA-Z0-9_-]+)([^>]*)>|([^<]+)/g;
   let match: RegExpExecArray | null;

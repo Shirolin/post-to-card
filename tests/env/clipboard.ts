@@ -1,25 +1,26 @@
 /**
  * Clipboard API Simulation Layer with Granular Fault Injection.
- * Supports simulating:
+ *
+ * Only the surface the extension actually uses is modelled: `write([item])`,
+ * which is how the export engine copies a card, and the four ways it can be
+ * refused. `writeText`, `clear` and `ClipboardItem.getType` were here too and no
+ * test, production file or fixture called any of them, so they read as covered
+ * behaviour without being any.
+ *
  * 1. Success path (navigator.clipboard.write)
  * 2. Focus loss (DOMException: Document is not focused)
  * 3. Gesture expiration (NotAllowedError: Must be handling a user gesture)
  * 4. Permission denial
  */
 
+import type { DomDocument, DomElement } from './browser.ts';
+
 export class MockClipboardItem {
+  /** The MIME types the item was built with. All a test ever reads. */
   public types: string[];
-  private data: Record<string, Blob>;
 
   constructor(data: Record<string, Blob>) {
-    this.data = data;
     this.types = Object.keys(data);
-  }
-
-  public async getType(type: string): Promise<Blob> {
-    const blob = this.data[type];
-    if (!blob) throw new Error(`Type ${type} not found in ClipboardItem`);
-    return blob;
   }
 }
 
@@ -47,18 +48,47 @@ export class MockClipboard {
         return Promise.resolve();
     }
   }
+}
 
-  public async writeText(text: string): Promise<void> {
-    if (this.failureMode !== 'none') {
-      return this.write([]);
+/**
+ * Installs a clipboard set to `failureMode` on `navigator` for the duration of
+ * `body`, and returns the download anchors the fallback left in the document.
+ *
+ * The anchors are read before their cleanup timer fires, which is the only
+ * moment they exist. `console.warn` is silenced for the same duration: every
+ * refusal path logs one, and a suite that prints them reads like a failing run.
+ *
+ * Tiers 1 and 4 each used to keep a copy of this, and the copies had already
+ * drifted — only tier 4 re-listed the failure union, so a fifth mode added to
+ * `ClipboardFailureMode` would have gone stale there without a word.
+ */
+export async function withClipboard(
+  failureMode: ClipboardFailureMode,
+  body: (clipboard: MockClipboard) => Promise<void>
+): Promise<DomElement[]> {
+  const scope = globalThis as Record<string, unknown>;
+  const doc = scope.document as DomDocument;
+  const clipboard = new MockClipboard();
+  clipboard.failureMode = failureMode;
+
+  const savedClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, 'clipboard');
+  const savedItem = scope.ClipboardItem;
+  Object.defineProperty(globalThis.navigator, 'clipboard', { value: clipboard, configurable: true, writable: true });
+  scope.ClipboardItem = MockClipboardItem;
+
+  const savedWarn = console.warn;
+  console.warn = () => {};
+  try {
+    await body(clipboard);
+    return doc.body.querySelectorAll('a[download]');
+  } finally {
+    console.warn = savedWarn;
+    if (savedClipboard) {
+      Object.defineProperty(globalThis.navigator, 'clipboard', savedClipboard);
+    } else {
+      delete (globalThis.navigator as { clipboard?: unknown }).clipboard;
     }
-    const blob = new Blob([text], { type: 'text/plain' });
-    this.writtenItems.push(new MockClipboardItem({ 'text/plain': blob }));
-  }
-
-  public clear(): void {
-    this.writtenItems = [];
-    this.failureMode = 'none';
+    scope.ClipboardItem = savedItem;
   }
 }
 

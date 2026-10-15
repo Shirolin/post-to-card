@@ -11,6 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { createDomElement, DomDocument } from '../env/browser.ts';
+import { createSuite } from '../env/harness.ts';
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { initGraphQLBridge } from '../../src/content/graphql/bridge.ts';
 import { lookupReplyLink } from '../../src/content/graphql/bridge.ts';
@@ -18,20 +19,7 @@ import { TWEET_DETAIL_THREAD_JSON, TWEET_DETAIL_SHALLOW_QUOTE_JSON, HOME_TIMELIN
 import { NESTED_QUOTE_PREVIEW_HTML } from '../fixtures/nested-quote-preview.ts';
 import { FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 // Global window mock for GraphQL bridge dispatch in Node.js
 type Listener = (e: any) => void;
@@ -491,28 +479,6 @@ test('res.12: a GraphQL quote truncated at depth 1 is backfilled from the DOM', 
   );
 });
 
-export async function runTierResolver(): Promise<{
-  total: number;
-  passed: number;
-  failed: number;
-  results: TestResult[];
-}> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.stack || err.message : String(err);
-      results.push({ name: t.name, passed: false, error: errorMsg, durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTierResolver() {
+  return run();
 }

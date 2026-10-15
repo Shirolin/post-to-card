@@ -6,7 +6,8 @@
 import assert from 'node:assert/strict';
 import { DomElement, DomImageElement, DomDocument, DomMutationObserver, DomShadowRoot, createDomElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
-import { renderComponent, rasterizer, exportEngine } from '../env/render.ts';
+import { renderComponent, rasterizer, exportEngine, cardRenderer } from '../env/render.ts';
+import { createSuite } from '../env/harness.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { classifySocial, getReplyingToHandle, getRetweetedBy } from '../../src/content/adapter/social.ts';
 import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/adapter/urls.ts';
@@ -33,38 +34,19 @@ import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
 import { RETWEET_HTML } from '../fixtures/retweet.ts';
 import { PINNED_HTML } from '../fixtures/pinned.ts';
 import { withoutTestIds } from '../fixtures/strip-testids.ts';
-import { loadUserPreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
+import { loadUserPreferences, saveUserPreferences, subscribePreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
 import { DEFAULT_CARD_CONFIG } from '../../src/content/ui/themes.ts';
 import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig } from '../../src/types/card.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 /** The config a card is rendered with here — production's default, with the
  * locale pinned so the copy does not follow the machine's language. */
 const CARD_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, locale: 'en-US' };
 
 /** The card, rendered from data, so a boundary claim is made against markup. */
-function renderCard(data: TweetData | ThreadData): Promise<string> {
-  return renderComponent('/src/content/ui/Card.tsx', 'Card', {
-    data,
-    config: CARD_CONFIG,
-    onExcludeTweet: () => {},
-  });
-}
+const renderCard = cardRenderer(CARD_CONFIG);
 
 const MEDIA_ONLY_TWEET: TweetData = {
   id: '20001',
@@ -79,7 +61,7 @@ const MEDIA_ONLY_TWEET: TweetData = {
 // Boundary 1: Empty and Whitespace-Only Text
 // -------------------------------------------------------------
 test('Tier 2.1: a media-only post renders its picture and leaves the text block empty', async () => {
-  const html = await renderCard(MEDIA_ONLY_TWEET);
+  const html = await renderCard({ data: MEDIA_ONLY_TWEET });
 
   assert.equal((html.match(/class="media-box"/g) || []).length, 1, 'the picture did not reach the card');
   const textBlock = html.match(/class="tweet-text-content"[^>]*>([\s\S]*?)<\/div>/);
@@ -105,7 +87,7 @@ test('Tier 2.2: a whitespace-only node collapses without ghost spacing and keeps
 // -------------------------------------------------------------
 test('Tier 2.3: a 4500-character post reaches the card whole, with no truncation', async () => {
   const longText = 'A'.repeat(4500);
-  const html = await renderCard({ ...MEDIA_ONLY_TWEET, text: longText });
+  const html = await renderCard({ data: { ...MEDIA_ONLY_TWEET, text: longText } });
 
   assert.ok(
     html.includes(longText),
@@ -149,8 +131,7 @@ test('Tier 2.6: 50 consecutive Twemoji images restore with no separator between 
 // -------------------------------------------------------------
 test('Tier 2.7: a post with no avatar URL renders the inline placeholder, not a broken image', async () => {
   const html = await renderCard({
-    ...MEDIA_ONLY_TWEET,
-    author: { name: 'Artist', handle: '@artist' },
+    data: { ...MEDIA_ONLY_TWEET, author: { name: 'Artist', handle: '@artist' } },
   });
 
   assert.ok(
@@ -159,7 +140,7 @@ test('Tier 2.7: a post with no avatar URL renders the inline placeholder, not a 
   );
   assert.ok(!html.includes('src="undefined"'), 'the absent URL leaked into the markup');
 
-  const withAvatar = await renderCard(MEDIA_ONLY_TWEET);
+  const withAvatar = await renderCard({ data: MEDIA_ONLY_TWEET });
   assert.ok(
     withAvatar.includes('https://pbs.twimg.com/avatar.jpg'),
     'a real avatar was replaced by the placeholder'
@@ -190,13 +171,15 @@ test('Tier 2.7: a post with no avatar URL renders the inline placeholder, not a 
 // -------------------------------------------------------------
 test('Tier 2.12: an unavailable quoted post renders the tombstone, not an empty quote card', async () => {
   const html = await renderCard({
-    ...MEDIA_ONLY_TWEET,
-    text: 'What do you think of this?',
-    quotePost: {
-      author: { name: '', handle: '', avatarUrl: '' },
-      text: '',
-      timestamp: '',
-      isUnavailable: true,
+    data: {
+      ...MEDIA_ONLY_TWEET,
+      text: 'What do you think of this?',
+      quotePost: {
+        author: { name: '', handle: '', avatarUrl: '' },
+        text: '',
+        timestamp: '',
+        isUnavailable: true,
+      },
     },
   });
 
@@ -820,6 +803,60 @@ test('Tier 2.39: the article selector falls back past data-testid', () => {
     TWEET_ARTICLE_SELECTOR.includes('main article'),
     'a bare main article fallback is required for logged-out pages'
   );
+});
+
+test('Tier 2.39b: the structural article fallbacks are reachable, not merely spelled', async () => {
+  // 2.39 asserts the constant carries the members; this asserts the engine
+  // resolves them. The matcher fed every comma member to the compound-only
+  // matcher, which read the space in `main article` as an unparsable tail and
+  // returned false — so `closest(TWEET_ARTICLE_SELECTOR)` answered null on
+  // exactly the logged-out page that member exists for, and the owning post was
+  // never marked. The button was still appended, so the failure was invisible:
+  // pressing it announced nothing.
+  await withInjectionEnv(async ({ doc }) => {
+    const main = createDomElement(`
+      <main>
+        <article tabindex="0">
+          <div role="group">
+            <button aria-label="Reply">64</button>
+          </div>
+        </article>
+      </main>
+    `);
+    doc.body.appendChild(main);
+
+    const article = main.querySelector('article')!;
+    assert.equal(article.getAttribute('data-testid'), null, 'the logged-out article carries no testid');
+    assert.equal(article.getAttribute('role'), null, 'and no role either');
+
+    const bar = article.querySelector('div[role="group"]') as unknown as Element;
+    assert.equal(injectIntoActionBar(bar, () => {}), true, 'the trigger is still injected');
+    assert.equal(
+      article.getAttribute('data-post-to-card-injected'),
+      'true',
+      'the owning post is resolved through the `main article` member and marked'
+    );
+
+    // The other structural member, on the layout that has a cell wrapper
+    // instead of a bare `<main>`.
+    const wrapped = createDomElement(`
+      <div data-testid="cellInnerDiv">
+        <article tabindex="0">
+          <div role="group"><button aria-label="Reply">7</button></div>
+        </article>
+      </div>
+    `);
+    doc.body.appendChild(wrapped);
+    const wrappedArticle = wrapped.querySelector('article')!;
+    const wrappedBar = wrappedArticle.querySelector('div[role="group"]') as unknown as Element;
+
+    assert.equal(injectIntoActionBar(wrappedBar, () => {}), true);
+    assert.equal(
+      wrappedArticle.getAttribute('data-post-to-card-injected'),
+      'true',
+      'and through the `cellInnerDiv article` member'
+    );
+  });
 });
 
 test('Tier 2.40: a translated post carries X’s "translated from" notice verbatim', () => {
@@ -1721,6 +1758,82 @@ test('Tier 2.76: the stored toggle preferences are honoured, and their absence m
   });
 });
 
+test('Tier 2.76b: a storage read that fails comes back with the defaults', async () => {
+  // Chrome reports a failed `storage.local.get` by setting `runtime.lastError`
+  // for the duration of the callback. Nothing in the suite ever set it, so the
+  // branch that notices was unreachable — a profile whose read fails would have
+  // been preferred over the defaults, reading `res[STORAGE_KEY]` out of a
+  // response that never arrived.
+  await withInjectionEnv(async ({ chrome }) => {
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'darkroom', padding: '48px' } });
+    chrome.runtime.lastError = { message: 'storage read failed' };
+
+    assert.deepEqual(
+      await loadUserPreferences(),
+      DEFAULT_CARD_CONFIG,
+      'a failed read falls back to the defaults rather than to the stored value'
+    );
+  });
+});
+
+test('Tier 2.76c: with no storage API at all the defaults still resolve', async () => {
+  // The fallback has no `chrome` at all — a preview build, a page where the
+  // extension's storage was never injected. Deleting the branch left the promise
+  // pending forever instead of failing, which a timeout turns back into a
+  // failure: a card that never opens is the symptom.
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+  delete scope.chrome;
+  try {
+    const prefs = await Promise.race([
+      loadUserPreferences(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('loadUserPreferences never settled without chrome')), 500)
+      ),
+    ]);
+    assert.deepEqual(prefs, DEFAULT_CARD_CONFIG, 'the defaults are what a storage-less page gets');
+  } finally {
+    scope.chrome = savedChrome;
+  }
+});
+
+test('Tier 2.76d: saving without a storage API is a no-op, not a throw', async () => {
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+  delete scope.chrome;
+  try {
+    await assert.doesNotReject(
+      () => saveUserPreferences(DEFAULT_CARD_CONFIG),
+      'a page with no storage must not break the caller that saved a preference'
+    );
+  } finally {
+    scope.chrome = savedChrome;
+  }
+});
+
+test('Tier 2.76e: only a local write of the preferences key reaches the subscriber', async () => {
+  // The guard reads the area name and the key. Without it any write to any area
+  // — a sync push, a removal — repainted the card, which is the kind of change
+  // nobody notices until a profile sync rewrites a field it never set.
+  await withInjectionEnv(async ({ chrome }) => {
+    const seen: CardConfig[] = [];
+    const unsubscribe = subscribePreferences((prefs) => seen.push(prefs));
+
+    chrome.storage.sync.set({ [STORAGE_KEY]: { theme: 'terminal' } });
+    chrome.storage.local.remove(STORAGE_KEY);
+    assert.equal(seen.length, 0, 'a sync write and a removal are both ignored');
+
+    // The positive control: a local write of the key does reach it, so the
+    // two silences above are the guard and not a dead subscription.
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'terminal' } });
+    assert.equal(seen.length, 1, 'a local write of the key is the one that does');
+
+    unsubscribe();
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'gallery' } });
+    assert.equal(seen.length, 1, 'and unsubscribing retires the listener');
+  });
+});
+
 test('Tier 2.77: Alt+C hands the tweet under the pointer to the card, and nothing else does', async () => {
   // F30.4's claim, driven rather than read: the shortcut exists so a card can be
   // opened without reaching for the injected trigger, which only helps if it
@@ -2255,22 +2368,6 @@ test('Tier 2.91: focus stays in the group when the level just chosen turns out t
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 2
 // -------------------------------------------------------------
-export async function runTier2(): Promise<{ total: number; passed: number; failed: number; results: TestResult[] }> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: any) {
-      results.push({ name: t.name, passed: false, error: err?.message || String(err), durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTier2() {
+  return run();
 }

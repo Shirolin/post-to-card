@@ -37,9 +37,17 @@ class ChromeRuntimeMock {
   ): Promise<ExtensionResponse> {
     return new Promise((resolve, _reject) => {
       let responded = false;
+      // Chrome closes the response port when the listener returns without
+      // holding it open, and a `sendResponse` after that reaches nobody. The
+      // mock delivered late responses regardless, so a listener that forgot to
+      // `return true` answered the caller here exactly as a correct one would —
+      // the one thing the expensive tests that go through the message channel
+      // could never catch.
+      let portClosed = false;
       const sender = { id: 'post-to-card-extension', tab: { id: 1 } };
 
       const sendResponse = (res: ExtensionResponse) => {
+        if (portClosed) return;
         if (!responded) {
           responded = true;
           if (callback) callback(res);
@@ -65,6 +73,11 @@ class ChromeRuntimeMock {
           return;
         }
       }
+
+      // Nothing answered during the synchronous call, so no listener held the
+      // port open: close it, and let the callback that arrives later be the
+      // no-op Chrome makes it.
+      portClosed = true;
 
       // If no listeners handled synchronously or returned true
       if (!responded) {
@@ -253,6 +266,9 @@ class ChromeTabsMock {
   /** Every message the popup sent, in order. */
   public sent: Array<{ tabId: number; message: any }> = [];
 
+  /** Whether `query` answers with no tabs at all, as it does when none qualifies. */
+  public queryReturnsNone = false;
+
   constructor(canReadUrl: boolean, runtime: ChromeRuntimeMock) {
     this.canReadUrl = canReadUrl;
     this.runtime = runtime;
@@ -270,7 +286,7 @@ class ChromeTabsMock {
   ): Promise<Array<{ id: number; url?: string }>> {
     const tab: { id: number; url?: string } = { id: 1 };
     if (this.canReadUrl) tab.url = 'https://x.com/jack/status/20';
-    const tabs = [tab];
+    const tabs = this.queryReturnsNone ? [] : [tab];
     // The popup uses the callback form, as the real API's own docs do for a
     // fire-and-forget query. Answering only the Promise would leave the popup's
     // handler unreachable from a test.

@@ -27,7 +27,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 5. **Clean Multi-Entry Vite Build Pipeline**:
    - `background.js` 输出为标准 ESM 脚本。
    - `content.js` 输出为完全自包含的 IIFE 脚本（无顶层 import/export）。
-   - 严控依赖：仅 `preact`, `modern-screenshot`, `qrcode-generator`，零外部依赖，100% 离线运行。
+   - 严控依赖：仅 `preact`, `modern-screenshot`, `qrcode-generator`, `lucide-preact`，零外部服务，100% 离线运行。
 
 ---
 
@@ -109,7 +109,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 ```
 d:/Project/post-to-card/
 ├── manifest.json                  # Manifest V3 模板/配置
-├── package.json                   # 核心依赖 (preact, modern-screenshot, qrcode-generator)
+├── package.json                   # 核心依赖 (preact, lucide-preact, modern-screenshot, qrcode-generator)
 ├── tsconfig.json                  # TypeScript 配置
 ├── vite.config.ts                 # 三模式/多入口 Vite 构建管道
 ├── dev/                           # 仅开发用：可视化 UI harness
@@ -130,7 +130,8 @@ d:/Project/post-to-card/
 
 ## Data Channels
 
-推文数据有两条独立通道，`src/content/index.ts` 的 `resolveThreadData` 负责调度：
+推文数据有两条独立通道，`src/content/adapter/resolver.ts` 的 `resolveThread` 负责调度
+（`src/content/index.ts` 只是调用方）：
 
 | 通道 | 入口 | 何时使用 |
 |---|---|---|

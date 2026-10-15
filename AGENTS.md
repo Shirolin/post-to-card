@@ -21,7 +21,8 @@ bundle。`npm test` 只跑 tier1-4 与 i18n / graphql / resolver / article / hyg
 
 - `public/popup.js` 与 `dev/verify-extension.mjs` 在 tsc 的 `include` 之外，改它们时只有 build 里的
   `node --check` 会拦语法错。
-- `tests/tiers/` 不在任何 tsconfig 里（shim 的 `DomElement` 不是 `Element`）——改共享类型（`TweetData`
+- `tests/tiers/` 基本不在 tsconfig 里（shim 的 `DomElement` 不是 `Element`，跨边界要到处加 cast）；
+  唯一的例外是 `tsconfig.test-support.json` 里列着的那三个从不跨边界的文件。改共享类型（`TweetData`
   等）的字段时，grep 一遍测试里的名字，别只信 tsc。
 
 装扩展进真实浏览器用 `node dev/verify-extension.mjs --url https://x.com/`（零依赖，headed；

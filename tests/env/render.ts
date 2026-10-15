@@ -3,6 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { h, type ComponentType } from 'preact';
 import { render } from 'preact-render-to-string';
 
+import type { TweetData, ThreadData } from '../../src/types/tweet.ts';
+import type { CardConfig } from '../../src/types/card.ts';
+import type { RasterizerCall } from './modern-screenshot-stub.ts';
+
 /**
  * Renders a `.tsx` component to HTML, in Node.
  *
@@ -51,6 +55,41 @@ export async function renderComponent(
   return render(h(component, props));
 }
 
+export interface CardRenderArgs {
+  data?: ThreadData | TweetData;
+  config?: Partial<CardConfig>;
+}
+
+/**
+ * Binds the card to one tier's base config and default data.
+ *
+ * Every tier used to keep its own `renderCard`, and the four had drifted into
+ * three different signatures -- `(data)`, `(data, config)`, and one that took
+ * `(config, data)` with the pair reversed. Tier 1-4 are in no tsconfig, so a
+ * copy whose arguments were swapped compiled to nothing and bound a tweet to
+ * `config` in silence. One factory, one argument shape, and a tier that wants
+ * the card only names its base config. `defaultData` is for a tier that renders
+ * one fixture by default; a tier that always names its data binds without one,
+ * and a call that then passes no `data` is an error rather than a card built
+ * from `undefined`.
+ */
+export function cardRenderer(
+  baseConfig: CardConfig,
+  defaultData?: ThreadData | TweetData
+): (args?: CardRenderArgs) => Promise<string> {
+  return (args = {}) => {
+    const data = args.data ?? defaultData;
+    if (!data) {
+      throw new Error('renderCard(): no data argument and this renderer was bound without a default');
+    }
+    return renderComponent('/src/content/ui/Card.tsx', 'Card', {
+      data,
+      config: { ...baseConfig, ...args.config },
+      onExcludeTweet: () => {},
+    });
+  };
+}
+
 /**
  * Loads a `.tsx` module through the same pipeline, so its exported *functions*
  * can be called rather than only its components rendered.
@@ -77,7 +116,7 @@ export async function exportEngine(): Promise<Record<string, any>> {
 
 export interface RasterizerStub {
   /** Every call the export engine made, in order. */
-  rasterizerCalls: Array<{ target: unknown; options: Record<string, any> }>;
+  rasterizerCalls: RasterizerCall[];
   /** Makes the next rasterization reject, the way a browser failure would. */
   failNextRasterization: (message: string) => void;
   resetRasterizer: () => void;

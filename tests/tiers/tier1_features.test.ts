@@ -12,12 +12,13 @@ import { renderToStaticMarkup } from 'preact-render-to-string';
 
 import { DomAnchorElement, DomDocument, DomElement, DomImageElement, DomShadowRoot, createDomElement, DomMutationObserver } from '../env/browser.ts';
 import { createChromeMock, type SendOutcome } from '../env/chrome.ts';
-import { MockClipboard, MockClipboardItem, type ClipboardFailureMode } from '../env/clipboard.ts';
+import { withClipboard, type ClipboardFailureMode } from '../env/clipboard.ts';
+import { createSuite } from '../env/harness.ts';
 import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
 import { THREAD_HTML } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML, QUOTE_TWEET_UNAVAILABLE_HTML } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, PURE_EMOJI_HTML } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML, FOUR_GIFS_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML, VIDEO_ARIA_LABEL_ONLY_HTML, FOUR_GIFS_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import {
@@ -40,7 +41,7 @@ import { isAllowedHost, clearImageCache, getImageCacheSize } from '../../src/bac
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../../src/content/adapter/urls.ts';
 import { sanitizeQrUrl, generateQrCodeData, CardQrCode } from '../../src/content/ui/qrcode.ts';
 
-import { renderComponent, loadModule, rasterizer, exportEngine } from '../env/render.ts';
+import { renderComponent, loadModule, rasterizer, exportEngine, cardRenderer } from '../env/render.ts';
 
 import type { TweetData, ThreadData, MediaItem } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId } from '../../src/types/card.ts';
@@ -82,15 +83,7 @@ const THREAD: ThreadData = {
   targetTweetIndex: 0,
 };
 
-function renderCard(
-  args: { data?: ThreadData | TweetData; config?: Partial<CardConfig> } = {}
-): Promise<string> {
-  return renderComponent('/src/content/ui/Card.tsx', 'Card', {
-    data: args.data ?? VIDEO_TWEET,
-    config: { ...CARD_CONFIG, ...args.config },
-    onExcludeTweet: () => {},
-  });
-}
+const renderCard = cardRenderer(CARD_CONFIG, VIDEO_TWEET);
 
 /**
  * The inline style the card root was rendered with.
@@ -117,20 +110,7 @@ function renderControls(
   });
 }
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 // -------------------------------------------------------------
 // Reference helper functions derived from Authoritative Specs
@@ -410,6 +390,92 @@ test('F4.5: the origin gate admits twimg and nothing that merely ends in it', ()
   assert.equal(isAllowedHost('javascript:alert(1)'), false);
   assert.equal(isAllowedHost('file:///etc/passwd'), false);
   assert.equal(isAllowedHost('ftp://pbs.twimg.com/x.png'), false);
+});
+
+test('F4.6: the worker refuses a non-twimg URL instead of fetching it', async () => {
+  // The gate that matters is the one on the message path, not the helper: the
+  // worker forwards `message.url` straight into the proxy, and the proxy is the
+  // last place that can say no. F4.5 exercises `isAllowedHost` on its own, so
+  // deleting the guard left the suite green while any page could ask the worker
+  // to fetch any host through the extension's own (permissioned) fetch.
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  await withFetch(
+    () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'image/png' } }),
+    async (urls) => {
+      const res = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: 'https://evil.example/steal.png',
+      });
+
+      assert.equal(res.success, false, 'the worker must refuse a foreign origin');
+      if (res.success) return;
+      assert.match(res.error, /Forbidden origin/, 'the refusal has to name the reason');
+      assert.equal(urls.length, 0, 'and the forbidden URL must never be requested');
+    }
+  );
+});
+
+test('F4.7: a fetch that rejects is reported with the reason it failed', async () => {
+  // The other half of F4.3: that test drives a 404 *response*, which returns
+  // before the catch. A fetch that rejects — DNS, TLS, a connection reset —
+  // arrives here instead, and the caller is told why.
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  await withFetch(
+    () => {
+      throw new Error('socket hang up');
+    },
+    async () => {
+      const res = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: 'https://pbs.twimg.com/media/unreachable.jpg',
+      });
+
+      assert.equal(res.success, false, 'a rejected fetch is a failed response, not a throw');
+      if (res.success) return;
+      assert.equal(res.error, 'socket hang up', 'and the failure reason reaches the caller');
+    }
+  );
+});
+
+test('F4.8: the cache evicts the least recently used entry, not the oldest', async () => {
+  // The cache is capped at 200 and the cap is enforced by insertion order, so
+  // the only thing that makes it LRU rather than FIFO is the delete-and-reinsert
+  // on a hit. Dropping that left tier1 and tier5 green: the cap still held and
+  // the size assertions still passed, while a hot avatar fell out of the cache
+  // behind images nobody asks for twice.
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  const urlOf = (i: number) => `https://pbs.twimg.com/media/entry_${i}.jpg`;
+  const cap = 200;
+
+  await withFetch(
+    () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'image/jpeg' } }),
+    async (urls) => {
+      for (let i = 0; i < cap; i++) {
+        await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(i) });
+      }
+      assert.equal(getImageCacheSize(), cap, 'the cache holds a full set');
+
+      // Touch the first entry, then push the cache one past its cap. FIFO would
+      // drop `entry_0`; LRU drops whatever the touch pushed second.
+      await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(0) });
+      await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(cap) });
+      assert.equal(getImageCacheSize(), cap, 'the cache stays at its cap');
+
+      const fetchesBefore = urls.length;
+      const again = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: urlOf(0),
+      });
+      assert.equal(again.success, true);
+      assert.equal(urls.length, fetchesBefore, 'the touched entry survives the eviction');
+    }
+  );
 });
 
 // -------------------------------------------------------------
@@ -2804,6 +2870,39 @@ test('F21.2c: a raw count is abbreviated, not printed at full length', async () 
   assert.ok(!html.includes('12700') && !html.includes('482000'), 'raw counts are not printed in full');
 });
 
+test('F21.2d: a bookmark count is labelled as bookmarks, never as views', async () => {
+  // Views and bookmarks came from two different nodes on the page
+  // (`div[data-testid="viewCount"]` vs the bookmark button) and two different
+  // GraphQL fields, but the card printed the pair through one slot:
+  // `formatStat(stats.views || stats.bookmarks)`. A post whose views the
+  // extraction missed but whose bookmarks it caught therefore showed the
+  // bookmark count under "Views" with the views icon — a wrong number under the
+  // wrong noun, which is worse than leaving the slot empty.
+  const bookmarksOnly = await renderCard({
+    data: { ...VIDEO_TWEET, stats: { replies: '191', reposts: '80', likes: '5.2K', bookmarks: '37' } },
+  });
+  assert.ok(bookmarksOnly.includes('37'), 'a bookmark count is still shown');
+  assert.ok(
+    bookmarksOnly.includes(`${TRANSLATIONS['en-US'].bookmarks}`),
+    'and carries the bookmarks label it belongs to'
+  );
+  assert.ok(
+    !bookmarksOnly.includes(`${TRANSLATIONS['en-US'].views}`),
+    'but never the views label it does not'
+  );
+
+  // The views slot keeps its own icon, so the two metrics are told apart by
+  // more than the title text.
+  const viewsOnly = await renderCard({
+    data: { ...VIDEO_TWEET, stats: { replies: '191', reposts: '80', likes: '5.2K', views: '842' } },
+  });
+  assert.ok(viewsOnly.includes('842'), 'a views count is shown');
+  assert.ok(
+    !viewsOnly.includes(`${TRANSLATIONS['en-US'].bookmarks}`),
+    'and does not claim to be a bookmark count'
+  );
+});
+
 test('F21.3: toggling showTimestamp hides date and time display', async () => {
   // Stats and the QR code are turned off in both renders so the footer itself
   // stays on and only the timestamp can be the difference.
@@ -3382,36 +3481,6 @@ const pngBlob = (): Blob => new Blob(['pngdata'], { type: 'image/png' });
  * Installs a clipboard on `navigator` for the duration of `body` and returns the
  * download anchors left in the document. Read before the cleanup timer fires.
  */
-async function withClipboard(
-  failureMode: ClipboardFailureMode,
-  body: (clipboard: MockClipboard) => Promise<void>
-): Promise<DomElement[]> {
-  const scope = globalThis as Record<string, unknown>;
-  const doc = scope.document as DomDocument;
-  const clipboard = new MockClipboard();
-  clipboard.failureMode = failureMode;
-
-  const savedClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, 'clipboard');
-  const savedItem = scope.ClipboardItem;
-  Object.defineProperty(globalThis.navigator, 'clipboard', { value: clipboard, configurable: true, writable: true });
-  scope.ClipboardItem = MockClipboardItem;
-
-  const savedWarn = console.warn;
-  console.warn = () => {};
-  try {
-    await body(clipboard);
-    return doc.body.querySelectorAll('a[download]');
-  } finally {
-    console.warn = savedWarn;
-    if (savedClipboard) {
-      Object.defineProperty(globalThis.navigator, 'clipboard', savedClipboard);
-    } else {
-      delete (globalThis.navigator as { clipboard?: unknown }).clipboard;
-    }
-    scope.ClipboardItem = savedItem;
-  }
-}
-
 test('F26.1: navigator.clipboard.write succeeds when document has focus', async () => {
   await withContainerEnv(async () => {
     const engine = await exportEngine();
@@ -3691,6 +3760,22 @@ test('F29.1: detects GIF media vs standard video containers', () => {
   assert.equal(typeOf(VIDEO_POSTER_ONLY_HTML), 'video', 'and a video poster without one stays a video');
 });
 
+test('F29.1b: a player marked only by its aria-label is the container the card reads', () => {
+  // Of the four ways production names a video container, this is the one whose
+  // attribute value contains a space. The selector engine used to split members
+  // on whitespace, so it read `div[aria-label="Embedded` — no closing bracket,
+  // no match — and the `<video>` element itself became the container. The
+  // duration lives on the player, beside the poster, so the card lost it: the
+  // frame rendered with no `1:42` on it.
+  const tweet = extractTweetData(createDomElement(VIDEO_ARIA_LABEL_ONLY_HTML) as unknown as Element);
+  assert.equal(tweet?.media?.[0]?.type, 'video', 'the post is a video');
+  assert.equal(
+    tweet?.media?.[0]?.duration,
+    '1:42',
+    'and the duration beside the poster is read off the player that holds it'
+  );
+});
+
 test('F29.2: extracts video duration timestamp from video controls', () => {
   const media = extractTweetData(createDomElement(VIDEO_WITH_DURATION_HTML) as unknown as Element)?.media;
 
@@ -3865,34 +3950,74 @@ async function withPopup(
     closed: () => boolean;
     locale: string;
     sent: () => unknown;
+    /** The node the popup paints a given string into, by its id. */
+    text: (id: string) => string;
+    /** Whether the button-hiding checkbox ended up ticked. */
+    checked: () => boolean;
+    /** The preference the popup left in storage, read back through the API. */
+    storedPrefs: () => Promise<Record<string, unknown>>;
     /** Lets the popup's own deferred work (its status timer, its close) run. */
     settle: (ms: number) => Promise<void>;
-  }) => Promise<void>
+  }) => Promise<void>,
+  options: {
+    /** What `chrome.storage.local` already holds when the popup loads. */
+    prefs?: Record<string, unknown>;
+    /** What the browser reports as its language. */
+    language?: string;
+    /** What `chrome.tabs` looks like: one tab, none, or no API at all. */
+    tabs?: 'one' | 'none' | 'absent';
+    /** What the user does to the popup. Defaults to pressing the trigger. */
+    interact?: (doc: DomDocument) => void;
+  } = {}
 ): Promise<void> {
   const scope = globalThis as Record<string, unknown>;
-  const saved = { document: scope.document, chrome: scope.chrome, window: scope.window };
+  const saved = {
+    document: scope.document,
+    chrome: scope.chrome,
+    window: scope.window,
+  };
+  // Node defines `navigator` as a getter-only accessor, so the language has to
+  // go in through the descriptor rather than by assignment.
+  const savedNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const doc = new DomDocument();
   doc.body.innerHTML = popupMarkup();
 
   const chromeMock = createChromeMock();
   chromeMock.tabs.outcome = outcome;
+  if (options.tabs === 'none') chromeMock.tabs.queryReturnsNone = true;
+  if (options.tabs === 'absent') delete (chromeMock as unknown as { tabs?: unknown }).tabs;
+  // Seeded through the same API the popup reads, rather than by reaching into
+  // the mock, so the popup sees exactly what a returning user's profile holds.
+  if (options.prefs) await chromeMock.storage.local.set({ post_to_card_user_prefs: options.prefs });
+
   let didClose = false;
 
   scope.document = doc;
   scope.chrome = chromeMock;
   scope.window = { close: () => { didClose = true; } };
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { language: options.language ?? 'en-US' },
+    configurable: true,
+    writable: true,
+  });
 
   const savedLog = console.log;
   console.log = () => {};
   try {
     popupLoads++;
     await loadModule(`/public/popup.js?load=${popupLoads}`);
-    doc.getElementById('btn-trigger-now')!.click();
+    (options.interact ?? ((d: DomDocument) => d.getElementById('btn-trigger-now')!.click()))(doc);
     await body({
       status: () => doc.getElementById('status-text')!.textContent,
       closed: () => didClose,
       locale: doc.documentElement.lang,
-      sent: () => chromeMock.tabs.sent,
+      sent: () => (options.tabs === 'absent' ? [] : chromeMock.tabs.sent),
+      text: (id) => doc.getElementById(id)!.textContent,
+      checked: () => Boolean((doc.getElementById('toggle-button') as unknown as { checked?: boolean }).checked),
+      storedPrefs: async () => {
+        const items = await chromeMock.storage.local.get('post_to_card_user_prefs');
+        return (items?.post_to_card_user_prefs ?? {}) as Record<string, unknown>;
+      },
       settle: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     });
   } finally {
@@ -3900,6 +4025,8 @@ async function withPopup(
     scope.document = saved.document;
     scope.chrome = saved.chrome;
     scope.window = saved.window;
+    if (savedNavigator) Object.defineProperty(globalThis, 'navigator', savedNavigator);
+    else delete scope.navigator;
   }
 }
 
@@ -3950,6 +4077,122 @@ test('F30.8: the popup asks the content script for the active tab, with the trig
       'the popup must ask the active tab for its card, once'
     );
   });
+});
+
+test('F30.9: the popup paints the stored preference over the browser default', async () => {
+  // Both branches of the read the popup does on load were unreachable from a
+  // test: `withPopup` never seeded storage, so the checkbox was `true` whether
+  // the popup honoured the stored value or hard-coded it, and the locale block
+  // no-opped. A returning user who had hidden the button got it ticked back, and
+  // nothing could fail on it.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ checked, locale, text }) => {
+      assert.equal(checked(), false, 'a stored "off" leaves the box unticked');
+      assert.equal(locale, 'zh-CN', 'and a stored locale beats the browser language');
+      assert.equal(
+        text('toggle-title'),
+        popupCopy('toggleTitle', 'zh-CN'),
+        'the whole panel is repainted in the stored language, not only its lang attribute'
+      );
+    },
+    { prefs: { showActionBarButton: false, locale: 'zh-CN' }, language: 'en-US' }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ checked, locale }) => {
+      assert.equal(checked(), true, 'an explicit "on" leaves the box ticked');
+      assert.equal(locale, 'en-US', 'and a stored locale the popup does not know is ignored');
+    },
+    { prefs: { showActionBarButton: true, locale: 'klingon' }, language: 'en-US' }
+  );
+});
+
+test('F30.10: the popup reads its language off the browser when storage has none', async () => {
+  // The locale table is hand-synced with `src/content/i18n.ts` -- public/ is
+  // copied into the bundle verbatim and cannot import from src/ -- so the only
+  // thing keeping the duplicate honest is a test that drives it. Nothing pinned
+  // `browserLocale`, and a mutation to a constant survived.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ locale, text }) => {
+      assert.equal(locale, 'zh-CN', 'a Chinese browser gets the Chinese popup');
+      assert.equal(text('btn-text'), popupCopy('trigger', 'zh-CN'));
+    },
+    { language: 'zh-CN', prefs: {} }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ locale, text }) => {
+      assert.equal(locale, 'en-US', 'and anything else gets English');
+      assert.equal(text('btn-text'), popupCopy('trigger', 'en-US'));
+    },
+    { language: 'de-DE', prefs: {} }
+  );
+});
+
+test('F30.11: the toggle writes the preference back and says so', async () => {
+  // The change handler is the only writer of `showActionBarButton`, and it was
+  // outside every tier: no test dispatched a change on the checkbox, so both the
+  // stored value and the status string could have been wrong without a failure.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    async ({ status, storedPrefs }) => {
+      assert.equal(status(), popupCopy('buttonHidden', 'en-US'), 'turning it off says so');
+      assert.equal(
+        (await storedPrefs()).showActionBarButton,
+        false,
+        'and the preference is written to the key the content script reads, not only painted'
+      );
+    },
+    {
+      prefs: { showActionBarButton: true },
+      interact: (doc) => {
+        const box = doc.getElementById('toggle-button') as unknown as { checked: boolean };
+        box.checked = false;
+        box.dispatchEvent({ type: 'change', preventDefault: () => {} });
+      },
+    }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    async ({ status, storedPrefs }) => {
+      assert.equal(status(), popupCopy('buttonEnabled', 'en-US'), 'turning it back on says so');
+      assert.equal((await storedPrefs()).showActionBarButton, true);
+    },
+    {
+      prefs: { showActionBarButton: false },
+      interact: (doc) => {
+        const box = doc.getElementById('toggle-button') as unknown as { checked: boolean };
+        box.checked = true;
+        box.dispatchEvent({ type: 'change', preventDefault: () => {} });
+      },
+    }
+  );
+});
+
+test('F30.12: a popup with no active tab says so instead of doing nothing', async () => {
+  // `query` answering an empty list is the reachable half of the guard; the
+  // `chrome.tabs` guard is defensive, but a popup that stays silent on either
+  // looks identical to one that worked.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ status }) => {
+      assert.equal(status(), popupCopy('noActiveTab', 'en-US'), 'no tab is its own message');
+    },
+    { tabs: 'none' }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ status }) => {
+      assert.equal(status(), popupCopy('noTabAccess', 'en-US'), 'no tabs API is another');
+    },
+    { tabs: 'absent' }
+  );
 });
 
 // -------------------------------------------------------------
@@ -4198,6 +4441,25 @@ test('F31.4: the popup’s TRIGGER_ACTIVE_CARD message is answered', async () =>
   });
 });
 
+test('F31.5b: the second deferred scan covers a post the first one could not see', async () => {
+  // Two scans, and the entry runs them for a reason: X hydrates a deep-linked
+  // feed in stages, and a post that lands after the first scan has no other
+  // way in here. F31.5 only proves the 500ms pass works — it appends the post
+  // at startup and waits 600ms — so deleting the 1500ms pass left the suite
+  // green. This one appends *after* the first scan has run.
+  await withEntryEnv({}, async ({ doc }) => {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    assert.equal(doc.querySelector('[data-post-to-card-btn="true"]'), null,
+      'the first scan has already run and found nothing');
+
+    doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    assert.ok(doc.querySelector('[data-post-to-card-btn="true"]'),
+      'the later scan is what covers a post arriving after the first one');
+  });
+});
+
 test('F31.5: the deferred scans pick up a post that was not there at startup', async () => {
   // A post that arrives after startup can only be found by the entry's own
   // deferred scans, because the observer is inert here. With a live observer this
@@ -4220,22 +4482,6 @@ test('F31.5: the deferred scans pick up a post that was not there at startup', a
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 1
 // -------------------------------------------------------------
-export async function runTier1(): Promise<{ total: number; passed: number; failed: number; results: TestResult[] }> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: any) {
-      results.push({ name: t.name, passed: false, error: err?.message || String(err), durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTier1() {
+  return run();
 }

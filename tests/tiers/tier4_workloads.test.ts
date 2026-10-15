@@ -21,8 +21,9 @@ import assert from 'node:assert/strict';
 
 import { DomDocument, DomElement, DomImageElement, DomShadowRoot, createDomElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
-import { MockClipboard, MockClipboardItem } from '../env/clipboard.ts';
-import { renderComponent, loadModule, rasterizer, exportEngine } from '../env/render.ts';
+import { withClipboard } from '../env/clipboard.ts';
+import { renderComponent, loadModule, rasterizer, exportEngine, cardRenderer } from '../env/render.ts';
+import { createSuite } from '../env/harness.ts';
 
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
@@ -33,23 +34,9 @@ import { THREAD_HTML } from '../fixtures/thread.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import { FOUR_PHOTOS_HTML } from '../fixtures/multi-images.ts';
 
-import type { TweetData, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig } from '../../src/types/card.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 // -------------------------------------------------------------
 // Environment
@@ -134,13 +121,7 @@ async function withSandbox(body: (s: Sandbox) => Promise<void>): Promise<void> {
  * about, and the locale pinned so the copy does not follow the machine. */
 const CARD_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, theme: 'darkroom', locale: 'en-US' };
 
-function renderCard(data: ThreadData | TweetData, config: Partial<CardConfig> = {}): Promise<string> {
-  return renderComponent('/src/content/ui/Card.tsx', 'Card', {
-    data,
-    config: { ...CARD_CONFIG, ...config },
-    onExcludeTweet: () => {},
-  });
-}
+const renderCard = cardRenderer(CARD_CONFIG);
 
 /**
  * The images the extractor produced, as a card element the export can walk.
@@ -203,36 +184,6 @@ async function exportBlob(
  * the document. A download is observed where it happens: as the `<a download>` the
  * fallback path appends and clicks, read back before its cleanup timer fires.
  */
-async function withClipboard(
-  failureMode: 'none' | 'unfocused' | 'gesture_expired' | 'permission_denied',
-  body: (clipboard: MockClipboard) => Promise<void>
-): Promise<HTMLAnchorElement[]> {
-  const scope = globalThis as Record<string, unknown>;
-  const doc = scope.document as DomDocument;
-  const clipboard = new MockClipboard();
-  clipboard.failureMode = failureMode;
-
-  const savedClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, 'clipboard');
-  const savedItem = scope.ClipboardItem;
-  Object.defineProperty(globalThis.navigator, 'clipboard', { value: clipboard, configurable: true, writable: true });
-  scope.ClipboardItem = MockClipboardItem;
-
-  const savedWarn = console.warn;
-  console.warn = () => {};
-  try {
-    await body(clipboard);
-    return Array.from(doc.body.querySelectorAll<HTMLAnchorElement>('a[download]'));
-  } finally {
-    console.warn = savedWarn;
-    if (savedClipboard) {
-      Object.defineProperty(globalThis.navigator, 'clipboard', savedClipboard);
-    } else {
-      delete (globalThis.navigator as { clipboard?: unknown }).clipboard;
-    }
-    scope.ClipboardItem = savedItem;
-  }
-}
-
 // -------------------------------------------------------------
 // Workflow 1: Viral Tweet with 4 photos -> Darkroom -> Clipboard Copy
 // -------------------------------------------------------------
@@ -255,7 +206,7 @@ test('Tier 4.1: a four-photo tweet extracts, renders, rasterizes clean and reach
     }
 
     // 2. The card renders those four photos.
-    const html = await renderCard({ ...tweet, author: { name: 'Viral Creator', handle: '@creator' } });
+    const html = await renderCard({ data: { ...tweet, author: { name: 'Viral Creator', handle: '@creator' } } });
     assert.equal((html.match(/class="media-box"/g) || []).length, 4);
     assert.ok(html.includes('data-theme="darkroom"'));
 
@@ -298,7 +249,7 @@ test('Tier 4.2: a three-post thread resolves, blurs its author, and falls back t
     assert.equal(handles.size, 1, `the thread merged another author's post: ${[...handles].join(', ')}`);
 
     // The card blurs the author and nothing else.
-    const html = await renderCard(thread, { blurAuthor: true, aspectRatio: '3:4' });
+    const html = await renderCard({ data: thread, config: { blurAuthor: true, aspectRatio: '3:4' } });
     const blurred = [...html.matchAll(/class="([^"]*\bis-blurred\b[^"]*)"/g)].map((m) => m[1]);
     assert.ok(blurred.length > 0, 'blurAuthor did not reach the card');
     for (const classes of blurred) {
@@ -338,7 +289,7 @@ test('Tier 4.3: a quote tweet extracts its quote and renders it, then downloads 
     assert.equal(tweet.quotePost!.author.handle, '@sama');
     assert.ok(tweet.quotePost!.text.length > 0, 'the quote body is empty');
 
-    const html = await renderCard({ ...tweet, author: { name: 'Satya', handle: '@satyanadella' } });
+    const html = await renderCard({ data: { ...tweet, author: { name: 'Satya', handle: '@satyanadella' } } });
     assert.equal((html.match(/class="quote-card"/g) || []).length, 1);
     assert.ok(html.includes(tweet.quotePost!.text.slice(0, 20)), 'the quoted body did not reach the markup');
 
@@ -419,22 +370,6 @@ test('Tier 4.4: the scroll lock is reentrant, restores what it found, and a clos
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 4
 // -------------------------------------------------------------
-export async function runTier4(): Promise<{ total: number; passed: number; failed: number; results: TestResult[] }> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: any) {
-      results.push({ name: t.name, passed: false, error: err?.message || String(err), durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTier4() {
+  return run();
 }

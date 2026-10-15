@@ -43,7 +43,7 @@ Every feature identified in `PROJECT.md` is covered with a minimum of 5 rigorous
 | **F8** | SPA Route Navigation Handling | Handle Twitter SPA route transitions (`/home`, `/status/:id`, `/:username`) | `tier2_boundaries.test.ts` Tier 2.87 | 1 | **F8.1–F8.5 已删除**：各自定义本地函数再断言它刚设的标志，不触及任何生产代码。导航接线改由 Tier 2.87 覆盖——它调用出厂的 `initTwitterInjection`、派发真实 `popstate`，断言重扫发生；删掉 `popstate` 监听会让它失败。入口模块自身的接线（`src/content/index.ts`）另由 tier1 F31.1–F31.5 覆盖 |
 | **F9** | Native Emoji Restoration | Convert Twemoji `<img alt="🔥">` to native Unicode string in text and names | `tier1_features.test.ts` § F9 | 5 | `img[alt]` extraction, childNodes recursion, multiple emojis preservation, username emojis, zero text truncation |
 | **F10** | Mention & Hashtag Preservation | Preserve `@mentions`, `#hashtags`, `$cashtags`, and URLs as styled tokens | `tier1_features.test.ts` § F10 | 5 | Mention tokenization, hashtag regex parsing, cashtag detection, t.co link rewriting, token array output |
-| **F11** | High-Res Media Upgrade | Rewrite avatars to `_400x400`, photos to `name=large`, extract video posters | `tier1_features.test.ts` § F11 | 5 | `_normal` to `_400x400`, `name=small` to `name=large`, legacy `:small` format, video poster extraction, fallback thumbnail |
+| **F11** | High-Res Media Upgrade | Rewrite avatars to `_400x400`, photos to `name=orig`, extract video posters | `tier1_features.test.ts` § F11 | 5 | `_normal` to `_400x400`, `name=small` to `name=orig`, legacy `:small` format, video poster extraction, fallback thumbnail |
 | **F12** | Multi-Image Grid Extraction | Extract 1 to 4 photo attachments and map layout geometry | `tier1_features.test.ts` § F12 | 5 | 1 photo full-width, 2 photos dual column, 3 photos split layout, 4 photos 2x2 grid, >4 images clamp |
 | **F13** | Quote Tweet Extraction | Extract nested `quotePost` (author, text, media, time) and handle deleted posts | `tier1_features.test.ts` § F13 | 5 | Nested container selector, quote author info, quote body text, quote media extraction, deleted post detection |
 | **F14** | Continuous Thread Connector | Traverse author's continuous chain, filter ads and outsider replies, add metadata | `tier1_features.test.ts` § F14 | 5 | Same-author chaining, ad interception, other-user reply cutoff, thread index ordering, connector metadata |
@@ -64,7 +64,7 @@ Every feature identified in `PROJECT.md` is covered with a minimum of 5 rigorous
 
 ## 3. Runner Architecture & Emulation Stack
 
-The test runner is built entirely using Node.js 24's native TypeScript and ESM execution capabilities, guaranteeing zero external dependencies while offering total deterministic control:
+The test runner is built entirely on Node.js 24's native TypeScript and ESM execution capabilities, with no test framework and no runtime dependency of its own — total deterministic control at the cost of the two dev-only libraries the render path borrows (Vite's SSR loader and `preact-render-to-string`, both already in `devDependencies`; neither reaches the network):
 
 ```
 tests/
@@ -74,6 +74,7 @@ tests/
 │   ├── chrome.ts                 # Chrome Extension Manifest V3 runtime, messaging, tabs, storage mocks
 │   ├── clipboard.ts              # Async Clipboard API emulator with focus & permission failure modes
 │   ├── render.ts                 # Vite SSR loader, and the `modern-screenshot` alias the export engine runs against
+│   ├── harness.ts                # The registry and runner every tier shares
 │   └── modern-screenshot-stub.ts # The rasterizer stand-in: records what the engine asked it to draw
 ├── fixtures/
 │   ├── single-tweet.ts           # Realistic DOM fixture for single tweet
@@ -96,7 +97,7 @@ tests/
 ```
 
 ### 3.1 Browser & DOM Emulation Layer (`tests/env/browser.ts`)
-- Implements full tree traversal (`childNodes`, `children`, `parentNode`, `parentElement`, `previousElementSibling`, `nextElementSibling`).
+- Implements full tree traversal (`childNodes`, `children`, `parentNode`, `parentElement`, `previousElementSibling`).
 - Supports standard DOM query selectors: `querySelector`, `querySelectorAll`, `closest`, `matches` supporting attribute selectors (`[data-testid="..."]`, `[role="..."]`, `[alt]`, `[href*="..."]`).
 - Implements Web Components standard: `customElements.define`, `customElements.get`, `Element.attachShadow({ mode: 'open' })` with encapsulated ShadowRoot.
 - Implements `MutationObserver` with synchronous batched delivery and disconnect lifecycle.
@@ -121,12 +122,17 @@ tests/
   2. `USER_GESTURE_EXPIRED`: Throws `NotAllowedError: Must be handling a user gesture to use the Clipboard API`.
   3. `PERMISSION_DENIED`: Throws `NotAllowedError: Clipboard permission denied`.
 - The download side is not emulated here: a download spy used to sit alongside the clipboard mock, and the tiers that named it were asserting the spy's own bookkeeping. `exportBlobWithFallback` is production code and is driven directly instead.
+- `withClipboard(failureMode, body)` installs a clipboard on `navigator` for the duration of `body` and returns the `<a download>` anchors the fallback left behind, read before their cleanup timer fires. Tier 1 and Tier 4 each kept a copy of it; the copies had already drifted, and only one of them re-listed the failure union.
 
 ### 3.5 Component Rendering Layer (`tests/env/render.ts`)
 - The one layer that is not hand-rolled: it borrows Vite's SSR pipeline (already a dev dependency, and the same transform the build uses) to load a `.tsx` component in Node, then renders it to HTML with `preact-render-to-string`.
 - This is what lets a claim about the UI be asserted against the markup it produces instead of against the text of the component's source. Vite externalises dependencies in SSR, so the component and the renderer share one Preact instance — without that, `Fragment` and hook identity would not match between them.
 - `loadModule` exposes the same pipeline for modules that export functions rather than components, which is how `Modal.tsx`'s real `lockScroll` and the real export engine are reached. Anything from `src/` that a test drives must come through here, or the test gets Node's second copy of the module and its side effects land in the wrong registry.
 - Used by Tier 1 for the card and controls: the video badge and its preference, the localized toggle labels, the QR tooltip, and the `data-html2canvas-ignore` marker the export filter keys on.
+- `cardRenderer(baseConfig, defaultData?)` is the one way a tier renders the card: it binds production's `Card` to that tier's base config, and every tier's `renderCard` takes the same `{ data, config }` object. Each tier used to carry its own copy in its own argument order, and tiers 1-4 are in no tsconfig, so a copy with the two swapped compiled to nothing.
+
+### 3.6 Suite Harness (`tests/env/harness.ts`)
+- `createSuite()` returns the tier's `test()` registry and the `run()` that executes it in order. Every tier file used to carry both, and the two shapes had diverged: tiers 1-4 reported a failure as `err.message`, the five `tier_*.test.ts` files as `err.stack || err.message`. One mapping now, reporting the stack when there is one — a stack carries the message and the line that threw.
 
 ---
 

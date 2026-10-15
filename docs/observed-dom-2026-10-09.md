@@ -54,7 +54,8 @@ article[data-testid="tweet"]
 - `extractTweetMedia` 的过滤器 `!isInsideQuoteTweet(img)` → **封面被过滤**
 
 实测确认：互动条与封面都位于读视图**内部**（`barInRv: true`、`photoInRv: true`）。
-修复见 `src/content/adapter/articleScope.ts`：判定嵌套 article 时跳过读视图。
+修复见 `src/content/adapter/articleScope.ts`：判定嵌套 article 时跳过读视图。（该模块已于 2026-10-12 并入
+`extractor.ts`，读视图选择器现在是那里的 `ARTICLE_READ_VIEW`。）
 
 ### 2. 正文内嵌推文，其媒体与统计会串进卡片
 
@@ -163,7 +164,8 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
    所以上面那个 bug 在测试里被掩盖成「拿到了第一个 `<p>`」。已改为按文档序遍历命中集合——这正是本文档
    反复记的那类教训：夹具会和浏览器对着错。
 
-其余按标准收紧：`extractor.ts` 内联重复的 `ARTICLE_BODY` 选择器改从 `articleScope.ts` 导出复用；
+其余按标准收紧：`extractor.ts` 内联重复的 `ARTICLE_BODY` 选择器改从 `articleScope.ts` 导出复用（两者后来
+合成一个模块，现在 `ARTICLE_BODY` 就是 `extractor.ts` 自己的模块私有常量，不再跨模块导出）；
 `FALLBACK_ATTR` 无第二调用方，收回为模块私有；`parse.ts` 里 retweet 分支与外层重复的
 `entitySourceFor → parseRichTokens → strip` 序列抽成了 `parseBody`。封面 `MediaItem` 的两侧各自构造仍保留。
 

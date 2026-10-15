@@ -13,7 +13,8 @@ import assert from 'node:assert/strict';
 
 import { DomElement, DomImageElement } from '../env/browser.ts';
 import { createChromeMock } from '../env/chrome.ts';
-import { renderComponent } from '../env/render.ts';
+import { cardRenderer } from '../env/render.ts';
+import { createSuite } from '../env/harness.ts';
 
 import {
   THEMES,
@@ -30,21 +31,9 @@ import { loadUserPreferences, saveUserPreferences } from '../../src/content/pref
 
 import type { TweetData, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../src/types/card.ts';
+import type { Locale } from '../../src/content/i18n.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 // -------------------------------------------------------------
 // The card under test
@@ -72,13 +61,7 @@ const TWEET: TweetData = {
   })),
 };
 
-function renderCard(config: Partial<CardConfig>, data: ThreadData | TweetData = TWEET): Promise<string> {
-  return renderComponent('/src/content/ui/Card.tsx', 'Card', {
-    data,
-    config: { ...BASE_CONFIG, ...config },
-    onExcludeTweet: () => {},
-  });
-}
+const renderCard = cardRenderer(BASE_CONFIG, TWEET);
 
 /** The card's own root element, as rendered — attributes and inline style. */
 function rootTag(html: string): string {
@@ -107,7 +90,7 @@ test('Tier 3.1: every material renders its own data-theme and injects that mater
   assert.ok(THEME_ORDER.length >= 11, 'the resident material set shrank unexpectedly');
 
   for (const theme of THEME_ORDER) {
-    const html = await renderCard({ theme });
+    const html = await renderCard({ config: { theme } });
     assert.equal(
       attribute(rootTag(html), 'data-theme'),
       theme,
@@ -122,7 +105,7 @@ test('Tier 3.1: every material renders its own data-theme and injects that mater
 
 test('Tier 3.2: every padding option reaches the root as both attribute and inline padding', async () => {
   for (const padding of PADDING_OPTIONS) {
-    const html = await renderCard({ padding });
+    const html = await renderCard({ config: { padding } });
     assert.equal(attribute(rootTag(html), 'data-padding'), padding);
     assert.ok(
       styleAttr(html).includes(`padding:${padding}`),
@@ -135,7 +118,7 @@ test('Tier 3.3: every radius option resolves through resolveRadius and lands on 
   for (const borderRadius of RADIUS_OPTIONS) {
     const theme: ThemeId = 'gallery';
     const expected = resolveRadius(borderRadius, theme);
-    const html = await renderCard({ borderRadius, theme });
+    const html = await renderCard({ config: { borderRadius, theme } });
     const style = styleAttr(html);
 
     assert.equal(attribute(rootTag(html), 'data-radius'), borderRadius);
@@ -156,7 +139,7 @@ test('Tier 3.4: the full material x padding x radius matrix renders every combin
   for (const theme of THEME_ORDER) {
     for (const padding of PADDING_OPTIONS) {
       for (const borderRadius of RADIUS_OPTIONS) {
-        const html = await renderCard({ theme, padding, borderRadius });
+        const html = await renderCard({ config: { theme, padding, borderRadius } });
         const tag = rootTag(html);
 
         assert.equal(attribute(tag, 'data-theme'), theme, `${theme}/${padding}/${borderRadius}: wrong data-theme`);
@@ -213,7 +196,7 @@ const MEGA_THREAD: ThreadData = {
 };
 
 test('Tier 3.5: a thread carrying a quote, a four-photo grid and emoji renders every part at once', async () => {
-  const html = await renderCard({}, MEGA_THREAD);
+  const html = await renderCard({ data: MEGA_THREAD });
 
   // 4 photos + the quote's 1 + the second post's 1.
   assert.equal((html.match(/class="media-box"/g) || []).length, 6, 'media boxes went missing');
@@ -232,7 +215,7 @@ test('Tier 3.5: a thread carrying a quote, a four-photo grid and emoji renders e
 // -------------------------------------------------------------
 
 test('Tier 3.6: the privacy blur lands on the author block only, never on the QR code', async () => {
-  const html = await renderCard({ blurAuthor: true, showQrCode: true, theme: 'darkroom' });
+  const html = await renderCard({ config: { blurAuthor: true, showQrCode: true, theme: 'darkroom' } });
 
   const blurred = [...html.matchAll(/class="([^"]*\bis-blurred\b[^"]*)"/g)].map((m) => m[1]);
   assert.ok(blurred.length >= 3, 'blurring the author left nothing blurred');
@@ -261,7 +244,7 @@ test('Tier 3.7: 3:4 sets a min-height floor and leaves the card free to grow pas
   const floor = getAspectMinHeight('3:4', 640);
   assert.equal(floor, '853px');
 
-  const html = await renderCard({ aspectRatio: '3:4' }, MEGA_THREAD);
+  const html = await renderCard({ config: { aspectRatio: '3:4' }, data: MEGA_THREAD });
   const style = styleAttr(html);
 
   assert.equal(attribute(rootTag(html), 'data-ratio'), '3:4');
@@ -275,7 +258,7 @@ test('Tier 3.8: 16:9 sets its own floor and keeps the same freedom to expand', a
   const floor = getAspectMinHeight('16:9', 640);
   assert.equal(floor, '360px');
 
-  const html = await renderCard({ aspectRatio: '16:9' }, MEGA_THREAD);
+  const html = await renderCard({ config: { aspectRatio: '16:9' }, data: MEGA_THREAD });
   const style = styleAttr(html);
 
   assert.equal(attribute(rootTag(html), 'data-ratio'), '16:9');
@@ -289,8 +272,8 @@ test('Tier 3.8: 16:9 sets its own floor and keeps the same freedom to expand', a
 // -------------------------------------------------------------
 
 test('Tier 3.9: every image the card paints is one the background proxy is allowed to fetch', async () => {
-  const html = await renderCard({}, MEGA_THREAD);
-  const srcs = [...html.matchAll(/<img[^>]*\ssrc="([^"]*)"/g)].map((m) => m[1]);
+  const html = await renderCard({ data: MEGA_THREAD });
+  const srcs =[...html.matchAll(/<img[^>]*\ssrc="([^"]*)"/g)].map((m) => m[1]);
 
   assert.ok(srcs.length >= 6, `expected the card to paint its avatars and media, saw ${srcs.length} images`);
 
@@ -369,8 +352,27 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
     assert.equal(restored.showStats, false);
     assert.equal(restored.blurAuthor, true);
 
+    // The locale is the one field whose default is not a constant: it follows
+    // the machine's language, so a test that saved a fixed value could agree
+    // with a mutation that ignored the stored one. Both directions are pinned
+    // against whatever this machine's default turns out to be.
+    const otherLocale: Locale = DEFAULT_CARD_CONFIG.locale === 'zh-CN' ? 'en-US' : 'zh-CN';
+    await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, locale: otherLocale });
+    assert.equal(
+      (await loadUserPreferences()).locale,
+      otherLocale,
+      'a stored locale must survive, not be replaced by the machine default'
+    );
+
+    await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, locale: 'klingon' as Locale });
+    assert.equal(
+      (await loadUserPreferences()).locale,
+      DEFAULT_CARD_CONFIG.locale,
+      'and an unrecognised one degrades to the default'
+    );
+
     // And the restored config is one the card can actually render.
-    const html = await renderCard(restored);
+    const html = await renderCard({ config: restored });
     assert.equal(attribute(rootTag(html), 'data-theme'), 'darkroom');
   } finally {
     (globalThis as Record<string, unknown>).chrome = originalChrome;
@@ -380,22 +382,6 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 3
 // -------------------------------------------------------------
-export async function runTier3(): Promise<{ total: number; passed: number; failed: number; results: TestResult[] }> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: any) {
-      results.push({ name: t.name, passed: false, error: err?.message || String(err), durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTier3() {
+  return run();
 }

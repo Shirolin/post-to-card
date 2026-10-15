@@ -224,6 +224,28 @@ export const VIDEO_WITH_DURATION_HTML = `
 `;
 
 /**
+ * A video player marked only by its `aria-label`, with no testid on it.
+ *
+ * The container selectors that look for a player name three attributes and the
+ * bare tag, and this is the one that carries a space in its value. A shim that
+ * tokenized selectors on whitespace split the member in half and matched
+ * nothing, so the container was never found and the duration beside the poster
+ * was lost — the card showed the frame with no `1:42` on it. The player is the
+ * only source of it: the video element holds no text of its own.
+ */
+export const VIDEO_ARIA_LABEL_ONLY_HTML = `
+<article data-testid="tweet">
+  <div data-testid="User-Name">
+    <a href="/user/status/8104"><time datetime="2026-07-02T00:00:00.000Z"></time></a>
+  </div>
+  <div aria-label="Embedded video">
+    <video poster="https://pbs.twimg.com/tweet_video_thumb/aria_only_poster.jpg"></video>
+    <div><span>1:42</span></div>
+  </div>
+</article>
+`;
+
+/**
  * A GIF in the state a feed actually shows with autoplay off: a poster `img`
  * plus the interstitial overlay that stands in for the player, and no `<video>`
  * anywhere. Captured from a live logged-in feed on 2026-10-10

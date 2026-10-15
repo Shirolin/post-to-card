@@ -1,6 +1,8 @@
 # 真实 DOM 采样清单
 
-> **状态：第 2、3、7 条已由 `docs/observed-dom-2026-10-10-authenticated.md` 回答（结论见那篇），
+> **状态：第 2、7 条已由 `docs/observed-dom-2026-10-10-authenticated.md` 回答，第 3 条由
+> `docs/observed-dom-2026-10-02-authenticated.md`（外层）与 `docs/observed-dom-2026-10-14-nested-quote.md`
+> （嵌套）回答——10-10 那篇把引用推文列在「未采到」里，所以别指望从它读结论；
 > 其余仍未采到；「为什么」一列写的是采集当日的判据，不是现行事实。**
 > 已经采到的场景在 `docs/observed-dom-*.md`（每篇开头有状态行），先看那里，再决定还差哪几条。
 

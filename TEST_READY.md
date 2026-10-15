@@ -108,13 +108,13 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - **F8 (SPA Navigation)**: *removed* — its five tests each defined a local function, called it, and asserted the result. The navigation wiring is covered by tier2 Tier 2.87, which calls the shipped `initTwitterInjection` and dispatches a real `popstate`; the entry module's own wiring is F31.1–F31.5.
 - **F9 (Emoji Restoration)**: Twemoji img[alt] restoration, display name emoji support, BR tag to newline, pure emoji tweets, textContent loss proof.
 - **F10 (Rich Tokens)**: @mention links, #hashtag search, $cashtags, t.co display text, trailing pic.twitter.com link stripping.
-- **F11 (Media Upgrades)**: Avatar _400x400 upgrade, photo name=large upgrade, legacy :small to :large, video poster extraction, empty media resilience.
+- **F11 (Media Upgrades)**: Avatar _400x400 upgrade, photo name=orig upgrade (4096px, `name=large` stops at 2048px), WebP rewritten to JPEG, legacy :small to :orig, video poster extraction, empty media resilience.
 - **F12 (Multi-Image Grid)**: 1 photo full width, 2 photos dual column, 3 photos split layout, 4 photos 2x2 grid, max 4 photos clamp.
 - **F13 (Quote Tweets)**: Nested quoteTweet container, independent quote author, quote text, quote media extraction, deleted quote post tombstone.
 - **F14 (Thread Connector)**: 3-tweet same-author chaining, sponsored ad interception, third-party reply exclusion, thread index/total calculation, single tweet flag.
 - **F15 (Shadow DOM Container)**: Custom element registration, open shadowRoot attachment, InvalidStateError on double attach, singleton guard, unmount cleanup.
 - **F16 (Inline Style Isolation)**: ShadowRoot style tag, :host all: initial, zero host CSS leakage, font stack fallbacks, textContent injection.
-- **F17 (Curated Themes, P0 + P2)**: 8 套材质主题 token 表（羊皮纸 / 暗刊 / 细线 + 牛皮纸 / 蓝晒图 / 终端 + 报纸栏 / 粗野派），每套带签名装饰线与呼吸节奏；引号推文按材质分填充/描边两种呈现。纯白禁令、无渐变面、明度阶单调性、衬线/无衬/等宽字族、强调色、退役主题 id 迁移（Linear 暗黑→暗刊、极致纯黑→蓝晒图、Notion 纯白→羊皮纸）、双语主题名、正文/副文/脚注/链接 4.5:1 对比度底线、引号面板可见性、水印走脚注墨色、qrFill 与引号圆角接线、垫底与卡面分离度、禁止硬编码品牌蓝、实验性主题不进默认转盘。
+- **F17 (Curated Themes, P0 + P2)**: 12 套材质主题 token 表（11 常驻 + 1 实验性粗野派，默认不进转盘），每套带签名装饰线与呼吸节奏；引号推文按材质分填充/描边两种呈现。纯白禁令、无渐变面、明度阶单调性、衬线/无衬/等宽字族、强调色、退役主题 id 迁移（linear-dark / oled-black→darkroom、notion-white / parchment→gallery）、双语主题名、正文/副文/脚注/链接 4.5:1 对比度底线、引号面板可见性、水印走脚注墨色、qrFill 与引号圆角接线、垫底与卡面分离度、禁止硬编码品牌蓝、实验性主题不进默认转盘。
 - **F18 (Padding & Radius)**: 16px/32px/48px padding, follow-theme plus 0px/12px/20px radius, padding fallback, radius fallback, media corner synchronization, per-theme corner deferral.
 - **F19 (Fluid Expansion)**: Auto ratio unconstrained, 3:4 ratio 853px min-height, 16:9 ratio 360px min-height, downward expansion without clipping, overflow: visible.
 - **F20 (Offline QR Code)**: Vector SVG generation, UTM/tracking parameter stripping, crispEdges shape rendering, long URL support, 100% offline.

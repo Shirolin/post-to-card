@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseTweetDetailResponse, parseReplyLinkage } from '../../src/content/graphql/parse.ts';
 import { applyDomTranslation } from '../../src/content/graphql/bridge.ts';
+import { createSuite } from '../env/harness.ts';
 import type { ThreadData } from '../../src/types/tweet.ts';
 import {
   TWEET_DETAIL_THREAD_JSON,
@@ -31,20 +32,7 @@ import {
   TWEET_DETAIL_NESTED_QUOTE_JSON,
 } from '../fixtures/graphql.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 test('gql.1: a conversation yields every tweet and marks the thread', () => {
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1');
@@ -570,28 +558,6 @@ test('gql.32: a quote of a deleted post is a tombstone, not the absence of a quo
   assert.equal(noQuote.thread?.tweets[0].quotePost, undefined);
 });
 
-export async function runTierGraphQL(): Promise<{
-  total: number;
-  passed: number;
-  failed: number;
-  results: TestResult[];
-}> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.stack || err.message : String(err);
-      results.push({ name: t.name, passed: false, error: errorMsg, durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTierGraphQL() {
+  return run();
 }
