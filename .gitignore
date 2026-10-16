@@ -11,6 +11,11 @@ build/
 # Subagent teamwork & internal logs
 .agents/
 
+# Claude Code harness state: launch config and per-machine settings for the
+# dev preview server. Nothing here is shared — the repo documents its agent
+# workflow in AGENTS.md and docs/agents/ instead.
+.claude/
+
 # Agent harness state (screenshots, panel state, issue tracker)
 .openchamber/
 .playwright-mcp/

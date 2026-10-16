@@ -2,7 +2,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { Locale } from '../../types/card.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
-import { Sparkles, X } from 'lucide-preact';
+import { X } from 'lucide-preact';
 
 let activeScrollLocks = 0;
 let previousOverflow = '';
@@ -235,7 +235,25 @@ export function Modal({ isOpen = true, locale, summary, onClose, children }: Mod
         <div class="modal-header">
           <div class="modal-brand">
             <div class="modal-brand-icon" aria-hidden="true">
-              <Sparkles size={16} strokeWidth={2} />
+              {/* The product's own mark — three blocks, one wide above two
+                  square — rather than lucide's Sparkles, so the modal header,
+                  the toolbar popup and the injected trigger all say the same
+                  name the same way. Drawn inline for the same reason the
+                  trigger is: it is the one glyph that must not drift. */}
+              <svg
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="18" height="7" x="3" y="3" rx="1" ry="1" />
+                <rect width="7" height="7" x="3" y="14" rx="1" ry="1" />
+                <rect width="7" height="7" x="14" y="14" rx="1" ry="1" />
+              </svg>
             </div>
             <span class="modal-brand-name">{t.brandName}</span>
             {summary && <span class="modal-header-summary">{summary}</span>}
