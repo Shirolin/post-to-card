@@ -2,8 +2,12 @@
    Post-to-Card Modal & Shell Styles
    100% self-contained styles for Shadow DOM isolation
 
-   Accent palette is aligned with Twitter/X dark mode so the overlay reads as
-   part of the host page rather than a foreign layer.
+   The accent palette is deliberately NOT X's `#1d9bf0` here. Two jobs compete
+   for one colour in this dialog — accent ink on dark sheets (text, icons,
+   rules) and the accent fill white text sits on (the primary button, the
+   selected segmented option) — and X's blue cannot do the second: white on it
+   is 3.00:1. It is split into `--ptc-accent-ink` and `--ptc-accent-fill`, the
+   same separation the card themes already make between `accent` and `link`.
    ========================================================================== */
 
 /* `.ptc-scope` mirrors the token host for the dev harness, which renders the
@@ -22,19 +26,54 @@
   box-sizing: border-box;
 
   /* Design tokens */
-  --ptc-accent: #1d9bf0;
-  --ptc-accent-hover: #1a8cd8;
-  --ptc-accent-soft: rgba(29, 155, 240, 0.15);
-  --ptc-accent-ring: rgba(29, 155, 240, 0.45);
-  --ptc-danger: #f4212e;
+  /* The accent splits in two, for the reason themes.ts already states for the
+     cards: one chromatic highlight cannot be both ink on a dark sheet and a fill
+     under white text. `#1d9bf0` was asked to do both and failed the second —
+     white on it measured 3.00:1 against AA's 4.5:1, on the primary button of the
+     whole feature. The hue, saturation class and meaning are unchanged; only the
+     lightness is moved to where each job can be read.
+
+       --ptc-accent-ink   #6cb0f5 (S 55.9)  text, icons and rules on dark:
+                         7.82:1 on the panel, and 5.36:1 at its worst, on the
+                         accent wash sitting over a hovered row.
+       --ptc-accent-fill  #1668c4 (S 88.8) filled surfaces white text sits on:
+                         5.51:1 white-on-fill, 3.25:1 fill-on-panel.
+       --ptc-accent-fill-hover #1a6bcd     5.21:1 white, 3.44:1 on the panel. */
+  --ptc-accent-ink: #6cb0f5;
+  --ptc-accent-fill: #1668c4;
+  --ptc-accent-fill-hover: #1a6bcd;
+  --ptc-accent-soft: rgba(108, 176, 245, 0.15);
+  /* Drawn against the element it rings, not against the panel. On the accent
+     fill itself a ring in the accent is 1:1 — invisible — so the filled states
+     take their own ring colour below. */
+  --ptc-accent-ring: #6cb0f5;
+  --ptc-accent-ring-on-fill: #ffffff;
+  /* 6.11:1 on the panel and 5.55:1 on a hovered row. `#f4212e` was X's own
+     danger red and measured 4.35:1 / 3.96:1, so the export-failure line was the
+     one message in this dialog that could not be read. */
+  --ptc-danger: #ff6169;
   --ptc-success: #00ba7c;
 
-  --ptc-bg-shell: #000000;
+  /* The shell is an off-black rather than `#000000`. A pure black backdrop made
+     three things worse and fixed none: the dialog's own drop shadow was drawn in
+     rgba(0,0,0,.85) on black and so was invisible, the panel and the mat could
+     not be told apart at a glance, and the shadow-readable edge between dialog
+     and backdrop had nothing to land on. `#0b0d11` is cool and neutral, which
+     keeps it in the same grey family as the panel below rather than mixing a
+     warm black with a cool grey. 1.09:1 off the panel — enough separation to
+     read as an object lying on a board, like `canvas` on the cards. */
+  --ptc-bg-shell: #0b0d11;
   --ptc-bg-panel: #16171b;
   --ptc-bg-raised: rgba(255, 255, 255, 0.04);
   --ptc-bg-hover: rgba(255, 255, 255, 0.08);
-  --ptc-border: rgba(255, 255, 255, 0.1);
-  --ptc-border-strong: rgba(255, 255, 255, 0.2);
+  /* Boundaries are not text, but WCAG 1.4.11 still asks for 3:1 where a
+     boundary is what tells a control apart from the surface it sits on. Both
+     were below it: `rgba(255,255,255,.1)` measured 1.21:1 and `.2` measured
+     1.88:1. `.34` clears 3:1 on the panel (3.12:1) and on a hovered row
+     (3.10:1), which are the two surfaces every boundary here has to be seen
+     against. */
+  --ptc-border: rgba(255, 255, 255, 0.34);
+  --ptc-border-strong: rgba(255, 255, 255, 0.44);
 
   --ptc-text: #e7e9ea;
   /* Secondary text: the 11-12px labels, unselected segmented options and swatch
@@ -71,10 +110,32 @@
   outline: none;
 }
 
+/* Single visible focus treatment for every interactive element.
+
+   The ring is the accent ink, not the accent fill. The default read this as
+   `--ptc-accent`, which was also the selected state's own background (the
+   segmented options, the checked swatch, the download row) — so on any control
+   that was already selected the ring was drawn in the same colour as the fill it
+   wrapped and measured 1:1. There was no focus indicator at all on the one
+   control a keyboard user is most likely to land on: `#6cb0f5` on `#1668c4` is
+   1.66:1. The ink step clears it at 5.36:1, so the ring is now visible on every
+   surface in this dialog including the filled ones. */
 :is(button, [role="button"], [role="switch"], [role="radio"], [role="checkbox"], a):focus-visible {
-  outline: 2px solid var(--ptc-accent);
+  outline: 2px solid var(--ptc-accent-ring);
   outline-offset: 2px;
   border-radius: var(--ptc-radius-sm);
+}
+
+/* The dark fills take a white ring instead. A 2px ink ring on a filled surface
+   reads as a narrow halo at 1.66:1 and a wider one changes the control's
+   silhouette; white against the same fill is 5.51:1. `outline-offset` goes
+   negative so the ring is drawn inside the fill rather than floating outside it
+   in accent ink. */
+.btn-primary:focus-visible,
+.btn-group-item.is-active:focus-visible,
+.theme-button.is-active .theme-swatch-check:focus-visible {
+  outline: 2px solid var(--ptc-accent-ring-on-fill);
+  outline-offset: -4px;
 }
 
 /* The dialog is focused programmatically on open, so a screen reader lands inside
@@ -135,12 +196,19 @@
   flex-direction: column;
   width: 100%;
   max-width: 1140px;
-  max-height: 92vh;
-  height: 90vh;
+  /* `dvh`, not `vh`: on iOS Safari `vh` is the largest possible viewport and
+     does not shrink when the browser chrome retracts, so the dialog's bottom
+     edge sat under the URL bar with the export button out of reach. Both
+     heights take the unit so they stay consistent. */
+  max-height: 92dvh;
+  height: 90dvh;
   background: var(--ptc-bg-shell);
   border: 1px solid var(--ptc-border);
   border-radius: var(--ptc-radius-lg);
-  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.85);
+  /* Tinted to the shell's own hue rather than pure black, so the dialog sits on
+     the board with depth instead of being crowned by a void that was invisible
+     when the shell was `#000000`. */
+  box-shadow: 0 24px 60px -12px rgba(2, 4, 8, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.03);
   color: var(--ptc-text);
   overflow: hidden;
   animation: ptc-scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -178,7 +246,7 @@
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background: var(--ptc-accent);
+  background: var(--ptc-accent-fill);
   color: #ffffff;
   flex-shrink: 0;
 }
@@ -409,7 +477,7 @@
   padding: 1px 7px;
   border-radius: 999px;
   background: var(--ptc-accent-soft);
-  color: var(--ptc-accent);
+  color: var(--ptc-accent-ink);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
@@ -464,18 +532,27 @@
   width: 100%;
   height: 34px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.34);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transition: border-color 0.15s ease;
 }
 
 .theme-button:hover .theme-swatch {
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.44);
 }
 
+/* The selected swatch is marked by the *ink*, not the fill. This is the one
+   place the selection is drawn on top of twelve different sheet colours, so it
+   has to hold against all of them — the fill's 3.25:1 was measured against the
+   panel and disappears on Brutalist's yellow. The ink is a hairline in the
+   panel's own tone so the ring reads as a cut-out around whatever material the
+   swatch is showing, and the glow is the ink's at 0.4 rather than 0.35. */
 .theme-button.is-active .theme-swatch {
-  border-color: var(--ptc-accent);
-  box-shadow: 0 0 0 2px #16171b, 0 0 0 4px var(--ptc-accent), 0 4px 12px rgba(29, 155, 240, 0.35);
+  border-color: var(--ptc-accent-ink);
+  box-shadow:
+    0 0 0 2px var(--ptc-bg-panel),
+    0 0 0 4px var(--ptc-accent-ink),
+    0 4px 12px rgba(108, 176, 245, 0.4);
 }
 
 /* Badge in upper-right corner so it never obscures the material preview */
@@ -489,7 +566,7 @@
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: var(--ptc-accent);
+  background: var(--ptc-accent-fill);
   color: #ffffff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
@@ -574,13 +651,16 @@
 }
 
 .btn-group-item.is-active {
-  background: var(--ptc-accent);
+  background: var(--ptc-accent-fill);
   color: #ffffff;
 }
 
+/* The selected option already carries the accent fill, so the ring takes the
+   white treatment set above and pulls inside it. `-3px` rather than `-4px`
+   because these segments are smaller than the primary button. */
 .btn-group-item:focus-visible {
-  outline: 2px solid var(--ptc-accent);
-  outline-offset: 1px;
+  outline: 2px solid var(--ptc-accent-ring-on-fill);
+  outline-offset: -3px;
 }
 
 /* Feature Toggles List */
@@ -624,14 +704,16 @@
   position: relative;
   width: 38px;
   height: 21px;
-  background: rgba(255, 255, 255, 0.2);
+  /* The off state's track has to be tellable from the panel it sits on, or the
+     switch reads as a label with nothing to press. 1.88:1 before; 3.1:1 now. */
+  background: rgba(255, 255, 255, 0.34);
   border-radius: 999px;
   flex-shrink: 0;
   transition: background 0.2s ease;
 }
 
 .toggle-switch.is-checked {
-  background: var(--ptc-accent);
+  background: var(--ptc-accent-fill);
 }
 
 .toggle-thumb {
@@ -756,7 +838,7 @@
   justify-content: center;
   gap: 8px;
   padding: 12px 18px;
-  background: var(--ptc-accent);
+  background: var(--ptc-accent-fill);
   border: none;
   border-radius: var(--ptc-radius);
   color: #ffffff;
@@ -764,11 +846,21 @@
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, opacity 0.15s ease;
+  /* Pressed as well as hovered: the primary action is the one control here whose
+     whole job is being pressed, and it gave no feedback that it had been. */
+  transform: translateY(0);
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--ptc-accent-hover);
+  background: var(--ptc-accent-fill-hover);
 }
 
 .btn-primary:disabled,
@@ -789,7 +881,7 @@
   border-radius: var(--ptc-radius);
   color: var(--ptc-text);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -797,11 +889,18 @@
   border-color: var(--ptc-border-strong);
 }
 
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* The spinner sits on the accent fill, where a translucent white ring was
+   2.55:1 against it — the moving part of the wait state was the least visible
+   thing on screen. Opaque white is 5.51:1. */
 .spinner {
   width: 15px;
   height: 15px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #ffffff;
+  border: 2px solid #ffffff;
+  border-top-color: rgba(255, 255, 255, 0.45);
   border-radius: 50%;
   animation: ptc-spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -856,7 +955,7 @@
 .btn-text-action {
   background: transparent;
   border: none;
-  color: var(--ptc-accent);
+  color: var(--ptc-accent-ink);
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
@@ -932,7 +1031,7 @@
 }
 
 .tweet-manager-item.is-target {
-  border-left: 2px solid var(--ptc-accent);
+  border-left: 2px solid var(--ptc-accent-ink);
 }
 
 .tweet-checkbox {
@@ -950,8 +1049,8 @@
 }
 
 .tweet-checkbox.is-checked {
-  background: var(--ptc-accent);
-  border-color: var(--ptc-accent);
+  background: var(--ptc-accent-fill);
+  border-color: var(--ptc-accent-fill);
 }
 
 .tweet-index-badge {
@@ -998,8 +1097,8 @@
   }
   #post-to-card-dialog,
   .post-to-card-dialog {
-    height: 100vh;
-    max-height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
     border-radius: 0;
     border: none;
   }

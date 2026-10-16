@@ -34,6 +34,88 @@ export const TRIGGER_SELECTOR = '[data-post-to-card-btn="true"]';
 const TRIGGER_BUTTON_SELECTOR = TRIGGER_SELECTOR;
 
 /**
+ * The trigger button's own stylesheet, injected once alongside the visibility
+ * rule it used to be the only content of.
+ *
+ * Everything here is scoped to this extension's own attributes, so it cannot
+ * touch X's own controls. The `!important` flags survive from before this was one
+ * stylesheet: the trigger sits inside X's action bar, which sets its own
+ * `display`, `align-items` and `flex-shrink` on flex children, and a
+ * same-specificity rule loses to the one the page ships later. The layout
+ * declarations are therefore still mine to win; the *paint* ones are not
+ * important, which is what lets a normal `:hover` rule below override the page's
+ * colors.
+ */
+const TRIGGER_CSS = `
+[data-post-to-card-btn="true"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 34.75px;
+  min-width: 34.75px;
+  min-height: 20px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: rgb(113, 118, 123);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  vertical-align: middle;
+  margin: auto 0;
+  user-select: none;
+  position: relative;
+  z-index: 1;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+[data-post-to-card-btn="true"] svg { display: block; }
+
+/* Neutral on hover. The button used to hard-code X's own brand blue,
+   rgb(29, 155, 240), as its inline hover colour — the same blue the card themes
+   are forbidden from carrying, and the same blue the tweet's own reply button
+   turns on hover, so the trigger lit up exactly like a native control and had
+   nothing of its own. This stays neutral grey and adds a focus ring instead, which
+   is the affordance a keyboard user actually needs. */
+[data-post-to-card-btn="true"]:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: rgb(231, 233, 234);
+}
+[data-post-to-card-btn="true"]:active {
+  transform: scale(0.92);
+}
+
+/* The one thing the inline version could not do. outline:none was set inline, so
+   nothing — not :focus, not :focus-visible, not the browser's own default — could
+   draw a ring on a keyboard-focused trigger: the only control this extension puts
+   on the page was invisible to a keyboard. The offset is negative because the
+   action bar clips its children, so an outset ring is cut in half on the top and
+   bottom. */
+[data-post-to-card-btn="true"]:focus-visible {
+  outline: 2px solid rgb(108, 176, 245);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-post-to-card-btn="true"] { transition-duration: 0.01ms; }
+}
+
+[data-post-to-card-wrapper="true"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  height: 100% !important;
+  max-height: 100%;
+  margin: auto 0 !important;
+  flex-shrink: 0 !important;
+}
+`;
+
+/**
  * Toggles the visibility of injected action bar trigger buttons across all tweets.
  * When hidden, the buttons remain in DOM (preserving injection deduplication and scroll state)
  * but are visually removed with `display: none !important`.
@@ -42,7 +124,7 @@ export function setInjectedButtonVisibility(visible: boolean): void {
   if (!document.getElementById(VISIBILITY_STYLE_ID)) {
     const styleEl = document.createElement('style');
     styleEl.id = VISIBILITY_STYLE_ID;
-    styleEl.textContent = `
+    const hideRule = `
       html.${HIDE_ACTION_BUTTON_CLASS} [data-post-to-card-btn="true"],
       html.${HIDE_ACTION_BUTTON_CLASS} [data-post-to-card-wrapper="true"],
       .${HIDE_ACTION_BUTTON_CLASS} [data-post-to-card-btn="true"],
@@ -65,6 +147,7 @@ export function setInjectedButtonVisibility(visible: boolean): void {
         vertical-align: middle !important;
       }
     `;
+    styleEl.textContent = TRIGGER_CSS + hideRule;
     const target = document.head || document.documentElement || document.body;
     target.appendChild(styleEl);
   }
@@ -95,6 +178,9 @@ export function applyTriggerLocale(locale?: Locale): void {
  * matches exactly. The previous glyph was the Image icon, whose rounded square
  * plus circle reads as a camera at this size and was easily confused with X's
  * own media controls.
+ *
+ * It is also the product's mark: the popup header and the modal header now draw
+ * the same three blocks, so the three places that name this extension agree.
  */
 export const TRIGGER_BUTTON_SVG = `
 <svg viewBox="0 0 24 24" width="18.75" height="18.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -107,10 +193,20 @@ export const TRIGGER_BUTTON_SVG = `
 /**
  * Creates the Post-to-Card trigger button, formatted to blend into the X tweet
  * action bar while remaining visually distinct from its native controls.
+ *
+ * All of its styling lives in the stylesheet this module injects, and it used to
+ * be thirty-odd `btn.style.` assignments plus JS listeners for hover and press.
+ * That was two problems. The listeners re-implemented `:hover` and `:active` in
+ * JS, so a `pointerleave` that stopped before the JS ran left the button lit; and
+ * `btn.style.outline = 'none'` removed the focus ring that `:focus-visible` would
+ * otherwise have drawn, leaving the only control this extension puts on the page
+ * with no keyboard indicator at all. The states the reviewer saw were the
+ * ones the stylesheet draws now.
  */
 export function createTriggerButton(onClick: () => void, locale?: Locale): HTMLElement {
   const t = getTranslation(sanitizeLocale(locale));
   const btn = document.createElement('button');
+  btn.setAttribute('type', 'button');
   btn.setAttribute('role', 'button');
   btn.setAttribute('aria-label', t.triggerButtonTitle);
   btn.setAttribute('title', t.triggerButtonTitle);
@@ -118,52 +214,10 @@ export function createTriggerButton(onClick: () => void, locale?: Locale): HTMLE
 
   btn.innerHTML = TRIGGER_BUTTON_SVG;
 
-  btn.style.display = 'inline-flex';
-  btn.style.alignItems = 'center';
-  btn.style.justifyContent = 'center';
-  btn.style.alignSelf = 'center';
-  btn.style.background = 'transparent';
-  btn.style.border = 'none';
-  btn.style.outline = 'none';
-  btn.style.cursor = 'pointer';
-  btn.style.padding = '0';
-  btn.style.width = '34.75px';
-  btn.style.height = '100%';
-  btn.style.minWidth = '34.75px';
-  btn.style.minHeight = '20px';
-  btn.style.flexShrink = '0';
-  btn.style.borderRadius = '9999px';
-  btn.style.lineHeight = '1';
-  btn.style.color = 'rgb(113, 118, 123)';
-  btn.style.margin = 'auto 0';
-  btn.style.verticalAlign = 'middle';
-  btn.style.transition = 'background-color 0.15s ease, color 0.15s ease, transform 0.1s ease';
-  btn.style.userSelect = 'none';
-  btn.style.zIndex = '1';
-
   btn.addEventListener('click', (e: Event) => {
     e.stopPropagation();
     e.preventDefault();
     onClick();
-  });
-
-  btn.addEventListener('mouseenter', () => {
-    btn.style.backgroundColor = 'rgba(29, 155, 240, 0.1)';
-    btn.style.color = 'rgb(29, 155, 240)';
-  });
-
-  btn.addEventListener('mouseleave', () => {
-    btn.style.backgroundColor = 'transparent';
-    btn.style.color = 'rgb(113, 118, 123)';
-    btn.style.transform = 'scale(1)';
-  });
-
-  btn.addEventListener('mousedown', () => {
-    btn.style.transform = 'scale(0.92)';
-  });
-
-  btn.addEventListener('mouseup', () => {
-    btn.style.transform = 'scale(1)';
   });
 
   return btn;
@@ -177,16 +231,9 @@ export function createTriggerButton(onClick: () => void, locale?: Locale): HTMLE
 export function createActionBarButtonWrapper(): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.setAttribute('data-post-to-card-wrapper', 'true');
-
-  wrapper.style.display = 'inline-flex';
-  wrapper.style.alignItems = 'center';
-  wrapper.style.justifyContent = 'center';
-  wrapper.style.alignSelf = 'center';
-  wrapper.style.height = '100%';
-  wrapper.style.maxHeight = '100%';
-  wrapper.style.margin = 'auto 0';
-  wrapper.style.flexShrink = '0';
-
+  // Styled by TRIGGER_CSS. Inline styles lived here too; they moved with the
+  // button's so one stylesheet owns everything this extension paints into X's
+  // action bar.
   return wrapper;
 }
 
