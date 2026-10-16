@@ -17,7 +17,6 @@ export interface Translations {
   collapsePanel: string;
   expandPanel: string;
   language: string;
-  languageCardHint: string;
   layoutAndStyle: string;
   theme: string;
   themesShowAll: string;
@@ -34,7 +33,14 @@ export interface Translations {
   padding: string;
   borderRadius: string;
   borderRadiusFollowTheme: string;
-  elementsAndPrivacy: string;
+  cardFooter: string;
+  privacy: string;
+  actionButtonHint: string;
+  experimentalTheme: string;
+  watermarkHint: string;
+  videoPlayButtonTitle: string;
+  blurAuthorHint: string;
+  presentation: string;
 
   // Tweet Scope & Management
   manageTweets: string;
@@ -115,7 +121,6 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     collapsePanel: '收起菜单',
     expandPanel: '展开菜单',
     language: '界面与卡片语言',
-    languageCardHint: '同时决定卡片上的日期格式',
     layoutAndStyle: '版式与样式',
     theme: '视觉主题',
     themesShowAll: '展开其余 {count} 款',
@@ -132,7 +137,14 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     padding: '内边距',
     borderRadius: '卡片圆角',
     borderRadiusFollowTheme: '跟随主题',
-    elementsAndPrivacy: '展示模块与隐私',
+    cardFooter: '卡片页脚',
+    privacy: '隐私',
+    actionButtonHint: '隐藏后，将光标移到推文上按 Alt + C 仍可生成卡片',
+    experimentalTheme: '实验性主题，效果可能不稳定',
+    watermarkHint: '卡片右下角的一行署名与构建号',
+    videoPlayButtonTitle: '视频缩略图右下角的角标。卡片是静态图，不含播放器',
+    blurAuthorHint: '模糊正文作者的头像、昵称与账号。被引用的推文作者不受影响',
+    presentation: '呈现细节',
     manageTweets: '包含推文',
     selectAll: '全选',
     selectCurrentOnly: '仅此推文',
@@ -143,7 +155,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     qrCode: '原文二维码',
     metricsAndStats: '互动数据',
     timestamp: '发布时间',
-    watermark: '微水印尾标',
+    watermark: '署名与版本',
     blurAuthor: '作者隐私脱敏',
     tweetActionButton: '推文卡片按钮',
     videoPlayButton: '视频播放按钮',
@@ -204,7 +216,6 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     collapsePanel: 'Collapse panel',
     expandPanel: 'Expand panel',
     language: 'Language (UI & Card)',
-    languageCardHint: 'Also sets the date format on the card',
     layoutAndStyle: 'Layout & Style',
     theme: 'Theme',
     themesShowAll: 'Show {count} more',
@@ -226,7 +237,14 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     // invent separate terms for the same idea, and it has the most headroom of
     // any candidate. The tooltip carries the precise meaning.
     borderRadiusFollowTheme: 'Auto',
-    elementsAndPrivacy: 'Elements & Privacy',
+    cardFooter: 'Card Footer',
+    privacy: 'Privacy',
+    actionButtonHint: 'While hidden, hover a post and press Alt + C to still make a card',
+    experimentalTheme: 'Experimental theme, may change',
+    watermarkHint: 'A one-line credit and build number at the card\'s bottom right',
+    videoPlayButtonTitle: 'The badge on a video thumbnail. The card is a still image, not a player',
+    blurAuthorHint: 'Blurs the author of the post itself. A quoted post\'s author is untouched',
+    presentation: 'Presentation',
     manageTweets: 'Included Tweets',
     selectAll: 'Select All',
     selectCurrentOnly: 'Current Only',
@@ -237,7 +255,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     qrCode: 'QR Code',
     metricsAndStats: 'Metrics & Stats',
     timestamp: 'Timestamp',
-    watermark: 'Watermark',
+    watermark: 'Credit & build',
     blurAuthor: 'Blur Author (Privacy)',
     tweetActionButton: 'Tweet Card Button',
     videoPlayButton: 'Video Play Button',

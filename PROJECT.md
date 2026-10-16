@@ -18,7 +18,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
      - 3 档内边距 (16/32/48px)、3 档圆角 (0/12/20px)。
      - Auto 及 3:4 / 16:9 画幅（弹性下限法则 `min-height` + `height: auto`，向下平滑延展，绝不截断长文本）。
      - 离线矢量 SVG 二维码生成 (`qrcode-generator`)。
-     - 7 个独立开关。其中 6 个控制卡片内容：原文二维码、互动数据、发布时间、微水印尾标、作者隐私脱敏、视频播放角标（角标样式见 F29）；第 7 个「推文卡片按钮」控制的是推文操作栏的注入，不进卡片，见 F30。
+     - 7 个独立开关，按作用范围分组而非按控件类型堆叠：卡片页脚（原文二维码、互动数据、发布时间，帖子缺对应数据时该开关不出现）、隐私（作者隐私脱敏）、呈现细节（视频播放角标、署名与版本、推文卡片按钮，后两项在折叠区）。「推文卡片按钮」控制的是推文操作栏的注入，不进卡片，见 F30。
      - 背景无抖动滚动锁、Esc 快捷键及点击蒙层关闭。
 4. **Export Engine (Content Script - Canvas Layer)**:
    - 调用 `modern-screenshot` 进行 Retina 级 (scale: 2 或 3) 离线渲染。
@@ -54,7 +54,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F18 | Padding & Border Radius Options | 3 档内边距 (16/32/48px) 与 4 档圆角（跟随主题 / 0/12/20px） | M4 | ORIGINAL_REQUEST §R2 |
 | F19 | Downward Expanding Poster Layouts | Auto 及 3:4 / 16:9 画幅弹性下限 min-height，长文本平滑向下延展绝不截断 | M4 | ORIGINAL_REQUEST §R2 |
 | F20 | Offline QR Code Generator | 纯本地 qrcode-generator 生成推文链接矢量 SVG 二维码 | M4 | ORIGINAL_REQUEST §R2 |
-| F21 | Interactive Controls & Toggles | 6 个卡片内开关：二维码、互动数据、发布时间、微水印尾标、作者隐私脱敏、视频播放角标 | M4 | ORIGINAL_REQUEST §R2 |
+| F21 | Interactive Controls & Toggles | 7 个开关按作用范围分组（卡片页脚 / 隐私 / 呈现细节），帖子缺 url·互动数据·时间戳时对应页脚开关不渲染；折叠区由版式与样式领头，内边距与圆角紧跟主题 | M4 | ORIGINAL_REQUEST §R2 |
 | F22 | Author Privacy Blurring | 对作者昵称、Handle、头像启用 filter: blur(...) 隐私保护 | M4 | ORIGINAL_REQUEST §R2 |
 | F23 | Modal UX & Scroll Lock | 弹窗居中、Esc 快捷键、蒙层关闭、背景无抖动滚动锁 | M4 | ORIGINAL_REQUEST §R2 |
 | F24 | Modern-Screenshot Retina Export | 调用 modern-screenshot 生成 2x/3x 高分辨率 PNG | M5 | ORIGINAL_REQUEST §R3 |
