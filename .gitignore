@@ -21,6 +21,15 @@ build/
 .playwright-mcp/
 .scratch/
 
+# Throwaway probes written while investigating something. They belong in
+# .scratch/; these catch the ones that land in the tree instead, so `git add -A`
+# cannot sweep a probe into a commit. Anchored to the two directories probes
+# actually land in -- an unanchored `zz_*` would also swallow a real file named
+# that way further down.
+/scratch-*
+/zz_*
+/tests/zz_*
+
 # Logs
 logs
 *.log
