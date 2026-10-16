@@ -5,18 +5,18 @@
 > **P2-16 也已落地**：`tier2` 的 2.38 一直在测「整页无 `data-testid` 的优雅降级」，
 > 只是夹具是手搓的两行；现在换成「真实夹具褪掉属性」，并补上「身份仍在」「正文不吞按钮文字」。
 > **「拦截 GraphQL」曾列为明确不做，但已单独立项并落地**：现在 `src/content/graphql/` 就是那条通道
-> （`hook.ts` MAIN world + `operations.ts` 名单 + `parse.ts`/`replyLinks.ts`/`bridge.ts`），
+> （`hook.ts` MAIN world + `operations.ts` 名单 + `parse.ts` + `bridge.ts`），
 > 调研记录在 `docs/x-graphql-research.md`，调度见 `PROJECT.md` 的 Data Channels。故该行已从下表移除。
 > 仍开着的是 **P2-17**：源码字符串断言还在，但它不是一句「都改为断言行为」能收的。
 > 已经换掉的：F27.1、F27.4、F29.1、F29.2、F29.6、F30.1（F29.6 / F30.1 的存储解析半边移到了 `tier2` 2.76）；
 > F30.3 / F30.4 直接删掉——前者是源码文本加一段自己 `classList.add` 再 `contains` 的自证，
 > 后者要认的 DOM 行为由 `tier2` 2.62 / 2.77 在真跑。
-> 渲染类断言现在有真路径了：F29.3/7/8、F30.2、F20.6、F24.4b 改成渲染真组件再断言输出
+> 渲染类断言现在有真路径了：F29.3/7/8、F30.2、F20.6、F24.4 改成渲染真组件再断言输出
 > （`tests/env/render.ts` 借 Vite 的 SSR 通道加载 `.tsx`，`preact-render-to-string` 出 HTML；
 > 还读源码文本的只剩两类：**CSS 文本**（F17.10/12/14/14b/16/17、F23.6、F27.5/6、F28.4/6、F29.4——
 > 离线没有 CSS 引擎，这一层做不出行为断言，写法上向 F27.6 看齐：先去注释、再切到规则块），
-> 以及**跨文件契约的字面量**（F20.6 的 `qrcode.ts` 必填 `title`、F24.4b 的 `export.ts` 过滤器属性名——
-> 两处互相不能 import，属 `tier_hygiene` 那一类）。
+> 以及**跨文件契约的字面量**（F20.6 的 `qrcode.ts` 必填 `title`——两边互相不能 import，
+> 属 `tier_hygiene` 那一类）。
 > 另：`diagnostics.text` 的 `'fallback'` 取不到——`text` 只在 `tweetText` 命中时才产生，
 > 所以「fallback/none 上涨即 X 改版信号」这句目前只有 `none` 那一半成立。
 > 下面两节「社区确认可依赖的信号」「明确不做的事」是**现行参考**，其余按历史读。
@@ -94,7 +94,7 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 - `div[data-testid="socialContext"]` —— 承载「转发/置顶/回复」**容器**，容器名稳定、内部文字不稳定
   - **2026-10-10 实测修正**：详情页会话区里这个容器**不存在**（35 条推文 0 个），
     也没有「Replying to / 回复」文案，所以那里 `getReplyingToHandle` 只能返回 null。
-    「稳定」目前只对时间线成立过。见 `docs/observed-dom-2026-10-10.md`
+    「稳定」目前只对时间线成立过。见 `docs/observed-dom-2026-10-10-authenticated.md`
   - **2026-10-11 实测修正（转发帖）**：`data-testid="socialContext"` **不在 `div` 上，而在 `span` 上**，
     且**转帖者的 handle 是这个 span 自己所在的 `<a>`**，不是容器内的链接：
     `<a href="/ShiroLinHime"><span data-testid="socialContext">你已转帖</span></a>`。
@@ -105,7 +105,7 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
   自动播放关闭时，视频/GIF 在时间线里以「海报 `img` + 这个 interstitial」出现，**没有 `<video>`**；
   这个状态下 GIF 与视频仍然由**徽标文本**区分（容器内有 `<span>GIF</span>`），
   容器自身的 `aria-label` 是本地化的 `嵌入式视频`，所以 `div[aria-label="Embedded video"]` 那条精确匹配
-  在 zh-CN 页面上匹配不到。见 `docs/observed-dom-2026-10-10.md`
+  在 zh-CN 页面上匹配不到。见 `docs/observed-dom-2026-10-10-authenticated.md`
 - **串的判据在 API，不在 DOM** —— **2026-10-10 实测**：X 自己的「这是同一串的下一节」条件是
  `legacy.in_reply_to_status_id_str === 上一条的 id_str`（同时 `in_reply_to_screen_name` 等于上一条作者，
  所以「同作者」是它的推论而不是独立条件），`conversation_id_str` 把整串绑在一起。
@@ -113,7 +113,7 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
  DOM 里**没有**任何对应物：同一个串的状态页上 `tweet-thread-indicator` 0、细线（宽 ≤4px 的元素）0、
  `border-left` 0、伪元素 0、「显示此推文串」0，续条就是平铺在回复框下面的一条普通回复。
  这份 payload 我们**已经在拦**（名单见 `graphql/operations.ts`），`in_reply_to_status_id_str`
- 由 `graphql/parse.ts` 收进 `graphql/replyLinks.ts` 的索引，供列表视图里的 DOM 走查使用。
+ 由 `graphql/parse.ts` 收进 `graphql/bridge.ts` 的索引，供列表视图里的 DOM 走查使用。
 - **外链卡片媒体在 GraphQL 与 DOM 均须提取** —— **2026-10-13 实测**：外链推文（如 `summary_large_image`）的封面图不走 `entities.media`，而在 `tweet.card.legacy.binding_values`。GraphQL 通道须解析其 `photo_image_full_size_original` 等原图字段，否则权威通道会将其判为无媒体并短路屏蔽 DOM 通道；DOM 端容器以 `[data-testid="card.wrapper"]`（不绑定 `div` 标签）定位，其内标准 `img` 即为卡片封面。
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号

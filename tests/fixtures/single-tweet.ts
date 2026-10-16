@@ -1,8 +1,11 @@
 /**
- * Production-fidelity Twitter/X DOM fixture for a single tweet.
+ * A single-tweet DOM fixture.
+ *
+ * Hand-built to the shape X emits rather than pasted from a capture, so the
+ * structure is the claim and the strings are placeholders. There is no
+ * `EXPECTED_*` companion: what the extractor makes of this markup is asserted
+ * against the extractor in the tiers, not against a second copy of the answer.
  */
-
-import type { TweetData } from '../../src/types/tweet.ts';
 
 export const SINGLE_TWEET_HTML = `
 <article data-testid="tweet" tabindex="0" role="article" class="css-175oi2r r-18u37iz">
@@ -63,31 +66,3 @@ export const SINGLE_TWEET_HTML = `
 </article>
 `;
 
-export const EXPECTED_SINGLE_TWEET_DATA: TweetData = {
-  id: '20',
-  url: 'https://x.com/jack/status/20',
-  author: {
-    name: 'Jack Dorsey',
-    handle: '@jack',
-    avatarUrl: 'https://pbs.twimg.com/profile_images/1115644071988/jack_400x400.jpg',
-    verified: true,
-  },
-  text: 'just setting up my twttr ✨',
-  timestamp: '2006-03-21T20:50:14.000Z',
-  stats: {
-    replies: '48.5K',
-    reposts: '120.2K',
-    likes: '1.5M',
-    bookmarks: '32.1K',
-    views: '18.4M',
-  },
-  media: [
-    {
-      type: 'image',
-      url: 'https://pbs.twimg.com/media/first_tweet_photo.jpg?format=jpg&name=large',
-      originalUrl: 'https://pbs.twimg.com/media/first_tweet_photo.jpg?format=jpg&name=small',
-      alt: 'Image',
-    }
-  ],
-  isThreadPart: false,
-};

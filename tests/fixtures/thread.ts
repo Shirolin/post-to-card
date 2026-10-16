@@ -1,9 +1,12 @@
 /**
  * Continuous same-author thread DOM fixture.
  * Contains 3 interconnected tweets by @dan_abramov.
+ *
+ * Hand-built to the shape X emits rather than pasted from a capture, so the
+ * structure is the claim and the strings are placeholders. There is no
+ * `EXPECTED_*` companion: what the resolver makes of this markup is asserted
+ * against the resolver in the tiers, not against a second copy of the answer.
  */
-
-import type { ThreadData } from '../../src/types/tweet.ts';
 
 export const THREAD_HTML = `
 <div id="timeline">
@@ -69,59 +72,6 @@ export const THREAD_HTML = `
   </article>
 </div>
 `;
-
-export const EXPECTED_THREAD_DATA: ThreadData = {
-  author: {
-    name: 'Dan Abramov',
-    handle: '@dan_abramov',
-    avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
-  },
-  isSingle: false,
-  tweets: [
-    {
-      id: '1001',
-      url: 'https://x.com/dan_abramov/status/1001',
-      author: {
-        name: 'Dan Abramov',
-        handle: '@dan_abramov',
-        avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
-      },
-      text: '1/3 React Server Components change how we think about mental models. 🧵',
-      timestamp: '2026-04-10T10:00:00.000Z',
-      isThreadPart: true,
-      threadIndex: 0,
-      threadTotal: 3,
-    },
-    {
-      id: '1002',
-      url: 'https://x.com/dan_abramov/status/1002',
-      author: {
-        name: 'Dan Abramov',
-        handle: '@dan_abramov',
-        avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
-      },
-      text: '2/3 Instead of sending all bundle JS to client, components stay on server.',
-      timestamp: '2026-04-10T10:05:00.000Z',
-      isThreadPart: true,
-      threadIndex: 1,
-      threadTotal: 3,
-    },
-    {
-      id: '1003',
-      url: 'https://x.com/dan_abramov/status/1003',
-      author: {
-        name: 'Dan Abramov',
-        handle: '@dan_abramov',
-        avatarUrl: 'https://pbs.twimg.com/profile_images/999/dan_400x400.jpg',
-      },
-      text: '3/3 Read the full architecture RFC on GitHub. End of thread.',
-      timestamp: '2026-04-10T10:10:00.000Z',
-      isThreadPart: true,
-      threadIndex: 2,
-      threadTotal: 3,
-    },
-  ],
-};
 
 /**
  * The same author's consecutive posts as a *list view* renders them: no

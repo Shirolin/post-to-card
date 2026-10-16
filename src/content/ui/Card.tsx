@@ -8,7 +8,7 @@ import { planMediaGrid, applyMediaGridPlan, recordShape } from './mediaGrid.ts';
 import { imageFallbackAttrs, advanceImageFallback } from './imageFallback.ts';
 import { threadScope, tweetKey } from './threadScope.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
-import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Languages } from 'lucide-preact';
+import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages } from 'lucide-preact';
 import { CARD_BUILD } from '../build.ts';
 
 export interface CardProps {
@@ -358,7 +358,8 @@ export function hasRenderableStats(stats: TweetStats | undefined): boolean {
     formatStat(stats.replies) ||
       formatStat(stats.reposts) ||
       formatStat(stats.likes) ||
-      formatStat(stats.views || stats.bookmarks)
+      formatStat(stats.views) ||
+      formatStat(stats.bookmarks)
   );
 }
 
@@ -367,9 +368,10 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
   const replyStr = formatStat(stats.replies);
   const repostStr = formatStat(stats.reposts);
   const likeStr = formatStat(stats.likes);
-  const viewsStr = formatStat(stats.views || stats.bookmarks);
+  const viewsStr = formatStat(stats.views);
+  const bookmarkStr = formatStat(stats.bookmarks);
 
-  const hasAnyStat = replyStr || repostStr || likeStr || viewsStr;
+  const hasAnyStat = replyStr || repostStr || likeStr || viewsStr || bookmarkStr;
   if (!hasAnyStat) return null;
 
   return (
@@ -396,6 +398,12 @@ function renderStats(stats: TweetStats | undefined, t: ReturnType<typeof getTran
         <span class="stat-item" title={`${viewsStr} ${t.views}`}>
           <ChartNoAxesColumn class="stat-icon" size={15} strokeWidth={1.6} aria-hidden="true" />
           {viewsStr}
+        </span>
+      )}
+      {!viewsStr && bookmarkStr && (
+        <span class="stat-item" title={`${bookmarkStr} ${t.bookmarks}`}>
+          <Bookmark class="stat-icon" size={15} strokeWidth={1.6} aria-hidden="true" />
+          {bookmarkStr}
         </span>
       )}
     </div>

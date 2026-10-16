@@ -25,22 +25,10 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createSuite } from '../env/harness.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -199,30 +187,43 @@ test('hygiene.4: no test file imports a name it never reads', () => {
   );
 });
 
-export async function runTierHygiene(): Promise<{
-  total: number;
-  passed: number;
-  failed: number;
-  results: TestResult[];
-}> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
+// 5. A tab's `url` is only present when the extension holds the "tabs" permission
+// or host permission for that page (developer.chrome.com/docs/extensions/reference/api/tabs).
+//
+// The popup's quick-trigger button gated on `activeTab.url` while manifest.json
+// granted neither "tabs" nor "activeTab" and no x.com host permission, so `url` was
+// undefined on every page: the gate rejected all tabs, including X, and the button
+// could never reach the content script. Nothing saw it -- `node --check` only parses
+// popup.js, and no test drives the popup. The reachability question belongs to the
+// send, whose `chrome.runtime.lastError` says whether a receiver exists at all.
+test('hygiene.5: the popup reads no tab property the manifest cannot grant', () => {
+  const popup = readFileSync(join(REPO_ROOT, 'public', 'popup.js'), 'utf8');
+  const manifest = JSON.parse(readFileSync(join(REPO_ROOT, 'manifest.json'), 'utf8')) as {
+    permissions?: string[];
+  };
 
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      const elapsed = Date.now() - start;
-      results.push({ name: t.name, passed: true, durationMs: elapsed });
-      passed++;
-    } catch (err: unknown) {
-      const elapsed = Date.now() - start;
-      const errorMsg = err instanceof Error ? err.stack || err.message : String(err);
-      results.push({ name: t.name, passed: false, error: errorMsg, durationMs: elapsed });
-      failed++;
-    }
-  }
+  const permissions = manifest.permissions || [];
+  if (permissions.includes('tabs') || permissions.includes('activeTab')) return;
 
-  return { total: tests.length, passed, failed, results };
+  // Comments are stripped first: this file's own explanation of the bug names the
+  // property, and prose about a violation is not a violation.
+  const code = popup
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+
+  const reads = [
+    ...code.matchAll(/\b(?:activeTab|tab|tabs\[0\])\.(url|pendingUrl|title|favIconUrl)\b/g),
+  ].map((m) => m[0]);
+
+  assert.deepEqual(
+    reads,
+    [],
+    `public/popup.js reads ${reads.join(', ')} but manifest.json declares neither "tabs" nor "activeTab", so the value is always undefined. Decide from chrome.runtime.lastError instead.`
+  );
+});
+
+export function runTierHygiene() {
+  return run();
 }

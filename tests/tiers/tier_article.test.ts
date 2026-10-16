@@ -28,26 +28,14 @@
 
 import assert from 'node:assert/strict';
 import { createDomElement } from '../env/browser.ts';
+import { createSuite } from '../env/harness.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { parseTweetDetailResponse } from '../../src/content/graphql/parse.ts';
 import { ARTICLE_TWEET_HTML } from '../fixtures/article-tweet.ts';
 import { TWEET_DETAIL_ARTICLE_JSON } from '../fixtures/graphql.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 test('art.1: an article is the tweet\'s own content, so its stats are kept', () => {
   // Without the fix, `isInsideNestedArticle` counted the read view as a nested
@@ -230,28 +218,6 @@ test('art.11: the DOM lead is the article\'s first paragraph, not the whole pros
     'the rest of the article is not part of the lead');
 });
 
-export async function runTierArticle(): Promise<{
-  total: number;
-  passed: number;
-  failed: number;
-  results: TestResult[];
-}> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.stack || err.message : String(err);
-      results.push({ name: t.name, passed: false, error: errorMsg, durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTierArticle() {
+  return run();
 }

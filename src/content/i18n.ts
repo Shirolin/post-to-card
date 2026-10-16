@@ -99,6 +99,7 @@ export interface Translations {
   reposts: string;
   likes: string;
   views: string;
+  bookmarks: string;
   photoAlt: string;
   videoLabel: string;
 }
@@ -189,6 +190,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     reposts: '次转推',
     likes: '次喜欢',
     views: '次浏览',
+    bookmarks: '次书签',
     photoAlt: '推文配图',
     videoLabel: '视频',
   },
@@ -282,6 +284,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     reposts: 'Reposts',
     likes: 'Likes',
     views: 'Views',
+    bookmarks: 'Bookmarks',
     photoAlt: 'Tweet photo',
     videoLabel: 'Video',
   },

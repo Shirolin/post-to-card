@@ -71,6 +71,25 @@ export interface QuoteTweetData {
 }
 
 /**
+ * A quote whose post is gone: X says the quoted post was deleted or is not
+ * viewable, and the card draws a tombstone box rather than an empty quote.
+ *
+ * One constructor for both channels. The DOM channel reaches this state through
+ * `isUnavailableMarker` and the GraphQL channel through a `TweetTombstone`
+ * union, and the whole reason the GraphQL channel has to answer it at all is
+ * that the two must not disagree about the same post — so they must not be able
+ * to construct two different shapes for it either.
+ */
+export function unavailableQuote(): QuoteTweetData {
+  return {
+    author: { name: '', handle: '', avatarUrl: '' },
+    text: '',
+    timestamp: '',
+    isUnavailable: true,
+  };
+}
+
+/**
  * A long-form post: X's article attached to a tweet.
  *
  * The tweet that carries an article is still a tweet — it has its own body,

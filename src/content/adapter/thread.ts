@@ -23,14 +23,37 @@ export { getReplyingToHandle };
  * fallback both match nothing. The final entry is the only path that works
  * there, since a bare `article` inside `main` is still rendered.
  */
-export const TWEET_ARTICLE_SELECTOR = [
+export const TWEET_ARTICLE_SELECTORS: readonly string[] = [
   'article[data-testid="tweet"]',
   'article[role="article"]',
   '[data-testid="cellInnerDiv"] article',
   // Logged-out fallback: verified against a real public tweet page, where the
   // only surviving marker is the bare tag inside the main column.
   'main article',
-].join(', ');
+];
+
+/**
+ * The list above, joined, for callers that need one selector to hand to
+ * `querySelectorAll`.
+ *
+ * Kept as a separate export because the joined form is a *list*: interpolating
+ * it into a longer selector parses as `a or (b c)` rather than `(a c) or (b c)`,
+ * which silently matches the wrong elements. Callers that need to append a
+ * descendant must map over `TWEET_ARTICLE_SELECTORS` instead — see
+ * `withDescendant` below, which is the only supported way to do it.
+ */
+export const TWEET_ARTICLE_SELECTOR = TWEET_ARTICLE_SELECTORS.join(', ');
+
+/**
+ * Appends `descendant` to *every* alternative of a selector list.
+ *
+ * `(a, b) + ' c'` is `a or (b c)`; this is `a c or b c`. The distinction is not
+ * academic: it is what put the trigger button on the tweet root, below the media,
+ * instead of in the action row.
+ */
+export function withDescendant(selectorList: readonly string[], descendant: string): string {
+  return selectorList.map((part) => `${part.trim()} ${descendant}`).join(', ');
+}
 
 /**
  * Detects whether a tweet article element is an advertisement or sponsored post.

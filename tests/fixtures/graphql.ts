@@ -451,6 +451,62 @@ export const TWEET_DETAIL_TOMBSTONE_JSON = JSON.stringify({
 });
 
 /**
+ * A tweet quoting a post that no longer exists.
+ *
+ * X still sends `quoted_status_result`, but its `result` is a tombstone rather
+ * than a `Tweet`. That is not the same as quoting nobody: the DOM channel draws
+ * a tombstone box here, so a parser that returns `undefined` makes the two
+ * channels disagree about the same post.
+ */
+export const TWEET_DETAIL_QUOTE_TOMBSTONE_JSON = JSON.stringify({
+  data: {
+    threaded_conversation_with_injections_v2: {
+      instructions: [
+        {
+          type: 'TimelineAddEntries',
+          entries: [
+            {
+              entryType: 'TimelineTimelineItem',
+              entryId: 'tweet-4101',
+              sortIndex: '1',
+              content: {
+                itemContent: {
+                  tweet_results: {
+                    result: {
+                      __typename: 'Tweet',
+                      rest_id: '4101',
+                      core: {
+                        user_results: {
+                          result: {
+                            legacy: { screen_name: 'erin', name: 'Erin' },
+                            profile_image_url_https: 'https://pbs.twimg.com/profile_images/2/erin.jpg'
+                          }
+                        }
+                      },
+                      legacy: {
+                        full_text: 'and it is gone',
+                        created_at: 'Mon Dec 22 19:00:00 +0000 2025',
+                        is_quote_status: true
+                      },
+                      quoted_status_result: {
+                        result: {
+                          __typename: 'TweetTombstone',
+                          tombstone: { text: { text: 'This Post was deleted.' } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+});
+
+/**
  * A tweet whose author uses the newer user shape.
  *
  * X moved the user object's profile fields out of `legacy`: the avatar now
@@ -648,6 +704,37 @@ export const TWEET_DETAIL_VISIBILITY_JSON = JSON.stringify({
           ]
         }
       ]
+    }
+  }
+});
+
+/**
+ * A `TweetResultByRestId` body: one post under `data.tweet.result`, no
+ * instruction list.
+ *
+ * The tweet itself is the visibility-wrapped one above, because that union is
+ * exactly what this operation returns for a restricted post; the envelope is
+ * the part that differs from every other fixture here.
+ */
+export const TWEET_RESULT_BY_REST_ID_JSON = JSON.stringify({
+  data: {
+    tweet: {
+      result: {
+        __typename: 'TweetWithVisibilityResults',
+        tweet: {
+          __typename: 'Tweet',
+          rest_id: '6001',
+          core: {
+            user_results: {
+              result: {
+                legacy: { screen_name: 'rest', name: 'Rest Id' },
+                profile_image_url_https: 'https://pbs.twimg.com/profile_images/6/r.jpg'
+              }
+            }
+          },
+          legacy: { full_text: 'single post', created_at: 'Mon Dec 22 19:00:00 +0000 2025' }
+        }
+      }
     }
   }
 });

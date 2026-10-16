@@ -38,7 +38,12 @@ export function lockScroll(): void {
     if (body) {
       body.style.overflow = 'hidden';
       if (scrollbarWidth > 0) {
-        body.style.paddingRight = `${scrollbarWidth}px`;
+        // Added to whatever the page already had, not written over it. The
+        // padding stands in for the scrollbar that just went away, so replacing
+        // an offset the page already carried under-compensates by exactly that
+        // offset and the content jumps sideways as the modal opens.
+        const existing = Number.parseFloat(body.style.paddingRight) || 0;
+        body.style.paddingRight = `${existing + scrollbarWidth}px`;
       }
     }
   }
@@ -48,7 +53,13 @@ export function lockScroll(): void {
 export function unlockScroll(): void {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
-  activeScrollLocks = Math.max(0, activeScrollLocks - 1);
+  // A release with nothing held is not a release. Falling through here would
+  // write whatever the *last* lock captured onto a page that is not locked —
+  // an unlock from a modal that was torn down twice restored an overflow the
+  // host page had long since moved past.
+  if (activeScrollLocks === 0) return;
+
+  activeScrollLocks--;
   if (activeScrollLocks > 0) return;
 
   const docEl = document.documentElement;

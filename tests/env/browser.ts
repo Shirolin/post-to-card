@@ -13,17 +13,60 @@
  *     (`dev/preview.ts`), never here.
  *
  * Selector behaviour is meant to match a browser: `querySelectorAll` returns
- * document order, and a query never matches the node it is called on. Both were
+ * document order, a query never matches the node it is called on, `closest`
+ * honours the descendant combinators in a list member, and a space inside a
+ * quoted attribute value does not split the selector. Every one of them was
  * once wrong here and let a real bug pass, so a change to the selector engine
  * deserves a second look at whether the browser agrees.
  */
 
-export class DomNode {
+/**
+ * The event-handler IDL attributes every real node carries.
+ *
+ * Not decoration: Preact decides whether `onClick` is a DOM property or a plain
+ * attribute by asking `'onclick' in node`, and only the property branch lowers
+ * the name to the `click` a dispatched event actually carries. With the check
+ * failing here the shim registered `Click` — capitalised — so every handler on a
+ * client-rendered element was unreachable and a click on the modal's backdrop
+ * did nothing while looking, from the test, like the modal had simply stayed
+ * open. The list is the standard set; a name outside it is treated as an
+ * attribute, exactly as a browser would treat it.
+ */
+const EVENT_HANDLER_ATTRIBUTES = [
+  'onabort', 'onanimationcancel', 'onanimationend', 'onanimationiteration', 'onanimationstart',
+  'onauxclick', 'onbeforeinput', 'onbeforetoggle', 'onblur', 'oncancel', 'oncanplay',
+  'oncanplaythrough', 'onchange', 'onclick', 'onclose', 'oncontextlost', 'oncontextmenu',
+  'oncontextrestored', 'oncopy', 'oncuechange', 'oncut', 'ondblclick', 'ondrag', 'ondragend',
+  'ondragenter', 'ondragleave', 'ondragover', 'ondragstart', 'ondrop', 'ondurationchange',
+  'onemptied', 'onended', 'onerror', 'onfocus', 'onformdata', 'ongotpointercapture', 'oninput',
+  'oninvalid', 'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onloadeddata', 'onloadedmetadata',
+  'onloadstart', 'onlostpointercapture', 'onmousedown', 'onmouseenter', 'onmouseleave',
+  'onmousemove', 'onmouseout', 'onmouseover', 'onmouseup', 'onpaste', 'onpause', 'onplay',
+  'onplaying', 'onpointercancel', 'onpointerdown', 'onpointerenter', 'onpointerleave',
+  'onpointermove', 'onpointerout', 'onpointerover', 'onpointerup', 'onprogress', 'onratechange',
+  'onreset', 'onresize', 'onscroll', 'onscrollend', 'onsecuritypolicyviolation', 'onseeked',
+  'onseeking', 'onselect', 'onselectionchange', 'onselectstart', 'onslotchange', 'onstalled',
+  'onsubmit', 'onsuspend', 'ontimeupdate', 'ontoggle', 'ontouchcancel', 'ontouchend',
+  'ontouchmove', 'ontouchstart', 'ontransitioncancel', 'ontransitionend', 'ontransitionrun',
+  'ontransitionstart', 'onvolumechange', 'onwaiting', 'onwheel',
+  // Document and window level, which a real `Document` also answers for.
+  'onafterprint', 'onbeforeprint', 'onbeforeunload', 'onhashchange', 'onlanguagechange',
+  'onmessage', 'onmessageerror', 'onoffline', 'ononline', 'onpagehide', 'onpageshow',
+  'onpopstate', 'onrejectionhandled', 'onstorage', 'onunhandledrejection', 'onunload',
+];
+
+class DomNode {
   public static readonly ELEMENT_NODE = 1;
   public static readonly TEXT_NODE = 3;
   public static readonly COMMENT_NODE = 8;
   public static readonly DOCUMENT_NODE = 9;
   public static readonly DOCUMENT_FRAGMENT_NODE = 11;
+
+  constructor() {
+    for (const name of EVENT_HANDLER_ATTRIBUTES) {
+      (this as unknown as Record<string, null>)[name] = null;
+    }
+  }
 
   public nodeType: number = DomNode.ELEMENT_NODE;
   public nodeName: string = '';
@@ -35,21 +78,86 @@ export class DomNode {
     return this.parentNode instanceof DomElement ? this.parentNode : null;
   }
 
+  /** The document that created this node, when one did. */
+  public ownerDocumentRef: DomDocument | null = null;
+
+  /**
+   * The document this node belongs to.
+   *
+   * A node inside a shadow root belongs to the document its *host* is in, so the
+   * tree is walked rather than trusting the node's own record. Stopping at the
+   * fragment reported `null` for every element the card renders, and the export
+   * engine's clone then fell back to a bare tag — an `img` that was no longer an
+   * image element, with no `decode` to wait for.
+   *
+   * A detached node still belongs to the document that made it: a browser
+   * answers `document` for `document.createElement('div')`, not `null`. Falling
+   * back to the record is what covers that, and it is the case `modern-screenshot`
+   * hits when it builds a `<style>` of its own.
+   */
+  get ownerDocument(): DomDocument | null {
+    let node: DomNode = this;
+    while (node.parentNode) node = node.parentNode;
+    if (node instanceof DomShadowRoot) return node.host.ownerDocument;
+    if (node.nodeType === DomNode.DOCUMENT_NODE) return node as DomDocument;
+    return this.ownerDocumentRef;
+  }
+
+  /**
+   * True while this node is in a document's tree.
+   *
+   * A node in a shadow root is connected when its host is, which is the case
+   * that matters here: the card lives in a shadow root and its elements have to
+   * answer as connected.
+   */
+  get isConnected(): boolean {
+    const root = this.getRootNode();
+    if (root.nodeType === DomNode.DOCUMENT_NODE) return true;
+    if (root instanceof DomShadowRoot) return root.host.isConnected;
+    return false;
+  }
+
+  /** The root of this node's tree — a shadow root if it lives in one. */
+  getRootNode(): DomNode {
+    let node: DomNode = this;
+    while (node.parentNode) node = node.parentNode;
+    return node;
+  }
+
+  remove(): void {
+    if (this.parentNode) this.parentNode.removeChild(this);
+  }
+
+  /**
+   * A copy of this node.
+   *
+   * The export engine builds the off-screen card from one, and the copy is the
+   * node that actually gets rasterized — the live preview never is. Without this
+   * a test could only assert that the engine meant to clone, which is precisely
+   * the assertion that let a shrunk export ship.
+   */
+  cloneNode(deep: boolean = false): DomNode {
+    const copy = this.copySelf();
+    if (deep) {
+      for (const child of this.childNodes) {
+        copy.appendChild(child.cloneNode(true));
+      }
+    }
+    return copy;
+  }
+
+  /** The empty shell `cloneNode` fills in. Subclasses restore their own state. */
+  protected copySelf(): DomNode {
+    const copy = new (this.constructor as unknown as new () => DomNode)();
+    copy.nodeValue = this.nodeValue;
+    return copy;
+  }
+
   get previousElementSibling(): DomElement | null {
     if (!this.parentNode) return null;
     const siblings = this.parentNode.childNodes;
     const index = siblings.indexOf(this);
     for (let i = index - 1; i >= 0; i--) {
-      if (siblings[i] instanceof DomElement) return siblings[i] as DomElement;
-    }
-    return null;
-  }
-
-  get nextElementSibling(): DomElement | null {
-    if (!this.parentNode) return null;
-    const siblings = this.parentNode.childNodes;
-    const index = siblings.indexOf(this);
-    for (let i = index + 1; i < siblings.length; i++) {
       if (siblings[i] instanceof DomElement) return siblings[i] as DomElement;
     }
     return null;
@@ -104,18 +212,6 @@ export class DomNode {
     return newNode;
   }
 
-  public replaceChild<T extends DomNode>(newChild: T, oldChild: DomNode): T {
-    const idx = this.childNodes.indexOf(oldChild);
-    if (idx !== -1) {
-      this.removeChild(oldChild);
-      if (newChild.parentNode) newChild.parentNode.removeChild(newChild);
-      newChild.parentNode = this;
-      this.childNodes.splice(idx, 0, newChild);
-      notifyMutation(this, [newChild], [oldChild]);
-    }
-    return newChild;
-  }
-
   public contains(other: DomNode | null): boolean {
     if (!other) return false;
     let curr: DomNode | null = other;
@@ -127,12 +223,29 @@ export class DomNode {
   }
 }
 
-export class DomTextNode extends DomNode {
+class DomTextNode extends DomNode {
   constructor(text: string) {
     super();
     this.nodeType = DomNode.TEXT_NODE;
     this.nodeName = '#text';
     this.nodeValue = text;
+  }
+
+  /**
+   * The characters this node holds, under the name a real `Text` exposes them.
+   *
+   * Preact rewrites a text vnode by assigning `dom.data`, so without this a
+   * re-render set the property on the shim node and left `nodeValue` — which is
+   * what `textContent` reads — holding the previous string. Every dynamic text
+   * update in a re-rendered component silently showed the old value because of
+   * it.
+   */
+  get data(): string {
+    return this.nodeValue || '';
+  }
+
+  set data(val: string) {
+    this.nodeValue = val;
   }
 }
 
@@ -169,16 +282,106 @@ export class DomShadowRoot extends DomNode {
 export class DomElement extends DomNode {
   public tagName: string;
   public attributes: Map<string, string> = new Map();
-  public style: Record<string, string> = {};
+  /**
+   * Answers `''` for a property that was never set, the way a real
+   * `CSSStyleDeclaration` does.
+   *
+   * A plain object answers `undefined` instead, and code that captures a value
+   * and writes it back then stores `undefined`: the scroll lock read the host
+   * page's overflow, found `undefined` where the browser would have said `''`,
+   * and restored `undefined` — which is not a value the browser can produce, so
+   * the test was disagreeing with production about a case that cannot happen.
+   */
+  public style: Record<string, string> = new Proxy(
+    {
+      // A real CSSStyleDeclaration carries these, and Preact's DOM renderer
+      // calls `setProperty` for every style it writes. Without them the only way
+      // to mount a component into this shim was to hand-build the markup.
+      setProperty(this: Record<string, string>, name: string, value: string) {
+        this[name] = value;
+      },
+      getPropertyValue(this: Record<string, string>, name: string) {
+        return this[name] ?? '';
+      },
+      removeProperty(this: Record<string, string>, name: string) {
+        const previous = this[name] ?? '';
+        delete this[name];
+        return previous;
+      },
+      cssText: '',
+      // The declaration is read and written as a bag of strings, but it also has
+      // to carry the real methods, so the cast goes through `unknown`.
+    } as unknown as Record<string, string>,
+    {
+      get: (target, prop) => {
+        if (typeof prop !== 'string') return undefined;
+        return target[prop] ?? '';
+      },
+      set: (target, prop, value: string) => {
+        target[prop as string] = value;
+        return true;
+      },
+    }
+  );
   public dataset: Record<string, string> = {};
   public shadowRoot: DomShadowRoot | null = null;
+  /**
+   * Set by the test, not measured: there is no layout engine here. It exists
+   * because the shipped scroll lock derives the scrollbar width from
+   * `window.innerWidth - documentElement.clientWidth`, and a mock that always
+   * answers 0 cannot describe a page that has a scrollbar — the compensation it
+   * writes would look like a no-op.
+   */
+  public clientWidth: number = 0;
   private listeners: Map<string, Array<(evt: any) => void>> = new Map();
 
-  constructor(tagName: string) {
+  /**
+   * Moves focus here, the way the real method does.
+   *
+   * Components focus themselves on mount -- the modal focuses its dialog and
+   * restores the trigger on close -- so without this the only way to render one
+   * under this shim was to avoid it.
+   */
+  public focus(): void {
+    const doc = this.ownerDocument;
+    if (doc) doc.activeElement = this;
+    this.dispatchEvent({ type: 'focus' });
+  }
+
+  /**
+   * `tagName` is optional because a real custom element's constructor runs
+   * `super()` with no argument -- the tag comes from the registry, not from the
+   * subclass. Requiring one here made `HTMLElement` unusable as the base for a
+   * production custom element under this shim.
+   */
+  constructor(tagName: string = '') {
     super();
     this.nodeType = DomNode.ELEMENT_NODE;
     this.tagName = tagName.toUpperCase();
     this.nodeName = this.tagName;
+  }
+
+  /**
+   * Copied through the document's own factory, so an `img` stays an image
+   * element with a `src` and a `decode` rather than degrading to a bare tag.
+   */
+  protected copySelf(): DomNode {
+    const doc = this.ownerDocument;
+    const copy = (doc ? doc.createElement(this.tagName) : new DomElement(this.tagName)) as DomElement;
+    copy.nodeValue = this.nodeValue;
+    for (const [name, value] of this.attributes) {
+      copy.attributes.set(name, value);
+    }
+    copy.dataset = { ...this.dataset };
+    // Inline styles live on the declaration object here rather than in a
+    // `style` attribute, so the entries are what a copy has to carry over.
+    for (const key of Object.keys(this.style)) {
+      const value = (this.style as Record<string, unknown>)[key];
+      if (typeof value === 'string') {
+        (copy.style as Record<string, unknown>)[key] = value;
+      }
+    }
+    return copy;
   }
 
   get children(): DomElement[] {
@@ -201,6 +404,35 @@ export class DomElement extends DomNode {
     this.setAttribute('class', val);
   }
 
+  /**
+   * Reflected, as the real element reflects them: the property and the attribute
+   * are two views of one value.
+   *
+   * The radio group's keyboard handler reads both — `disabled` to skip a level
+   * that cannot be selected, `tabIndex` to decide where focus goes back — so a
+   * shim answering `undefined` for both made every level look selectable and
+   * none look like the tab stop.
+   */
+  get disabled(): boolean {
+    return this.attributes.has('disabled');
+  }
+
+  set disabled(val: boolean) {
+    if (val) this.attributes.set('disabled', '');
+    else this.attributes.delete('disabled');
+  }
+
+  get tabIndex(): number {
+    const raw = this.attributes.get('tabindex');
+    if (raw === undefined || raw.trim() === '') return 0;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? -1 : parsed;
+  }
+
+  set tabIndex(val: number) {
+    this.attributes.set('tabindex', String(val));
+  }
+
   get classList() {
     return {
       contains: (cls: string) => (this.className.split(/\s+/).filter(Boolean).includes(cls)),
@@ -213,14 +445,6 @@ export class DomElement extends DomNode {
         const current = new Set(this.className.split(/\s+/).filter(Boolean));
         classes.forEach(c => current.delete(c));
         this.className = Array.from(current).join(' ');
-      },
-      toggle: (cls: string, force?: boolean) => {
-        const current = new Set(this.className.split(/\s+/).filter(Boolean));
-        const shouldAdd = force !== undefined ? force : !current.has(cls);
-        if (shouldAdd) current.add(cls);
-        else current.delete(cls);
-        this.className = Array.from(current).join(' ');
-        return shouldAdd;
       },
     };
   }
@@ -300,11 +524,26 @@ export class DomElement extends DomNode {
       if (curr instanceof DomElement || curr instanceof DomDocument) {
         const list = (curr as any).listeners.get(event.type) || [];
         for (const cb of list) {
-          cb(event);
+          // Called with `this` bound to the node whose listener fired, as the
+          // real `addEventListener` does. Preact's own listener wrapper reads
+          // `this.l` to find the vnode handler it stored there, so calling
+          // through unbound made every `onClick` on a client-rendered element
+          // throw instead of dispatching.
+          //
+          // `currentTarget` is the node whose listener is running, which is not
+          // the same node as `target` once the event has bubbled. Four shipped
+          // handlers read it -- the modal's backdrop test (`e.target ===
+          // e.currentTarget`), the radio group's `e.currentTarget.parentElement`
+          // and two in the card. Leaving it unset made the radio group throw and
+          // left the backdrop test relying only on its id fallback.
+          event.currentTarget = curr;
+          cb.call(curr, event);
         }
       }
       curr = curr.parentNode;
     }
+    // Cleared once dispatch is over, as a browser does.
+    event.currentTarget = null;
     return !event.defaultPrevented;
   }
 
@@ -355,17 +594,17 @@ export class DomAnchorElement extends DomElement {
   set download(val: string) { this.setAttribute('download', val); }
 }
 
-export class DomVideoElement extends DomElement {
+class DomVideoElement extends DomElement {
   constructor() { super('VIDEO'); }
   get poster(): string { return this.getAttribute('poster') || ''; }
   set poster(val: string) { this.setAttribute('poster', val); }
 }
 
-export class DomStyleElement extends DomElement {
+class DomStyleElement extends DomElement {
   constructor() { super('STYLE'); }
 }
 
-export class DomCustomElementRegistry {
+class DomCustomElementRegistry {
   private registry = new Map<string, { new(): any }>();
   public define(name: string, constructor: { new(): any }): void {
     if (this.registry.has(name)) {
@@ -376,15 +615,12 @@ export class DomCustomElementRegistry {
   public get(name: string): { new(): any } | undefined {
     return this.registry.get(name.toLowerCase());
   }
-  public clear(): void {
-    this.registry.clear();
-  }
 }
 
 // Global active mutation observers
 const activeObservers: DomMutationObserver[] = [];
 
-export interface MutationRecord {
+interface MutationRecord {
   type: 'childList' | 'attributes';
   target: DomNode;
   addedNodes: DomNode[];
@@ -438,9 +674,17 @@ export class DomDocument extends DomNode {
   public head: DomElement;
   public body: DomElement;
   public documentElement: DomElement;
+  /**
+   * Settled by default, because every caller of this shim runs after load. A
+   * test that wants the pre-load path sets it to `'loading'` and fires
+   * `DOMContentLoaded` itself.
+   */
+  public readyState: 'loading' | 'interactive' | 'complete' = 'complete';
   public customElements: DomCustomElementRegistry;
-  private _focused: boolean = true;
   private listeners: Map<string, Array<(evt: any) => void>> = new Map();
+
+  /** The element holding focus, or null. Written by `DomElement.focus()`. */
+  public activeElement: DomElement | null = null;
 
   constructor() {
     super();
@@ -456,16 +700,39 @@ export class DomDocument extends DomNode {
   }
 
   public createElement(tagName: string): DomElement {
+    return this.adopt(this.createElementFor(tagName));
+  }
+
+  private createElementFor(tagName: string): DomElement {
     const tag = tagName.toLowerCase();
     const CustomCtor = this.customElements.get(tag);
     if (CustomCtor) {
-      return new CustomCtor();
+      const el: DomElement = new CustomCtor();
+      // A custom element's constructor runs `super()` with no tag, so the name
+      // is assigned by whoever creates it -- the parser in a browser, this mock
+      // here. Without it the element has no tag for a selector to match, and
+      // `document.querySelector('my-element')` could never find its own node.
+      if (!el.tagName) {
+        el.tagName = tag.toUpperCase();
+        el.nodeName = el.tagName;
+      }
+      return el;
     }
     if (tag === 'img') return new DomImageElement();
     if (tag === 'a') return new DomAnchorElement();
     if (tag === 'video') return new DomVideoElement();
     if (tag === 'style') return new DomStyleElement();
     return new DomElement(tagName);
+  }
+
+  /** Records `this` as the node's document, the way a real constructor would. */
+  private adopt<T extends DomNode>(node: T): T {
+    node.ownerDocumentRef = this;
+    return node;
+  }
+
+  public createTextNode(text: string): DomTextNode {
+    return this.adopt(new DomTextNode(text));
   }
 
   public createElementNS(_ns: string, tagName: string): DomElement {
@@ -484,14 +751,6 @@ export class DomDocument extends DomNode {
     return querySelectorAllInternal(this, selector) as unknown as E[];
   }
 
-  public hasFocus(): boolean {
-    return this._focused;
-  }
-
-  public setFocus(focused: boolean): void {
-    this._focused = focused;
-  }
-
   public addEventListener(type: string, cb: (evt: any) => void): void {
     const list = this.listeners.get(type) || [];
     list.push(cb);
@@ -508,20 +767,107 @@ export class DomDocument extends DomNode {
   public dispatchEvent(event: any): boolean {
     const list = this.listeners.get(event.type) || [];
     for (const cb of list) {
-      cb(event);
+      cb.call(this, event);
     }
     return !event.defaultPrevented;
   }
 }
 
 // Selector matching engine
-function matchesSelector(el: DomElement, selector: string): boolean {
-  // Support comma-separated selectors
-  const parts = selector.split(',').map(s => s.trim());
-  for (const part of parts) {
-    if (matchSingleSelector(el, part)) return true;
+
+/**
+ * Splits a selector list on its top-level commas.
+ *
+ * A comma inside a quoted attribute value separates nothing, so the split has
+ * to track bracket depth and quotes rather than trusting every `,`.
+ */
+function splitSelectorList(selector: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let bracketDepth = 0;
+  let quote = '';
+
+  for (const ch of selector) {
+    if (quote) {
+      current += ch;
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === '[') bracketDepth++;
+    else if (ch === ']') bracketDepth--;
+    else if (ch === ',' && bracketDepth === 0) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
   }
-  return false;
+
+  parts.push(current.trim());
+  return parts.filter(Boolean);
+}
+
+/**
+ * Splits one member of a selector list into its whitespace-separated compounds,
+ * treating a space inside an attribute value as part of that value.
+ *
+ * `div[aria-label="Embedded video"]` is one compound. A plain `split(/\s+/)`
+ * produced `['div[aria-label="Embedded', 'video"]']`, whose first half has no
+ * closing `]` and therefore matched nothing — so the video-container selector
+ * production hands to `querySelectorAll` was dead in this shim, and a fixture
+ * marking a video with the aria-label instead of the testid extracted no video.
+ */
+function splitSelectorTokens(selector: string): string[] {
+  return selector.match(/(?:\[[^\]]*\]|[^\s\[])+/g) ?? [];
+}
+
+function matchesSelector(el: DomElement, selector: string): boolean {
+  return splitSelectorList(selector).some(member => matchesCompoundChain(el, member));
+}
+
+/**
+ * Whether `el` is the subject of one member of a selector list.
+ *
+ * A member carrying a descendant combinator (`main article`) is matched the way
+ * a browser matches it: `el` itself must be the last compound, and the part in
+ * front must match one of its ancestors. Feeding the whole member to the
+ * compound-only matcher instead — as this did — made `main article` and
+ * `[data-testid="cellInnerDiv"] article` dead alternatives, because the matcher
+ * saw the space as an unparsable tail and returned false. Production relies on
+ * `closest(TWEET_ARTICLE_SELECTOR)`, so on an article that carries no
+ * `data-testid="tweet"` the shim answered "no owning article" where a browser
+ * answers the article, and nothing was injected.
+ */
+function matchesCompoundChain(el: DomElement, member: string): boolean {
+  const tokens = splitSelectorTokens(member);
+  if (tokens.length === 0) return false;
+
+  let i = tokens.length - 1;
+  if (!matchSingleSelector(el, tokens[i])) return false;
+  i--;
+
+  let descendant: DomElement = el;
+  while (i >= 0) {
+    let ancestor = descendant.parentElement;
+    let matched: DomElement | null = null;
+    while (ancestor) {
+      if (matchSingleSelector(ancestor, tokens[i])) {
+        matched = ancestor;
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    if (!matched) return false;
+    descendant = matched;
+    i--;
+  }
+
+  return true;
 }
 
 function matchSingleSelector(el: DomElement, selector: string): boolean {
@@ -586,7 +932,7 @@ function querySelectorInternal(root: DomNode, selector: string): DomElement | nu
 
 function querySelectorAllInternal(root: DomNode, selector: string): DomElement[] {
   if (selector.includes(',')) {
-    const subSelectors = selector.split(',').map(s => s.trim()).filter(Boolean);
+    const subSelectors = splitSelectorList(selector);
     const matched = new Set<DomElement>();
     for (const sub of subSelectors) {
       for (const el of querySelectorAllInternal(root, sub)) {
@@ -607,7 +953,7 @@ function querySelectorAllInternal(root: DomNode, selector: string): DomElement[]
   }
 
   // Support descendant combinators (e.g. "div[role='group'] button")
-  const tokens = selector.split(/\s+/).filter(Boolean);
+  const tokens = splitSelectorTokens(selector);
   if (tokens.length === 1) {
     const results: DomElement[] = [];
     walkTree(root, node => {
@@ -679,7 +1025,7 @@ function serializeNodesToHtml(nodes: DomNode[]): string {
   return html;
 }
 
-export function parseHtmlInto(parent: DomNode, html: string): void {
+function parseHtmlInto(parent: DomNode, html: string): void {
   // Simple regex-based HTML tree builder for test fixtures
   const tagRegex = /<(\/)?([a-zA-Z0-9_-]+)([^>]*)>|([^<]+)/g;
   let match: RegExpExecArray | null;

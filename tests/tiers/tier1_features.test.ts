@@ -7,31 +7,44 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { h } from 'preact';
+import { renderToStaticMarkup } from 'preact-render-to-string';
 
-import { DomDocument, DomElement, DomImageElement, createDomElement, DomMutationObserver } from '../env/browser.ts';
-import { createChromeMock } from '../env/chrome.ts';
-import { mockDomToBlob } from '../env/canvas.ts';
-import { MockClipboard, MockClipboardItem, DownloadTracker } from '../env/clipboard.ts';
-import { SINGLE_TWEET_HTML, EXPECTED_SINGLE_TWEET_DATA } from '../fixtures/single-tweet.ts';
-import { THREAD_HTML, EXPECTED_THREAD_DATA } from '../fixtures/thread.ts';
-import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
+import { DomAnchorElement, DomDocument, DomElement, DomImageElement, DomShadowRoot, createDomElement, DomMutationObserver } from '../env/browser.ts';
+import { createChromeMock, type SendOutcome } from '../env/chrome.ts';
+import { withClipboard, type ClipboardFailureMode } from '../env/clipboard.ts';
+import { createSuite } from '../env/harness.ts';
+import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
+import { THREAD_HTML } from '../fixtures/thread.ts';
+import { QUOTE_TWEET_HTML, QUOTE_TWEET_UNAVAILABLE_HTML } from '../fixtures/quote-tweet.ts';
 import { EMOJI_TWEET_HTML, PURE_EMOJI_HTML } from '../fixtures/emojis.ts';
-import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML, FOUR_GIFS_HTML } from '../fixtures/multi-images.ts';
+import { ONE_PHOTO_HTML, TWO_PHOTOS_HTML, THREE_PHOTOS_HTML, FOUR_PHOTOS_HTML, VIDEO_POSTER_HTML, PHOTO_AND_GIF_HTML, PHOTO_AND_VIDEO_HTML, GIF_POSTER_LAYER_HTML, VIDEO_VISIBLE_POSTER_HTML, MEDIA_WITH_INNER_GROUP_HTML, GIF_ARIA_LABELED_HTML, GIF_BADGE_TEXT_HTML, VIDEO_WITH_DURATION_HTML, GIF_POSTER_ONLY_HTML, VIDEO_POSTER_ONLY_HTML, VIDEO_ARIA_LABEL_ONLY_HTML, FOUR_GIFS_HTML } from '../fixtures/multi-images.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
-import { isActionBar, TRIGGER_BUTTON_SVG } from '../../src/content/adapter/injection.ts';
+import { resolveThread } from '../../src/content/adapter/resolver.ts';
+import {
+  isActionBar,
+  TRIGGER_BUTTON_SVG,
+  createTriggerButton,
+  injectIntoActionBar,
+  injectAll,
+  initTwitterInjection,
+} from '../../src/content/adapter/injection.ts';
 import { isThreadConnectedPair, isTemporallyConnected, getReplyingToHandle } from '../../src/content/adapter/thread.ts';
+import { restoreUnicodeEmojis } from '../../src/content/adapter/emojis.ts';
 import { toggleExcluded, selectCurrentOnly } from '../../src/content/ui/threadScope.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
-import { EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
-import { TRANSLATIONS } from '../../src/content/i18n.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout } from '../../src/content/ui/themes.ts';
+import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
+import { TRANSLATIONS, getTranslation } from '../../src/content/i18n.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, PADDING_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, sanitizePadding, getAspectMinHeight, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
+import { isAllowedHost, clearImageCache, getImageCacheSize } from '../../src/background/proxy.ts';
+import { upgradeAvatarUrl, upgradePhotoUrl } from '../../src/content/adapter/urls.ts';
+import { sanitizeQrUrl, generateQrCodeData, CardQrCode } from '../../src/content/ui/qrcode.ts';
 
-import { renderComponent } from '../env/render.ts';
+import { renderComponent, loadModule, rasterizer, exportEngine, cardRenderer } from '../env/render.ts';
 
 import type { TweetData, ThreadData, MediaItem } from '../../src/types/tweet.ts';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption, AspectRatioOption } from '../../src/types/card.ts';
-import type { ExtensionMessage } from '../../src/types/messages.ts';
+import type { CardConfig, ThemeId } from '../../src/types/card.ts';
 
 /**
  * A video post and a card config, for the tests that render the real card rather
@@ -47,22 +60,16 @@ const VIDEO_TWEET: TweetData = {
   media: [{ type: 'video', url: 'https://pbs.twimg.com/media/video_poster.jpg', duration: '1:42' }],
 };
 
-const CARD_CONFIG: CardConfig = {
-  theme: 'minimal',
-  padding: '24px',
-  borderRadius: '12px',
-  aspectRatio: 'auto',
-  imageFit: 'contain',
-  mediaLayout: 'grid',
-  showQrCode: true,
-  showStats: true,
-  showTimestamp: true,
-  showWatermark: true,
-  blurAuthor: false,
-  showActionBarButton: true,
-  showPlayButton: true,
-  locale: 'en-US',
-};
+/**
+ * The config a card is rendered with here.
+ *
+ * Spread from production's own default rather than re-listing the fields: the
+ * hand-written copy had drifted (24px padding and a fixed 12px radius, neither
+ * of which is what the extension ships), so the markup under test was not the
+ * markup the card produces. Only the locale is pinned, because the copy has to
+ * be deterministic while `detectDefaultLocale` reads the machine's language.
+ */
+const CARD_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, locale: 'en-US' };
 
 /** A two-post thread: the on-card exclude button only exists when there is more
  * than one post to keep, so claims about it need a thread rather than a tweet. */
@@ -76,14 +83,19 @@ const THREAD: ThreadData = {
   targetTweetIndex: 0,
 };
 
-function renderCard(
-  args: { data?: ThreadData | TweetData; config?: Partial<CardConfig> } = {}
-): Promise<string> {
-  return renderComponent('/src/content/ui/Card.tsx', 'Card', {
-    data: args.data ?? VIDEO_TWEET,
-    config: { ...CARD_CONFIG, ...args.config },
-    onExcludeTweet: () => {},
-  });
+const renderCard = cardRenderer(CARD_CONFIG, VIDEO_TWEET);
+
+/**
+ * The inline style the card root was rendered with.
+ *
+ * Read off the root element rather than searched for across the whole document:
+ * a media box or an avatar legitimately carries a fixed height, and a
+ * document-wide regex cannot tell those apart from the card being clipped.
+ */
+function cardRootStyle(html: string): string {
+  const tag = html.match(/<div[^>]*id="post-to-card-export-target"[^>]*>/);
+  assert.ok(tag, 'the card root is not in the rendered markup');
+  return (tag![0].match(/\sstyle="([^"]*)"/) || [])[1] || '';
 }
 
 function renderControls(
@@ -98,65 +110,11 @@ function renderControls(
   });
 }
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 // -------------------------------------------------------------
 // Reference helper functions derived from Authoritative Specs
 // -------------------------------------------------------------
-
-function restoreUnicodeEmojis(node: DomElement): string {
-  let result = '';
-  for (const child of node.childNodes) {
-    if (child.nodeType === 3) {
-      result += child.nodeValue || '';
-    } else if (child instanceof DomImageElement || (child as any).tagName === 'IMG') {
-      const alt = child.getAttribute('alt');
-      if (alt) result += alt;
-    } else if (child instanceof DomElement) {
-      if (child.tagName === 'BR') {
-        result += '\n';
-      } else {
-        result += restoreUnicodeEmojis(child);
-      }
-    }
-  }
-  return result;
-}
-
-function upgradeAvatarUrl(url: string): string {
-  if (!url) return '';
-  return url.replace(/_(?:normal|bigger|mini|200x200)(\.[a-zA-Z0-9]+)$/, '_400x400$1');
-}
-
-function upgradePhotoUrl(url: string): string {
-  if (!url) return '';
-  if (url.match(/:(?:thumb|small|medium|large|orig|\d+x\d+)$/)) {
-    return url.replace(/:(?:thumb|small|medium|large|orig|\d+x\d+)$/, ':large');
-  }
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.includes('twimg.com') && parsed.pathname.includes('/media/')) {
-      parsed.searchParams.set('name', 'large');
-      return parsed.toString();
-    }
-  } catch {
-    // Fallback for legacy format :small
-  }
-  return url;
-}
 
 // -------------------------------------------------------------
 // F1: Multi-Entry Build Pipeline
@@ -289,101 +247,235 @@ test('F3.5: package type is module', () => {
 
 // -------------------------------------------------------------
 // F4: Background CORS Image Proxy
+//
+// These go through the shipped worker: `src/background/index.ts` registers its
+// listener on import, exactly as Chrome loads it, and the proxy functions are
+// the real ones from `src/background/proxy.ts`. The previous revision defined a
+// listener, a cache and an `isAllowedHost` inside this file and asserted them
+// back, so none of it could fail when the shipped proxy broke.
+//
+// `fetch` is the one stub, and only its transport: the URL gate, the cache, the
+// MIME sniffing and the Base64 encoding are all production code.
 // -------------------------------------------------------------
-test('F4.1: background proxy handles FETCH_IMAGE_BASE64 message', async () => {
+
+let serviceWorkerChrome: ReturnType<typeof createChromeMock> | null = null;
+
+/**
+ * Loads the background worker with the extension API already in place.
+ *
+ * Imported once and shared. The listener registers at import time, and Node
+ * caches the module, so a second import would hand back a worker still wired to
+ * the first mock rather than re-registering on a new one.
+ */
+async function serviceWorker(): Promise<ReturnType<typeof createChromeMock>> {
+  if (serviceWorkerChrome) return serviceWorkerChrome;
   const chromeMock = createChromeMock();
-  // Simulate background message listener
-  chromeMock.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
-    if (msg.type === 'FETCH_IMAGE_BASE64') {
-      sendResponse({
-        success: true,
-        dataUrl: 'data:image/jpeg;base64,mockedbase64data==',
-        contentType: 'image/jpeg',
-      });
-      return true;
-    }
-  });
-
-  const res = await chromeMock.runtime.sendMessage({
-    type: 'FETCH_IMAGE_BASE64',
-    url: 'https://pbs.twimg.com/media/test.jpg',
-  });
-
-  assert.equal(res.success, true);
-  if (res.success) {
-    assert.ok(res.dataUrl.startsWith('data:image/jpeg;base64,'));
+  (globalThis as Record<string, unknown>).chrome = chromeMock;
+  const logged = console.log;
+  console.log = () => {};
+  try {
+    await import('../../src/background/index.ts');
+  } finally {
+    console.log = logged;
   }
+  serviceWorkerChrome = chromeMock;
+  return chromeMock;
+}
+
+/** Runs `body` with `fetch` answering `response`, and reports the URLs it was asked for. */
+async function withFetch(
+  respond: (url: string) => Response,
+  body: (urls: string[]) => Promise<void>
+): Promise<void> {
+  const realFetch = globalThis.fetch;
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    urls.push(url);
+    return respond(url);
+  }) as typeof fetch;
+  try {
+    await body(urls);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+test('F4.1: the worker turns a FETCH_IMAGE_BASE64 message into a Base64 data URL', async () => {
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  await withFetch(
+    () =>
+      new Response(png, { status: 200, headers: { 'content-type': 'image/png; charset=binary' } }),
+    async (urls) => {
+      const res = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: 'https://pbs.twimg.com/media/test.png',
+      });
+
+      assert.equal(res.success, true, 'the worker must answer a message it handles');
+      if (!res.success) return;
+      assert.equal(urls.length, 1, 'the worker never reached the network');
+      // The MIME is read off the response header, lowercased and stripped of its
+      // parameters -- `image/png; charset=binary` is not a usable data-URL type.
+      assert.equal(res.contentType, 'image/png');
+      assert.equal(res.dataUrl, `data:image/png;base64,${Buffer.from(png).toString('base64')}`);
+    }
+  );
 });
 
-test('F4.2: background proxy handles PING message for healthcheck', async () => {
-  const chromeMock = createChromeMock();
-  chromeMock.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
-    if (msg.type === 'PING') {
-      sendResponse({ success: true, dataUrl: '', contentType: 'text/plain' });
-      return true;
-    }
-  });
-
+test('F4.2: the worker answers PING with its own healthcheck shape', async () => {
+  const chromeMock = await serviceWorker();
   const res = await chromeMock.runtime.sendMessage({ type: 'PING' });
   assert.equal(res.success, true);
+  // `pong` is what distinguishes the healthcheck from a fetch that happens to
+  // succeed; asserting only `success` passes for a proxy that answered wrongly.
+  assert.equal((res as { pong?: boolean }).pong, true, 'the healthcheck must identify itself');
 });
 
-test('F4.3: background proxy catches and reports network fetch errors gracefully', async () => {
-  const chromeMock = createChromeMock();
-  chromeMock.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
-    if (msg.type === 'FETCH_IMAGE_BASE64') {
-      if (msg.url.includes('nonexistent')) {
-        sendResponse({ success: false, error: 'HTTP 404: Not Found' });
-        return true;
-      }
+test('F4.3: a failing fetch is reported as a failed response, not thrown at the caller', async () => {
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  await withFetch(
+    () => new Response('nope', { status: 404, statusText: 'Not Found' }),
+    async () => {
+      const res = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: 'https://pbs.twimg.com/media/nonexistent.jpg',
+      });
+      assert.equal(res.success, false);
+      if (res.success) return;
+      assert.match(res.error, /404/, 'the status has to survive into the error');
+      assert.match(res.error, /Not Found/);
     }
-  });
-
-  const res = await chromeMock.runtime.sendMessage({
-    type: 'FETCH_IMAGE_BASE64',
-    url: 'https://pbs.twimg.com/media/nonexistent.jpg',
-  });
-
-  assert.equal(res.success, false);
-  if (!res.success) {
-    assert.match(res.error, /404/);
-  }
+  );
 });
 
-test('F4.4: background proxy caches repeated requests in memory to avoid duplicate fetches', async () => {
-  const cache = new Map<string, string>();
-  let fetchCount = 0;
-
-  async function proxyFetch(url: string): Promise<string> {
-    if (cache.has(url)) return cache.get(url)!;
-    fetchCount++;
-    const dataUrl = `data:image/jpeg;base64,img_${fetchCount}`;
-    cache.set(url, dataUrl);
-    return dataUrl;
-  }
+test('F4.4: a repeated URL is answered from the cache without a second fetch', async () => {
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+  assert.equal(getImageCacheSize(), 0);
 
   const url = 'https://pbs.twimg.com/profile_images/avatar.jpg';
-  const res1 = await proxyFetch(url);
-  const res2 = await proxyFetch(url);
-  assert.equal(res1, res2);
-  assert.equal(fetchCount, 1, 'Duplicate request must hit memory cache');
+  await withFetch(
+    () => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'image/jpeg' } }),
+    async (urls) => {
+      const first = await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url });
+      const second = await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url });
+
+      assert.equal(urls.length, 1, 'the second request must be served from memory');
+      assert.equal(getImageCacheSize(), 1);
+      assert.deepEqual(second, first, 'a cache hit has to answer exactly what the fetch answered');
+    }
+  );
 });
 
-test('F4.5: background proxy enforces twimg domain constraint', () => {
-  function isAllowedHost(urlStr: string): boolean {
-    try {
-      const u = new URL(urlStr);
-      return u.hostname.endsWith('twimg.com');
-    } catch {
-      return false;
-    }
-  }
-
+test('F4.5: the origin gate admits twimg and nothing that merely ends in it', () => {
   assert.equal(isAllowedHost('https://pbs.twimg.com/photo.jpg'), true);
   assert.equal(isAllowedHost('https://abs-0.twimg.com/emoji.svg'), true);
+  assert.equal(isAllowedHost('https://twimg.com/photo.jpg'), true);
+
+  // The trap a bare `hostname.endsWith('twimg.com')` falls into: an attacker
+  // registers `notwimg.com` and the suffix check admits it. The gate has to be
+  // the label boundary, not the string tail.
+  assert.equal(isAllowedHost('https://notwimg.com/steal.png'), false, 'a host that merely ends in twimg.com is not twimg');
   assert.equal(isAllowedHost('https://evil-tracking.com/steal.png'), false);
+  assert.equal(isAllowedHost('https://twimg.com.evil.com/x.png'), false, 'the allowlisted label must be the host, not a prefix of it');
+
+  // The scheme gate is what stops the proxy being turned into a local file read
+  // or a script injection; the host alone would not.
   assert.equal(isAllowedHost('javascript:alert(1)'), false);
   assert.equal(isAllowedHost('file:///etc/passwd'), false);
+  assert.equal(isAllowedHost('ftp://pbs.twimg.com/x.png'), false);
+});
+
+test('F4.6: the worker refuses a non-twimg URL instead of fetching it', async () => {
+  // The gate that matters is the one on the message path, not the helper: the
+  // worker forwards `message.url` straight into the proxy, and the proxy is the
+  // last place that can say no. F4.5 exercises `isAllowedHost` on its own, so
+  // deleting the guard left the suite green while any page could ask the worker
+  // to fetch any host through the extension's own (permissioned) fetch.
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  await withFetch(
+    () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'image/png' } }),
+    async (urls) => {
+      const res = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: 'https://evil.example/steal.png',
+      });
+
+      assert.equal(res.success, false, 'the worker must refuse a foreign origin');
+      if (res.success) return;
+      assert.match(res.error, /Forbidden origin/, 'the refusal has to name the reason');
+      assert.equal(urls.length, 0, 'and the forbidden URL must never be requested');
+    }
+  );
+});
+
+test('F4.7: a fetch that rejects is reported with the reason it failed', async () => {
+  // The other half of F4.3: that test drives a 404 *response*, which returns
+  // before the catch. A fetch that rejects — DNS, TLS, a connection reset —
+  // arrives here instead, and the caller is told why.
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  await withFetch(
+    () => {
+      throw new Error('socket hang up');
+    },
+    async () => {
+      const res = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: 'https://pbs.twimg.com/media/unreachable.jpg',
+      });
+
+      assert.equal(res.success, false, 'a rejected fetch is a failed response, not a throw');
+      if (res.success) return;
+      assert.equal(res.error, 'socket hang up', 'and the failure reason reaches the caller');
+    }
+  );
+});
+
+test('F4.8: the cache evicts the least recently used entry, not the oldest', async () => {
+  // The cache is capped at 200 and the cap is enforced by insertion order, so
+  // the only thing that makes it LRU rather than FIFO is the delete-and-reinsert
+  // on a hit. Dropping that left tier1 and tier5 green: the cap still held and
+  // the size assertions still passed, while a hot avatar fell out of the cache
+  // behind images nobody asks for twice.
+  const chromeMock = await serviceWorker();
+  clearImageCache();
+
+  const urlOf = (i: number) => `https://pbs.twimg.com/media/entry_${i}.jpg`;
+  const cap = 200;
+
+  await withFetch(
+    () => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'image/jpeg' } }),
+    async (urls) => {
+      for (let i = 0; i < cap; i++) {
+        await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(i) });
+      }
+      assert.equal(getImageCacheSize(), cap, 'the cache holds a full set');
+
+      // Touch the first entry, then push the cache one past its cap. FIFO would
+      // drop `entry_0`; LRU drops whatever the touch pushed second.
+      await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(0) });
+      await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(cap) });
+      assert.equal(getImageCacheSize(), cap, 'the cache stays at its cap');
+
+      const fetchesBefore = urls.length;
+      const again = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: urlOf(0),
+      });
+      assert.equal(again.success, true);
+      assert.equal(urls.length, fetchesBefore, 'the touched entry survives the eviction');
+    }
+  );
 });
 
 // -------------------------------------------------------------
@@ -396,24 +488,30 @@ test('F5.1: zero external telemetry endpoints in source types or configuration',
   }
 });
 
-test('F5.2: qrcode generation operates completely offline without network', () => {
-  // Offline SVG QR simulation
-  function generateOfflineQrSvg(url: string): string {
-    assert.ok(url.length > 0);
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" data-testid="qr-svg"><rect width="100" height="100" fill="#fff"/><path d="M10 10h20v20h-20z" fill="#000"/></svg>`;
-  }
+test('F5.2: the rendered card asks the network for nothing', async () => {
+  // The generator's own offline property is F20.5. This is the other half: the
+  // markup the card produces carries no remote stylesheet, font or script, and
+  // its QR is inline vector rather than a picture fetched from a service.
+  const html = await renderCard();
 
-  const svg = generateOfflineQrSvg('https://x.com/jack/status/20');
-  assert.match(svg, /<svg/);
-  assert.match(svg, /data-testid="qr-svg"/);
+  assert.ok(!/<link/i.test(html), 'the card pulled in a remote resource with <link>');
+  assert.ok(!/<script/i.test(html), 'the card emitted a script tag');
+  assert.ok(!/googleapis|fonts\.gstatic/.test(html), 'the card referenced a remote font host');
+  assert.ok(!/@import/.test(html), 'the card referenced a remote stylesheet');
+  assert.ok(html.includes('card-qr-svg'), 'the QR is not the inline vector the card is supposed to paint');
 });
 
-test('F5.3: content script does not use eval or innerHTML injection of unescaped scripts', () => {
-  const safeText = '<script>alert(1)</script>';
-  const el = new DomElement('DIV');
-  el.textContent = safeText;
-  assert.equal(el.textContent, safeText);
-  assert.equal(el.querySelector('script'), null, 'Script tags should not be evaluated');
+test('F5.3: a hostile author name reaches the card escaped, not as live markup', async () => {
+  const hostile = '<script>alert(1)</script>';
+  const html = await renderCard({
+    data: {
+      ...VIDEO_TWEET,
+      author: { name: hostile, handle: '@attacker' },
+    },
+  });
+
+  assert.ok(!html.includes('<script'), 'the card emitted a live script tag');
+  assert.ok(html.includes('&lt;script'), `the name was not escaped, markup was: ${html.slice(0, 200)}`);
 });
 
 test('F5.4: local storage preferences stored without remote sync', async () => {
@@ -435,191 +533,318 @@ test('F5.4: local storage preferences stored without remote sync', async () => {
   assert.deepEqual(stored.userCardConfig, config);
 });
 
-test('F5.5: inline CSS styling guarantees zero network CSS font/stylesheet imports', () => {
-  const sampleCss = `
-    :host { all: initial; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    .card-root { background: #000; color: #fff; }
-  `;
-  assert.ok(!sampleCss.includes('@import url'), 'Must not contain remote @import');
-  assert.ok(!sampleCss.includes('fonts.googleapis.com'), 'Must not load Google Fonts externally');
+test('F5.5: neither shipped stylesheet loads anything over the network', () => {
+  // Read from disk, because the stylesheets are the shipped artifact: the card
+  // and the modal pull theirs in with `?inline`, so the file is what ships.
+  for (const name of ['card.css', 'modal.css']) {
+    const css = fs.readFileSync(path.resolve(process.cwd(), 'src/content/styles', name), 'utf8');
+
+    assert.ok(!/@import/.test(css), `${name} imports a remote stylesheet`);
+    assert.ok(!/url\(\s*['"]?https?:/.test(css), `${name} points at a remote url()`);
+    assert.ok(!/googleapis|gstatic/.test(css), `${name} loads a remote font`);
+    assert.ok(/font-family/.test(css), `${name} declares no font stack of its own`);
+  }
 });
 
 // -------------------------------------------------------------
 // F6: Tweet Action Bar Injection
+//
+// These drive the shipped injection module. The previous revision built its own
+// button, set its own `data-post-to-card-injected` flag, wrote its own
+// deduplication guard and then asserted them back, so a regression in
+// `injectIntoActionBar` could not fail any of them.
 // -------------------------------------------------------------
-test('F6.1: trigger button created with role button, SVG icon and zero emoji', () => {
-  const btn = new DomElement('BUTTON');
-  btn.setAttribute('role', 'button');
-  btn.setAttribute('aria-label', 'Post to Card');
-  btn.setAttribute('data-post-to-card-btn', 'true');
-  btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="3" width="13" height="15" rx="2"/></svg>';
 
-  assert.equal(btn.getAttribute('role'), 'button');
-  assert.equal(btn.getAttribute('aria-label'), 'Post to Card');
-  assert.ok(btn.innerHTML.includes('<svg'), 'Must have svg');
-  assert.ok(!btn.innerHTML.includes('✨'), 'Must not have emoji');
-});
+/**
+ * Installs a live document and a listener-recording window, then runs `body`.
+ *
+ * The modules under test read `document` and `window` off the global scope, so
+ * they need the shim in place rather than passed in. The window is a listener
+ * map rather than a second DOM: nothing here ever adds, removes or dispatches
+ * on it beyond recording.
+ */
+async function withDomEnv(
+  body: (env: {
+    doc: DomDocument;
+    fire: (type: string, event?: Record<string, unknown>) => void;
+    countQueries: (selector: string) => number;
+  }) => Promise<void>
+): Promise<void> {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = {
+    document: scope.document,
+    window: scope.window,
+    MutationObserver: scope.MutationObserver,
+  };
 
-test('F6.2: button successfully appends into div[role="group"] action bar', () => {
-  const tweet = createDomElement(SINGLE_TWEET_HTML);
-  const actionBar = tweet.querySelector('div[role="group"]');
-  assert.ok(actionBar, 'Must find action bar');
+  const doc = new DomDocument();
+  const listeners = new Map<string, Set<(e: unknown) => void>>();
+  const queries: string[] = [];
 
-  const btn = new DomElement('BUTTON');
-  btn.setAttribute('data-post-to-card-btn', 'true');
-  actionBar.appendChild(btn);
+  const realQueryAll = doc.querySelectorAll.bind(doc);
+  doc.querySelectorAll = ((selector: string) => {
+    queries.push(selector);
+    return realQueryAll(selector);
+  }) as typeof doc.querySelectorAll;
 
-  assert.ok(actionBar.querySelector('[data-post-to-card-btn="true"]'));
-});
+  const fakeWindow = {
+    location: { origin: 'https://x.com', pathname: '/home' },
+    innerWidth: 1200,
+    scrollY: 0,
+    scrollTo: () => {},
+    addEventListener: (type: string, cb: (e: unknown) => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(cb);
+    },
+    removeEventListener: (type: string, cb: (e: unknown) => void) => {
+      listeners.get(type)?.delete(cb);
+    },
+    dispatchEvent: (event: { type: string }) => {
+      for (const cb of [...(listeners.get(event.type) || [])]) cb(event);
+      return true;
+    },
+  };
 
-test('F6.3: action bar receives data-post-to-card-injected flag upon injection', () => {
-  const tweet = createDomElement(SINGLE_TWEET_HTML);
-  const actionBar = tweet.querySelector('div[role="group"]')!;
+  scope.document = doc;
+  scope.window = fakeWindow;
+  scope.MutationObserver = DomMutationObserver;
 
-  actionBar.setAttribute('data-post-to-card-injected', 'true');
-  assert.equal(actionBar.getAttribute('data-post-to-card-injected'), 'true');
-});
-
-test('F6.4: deduplication guard prevents injecting multiple buttons into same action bar', () => {
-  const tweet = createDomElement(SINGLE_TWEET_HTML);
-  const actionBar = tweet.querySelector('div[role="group"]')!;
-
-  let injectAttempts = 0;
-  function tryInject(bar: DomElement) {
-    if (bar.getAttribute('data-post-to-card-injected') === 'true') return;
-    bar.setAttribute('data-post-to-card-injected', 'true');
-    injectAttempts++;
+  try {
+    await body({
+      doc,
+      fire: (type, event = {}) => {
+        fakeWindow.dispatchEvent({ type, ...event });
+      },
+      countQueries: (selector) => queries.filter((q) => q.includes(selector)).length,
+    });
+  } finally {
+    scope.document = saved.document;
+    scope.window = saved.window;
+    scope.MutationObserver = saved.MutationObserver;
   }
+}
 
-  tryInject(actionBar);
-  tryInject(actionBar);
-  tryInject(actionBar);
+/** Lets the module's 150ms debounce elapse. */
+const afterDebounce = () => new Promise((r) => setTimeout(r, 220));
 
-  assert.equal(injectAttempts, 1, 'Should only inject once due to guard');
-});
+test('F6.1: the shipped trigger button is a labelled SVG control with no emoji', async () => {
+  await withDomEnv(async () => {
+    const btn = createTriggerButton(() => {}, 'en-US');
+    const expected = getTranslation('en-US').triggerButtonTitle;
 
-test('F6.5: clicking trigger button dispatches custom trigger event with target tweet article', () => {
-  const tweet = createDomElement(SINGLE_TWEET_HTML);
-  const actionBar = tweet.querySelector('div[role="group"]')!;
-  let triggeredArticle: DomElement | null = null;
-
-  const btn = new DomElement('BUTTON');
-  btn.addEventListener('click', () => {
-    triggeredArticle = btn.closest('article[data-testid="tweet"]');
+    assert.equal(btn.getAttribute('role'), 'button');
+    assert.equal(btn.getAttribute('data-post-to-card-btn'), 'true');
+    // The accessible name is the button's whole content, so it has to be the
+    // translated string rather than a hard-coded one.
+    assert.equal(btn.getAttribute('aria-label'), expected);
+    assert.equal(btn.getAttribute('title'), expected);
+    assert.ok(btn.innerHTML.includes('<svg'), 'the trigger is a vector, not a glyph');
+    assert.ok(!/\p{Extended_Pictographic}/u.test(btn.innerHTML), 'no emoji may reach the trigger');
   });
-
-  actionBar.appendChild(btn);
-  btn.click();
-
-  assert.ok(triggeredArticle);
-  assert.equal(triggeredArticle, tweet);
 });
 
-test('F6.6: trigger button wrapper and button specify vertical centering layout', () => {
-  const wrapper = new DomElement('DIV');
-  wrapper.setAttribute('data-post-to-card-wrapper', 'true');
-  wrapper.style['display'] = 'inline-flex';
-  wrapper.style['alignItems'] = 'center';
-  wrapper.style['justifyContent'] = 'center';
-  wrapper.style['alignSelf'] = 'center';
-  wrapper.style['height'] = '100%';
-  wrapper.style['margin'] = 'auto 0';
+test('F6.2: injection appends the wrapper into the action bar and marks the post', async () => {
+  await withDomEnv(async () => {
+    const tweet = createDomElement(SINGLE_TWEET_HTML);
+    const actionBar = tweet.querySelector('div[role="group"]')!;
 
-  const btn = new DomElement('BUTTON');
-  btn.setAttribute('data-post-to-card-btn', 'true');
-  btn.style['alignSelf'] = 'center';
-  btn.style['margin'] = 'auto 0';
-  btn.style['verticalAlign'] = 'middle';
+    assert.equal(injectIntoActionBar(actionBar as unknown as Element), true);
 
-  wrapper.appendChild(btn);
+    const wrapper = actionBar.querySelector('[data-post-to-card-wrapper="true"]');
+    assert.ok(wrapper, 'the trigger has to land inside the action row');
+    assert.ok(wrapper!.querySelector('[data-post-to-card-btn="true"]'));
+    // Appended, not prepended: the trigger sits after X's own controls.
+    assert.equal(actionBar.children[actionBar.children.length - 1], wrapper);
+    assert.equal(actionBar.getAttribute('data-post-to-card-injected'), 'true');
+    assert.equal(tweet.getAttribute('data-post-to-card-injected'), 'true',
+      'the guard is anchored to the post, so the post has to carry the mark');
+  });
+});
 
-  assert.equal(wrapper.getAttribute('data-post-to-card-wrapper'), 'true');
-  assert.equal(wrapper.style['alignSelf'], 'center');
-  assert.equal(wrapper.style['margin'], 'auto 0');
-  assert.equal(wrapper.style['alignItems'], 'center');
-  assert.equal(btn.style['alignSelf'], 'center');
-  assert.equal(btn.style['margin'], 'auto 0');
-  assert.equal(btn.style['verticalAlign'], 'middle');
-  assert.ok(wrapper.querySelector('[data-post-to-card-btn="true"]'));
+test('F6.3: a second injection into the same post is refused', async () => {
+  await withDomEnv(async () => {
+    const tweet = createDomElement(SINGLE_TWEET_HTML);
+    const actionBar = tweet.querySelector('div[role="group"]')!;
+
+    assert.equal(injectIntoActionBar(actionBar as unknown as Element), true);
+    assert.equal(injectIntoActionBar(actionBar as unknown as Element), false,
+      'the guard must refuse the repeat');
+
+    assert.equal(actionBar.querySelectorAll('[data-post-to-card-btn="true"]').length, 1,
+      'one post, one trigger');
+  });
+});
+
+test('F6.4: the mark on the post alone stops a second bar in the same post from injecting', async () => {
+  // X renders more than one role="group" per post, and the three lookup
+  // strategies resolve to different ones for the same tweet. A guard that only
+  // marked the container let the same post collect several buttons.
+  await withDomEnv(async () => {
+    const tweet = createDomElement(SINGLE_TWEET_HTML);
+    const bars = tweet.querySelectorAll('div[role="group"]');
+    assert.ok(bars.length >= 1);
+
+    assert.equal(injectIntoActionBar(bars[0] as unknown as Element), true);
+    // A second, different container inside the same post.
+    const second = new DomElement('DIV');
+    second.setAttribute('role', 'group');
+    tweet.appendChild(second);
+
+    assert.equal(injectIntoActionBar(second as unknown as Element), false);
+    assert.equal(tweet.querySelectorAll('[data-post-to-card-btn="true"]').length, 1);
+  });
+});
+
+test('F6.5: clicking the trigger announces the owning post on the window', async () => {
+  await withDomEnv(async () => {
+    const tweet = createDomElement(SINGLE_TWEET_HTML);
+    const actionBar = tweet.querySelector('div[role="group"]')!;
+
+    const win = (globalThis as Record<string, any>).window;
+    const events: Array<{ type: string; detail?: { article?: unknown } }> = [];
+    const realDispatch = win.dispatchEvent;
+    win.dispatchEvent = (event: any) => {
+      events.push(event);
+      return realDispatch(event);
+    };
+
+    let viaCallback: unknown = null;
+    injectIntoActionBar(actionBar as unknown as Element, (article) => { viaCallback = article; });
+    (actionBar.querySelector('[data-post-to-card-btn="true"]') as unknown as DomElement).click();
+
+    const announced = events.find((e) => e.type === 'post-to-card:trigger');
+    assert.ok(announced, 'the card is opened by this event; without it the click does nothing');
+    assert.equal(announced!.detail?.article, tweet, 'the event must name the post it came from');
+    assert.equal(viaCallback, tweet, 'and the callback must receive the same post');
+  });
+});
+
+test('F6.6: the trigger never lands on a media group inside the same post', async () => {
+  // Observed on a live two-image tweet: the photo block carries its own
+  // role="group", so a bare group match put the trigger on the photo.
+  await withDomEnv(async ({ doc }) => {
+    const article = createDomElement(MEDIA_WITH_INNER_GROUP_HTML);
+    doc.body.appendChild(article);
+
+    const injected = injectAll();
+
+    assert.equal(injected, 1, 'one post, one trigger -- not one per role=group');
+    const bars = article.querySelectorAll('div[role="group"]');
+    const withTrigger = bars.filter((b) => b.querySelector('[data-post-to-card-btn="true"]'));
+    assert.equal(withTrigger.length, 1);
+    assert.ok(withTrigger[0].querySelector('button[data-testid="reply"]'),
+      'the trigger belongs on the row holding the engagement controls');
+  });
 });
 
 // -------------------------------------------------------------
 // F7: Debounced MutationObserver
+//
+// These drive the real lifecycle manager. The previous revision exercised the
+// test shim's observer and a debounce defined in the test file, so nothing here
+// could fail when `initTwitterInjection` broke.
 // -------------------------------------------------------------
-test('F7.1: MutationObserver triggers injection scan on childList mutations', () => {
-  const doc = new DomDocument();
-  let mutationCount = 0;
 
-  const observer = new DomMutationObserver((mutations) => {
-    mutationCount += mutations.length;
+test('F7.1: a post added after the manager starts receives a trigger', async () => {
+  await withDomEnv(async ({ doc }) => {
+    const manager = initTwitterInjection(() => {});
+    try {
+      assert.equal(doc.querySelectorAll('[data-post-to-card-btn="true"]').length, 0);
+
+      doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+      await afterDebounce();
+
+      assert.equal(doc.querySelectorAll('[data-post-to-card-btn="true"]').length, 1,
+        'the observer has to reach the scan that injects into a newly rendered post');
+    } finally {
+      manager.disconnect();
+    }
   });
-
-  observer.observe(doc.body, { childList: true, subtree: true });
-
-  const tweet = createDomElement(SINGLE_TWEET_HTML);
-  doc.body.appendChild(tweet);
-
-  assert.equal(mutationCount, 1, 'MutationObserver should receive mutation record');
-  observer.disconnect();
 });
 
-test('F7.2: 150ms debounce coalesces rapid sequential DOM mutations into single scan', async () => {
-  let executionCount = 0;
-  let timer: any = null;
+test('F7.2: a burst of mutations produces one scan, not one per mutation', async () => {
+  await withDomEnv(async ({ doc, countQueries }) => {
+    const manager = initTwitterInjection(() => {});
+    try {
+      // Only the stage-1 lookup carries this negation, so counting it counts
+      // scans.
+      const SELECTOR = 'div[role="group"]:not([data-post-to-card-injected="true"])';
+      const before = countQueries(SELECTOR);
 
-  function scheduleScan() {
-    if (timer !== null) clearTimeout(timer);
-    timer = setTimeout(() => {
-      executionCount++;
-      timer = null;
-    }, 150);
-  }
+      // A virtual-scroll burst: ten posts appended in the same tick.
+      for (let i = 0; i < 10; i++) {
+        doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+      }
+      await afterDebounce();
 
-  // Rapid 10 mutations in 50ms
-  for (let i = 0; i < 10; i++) {
-    scheduleScan();
-  }
-
-  await new Promise(r => setTimeout(r, 200));
-  assert.equal(executionCount, 1, 'Debounce should coalesce rapid bursts into 1 execution');
+      assert.equal(countQueries(SELECTOR) - before, 1,
+        'the scan is the only thing that runs this query, so one scan means one query');
+      assert.equal(doc.querySelectorAll('[data-post-to-card-btn="true"]').length, 10,
+        'and that single scan still has to cover every post that arrived');
+    } finally {
+      manager.disconnect();
+    }
+  });
 });
 
-test('F7.3: observer queries only un-injected action bars to avoid layout thrashing', () => {
-  const doc = new DomDocument();
-  const tweet1 = createDomElement(SINGLE_TWEET_HTML);
-  const tweet2 = createDomElement(SINGLE_TWEET_HTML);
-  doc.body.appendChild(tweet1);
-  doc.body.appendChild(tweet2);
+test('F7.3: a scan never injects a second trigger into a post that already has one', async () => {
+  await withDomEnv(async ({ doc }) => {
+    const manager = initTwitterInjection(() => {});
+    try {
+      const first = createDomElement(SINGLE_TWEET_HTML);
+      doc.body.appendChild(first);
+      await afterDebounce();
 
-  tweet1.querySelector('div[role="group"]')!.setAttribute('data-post-to-card-injected', 'true');
+      // A further mutation forces another full scan over the same document.
+      doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+      await afterDebounce();
 
-  const unInjected = doc.querySelectorAll('article[data-testid="tweet"] div[role="group"]:not([data-post-to-card-injected="true"])');
-  assert.equal(unInjected.length, 1);
+      const buttons = first.querySelectorAll('[data-post-to-card-btn="true"]');
+      assert.equal(buttons.length, 1, 'the guard has to survive a rescan');
+      assert.equal(doc.querySelectorAll('[data-post-to-card-btn="true"]').length, 2);
+    } finally {
+      manager.disconnect();
+    }
+  });
 });
 
-test('F7.4: observer disconnects cleanly when extension is unmounted', () => {
-  const doc = new DomDocument();
-  let calls = 0;
-  const observer = new DomMutationObserver(() => { calls++; });
-  observer.observe(doc.body);
+test('F7.4: disconnecting stops the scans and releases the window listeners', async () => {
+  await withDomEnv(async ({ doc, fire }) => {
+    const manager = initTwitterInjection(() => {});
+    manager.disconnect();
 
-  observer.disconnect();
-  doc.body.appendChild(new DomElement('DIV'));
+    doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+    await afterDebounce();
+    assert.equal(doc.querySelectorAll('[data-post-to-card-btn="true"]').length, 0,
+      'a disconnected manager must not keep scanning');
 
-  assert.equal(calls, 0, 'No calls after observer is disconnected');
+    // popstate is the remaining route hook; firing it must not restart anything.
+    fire('popstate');
+    assert.equal(doc.querySelectorAll('[data-post-to-card-btn="true"]').length, 0,
+      'the route listener has to come off with the manager');
+  });
 });
 
-test('F7.5: observer handles subtree insertions across virtual scroll cellInnerDiv', () => {
-  const doc = new DomDocument();
-  const cell = new DomElement('DIV');
-  cell.setAttribute('data-testid', 'cellInnerDiv');
-  doc.body.appendChild(cell);
+test('F7.5: a post nested inside a virtual-scroll cell is still reached', async () => {
+  await withDomEnv(async ({ doc }) => {
+    const manager = initTwitterInjection(() => {});
+    try {
+      const cell = new DomElement('DIV');
+      cell.setAttribute('data-testid', 'cellInnerDiv');
+      doc.body.appendChild(cell);
+      await afterDebounce();
 
-  const tweet = createDomElement(SINGLE_TWEET_HTML);
-  cell.appendChild(tweet);
+      // The post arrives inside the cell that was already there, so only a
+      // subtree observation sees it.
+      cell.appendChild(createDomElement(SINGLE_TWEET_HTML));
+      await afterDebounce();
 
-  const found = doc.querySelector('div[data-testid="cellInnerDiv"] article[data-testid="tweet"]');
-  assert.ok(found, 'Should find tweet nested in cellInnerDiv');
+      assert.equal(doc.querySelectorAll('[data-post-to-card-btn="true"]').length, 1,
+        'a mutation below body is still a mutation of body');
+    } finally {
+      manager.disconnect();
+    }
+  });
 });
 
 // -------------------------------------------------------------
@@ -646,6 +871,10 @@ test('F9.1: restores Twemoji img[alt] to native Unicode string', () => {
   assert.ok(restored.includes('✨'));
   assert.ok(restored.includes('🎉'));
   assert.ok(restored.includes('💻'));
+  // Restoration is not a trade: the author's words have to come through too.
+  assert.ok(restored.includes('Big release today!'));
+  assert.ok(restored.includes('Post to Card is live'));
+  assert.ok(restored.includes('Try it offline now'));
 });
 
 test('F9.2: restores Twemoji inside author display name', () => {
@@ -654,16 +883,13 @@ test('F9.2: restores Twemoji inside author display name', () => {
   const restoredName = restoreUnicodeEmojis(userNameEl);
 
   assert.ok(restoredName.includes('🚀'));
+  assert.ok(restoredName.includes('Alex'));
 });
 
 test('F9.3: converts BR tags to native newline characters', () => {
-  const el = new DomElement('DIV');
-  el.appendChild(createDomElement('<span>Line 1</span>'));
-  el.appendChild(new DomElement('BR'));
-  el.appendChild(createDomElement('<span>Line 2</span>'));
+  const el = createDomElement('<div><span>Line 1</span><br><span>Line 2</span></div>');
 
-  const restored = restoreUnicodeEmojis(el);
-  assert.equal(restored, 'Line 1\nLine 2');
+  assert.equal(restoreUnicodeEmojis(el), 'Line 1\nLine 2');
 });
 
 test('F9.4: handles pure emoji tweets without crashing or empty text', () => {
@@ -674,47 +900,71 @@ test('F9.4: handles pure emoji tweets without crashing or empty text', () => {
   assert.equal(restored.replace(/\s+/g, ''), '😀😃😄😁');
 });
 
-test('F9.5: raw textContent loses Twemoji alt text proving restoration utility necessity', () => {
-  const tweet = createDomElement(EMOJI_TWEET_HTML);
-  const tweetText = tweet.querySelector('div[data-testid="tweetText"]')!;
+test('F9.5: a whitespace-only node keeps the line break it carries and collapses to one separator otherwise', () => {
+  // X splits a body around every inline element, so the paragraph break between
+  // two of them lands in a node of its own. Reading every whitespace-only node
+  // as indentation collapsed that break to a space and flattened a
+  // multi-paragraph post into one blob.
+  const withBreak = createDomElement('<div><span>a</span><span>\n</span><span>b</span></div>');
+  assert.equal(restoreUnicodeEmojis(withBreak), 'a\nb');
 
-  // Under normal DOM, img.textContent is empty!
-  const img = tweetText.querySelector('img')!;
-  assert.equal(img.textContent, '', 'img element textContent must be empty in standard DOM');
-  assert.equal(img.getAttribute('alt'), '🔥');
+  const indentation = createDomElement('<div><span>a</span><span>   </span><span>b</span></div>');
+  assert.equal(restoreUnicodeEmojis(indentation), 'a b');
 });
 
 // -------------------------------------------------------------
 // F10: Mention & Hashtag Preservation
+//
+// Every assertion below reads what the shipped extractor produced from real
+// markup. The previous revision read `EXPECTED_TOKENS` -- a fixture the test
+// itself owned -- and asserted its own fields back, so no token could ever come
+// out wrong.
 // -------------------------------------------------------------
-test('F10.1: identifies @mentions with handle links', () => {
-  const token = EXPECTED_TOKENS.find(t => t.type === 'mention' && t.value === '@typescript');
-  assert.ok(token);
-  assert.equal(token.href, '/typescript');
+
+/** The extracted post for the rich-token fixture. */
+function richTokensTweet(): TweetData {
+  return extractTweetData(createDomElement(RICH_TOKENS_HTML));
+}
+
+test('F10.1: the extractor marks mentions up as tokens carrying their profile link', () => {
+  const tokens = richTokensTweet().richTokens!;
+  const mention = tokens.find(t => t.type === 'mention' && t.value === '@typescript');
+  assert.ok(mention, 'the mention token is what makes the handle clickable on the card');
+  assert.equal(mention!.href, '/typescript');
+  assert.equal(tokens.filter(t => t.type === 'mention').length, 2);
 });
 
-test('F10.2: identifies #hashtags with search links', () => {
-  const token = EXPECTED_TOKENS.find(t => t.type === 'hashtag' && t.value === '#WebDev');
-  assert.ok(token);
+test('F10.2: the extractor marks hashtags up with their search link', () => {
+  const hashtag = richTokensTweet().richTokens!.find(t => t.type === 'hashtag');
+  assert.ok(hashtag, 'a hashtag the extractor missed prints as flat text');
+  assert.equal(hashtag!.value, '#WebDev');
+  assert.equal(hashtag!.href, '/hashtag/WebDev');
 });
 
-test('F10.3: identifies $cashtags for financial tickers', () => {
-  const token = EXPECTED_TOKENS.find(t => t.type === 'cashtag' && t.value === '$NVDA');
-  assert.ok(token);
+test('F10.3: the extractor marks cashtags up as their own token kind', () => {
+  const cashtags = richTokensTweet().richTokens!.filter(t => t.type === 'cashtag');
+  assert.deepEqual(cashtags.map(t => t.value), ['$NVDA', '$BTC']);
+  assert.equal(cashtags[0].href, '/search?q=%24NVDA');
 });
 
-test('F10.4: rewrites t.co redirect links to full display text', () => {
-  const token = EXPECTED_TOKENS.find(t => t.type === 'link');
-  assert.ok(token);
-  assert.equal(token.value, 'github.com/post-to-card');
+test('F10.4: an external link shows its display form while keeping the resolved URL', () => {
+  const link = richTokensTweet().richTokens!.find(t => t.type === 'link');
+  assert.ok(link, 'the external link must survive as a token');
+  // X shows `github.com/...` and keeps the real target in `title`; printing the
+  // t.co href instead is the regression this pins.
+  assert.equal(link!.value, 'github.com/post-to-card');
+  assert.equal(link!.href, 'https://github.com/post-to-card');
 });
 
-test('F10.5: strips trailing pic.twitter.com media attachment links from clean text', () => {
-  function stripPicTwitterLink(text: string): string {
-    return text.replace(/https?:\/\/pic\.twitter\.com\/\w+\s*$/, '').trim();
-  }
-  const raw = 'Check out this screenshot https://pic.twitter.com/hiddenpic';
-  assert.equal(stripPicTwitterLink(raw), 'Check out this screenshot');
+test('F10.5: the media permalink X appends is dropped from both the text and the tokens', () => {
+  const tweet = richTokensTweet();
+
+  assert.ok(!tweet.text.includes('pic.twitter.com'),
+    `the body still carries X's attachment link: ${tweet.text}`);
+  assert.ok(tweet.text.endsWith('github.com/post-to-card'),
+    `the author's own trailing link must survive: ${tweet.text}`);
+  assert.ok(!tweet.richTokens!.some(t => t.value.includes('pic.twitter.com')),
+    'the token pass and the text pass have to agree, or the card prints it in one view and not the other');
 });
 
 // -------------------------------------------------------------
@@ -726,16 +976,22 @@ test('F11.1: upgrades avatar from _normal to _400x400 ultra high-resolution', ()
   assert.equal(upgraded, 'https://pbs.twimg.com/profile_images/1115644071988/jack_400x400.jpg');
 });
 
-test('F11.2: upgrades photo URL query parameter name=small to name=large', () => {
+test('F11.2: a media thumbnail is upgraded to the original resolution, in JPEG', () => {
+  // `name=orig` rather than `name=large`: orig reaches 4096px and large stops at
+  // 2048. This assertion used to read `name=large` because the helper it called
+  // lived in this file and said so; the shipped upscaler says orig, and the card
+  // is what has to be right.
   const original = 'https://pbs.twimg.com/media/first_photo.jpg?format=jpg&name=small';
   const upgraded = upgradePhotoUrl(original);
-  assert.ok(upgraded.includes('name=large'));
+
+  const params = new URL(upgraded).searchParams;
+  assert.equal(params.get('name'), 'orig');
+  assert.equal(params.get('format'), 'jpg', 'X recompresses WebP sources, so original quality is fetched as JPEG');
 });
 
-test('F11.3: upgrades legacy colon suffix :small to :large', () => {
+test('F11.3: a legacy colon suffix is upgraded to :orig', () => {
   const original = 'https://pbs.twimg.com/media/legacy_photo.jpg:small';
-  const upgraded = upgradePhotoUrl(original);
-  assert.equal(upgraded, 'https://pbs.twimg.com/media/legacy_photo.jpg:large');
+  assert.equal(upgradePhotoUrl(original), 'https://pbs.twimg.com/media/legacy_photo.jpg:orig');
 });
 
 test('F11.4: extracts video poster frame from video component', () => {
@@ -874,83 +1130,118 @@ test('F30.2: the selection resolves to the action row even when media groups exi
 
 // -------------------------------------------------------------
 // F12: Multi-Image Grid Extraction
+//
+// These go through the extractor, so what is asserted is the media list the
+// card is actually handed. The previous revision counted `<img>` elements in
+// the fixture with `querySelectorAll`, which is a fact about the fixture.
 // -------------------------------------------------------------
-test('F12.1: extracts single image for full width display', () => {
-  const tweet = createDomElement(ONE_PHOTO_HTML);
-  const photos = tweet.querySelectorAll('div[data-testid="tweetPhoto"] img');
-  assert.equal(photos.length, 1);
+
+/** The media the extractor produced for a fixture, in order. */
+function mediaFrom(html: string): MediaItem[] {
+  const tweet = extractTweetData(createDomElement(html));
+  assert.ok(tweet.media, 'the extractor produced no media at all');
+  return tweet.media!;
+}
+
+test('F12.1: a one-photo post extracts one image, upgraded to the original', () => {
+  const media = mediaFrom(ONE_PHOTO_HTML);
+  assert.equal(media.length, 1);
+  assert.match(media[0].url, /name=orig/);
 });
 
-test('F12.2: extracts 2 images for 50/50 dual column grid', () => {
-  const tweet = createDomElement(TWO_PHOTOS_HTML);
-  const photos = tweet.querySelectorAll('div[data-testid="tweetPhoto"] img');
-  assert.equal(photos.length, 2);
+test('F12.2: a two-photo post extracts both, in document order', () => {
+  const media = mediaFrom(TWO_PHOTOS_HTML);
+  assert.equal(media.length, 2);
+  assert.deepEqual(
+    media.map((m) => new URL(m.url).pathname.split('/').pop()),
+    ['photo_left.jpg', 'photo_right.png']
+  );
 });
 
-test('F12.3: extracts 3 images for 1+2 split grid', () => {
-  const tweet = createDomElement(THREE_PHOTOS_HTML);
-  const photos = tweet.querySelectorAll('div[data-testid="tweetPhoto"] img');
-  assert.equal(photos.length, 3);
+test('F12.3: a three-photo post extracts all three', () => {
+  assert.equal(mediaFrom(THREE_PHOTOS_HTML).length, 3);
 });
 
-test('F12.4: extracts 4 images for standard 2x2 photo grid', () => {
-  const tweet = createDomElement(FOUR_PHOTOS_HTML);
-  const photos = tweet.querySelectorAll('div[data-testid="tweetPhoto"] img');
-  assert.equal(photos.length, 4);
+test('F12.4: a four-photo post extracts all four, each at original resolution', () => {
+  const media = mediaFrom(FOUR_PHOTOS_HTML);
+  assert.equal(media.length, 4);
+  for (const item of media) {
+    assert.match(item.url, /name=orig/, `photo was left at thumbnail size: ${item.url}`);
+  }
 });
 
-test('F12.5: clamps image extraction to a maximum of 4 photos', () => {
-  const photos = [1, 2, 3, 4, 5, 6].map(i => ({ url: `https://pbs.twimg.com/p${i}.jpg` }));
-  const clamped = photos.slice(0, 4);
-  assert.equal(clamped.length, 4);
+test('F12.5: a payload carrying more than four photos is clamped to four', () => {
+  // X does not offer a five-photo post, so this is the guard against a layout
+  // X might ship rather than a case seen in the wild. The card's grid has four
+  // cells; a fifth item would render outside the layout.
+  const five = FOUR_PHOTOS_HTML.replace(
+    '</article>',
+    '<div data-testid="tweetPhoto"><img src="https://pbs.twimg.com/media/extra.jpg?format=jpg&name=small" alt="Extra"></div></article>'
+  );
+  const media = mediaFrom(five);
+  assert.equal(media.length, 4, 'the fifth photo must not reach the card');
+  assert.ok(!media.some((m) => m.url.includes('extra.jpg')));
 });
 
 // -------------------------------------------------------------
 // F13: Quote Tweet Extraction
+//
+// These read the quote the extractor produced, not the markup it was given.
+// The previous revision queried the fixture's own nodes and asserted the text
+// it had just written there, so the parser was never exercised.
 // -------------------------------------------------------------
-test('F13.1: extracts nested quote tweet container with data-testid quoteTweet', () => {
-  const tweet = createDomElement(QUOTE_TWEET_HTML);
-  const quoteBox = tweet.querySelector('div[data-testid="quoteTweet"]');
-  assert.ok(quoteBox, 'Must find quote tweet box');
+
+/** The quote the extractor produced for a fixture, or null. */
+function quoteFrom(html: string): TweetData['quotePost'] {
+  const tweet = extractTweetData(createDomElement(html));
+  return tweet.quotePost;
+}
+
+test('F13.1: a quoted post is extracted as structured data, not left in the body', () => {
+  const quote = quoteFrom(QUOTE_TWEET_HTML);
+  assert.ok(quote, 'the quote did not survive extraction');
+  assert.ok(quote!.text.length > 0);
 });
 
-test('F13.2: extracts quote author name and handle independently from main tweet', () => {
-  const tweet = createDomElement(QUOTE_TWEET_HTML);
-  const quoteBox = tweet.querySelector('div[data-testid="quoteTweet"]')!;
-  const quoteUser = quoteBox.querySelector('div[data-testid="User-Name"]')!;
-
-  assert.ok(quoteUser.textContent.includes('Sam Altman'));
-  assert.ok(quoteUser.textContent.includes('@sama'));
+test('F13.2: the quote carries its own author, taken from the href and not the display name', () => {
+  const quote = quoteFrom(QUOTE_TWEET_HTML)!;
+  // The display-name link and the handle link share `/sama`, so a parser that
+  // reads the first anchor's text gets the name where the handle belongs.
+  assert.equal(quote.author.name, 'Sam Altman');
+  assert.equal(quote.author.handle, '@sama');
 });
 
-test('F13.3: extracts quote tweet text content accurately', () => {
-  const tweet = createDomElement(QUOTE_TWEET_HTML);
-  const quoteBox = tweet.querySelector('div[data-testid="quoteTweet"]')!;
-  const quoteText = quoteBox.querySelector('div[data-testid="tweetText"]')!;
-
-  assert.equal(quoteText.textContent.trim(), 'GPT-5.5 is now rolling out to all users. Enjoy!');
+test('F13.3: the quote body is the quoted post\'s own text', () => {
+  const quote = quoteFrom(QUOTE_TWEET_HTML)!;
+  assert.equal(quote.text, 'GPT-5.5 is now rolling out to all users. Enjoy!');
 });
 
-test('F13.4: extracts media attachments embedded inside quote tweet', () => {
-  const tweet = createDomElement(QUOTE_TWEET_HTML);
-  const quoteBox = tweet.querySelector('div[data-testid="quoteTweet"]')!;
-  const quoteImg = quoteBox.querySelector('div[data-testid="tweetPhoto"] img')!;
+test('F13.4: media inside the quote stays with the quote', () => {
+  const tweet = extractTweetData(createDomElement(QUOTE_TWEET_HTML));
+  const quote = tweet.quotePost!;
 
-  assert.ok(quoteImg);
-  assert.ok(quoteImg.getAttribute('src')!.includes('gpt_launch.png'));
+  assert.ok(quote.media?.length, 'the quoted picture was dropped');
+  assert.ok(quote.media![0].url.includes('gpt_launch.png'));
+  assert.ok(
+    !tweet.media?.some((m) => m.url.includes('gpt_launch.png')),
+    "the quoted post's picture must not also be listed as the outer post's media"
+  );
 });
 
-test('F13.5: detects deleted or unavailable quote tweet placeholders', () => {
-  const unavailableHtml = `
-    <article data-testid="tweet">
-      <div class="quote-box">
-        <span>This post is unavailable.</span>
-      </div>
-    </article>
-  `;
-  const tweet = createDomElement(unavailableHtml);
-  const isUnavailable = tweet.textContent.includes('This post is unavailable');
-  assert.equal(isUnavailable, true);
+test('F13.5: a deleted quoted post is reported as unavailable rather than as an empty quote', () => {
+  const quote = quoteFrom(QUOTE_TWEET_UNAVAILABLE_HTML);
+  assert.ok(quote, 'the tombstone must still produce a quote object');
+  assert.equal(quote!.isUnavailable, true);
+  assert.equal(quote!.text, '');
+  assert.equal(quote!.author.handle, '', 'there is no author to name');
+
+  // And the outer post is not itself marked unavailable: X leaves the quoting
+  // post intact. The flag lives in diagnostics, which is where a run of
+  // misclassified posts would surface.
+  assert.equal(
+    extractTweetData(createDomElement(QUOTE_TWEET_UNAVAILABLE_HTML)).diagnostics?.isUnavailable,
+    false
+  );
 });
 
 // -------------------------------------------------------------
@@ -1129,55 +1420,85 @@ test('F13.9: both quote levels reach the card, each carrying its own depth', asy
 
 // -------------------------------------------------------------
 // F14: Continuous Thread Connector
+//
+// These resolve through the shipped `resolveThread`. The previous revision
+// re-implemented the walk in the test file -- and asserted its own loop -- so
+// the resolver could have been deleted without a failure.
 // -------------------------------------------------------------
-test('F14.1: extracts multi-tweet continuous chain by same author', () => {
-  const container = createDomElement(THREAD_HTML);
-  const tweets = container.querySelectorAll('article[data-testid="tweet"]');
-  assert.equal(tweets.length, 3);
-});
 
-test('F14.2: halts thread traversal upon encountering sponsored ad', () => {
-  const container = createDomElement(MIXED_FEED_WITH_ADS_AND_REPLIES_HTML);
-  const articles = container.querySelectorAll('article[data-testid="tweet"]');
+/** Mounts `html` in a live document and resolves the thread starting at `index`. */
+async function resolvedThread(
+  html: string,
+  index = 0
+): Promise<{ thread: ThreadData; articleIds: string[] }> {
+  let out: { thread: ThreadData; articleIds: string[] } | null = null;
 
-  const threadTweets: DomElement[] = [];
-  const targetAuthor = '@alice';
+  await withDomEnv(async ({ doc }) => {
+    const feed = createDomElement(html);
+    doc.body.appendChild(feed);
+    // A single-post fixture's root *is* the article, so `querySelectorAll` --
+    // which only searches descendants -- finds nothing and the fixture itself
+    // has to be the one article.
+    const articles = feed.matches('article[data-testid="tweet"]')
+      ? [feed]
+      : feed.querySelectorAll('article[data-testid="tweet"]');
+    assert.ok(articles[index], `the fixture has no article at index ${index}`);
 
-  for (const art of articles) {
-    if (art.querySelector('[data-testid="placementTracking"]')) {
-      break; // Intercepted by ad
-    }
-    const handle = art.querySelector('a[href*="/alice"]');
-    if (handle) threadTweets.push(art);
-    else break;
-  }
-
-  assert.equal(threadTweets.length, 1, 'Thread must stop when intercepted by ad');
-});
-
-test('F14.3: excludes third-party replies from author thread', () => {
-  const container = createDomElement(MIXED_FEED_WITH_ADS_AND_REPLIES_HTML);
-  const articles = container.querySelectorAll('article[data-testid="tweet"]');
-  const targetAuthor = '@alice';
-
-  const validTweets = articles.filter(a => {
-    const isAd = a.querySelector('[data-testid="placementTracking"]');
-    const handleEl = a.querySelector('div[data-testid="User-Name"] a[href^="/"]');
-    return !isAd && handleEl && handleEl.textContent.includes(targetAuthor);
+    out = {
+      thread: resolveThread(articles[index] as unknown as Element),
+      articleIds: articles.map((a) => a.getAttribute('id') || ''),
+    };
   });
 
-  assert.equal(validTweets.length, 3, 'Only Alice tweets qualify');
+  return out!;
+}
+
+test('F14.1: a chain of the author\'s own posts resolves as one thread', async () => {
+  const { thread } = await resolvedThread(THREAD_HTML);
+
+  assert.equal(thread.tweets.length, 3, 'the walker dropped posts');
+  assert.equal(thread.isSingle, false);
+  assert.equal(thread.author.handle, '@dan_abramov');
+  assert.deepEqual(thread.tweets.map((t) => t.id), ['1001', '1002', '1003']);
+  assert.ok(thread.tweets.every((t) => t.diagnostics?.source === 'dom'));
 });
 
-test('F14.4: calculates threadIndex and threadTotal metadata', () => {
-  assert.equal(EXPECTED_THREAD_DATA.tweets.length, 3);
-  assert.equal(EXPECTED_THREAD_DATA.tweets[0].threadIndex, 0);
-  assert.equal(EXPECTED_THREAD_DATA.tweets[2].threadIndex, 2);
-  assert.equal(EXPECTED_THREAD_DATA.tweets[0].threadTotal, 3);
+test('F14.2: a sponsored post between two of the author\'s own posts ends the chain', async () => {
+  // tweet-1 and tweet-2 are both @alice and two minutes apart, so only the ad
+  // between them can stop the walk. Without the halt the card would carry the
+  // advertiser's post as the second entry of the thread.
+  const { thread } = await resolvedThread(MIXED_FEED_WITH_ADS_AND_REPLIES_HTML, 0);
+
+  assert.deepEqual(thread.tweets.map((t) => t.id), ['9001']);
+  assert.equal(thread.isSingle, true);
 });
 
-test('F14.5: flags single tweet as isSingle: true', () => {
-  assert.equal(EXPECTED_SINGLE_TWEET_DATA.isThreadPart, false);
+test('F14.3: another author\'s reply is not absorbed into the thread', async () => {
+  // tweet-2 is followed by @bob_troll's reply and then tweet-3, also @alice.
+  const { thread } = await resolvedThread(MIXED_FEED_WITH_ADS_AND_REPLIES_HTML, 2);
+
+  assert.ok(thread.tweets.every((t) => t.author.handle === '@alice'),
+    `a third-party post was absorbed: ${thread.tweets.map((t) => t.author.handle).join(', ')}`);
+  assert.deepEqual(thread.tweets.map((t) => t.id), ['9002']);
+});
+
+test('F14.4: a resolved thread numbers its posts from zero and states its length', async () => {
+  const { thread } = await resolvedThread(THREAD_HTML);
+
+  assert.deepEqual(thread.tweets.map((t) => t.threadIndex), [0, 1, 2]);
+  assert.ok(thread.tweets.every((t) => t.threadTotal === 3));
+  assert.ok(thread.tweets.every((t) => t.isThreadPart === true),
+    'every post in a multi-post card has to be marked as part of one');
+});
+
+test('F14.5: a post that stands alone resolves as a single, unnumbered card', async () => {
+  const { thread } = await resolvedThread(SINGLE_TWEET_HTML);
+
+  assert.equal(thread.tweets.length, 1);
+  assert.equal(thread.isSingle, true);
+  assert.equal(thread.tweets[0].isThreadPart, false);
+  assert.equal(thread.tweets[0].threadIndex, undefined);
+  assert.equal(thread.tweets[0].threadTotal, undefined);
 });
 
 test('F17.19: the type scale is a material token, not a block of CSS per material', async () => {
@@ -1450,102 +1771,290 @@ test('F14.9: excluding a post leaves it off the card, and the panel lists what i
 
 // -------------------------------------------------------------
 // F15: Custom Element & Shadow DOM
+//
+// These drive `src/content/container/element.ts` -- the module that mounts the
+// real card. Nothing in this repository imported it before, so its registration,
+// its singleton guard and its teardown were covered by tests of the test shim's
+// own `attachShadow`.
+//
+// The module registers itself on the global registry as a side effect of being
+// imported, and Node caches it, so the document below is created once and reused:
+// a fresh document per test would have its own registry and would never see the
+// definition.
 // -------------------------------------------------------------
-test('F15.1: post-to-card-container registers in customElements', () => {
-  const doc = new DomDocument();
-  class PostToCardContainer extends DomElement {
-    constructor() {
-      super('POST-TO-CARD-CONTAINER');
-      this.attachShadow({ mode: 'open' });
+
+let containerDoc: DomDocument | null = null;
+let containerModule: Record<string, any> | null = null;
+
+/**
+ * Imports the container module with the globals it reads at import time in
+ * place, and hands back a cleared document to mount into.
+ *
+ * Everything it installs is put back afterwards. A window left on `globalThis`
+ * is not inert: the Controls panel reads `window.innerWidth` to decide whether
+ * it is collapsed, and a document left behind is the one `resolveThread` walks,
+ * so a leaked shim changes what unrelated tiers render.
+ */
+async function withContainerEnv(
+  body: (env: {
+    doc: DomDocument;
+    PostToCardContainer: any;
+    openCardModal: (thread: ThreadData, onExport?: unknown) => any;
+    closeCardModal: () => void;
+    /** Dispatches a keydown on the window, the way a real browser would. */
+    fireKey: (key: string) => void;
+    /** Lets the effects Preact scheduled at ~35ms run. */
+    flushEffects: () => Promise<void>;
+  }) => Promise<void>
+): Promise<void> {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = {
+    document: scope.document,
+    window: scope.window,
+    HTMLElement: scope.HTMLElement,
+    customElements: scope.customElements,
+    ShadowRoot: scope.ShadowRoot,
+  };
+
+  // A window that can actually receive events. The modal binds its Escape
+  // handler with `window.addEventListener`, so a window whose `addEventListener`
+  // is a no-op makes the dismissal untestable from the outside and leaves the
+  // only option a hand-written copy of the handler inside the test.
+  const windowListeners = new Map<string, Array<(evt: any) => void>>();
+  const fakeWindow = {
+    addEventListener: (type: string, cb: (evt: any) => void) => {
+      windowListeners.set(type, [...(windowListeners.get(type) || []), cb]);
+    },
+    removeEventListener: (type: string, cb: (evt: any) => void) => {
+      windowListeners.set(type, (windowListeners.get(type) || []).filter((item) => item !== cb));
+    },
+    dispatchEvent: (evt: any) => {
+      for (const cb of [...(windowListeners.get(evt.type) || [])]) cb.call(fakeWindow, evt);
+      return true;
+    },
+    location: { origin: 'https://x.com', pathname: '/home' },
+    innerWidth: 1200,
+    scrollY: 0,
+    scrollTo: () => {},
+    // `modern-screenshot` reads the UA at import time and takes the whole module
+    // graph down with it when it is missing.
+    navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/140.0' },
+  };
+
+  const fireKey = (key: string): void => {
+    fakeWindow.dispatchEvent({
+      type: 'keydown',
+      key,
+      shiftKey: false,
+      defaultPrevented: false,
+      _propagationStopped: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      stopPropagation() {
+        this._propagationStopped = true;
+      },
+    });
+  };
+
+  // Effects are deferred, not synchronous: Preact flushes them from a 35ms
+  // timer. Asserting before that lands reads a component whose effects have
+  // never run.
+  const flushEffects = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 60));
+
+  try {
+    if (!containerModule) {
+      const doc = new DomDocument();
+      scope.document = doc;
+      scope.HTMLElement = DomElement;
+      scope.customElements = doc.customElements;
+      scope.window = fakeWindow;
+      containerModule = await loadModule('/src/content/container/element.ts');
+      containerDoc = doc;
     }
+
+    const doc = containerDoc!;
+    scope.document = doc;
+    scope.window = fakeWindow;
+    scope.HTMLElement = DomElement;
+    scope.customElements = doc.customElements;
+    // The export engine asks `root instanceof ShadowRoot` to decide where the
+    // off-screen copy goes, so the class has to be reachable as a global.
+    scope.ShadowRoot = DomShadowRoot;
+    doc.body.innerHTML = '';
+    windowListeners.clear();
+
+    await body({
+      doc,
+      PostToCardContainer: containerModule.PostToCardContainer,
+      openCardModal: containerModule.openCardModal,
+      closeCardModal: containerModule.closeCardModal,
+      fireKey,
+      flushEffects,
+    });
+  } finally {
+    containerModule?.closeCardModal();
+    windowListeners.clear();
+    if (containerDoc) containerDoc.body.innerHTML = '';
+    scope.document = saved.document;
+    scope.window = saved.window;
+    scope.HTMLElement = saved.HTMLElement;
+    scope.customElements = saved.customElements;
+    scope.ShadowRoot = saved.ShadowRoot;
   }
-  doc.customElements.define('post-to-card-container', PostToCardContainer);
-  assert.ok(doc.customElements.get('post-to-card-container'));
+}
+
+const CONTAINER_THREAD: ThreadData = {
+  author: { name: 'Ada', handle: '@ada' },
+  isSingle: true,
+  tweets: [
+    {
+      id: '90001',
+      url: 'https://x.com/ada/status/90001',
+      author: { name: 'Ada', handle: '@ada' },
+      text: 'shipping the video pass today',
+      timestamp: '2026-10-02T10:00:00.000Z',
+      isThreadPart: false,
+    },
+  ],
+};
+
+test('F15.1: the container element registers itself under its tag name', async () => {
+  await withContainerEnv(async ({ doc, PostToCardContainer }) => {
+    const registered = doc.customElements.get('post-to-card-container');
+    assert.ok(registered, 'without this the element never upgrades and the card never renders');
+    assert.equal(registered, PostToCardContainer);
+    // And the registry is what `createElement` consults, so the tag produces the
+    // class rather than a bare element.
+    assert.ok(doc.createElement('post-to-card-container') instanceof PostToCardContainer);
+  });
 });
 
-test('F15.2: container attaches open mode ShadowRoot', () => {
-  const container = new DomElement('POST-TO-CARD-CONTAINER');
-  const shadow = container.attachShadow({ mode: 'open' });
-  assert.equal(shadow.mode, 'open');
-  assert.equal(container.shadowRoot, shadow);
+test('F15.2: the container builds an open shadow root holding the styles and the mount point', async () => {
+  await withContainerEnv(async ({ PostToCardContainer }) => {
+    const container = new PostToCardContainer();
+
+    assert.ok(container.shadow, 'the card is isolated in a shadow root');
+    assert.equal(container.shadow.mode, 'open');
+    assert.equal(container.shadowRoot, container.shadow);
+    assert.equal(container.mountPoint.id, 'post-to-card-root');
+    assert.equal(container.styleElement.id, 'post-to-card-styles');
+    assert.ok(container.shadow.contains(container.styleElement));
+    assert.ok(container.shadow.contains(container.mountPoint));
+  });
 });
 
-test('F15.3: double attachShadow throws InvalidStateError', () => {
-  const container = new DomElement('POST-TO-CARD-CONTAINER');
-  container.attachShadow({ mode: 'open' });
-  assert.throws(() => {
-    container.attachShadow({ mode: 'open' });
-  }, /InvalidStateError/);
+test('F15.3: initialising twice leaves one stylesheet and one mount point', async () => {
+  await withContainerEnv(async ({ PostToCardContainer }) => {
+    const container = new PostToCardContainer();
+    const before = container.shadow.childNodes.length;
+
+    container.initComponent();
+    container.initComponent();
+
+    assert.equal(container.shadow.childNodes.length, before,
+      'a second init must not append a second copy of everything');
+    assert.equal(container.shadow.querySelectorAll('#post-to-card-root').length, 1);
+    assert.equal(container.shadow.querySelectorAll('#post-to-card-styles').length, 1);
+  });
 });
 
-test('F15.4: singleton guard prevents duplicate container injection into body', () => {
-  const doc = new DomDocument();
-  let count = 0;
-  function mountContainer() {
-    if (doc.querySelector('post-to-card-container')) return;
-    const el = doc.createElement('post-to-card-container');
-    doc.body.appendChild(el);
-    count++;
-  }
-  mountContainer();
-  mountContainer();
-  assert.equal(count, 1);
+test('F15.4: opening the card twice leaves exactly one container in the page', async () => {
+  await withContainerEnv(async ({ doc, openCardModal }) => {
+    const first = openCardModal(CONTAINER_THREAD);
+    const second = openCardModal(CONTAINER_THREAD);
+
+    assert.equal(second, first, 'the second open has to reuse the mounted container');
+    assert.equal(doc.querySelectorAll('post-to-card-container').length, 1);
+    assert.ok((first.mountPoint.innerHTML || '').length > 0, 'and the card has to be rendered into it');
+  });
 });
 
-test('F15.5: container unmount cleans up ShadowRoot content', () => {
-  const doc = new DomDocument();
-  const el = doc.createElement('post-to-card-container');
-  doc.body.appendChild(el);
-  assert.ok(doc.querySelector('post-to-card-container'));
+test('F15.5: closing the card removes the container and empties the shadow root', async () => {
+  await withContainerEnv(async ({ doc, openCardModal, closeCardModal }) => {
+    const container = openCardModal(CONTAINER_THREAD);
+    assert.ok((container.mountPoint.innerHTML || '').length > 0);
 
-  doc.body.removeChild(el);
-  assert.equal(doc.querySelector('post-to-card-container'), null);
+    closeCardModal();
+
+    assert.equal(doc.querySelector('post-to-card-container'), null,
+      'a closed card must not leave its host element on the page');
+    assert.equal(container.mountPoint.innerHTML, '', 'nor its contents in memory');
+  });
 });
 
 // -------------------------------------------------------------
 // F16: Inline CSS Style Isolation
+//
+// The stylesheet these check is the one the container actually injects, read
+// back off the element it injected it into.
 // -------------------------------------------------------------
-test('F16.1: style tag created inside shadowRoot', () => {
-  const container = new DomElement('POST-TO-CARD-CONTAINER');
-  const shadow = container.attachShadow({ mode: 'open' });
-  const style = new DomElement('STYLE');
-  style.id = 'post-to-card-styles';
-  shadow.appendChild(style);
 
-  assert.equal(shadow.querySelector('#post-to-card-styles'), style);
+/** The stylesheet the container injects, as text. */
+async function injectedCss(): Promise<string> {
+  let css = '';
+  await withContainerEnv(async ({ PostToCardContainer }) => {
+    css = new PostToCardContainer().styleElement.textContent || '';
+  });
+  return css;
+}
+
+test('F16.1: the stylesheet lives in the shadow root, not in the page', async () => {
+  await withContainerEnv(async ({ doc, PostToCardContainer }) => {
+    const container = new PostToCardContainer();
+
+    assert.ok(container.shadow.querySelector('#post-to-card-styles'));
+    assert.equal(doc.querySelector('#post-to-card-styles'), null,
+      'a stylesheet in the page would restyle X itself');
+    assert.equal(doc.querySelector('#post-to-card-root'), null);
+  });
 });
 
-test('F16.2: :host rule resets styles with all: initial', () => {
-  const css = ':host { all: initial; display: block; }';
-  assert.ok(css.includes('all: initial'));
+test('F16.2: the injected stylesheet resets the host with all: initial', async () => {
+  const css = await injectedCss();
+  assert.ok(css.length > 0, 'the container injected nothing');
+  assert.match(css, /:host[^{]*\{[^}]*all:\s*initial/,
+    'without the reset the card inherits X\'s typography and colours');
 });
 
-test('F16.3: shadow DOM styles do not leak to host document elements', () => {
-  const doc = new DomDocument();
-  const hostHeading = doc.createElement('H1');
-  doc.body.appendChild(hostHeading);
+test('F16.3: card styles are unreachable from the host document', async () => {
+  await withContainerEnv(async ({ doc, openCardModal }) => {
+    openCardModal(CONTAINER_THREAD);
+    const container = doc.querySelector('post-to-card-container')!;
 
-  const container = doc.createElement('POST-TO-CARD-CONTAINER');
-  const shadow = container.attachShadow({ mode: 'open' });
-  const shadowCard = new DomElement('DIV');
-  shadowCard.className = 'card-root';
-  shadow.appendChild(shadowCard);
-  doc.body.appendChild(container);
+    // A class the card really paints, taken from what it rendered rather than
+    // from a name chosen here.
+    const classes = (container.mountPoint.innerHTML.match(/class="([^"]+)"/) || [])[1];
+    const probe = (classes || '').split(/\s+/).filter(Boolean)[0];
+    assert.ok(probe, 'the card rendered no class to probe with');
 
-  // host document query does not see shadow elements
-  assert.equal(doc.querySelector('.card-root'), null);
+    assert.ok(container.shadow.querySelector(`.${probe}`), 'the card is inside the shadow root');
+    assert.equal(doc.querySelector(`.${probe}`), null,
+      'a host-page query must not reach into the shadow tree');
+  });
 });
 
-test('F16.4: font stack includes cross-platform clean sans-serif fallbacks', () => {
-  const fontStack = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-  assert.ok(fontStack.includes('-apple-system'));
-  assert.ok(fontStack.includes('sans-serif'));
+test('F16.4: the injected stylesheet states a cross-platform sans-serif stack', async () => {
+  const css = await injectedCss();
+  const hostRule = css.slice(css.indexOf(':host'));
+  const fontFamily = (hostRule.match(/font-family:\s*([^;]+);/) || [])[1] || '';
+
+  assert.ok(fontFamily.includes('-apple-system'), `missing the macOS face: ${fontFamily}`);
+  assert.ok(fontFamily.includes('Segoe UI'), `missing the Windows face: ${fontFamily}`);
+  assert.ok(fontFamily.includes('sans-serif'), `no fallback for anything else: ${fontFamily}`);
 });
 
-test('F16.5: inline style injection populates textContent correctly', () => {
-  const style = new DomElement('STYLE');
-  style.textContent = '.post-to-card-target { background: #30302e; }';
-  assert.equal(style.textContent, '.post-to-card-target { background: #30302e; }');
+test('F16.5: the container injects both stylesheets, in one style element', async () => {
+  await withContainerEnv(async ({ PostToCardContainer }) => {
+    const container = new PostToCardContainer();
+    const css = container.styleElement.textContent || '';
+
+    assert.equal(container.shadow.querySelectorAll('style').length, 1,
+      'a second style element is a stylesheet nobody keeps in sync');
+    // One rule that only the modal sheet has, and one only the card sheet has.
+    assert.ok(css.includes('.modal-header'), 'the modal stylesheet is missing');
+    assert.ok(css.includes('--font-display'), 'the card stylesheet is missing');
+  });
 });
 
 // -------------------------------------------------------------
@@ -2109,31 +2618,36 @@ test('F17.15: the masthead tick is the accent, but its hairline stays neutral in
 // -------------------------------------------------------------
 // F18: Padding & Border Radius Options
 // -------------------------------------------------------------
-test('F18.1: supports 3 padding options: 16px, 32px, 48px', () => {
-  const options: PaddingOption[] = ['16px', '32px', '48px'];
-  assert.equal(options.length, 3);
-  assert.equal(options[0], '16px');
-  assert.equal(options[1], '32px');
-  assert.equal(options[2], '48px');
-});
-
-test('F18.2: offers three explicit corners plus a follow-theme option', () => {
-  const options: RadiusOption[] = ['theme', '0px', '12px', '20px'];
-  assert.equal(options.length, 4);
-  assert.equal(options[0], 'theme');
-  assert.equal(RADIUS_OPTIONS[0], 'theme');
-});
-
-test('F18.3: invalid padding option falls back to 32px', () => {
-  function sanitizePadding(val: string): PaddingOption {
-    if (val === '16px' || val === '32px' || val === '48px') return val;
-    return '32px';
+test('F18.1: the padding picker offers three sizes and the sanitiser admits exactly those', () => {
+  assert.deepEqual(PADDING_OPTIONS, ['16px', '32px', '48px']);
+  for (const option of PADDING_OPTIONS) {
+    assert.equal(sanitizePadding(option), option, `${option} is offered but the sanitiser rejects it`);
   }
-  assert.equal(sanitizePadding('999px'), '32px');
+  assert.equal(sanitizePadding('17px'), '32px');
+  assert.equal(sanitizePadding(''), '32px');
 });
 
-test('F18.4: invalid border radius option falls back to 12px', () => {
-  assert.equal(sanitizeRadius('100px'), '12px');
+test('F18.2: the corner picker offers three explicit corners plus follow-theme', () => {
+  assert.deepEqual(RADIUS_OPTIONS, ['theme', '0px', '12px', '20px']);
+  for (const option of RADIUS_OPTIONS) {
+    assert.equal(sanitizeRadius(option), option, `${option} is offered but the sanitiser rejects it`);
+  }
+});
+
+test('F18.3: an unknown padding value falls back to the default rather than reaching the card', () => {
+  // A stored preference can be anything: an older build, a hand-edited value, a
+  // profile synced from another machine. It must not reach a CSS length.
+  for (const bogus of ['999px', '32', 'calc(1px)', 'javascript:alert(1)', '--x']) {
+    assert.equal(sanitizePadding(bogus), DEFAULT_CARD_CONFIG.padding, `admitted ${bogus}`);
+  }
+});
+
+test('F18.4: an unknown corner value falls back rather than reaching the card', () => {
+  // '12px' rather than the shipped default of 'theme': an unreadable value is
+  // answered with a concrete corner, not by handing the decision to the theme.
+  for (const bogus of ['100px', '12', 'round', 'url(x)', '']) {
+    assert.equal(sanitizeRadius(bogus), '12px', `admitted ${bogus}`);
+  }
   assert.equal(sanitizeRadius('theme'), 'theme');
 });
 
@@ -2175,86 +2689,93 @@ test('F18.6: follow-theme defers the corner to the theme, and inner never exceed
 // -------------------------------------------------------------
 // F19: Downward Expanding Poster Layouts
 // -------------------------------------------------------------
-test('F19.1: Auto aspect ratio has no min-height constraints', () => {
-  function getAspectMinHeight(ratio: AspectRatioOption, width: number = 640): string {
-    if (ratio === 'auto') return 'auto';
-    if (ratio === '3:4') return `${Math.round(width * (4 / 3))}px`;
-    if (ratio === '16:9') return `${Math.round(width * (9 / 16))}px`;
-    return 'auto';
-  }
+test('F19.1: the Auto ratio sets no minimum height', () => {
   assert.equal(getAspectMinHeight('auto'), 'auto');
+  assert.equal(getAspectMinHeight('auto', 1200), 'auto', 'the width is irrelevant to Auto');
 });
 
-test('F19.2: 3:4 poster ratio applies 853px min-height for 640px width', () => {
-  function getAspectMinHeight(ratio: AspectRatioOption, width: number = 640): number {
-    if (ratio === '3:4') return Math.round(width * (4 / 3));
-    return 0;
-  }
-  assert.equal(getAspectMinHeight('3:4', 640), 853);
+test('F19.2: the 3:4 poster ratio floors the card at four thirds of its width', () => {
+  assert.equal(getAspectMinHeight('3:4', 640), '853px');
+  assert.equal(getAspectMinHeight('3:4', 320), '427px');
 });
 
-test('F19.3: 16:9 banner ratio applies 360px min-height for 640px width', () => {
-  function getAspectMinHeight(ratio: AspectRatioOption, width: number = 640): number {
-    if (ratio === '16:9') return Math.round(width * (9 / 16));
-    return 0;
-  }
-  assert.equal(getAspectMinHeight('16:9', 640), 360);
+test('F19.3: the 16:9 banner ratio floors the card at nine sixteenths of its width', () => {
+  assert.equal(getAspectMinHeight('16:9', 640), '360px');
+  assert.equal(getAspectMinHeight('16:9', 1280), '720px');
 });
 
-test('F19.4: long text expands downward beyond min-height without clipping', () => {
-  const minHeight = 853;
-  const contentHeight = 1200;
-  const renderedHeight = Math.max(minHeight, contentHeight);
-  assert.equal(renderedHeight, 1200, 'Content must expand to full 1200px');
+test('F19.4: a poster card reaches its floor without being pinned to it', async () => {
+  const style = cardRootStyle(await renderCard({ data: THREAD, config: { aspectRatio: '3:4' } }));
+
+  assert.ok(style.includes('min-height:853px'), `the poster floor has to reach the card: ${style}`);
+  // A min-height alone is what lets long text expand past the floor; a fixed
+  // height would clip it. Both the height and the overflow have to stay open.
+  assert.ok(/height:\s*auto/.test(style), `the card root must be free to grow: ${style}`);
+  assert.ok(/overflow:\s*visible/.test(style), `clipping the card root would cut off the rest: ${style}`);
 });
 
-test('F19.5: card container style forbids overflow: hidden on vertical text axis', () => {
-  const cardStyle = {
-    overflow: 'visible',
-    minHeight: '853px',
-    height: 'auto',
-  };
-  assert.equal(cardStyle.overflow, 'visible');
-  assert.equal(cardStyle.height, 'auto');
+test('F19.5: an Auto-ratio card carries no floor at all', async () => {
+  const style = cardRootStyle(await renderCard({ data: THREAD, config: { aspectRatio: 'auto' } }));
+
+  assert.ok(!/min-height:\s*\d/.test(style), `Auto means the card is exactly as tall as its content: ${style}`);
+  assert.ok(/height:\s*auto/.test(style));
 });
 
 // -------------------------------------------------------------
 // F20: Offline QR Code Generator
 // -------------------------------------------------------------
-test('F20.1: generates SVG markup containing xmlns and path coordinates', () => {
-  const qrSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M0 0h10v10H0z"/></svg>';
-  assert.ok(qrSvg.includes('xmlns="http://www.w3.org/2000/svg"'));
-  assert.ok(qrSvg.includes('<path'));
+test('F20.1: the generator produces real SVG markup for a status URL', () => {
+  const qr = generateQrCodeData('https://x.com/jack/status/20');
+
+  assert.ok(qr, 'the generator returned nothing for a plain status URL');
+  assert.ok(qr!.path.length > 0, 'a QR with no modules encodes nothing');
+  assert.equal(qr!.viewBox, `0 0 ${qr!.moduleCount} ${qr!.moduleCount}`);
 });
 
-test('F20.2: sanitizes tracking parameters (utm_*, t.co wrappers) from QR URL', () => {
-  function sanitizeQrUrl(raw: string): string {
-    try {
-      const u = new URL(raw);
-      ['utm_source', 'utm_medium', 'utm_campaign', 's', 't'].forEach(p => u.searchParams.delete(p));
-      return u.toString();
-    } catch {
-      return raw;
-    }
-  }
-  const clean = sanitizeQrUrl('https://x.com/jack/status/20?s=20&utm_source=twitter');
-  assert.equal(clean, 'https://x.com/jack/status/20');
+test('F20.2: tracking parameters are stripped before the URL is encoded', () => {
+  // The code is scanned off a screen, so every character counts: a `?s=20` X
+  // appends would raise the QR version for no information.
+  assert.equal(sanitizeQrUrl('https://x.com/jack/status/20?s=20&utm_source=twitter'), 'https://x.com/jack/status/20');
+  assert.equal(sanitizeQrUrl('https://x.com/jack/status/20?t=abc'), 'https://x.com/jack/status/20');
+  // A parameter that carries meaning is not a tracker and has to survive.
+  assert.ok(sanitizeQrUrl('https://example.com/a?q=1').includes('q=1'));
 });
 
-test('F20.3: QR code renders crisp vector edges with shape-rendering', () => {
-  const svg = '<svg shape-rendering="crispEdges"></svg>';
-  assert.ok(svg.includes('shape-rendering="crispEdges"'));
+test('F20.3: the QR is drawn as crisp vector edges, not a smoothed image', () => {
+  const html = renderToStaticMarkup(
+    h(CardQrCode, { url: 'https://x.com/jack/status/20', title: 'Scan to open original tweet' })
+  );
+  assert.ok(html.includes('shape-rendering="crispEdges"'),
+    'without this the browser antialiases the modules and the code stops scanning');
+  assert.ok(html.includes('<path'), 'the modules are drawn as a path');
 });
 
-test('F20.4: supports encoding long status URLs up to 256 characters', () => {
+test('F20.4: a long status URL still encodes, and not into a dense code', () => {
   const longUrl = 'https://x.com/very_long_author_name_sample/status/1999999999999999999';
-  assert.ok(longUrl.length < 256);
+  const qr = generateQrCodeData(longUrl);
+
+  assert.ok(qr, 'a long URL must still produce a code');
+  // The card prints the code at a fixed size, so a code that grows past roughly
+  // version 10 stops resolving on a phone screen. The sanitizer is what keeps it
+  // small, which is why F20.2 matters.
+  assert.ok(qr!.moduleCount <= 57, `the code grew to ${qr!.moduleCount} modules, too dense to scan at card size`);
 });
 
-test('F20.5: offline generation functions without internet or external CDN', () => {
-  let isOfflineSafe = true;
-  // Local function call executes with zero fetch/XMLHttpRequest
-  assert.equal(isOfflineSafe, true);
+test('F20.5: the code is generated in process, with no request of any kind', () => {
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls++;
+    throw new Error('the QR generator must not reach the network');
+  }) as typeof fetch;
+
+  try {
+    const qr = generateQrCodeData('https://x.com/jack/status/20');
+    assert.ok(qr, 'the generator needs the network to work at all');
+    assert.equal(calls, 0, 'a QR that needs a CDN is a blank box offline');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 test('F20.6: the QR tooltip is localized, not a hard-coded English literal', async () => {
@@ -2292,19 +2813,13 @@ test('F20.6: the QR tooltip is localized, not a hard-coded English literal', asy
 // -------------------------------------------------------------
 // F21: Interactive Controls & Toggles
 // -------------------------------------------------------------
-test('F21.1: toggling showQrCode hides or displays QR element in DOM', () => {
-  const config: CardConfig = {
-    theme: 'gallery',
-    padding: '32px',
-    borderRadius: '12px',
-    aspectRatio: 'auto',
-    showQrCode: false,
-    showStats: true,
-    showTimestamp: true,
-    showWatermark: true,
-    blurAuthor: false,
-  };
-  assert.equal(config.showQrCode, false);
+test('F21.1: toggling showQrCode hides or displays QR element in DOM', async () => {
+  const shown = await renderCard({ config: { showQrCode: true } });
+  const hidden = await renderCard({ config: { showQrCode: false } });
+
+  assert.ok(shown.includes('card-qr-svg'), 'the QR is on the card when the preference is on');
+  assert.ok(!hidden.includes('card-qr-svg'), 'and is gone when it is off');
+  assert.ok(hidden.includes('card-footer'), 'the footer is still there — only the QR left');
 });
 
 test('F21.2: toggling showStats hides like, repost, reply statistics', async () => {
@@ -2355,34 +2870,104 @@ test('F21.2c: a raw count is abbreviated, not printed at full length', async () 
   assert.ok(!html.includes('12700') && !html.includes('482000'), 'raw counts are not printed in full');
 });
 
-test('F21.3: toggling showTimestamp hides date and time display', () => {
-  const showTimestamp = false;
-  const timeDom = showTimestamp ? '<span>2026-03-21</span>' : '';
-  assert.equal(timeDom, '');
+test('F21.2d: a bookmark count is labelled as bookmarks, never as views', async () => {
+  // Views and bookmarks came from two different nodes on the page
+  // (`div[data-testid="viewCount"]` vs the bookmark button) and two different
+  // GraphQL fields, but the card printed the pair through one slot:
+  // `formatStat(stats.views || stats.bookmarks)`. A post whose views the
+  // extraction missed but whose bookmarks it caught therefore showed the
+  // bookmark count under "Views" with the views icon — a wrong number under the
+  // wrong noun, which is worse than leaving the slot empty.
+  const bookmarksOnly = await renderCard({
+    data: { ...VIDEO_TWEET, stats: { replies: '191', reposts: '80', likes: '5.2K', bookmarks: '37' } },
+  });
+  assert.ok(bookmarksOnly.includes('37'), 'a bookmark count is still shown');
+  assert.ok(
+    bookmarksOnly.includes(`${TRANSLATIONS['en-US'].bookmarks}`),
+    'and carries the bookmarks label it belongs to'
+  );
+  assert.ok(
+    !bookmarksOnly.includes(`${TRANSLATIONS['en-US'].views}`),
+    'but never the views label it does not'
+  );
+
+  // The views slot keeps its own icon, so the two metrics are told apart by
+  // more than the title text.
+  const viewsOnly = await renderCard({
+    data: { ...VIDEO_TWEET, stats: { replies: '191', reposts: '80', likes: '5.2K', views: '842' } },
+  });
+  assert.ok(viewsOnly.includes('842'), 'a views count is shown');
+  assert.ok(
+    !viewsOnly.includes(`${TRANSLATIONS['en-US'].bookmarks}`),
+    'and does not claim to be a bookmark count'
+  );
 });
 
-test('F21.4: toggling showWatermark hides brand watermark', () => {
-  const showWatermark = false;
-  const mark = showWatermark ? '<span>Post to Card</span>' : '';
-  assert.equal(mark, '');
+test('F21.3: toggling showTimestamp hides date and time display', async () => {
+  // Stats and the QR code are turned off in both renders so the footer itself
+  // stays on and only the timestamp can be the difference.
+  const quiet: Partial<CardConfig> = { showStats: false, showQrCode: false };
+  const shown = await renderCard({ config: { ...quiet, showTimestamp: true } });
+  const hidden = await renderCard({ config: { ...quiet, showTimestamp: false } });
+
+  assert.ok(shown.includes('card-timestamp'), 'the timestamp is on the card by default');
+  assert.ok(!hidden.includes('card-timestamp'), 'and is gone when showTimestamp is off');
+  assert.ok(hidden.includes('card-footer'), 'the footer is still there — only the timestamp left');
 });
 
-test('F21.5: controls state updates reactively without full card remount', () => {
-  let state: CardConfig = {
-    theme: 'gallery',
-    padding: '32px',
-    borderRadius: '12px',
-    aspectRatio: 'auto',
-    showQrCode: true,
-    showStats: true,
-    showTimestamp: true,
-    showWatermark: true,
-    blurAuthor: false,
+test('F21.4: toggling showWatermark hides brand watermark', async () => {
+  // The watermark is the only thing left in the footer's right half, so with it
+  // off the footer has nothing at all to say and must not be rendered — its
+  // border and padding would otherwise leave a stray divider on the card.
+  const nothingElse: Partial<CardConfig> = {
+    showStats: false,
+    showQrCode: false,
+    showTimestamp: false,
   };
+  const shown = await renderCard({ config: { ...nothingElse, showWatermark: true } });
+  const hidden = await renderCard({ config: { ...nothingElse, showWatermark: false } });
 
-  state = { ...state, showWatermark: false };
-  assert.equal(state.showWatermark, false);
-  assert.equal(state.theme, 'gallery');
+  assert.ok(shown.includes('card-watermark'), 'the watermark is on the card by default');
+  assert.ok(!hidden.includes('card-watermark'), 'and is gone when showWatermark is off');
+  assert.ok(!hidden.includes('card-footer'), 'with nothing left to say the footer is not rendered');
+});
+
+/** The option text the segmented control labelled `label` is currently marking. */
+function checkedSegment(html: string, label: string): string | undefined {
+  // The group holds nothing but its buttons, so a lazy `</div>` ends it and the
+  // slice cannot spill into the next control.
+  const groups = [...html.matchAll(/<div class="btn-group"[^>]*aria-label="([^"]*)"[^>]*>([\s\S]*?)<\/div>/g)];
+  const group = groups.find((m) => m[1] === label);
+  if (!group) return undefined;
+  const active = [...group[2].matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].find((m) =>
+    m[0].includes('aria-checked="true"')
+  );
+  return active?.[1].trim();
+}
+
+/** Whether the toggle whose title starts with `label` renders as on. */
+function toggleIsOn(html: string, label: string): boolean {
+  const buttons = [...html.matchAll(/<button\b[^>]*class="toggle-item"[^>]*>([\s\S]*?)<\/button>/g)];
+  const button = buttons.find((m) => m[1].includes(`>${label}`));
+  assert.ok(button, `no toggle labelled ${label} in the rendered controls`);
+  return button![1].includes('toggle-switch is-checked');
+}
+
+test('F21.5: the controls are drawn from the config they are handed, not from an earlier one', async () => {
+  // Two renders of the same component with different configs. The claim is that
+  // every control derives its state from the current props, so a config change
+  // is visible in the markup rather than only in a variable the test owns.
+  const small = await renderControls({ config: { padding: '16px', showStats: true } });
+  const large = await renderControls({ config: { padding: '48px', showStats: true } });
+
+  assert.equal(checkedSegment(small, 'Padding'), '16px', 'the padding control marks the configured option');
+  assert.equal(checkedSegment(large, 'Padding'), '48px', 'and follows the config it is given');
+
+  // A toggle is the other shape of control: same props in, different markup out.
+  const statsOn = await renderControls({ config: { showStats: true } });
+  const statsOff = await renderControls({ config: { showStats: false } });
+  assert.equal(toggleIsOn(statsOn, 'Metrics'), true, 'the stats toggle reflects showStats');
+  assert.equal(toggleIsOn(statsOff, 'Metrics'), false, 'in both directions, not just the default');
 });
 
 test('F21.6: Controls renders narrow-screen collapse toggle handle with proper aria attributes', async () => {
@@ -2395,90 +2980,148 @@ test('F21.6: Controls renders narrow-screen collapse toggle handle with proper a
 
 // -------------------------------------------------------------
 // F22: Author Privacy Blurring
+//
+// Two halves, and both have to hold: the card marks the elements, and the
+// stylesheet is what actually blurs them. A class with no rule behind it blurs
+// nothing, and a rule with no class on the markup never applies.
 // -------------------------------------------------------------
-test('F22.1: blurAuthor applies CSS filter: blur(6px) to author avatar', () => {
-  const blurStyle = 'filter: blur(6px); transform: translateZ(0);';
-  assert.ok(blurStyle.includes('blur(6px)'));
+/** Whether the rule at `selector` in card.css declares `declaration`. */
+function cardCssDeclares(selector: string, declaration: string): boolean {
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const at = css.indexOf(selector);
+  if (at < 0) return false;
+  return css.slice(at, css.indexOf('}', at)).includes(declaration);
+}
+
+test('F22.1: blurAuthor applies CSS filter: blur(6px) to author avatar', async () => {
+  const html = await renderCard({ config: { blurAuthor: true } });
+
+  assert.match(html, /class="author-avatar is-blurred"/, 'the avatar container is marked');
+  assert.match(html, /class="author-avatar-img is-blurred"/, 'and the image inside it');
+  assert.ok(cardCssDeclares('.author-avatar-img.is-blurred', 'blur(6px)'),
+    'the class does nothing unless the sheet declares the blur for it');
 });
 
-test('F22.2: blurAuthor applies blur class to author display name', () => {
-  const el = new DomElement('SPAN');
-  el.className = 'author-name is-blurred';
-  assert.ok(el.classList.contains('is-blurred'));
+test('F22.2: blurAuthor applies blur class to author display name', async () => {
+  const html = await renderCard({ config: { blurAuthor: true } });
+
+  assert.match(html, /class="author-name is-blurred"/);
+  assert.ok(cardCssDeclares('.author-name.is-blurred', 'blur(6px)'));
 });
 
-test('F22.3: blurAuthor applies blur class to author @handle', () => {
-  const el = new DomElement('SPAN');
-  el.className = 'author-handle is-blurred';
-  assert.ok(el.classList.contains('is-blurred'));
+test('F22.3: blurAuthor applies blur class to author @handle', async () => {
+  const html = await renderCard({ config: { blurAuthor: true } });
+
+  assert.match(html, /class="author-handle is-blurred"/);
+  assert.ok(cardCssDeclares('.author-handle.is-blurred', 'blur(6px)'));
 });
 
 test('F22.4: avatar container has overflow: hidden to contain blur halo bleed', () => {
-  const containerStyle = { overflow: 'hidden', borderRadius: '50%' };
-  assert.equal(containerStyle.overflow, 'hidden');
-  assert.equal(containerStyle.borderRadius, '50%');
+  // The blurred avatar is a circle inside a square box; without the clip the
+  // blur's soft edge spills past the circle onto whatever sits beside it.
+  assert.ok(cardCssDeclares('.author-avatar {', 'overflow: hidden'));
+  assert.ok(cardCssDeclares('.author-avatar {', 'border-radius'));
 });
 
-test('F22.5: disabling blurAuthor removes filter without residual artifacts', () => {
-  const el = new DomElement('SPAN');
-  el.classList.add('is-blurred');
-  el.classList.remove('is-blurred');
-  assert.equal(el.classList.contains('is-blurred'), false);
+test('F22.5: disabling blurAuthor removes filter without residual artifacts', async () => {
+  const html = await renderCard({ config: { blurAuthor: false } });
+
+  assert.ok(!html.includes('is-blurred'),
+    'a leftover class on any element would still blur, since the sheet keys on the class alone');
 });
 
 // -------------------------------------------------------------
 // F23: Modal UX & Scroll Lock
+//
+// Driven through the real modal: `openCardModal` mounts the App, the App mounts
+// the Modal, and closing it goes back out through the container. A dismissal is
+// asserted by the card being gone from the page, which is what the user sees.
 // -------------------------------------------------------------
-test('F23.1: pressing Esc key dismisses the preview modal', () => {
-  let dismissed = false;
-  function handleKeyDown(evt: { key: string }) {
-    if (evt.key === 'Escape') dismissed = true;
-  }
-  handleKeyDown({ key: 'Escape' });
-  assert.equal(dismissed, true);
-});
+test('F23.1: pressing Esc key dismisses the preview modal', async () => {
+  await withContainerEnv(async ({ doc, openCardModal, fireKey, flushEffects }) => {
+    openCardModal(CONTAINER_THREAD);
+    // The Escape listener is bound from an effect, so it does not exist yet on
+    // the line after the render.
+    await flushEffects();
+    assert.ok(doc.querySelector('post-to-card-container'), 'the card is open to begin with');
 
-test('F23.2: clicking modal backdrop dismisses the modal', () => {
-  let dismissed = false;
-  const backdrop = new DomElement('DIV');
-  backdrop.id = 'post-to-card-backdrop';
-  backdrop.addEventListener('click', (e: any) => {
-    if (e.target === backdrop) dismissed = true;
+    fireKey('Escape');
+
+    assert.equal(doc.querySelector('post-to-card-container'), null,
+      'the window listener the modal bound has to receive the key and close it');
   });
-
-  backdrop.click();
-  assert.equal(dismissed, true);
 });
 
-test('F23.3: clicking inside card dialog stops propagation and does not dismiss', () => {
-  let dismissed = false;
-  const backdrop = new DomElement('DIV');
-  const dialog = new DomElement('DIV');
-  backdrop.appendChild(dialog);
+test('F23.2: clicking modal backdrop dismisses the modal', async () => {
+  await withContainerEnv(async ({ doc, openCardModal, flushEffects }) => {
+    const container = openCardModal(CONTAINER_THREAD);
+    await flushEffects();
 
-  backdrop.addEventListener('click', () => { dismissed = true; });
-  dialog.addEventListener('click', (e: any) => { e.stopPropagation(); });
+    const backdrop = container.mountPoint.querySelector('#post-to-card-backdrop');
+    assert.ok(backdrop, 'the modal rendered no backdrop to click');
+    backdrop.click();
 
-  dialog.click();
-  assert.equal(dismissed, false);
+    assert.equal(doc.querySelector('post-to-card-container'), null, 'a click on the backdrop closes the card');
+  });
 });
 
-test('F23.4: scroll lock locks document body overflow while modal is open', () => {
-  const doc = new DomDocument();
-  doc.body.style.overflow = 'hidden';
-  assert.equal(doc.body.style.overflow, 'hidden');
-  doc.body.style.overflow = '';
-  assert.equal(doc.body.style.overflow, '');
+test('F23.3: clicking inside card dialog stops propagation and does not dismiss', async () => {
+  await withContainerEnv(async ({ doc, openCardModal, flushEffects }) => {
+    const container = openCardModal(CONTAINER_THREAD);
+    await flushEffects();
+
+    const backdrop = container.mountPoint.querySelector('#post-to-card-backdrop');
+    const dialog = container.mountPoint.querySelector('#post-to-card-dialog');
+    assert.ok(backdrop && dialog, 'the modal rendered no dialog to click');
+
+    // The backdrop is the dialog's ancestor, so a click that is not stopped on
+    // the way out reaches it. Watching for that is what tells `stopPropagation`
+    // apart from the backdrop's own target check: without the watch, a modal that
+    // let the event through would still decline to close and the test would pass.
+    let reachedBackdrop = false;
+    backdrop.addEventListener('click', () => {
+      reachedBackdrop = true;
+    });
+
+    dialog.click();
+
+    assert.equal(reachedBackdrop, false, 'the click inside the dialog bubbled out to the backdrop');
+    assert.ok(doc.querySelector('post-to-card-container'),
+      'a click that lands on the dialog must not bubble out and close the card');
+  });
 });
 
-test('F23.5: scroll lock calculates and compensates for scrollbar width', () => {
-  function lockScroll(body: DomElement, scrollbarWidth: number) {
-    body.style.overflow = 'hidden';
-    body.style.paddingRight = `${scrollbarWidth}px`;
-  }
-  const body = new DomElement('BODY');
-  lockScroll(body, 15);
-  assert.equal(body.style.paddingRight, '15px');
+test('F23.4: scroll lock locks document body overflow while modal is open', async () => {
+  await withContainerEnv(async ({ doc }) => {
+    const modal = await loadModule('/src/content/ui/Modal.tsx');
+
+    modal.lockScroll();
+    // documentElement is the scrolling element on an X page, so locking only
+    // body would leave the page behind the overlay still scrollable.
+    assert.equal(doc.documentElement.style.overflow, 'hidden', 'the scrolling element is locked');
+    assert.equal(doc.body.style.overflow, 'hidden');
+
+    modal.unlockScroll();
+    assert.equal(doc.documentElement.style.overflow, '', 'and released on close');
+    assert.equal(doc.body.style.overflow, '');
+  });
+});
+
+test('F23.5: scroll lock calculates and compensates for scrollbar width', async () => {
+  await withContainerEnv(async ({ doc }) => {
+    const modal = await loadModule('/src/content/ui/Modal.tsx');
+
+    (globalThis as unknown as { window: { innerWidth: number } }).window.innerWidth = 1215;
+    doc.documentElement.clientWidth = 1200; // a 15px scrollbar
+    doc.body.style.paddingRight = '8px'; // an offset the page already carried
+
+    modal.lockScroll();
+    assert.equal(doc.body.style.paddingRight, '23px',
+      'the padding stands in for the vanished scrollbar, added to what the page already had');
+
+    modal.unlockScroll();
+    assert.equal(doc.body.style.paddingRight, '8px', 'and the page gets its own value back');
+  });
 });
 
 test('F23.6: a hidden preview toolbar is actually hidden, not just marked', () => {
@@ -2509,209 +3152,426 @@ test('F23.6: a hidden preview toolbar is actually hidden, not just marked', () =
 
 // -------------------------------------------------------------
 // F24: Modern-Screenshot Retina Export
+//
+// Driven through the real engine with only the rasterizer replaced
+// (`tests/env/modern-screenshot-stub.ts`). `renderCardToBlob` runs unmodified,
+// and what it hands the rasterizer is what these assert — a hand-written copy of
+// the rasterizer could only ever agree with itself.
 // -------------------------------------------------------------
+
+/** A post with the two things an export has to cope with: an avatar and photos. */
+const EXPORT_THREAD: ThreadData = {
+  author: { name: 'Ada', handle: '@ada', avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg' },
+  isSingle: true,
+  tweets: [
+    {
+      id: '90001',
+      url: 'https://x.com/ada/status/90001',
+      author: { name: 'Ada', handle: '@ada', avatarUrl: 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg' },
+      text: 'shipping the video pass today',
+      timestamp: '2026-10-02T10:00:00.000Z',
+      isThreadPart: false,
+      media: [
+        { type: 'image', url: 'https://pbs.twimg.com/media/one.jpg' },
+        { type: 'image', url: 'https://pbs.twimg.com/media/two.jpg' },
+      ],
+    },
+  ],
+};
+
+/** The card as the preview mounts it, inside the container's shadow root. */
+async function withMountedCard(
+  thread: ThreadData,
+  body: (card: DomElement, doc: DomDocument) => Promise<void>
+): Promise<void> {
+  await withContainerEnv(async ({ doc, openCardModal, flushEffects }) => {
+    const container = openCardModal(thread);
+    await flushEffects();
+    const card = container.shadow.querySelector('#post-to-card-export-target');
+    assert.ok(card, 'the card root is not in the shadow root');
+    await body(card, doc);
+  });
+}
+
 test('F24.1: exports card to PNG blob at scale: 2 for Retina resolution', async () => {
-  const card = new DomElement('DIV');
-  const blob = await mockDomToBlob(card, { scale: 2 });
-  assert.ok(blob);
-  assert.equal(blob.type, 'image/png');
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    const blob = await engine.renderCardToBlob(card);
+    assert.equal(blob.type, 'image/png');
+    assert.ok(blob.size > 0, 'the rasterizer handed back an empty picture');
+  });
+
+  assert.equal(stub.rasterizerCalls.length, 1, 'the card is rasterized exactly once');
+  assert.equal(stub.rasterizerCalls[0].options.scale, 2, 'the default export is the Retina factor');
+  assert.equal(engine.DEFAULT_EXPORT_SCALE, 2, 'and the figure the preview quotes is that one');
 });
 
 test('F24.2: exports card to PNG blob at scale: 3 for Ultra-HD resolution', async () => {
-  const card = new DomElement('DIV');
-  const blob = await mockDomToBlob(card, { scale: 3 });
-  assert.ok(blob);
-  assert.equal(blob.type, 'image/png');
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    const blob = await engine.renderCardToBlob(card, { scale: 3 });
+    assert.equal(blob.type, 'image/png');
+  });
+
+  assert.equal(stub.rasterizerCalls[0].options.scale, 3, 'an explicit scale reaches the rasterizer');
 });
 
 test('F24.3: waits for nested image decoding before rendering snapshot', async () => {
-  let decoded = false;
-  const img = new DomImageElement();
-  img.decode = async () => { decoded = true; };
-  await img.decode();
-  assert.equal(decoded, true);
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+
+  // The counter only moves once the decode has actually settled, so finding it
+  // above zero after the export resolved is the proof that the engine waited.
+  let decoded = 0;
+  const originalDecode = DomImageElement.prototype.decode;
+  DomImageElement.prototype.decode = async function () {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    decoded++;
+  };
+
+  try {
+    await withMountedCard(EXPORT_THREAD, async (card) => {
+      await engine.renderCardToBlob(card);
+    });
+  } finally {
+    DomImageElement.prototype.decode = originalDecode;
+  }
+
+  assert.ok(decoded > 0, 'the card has images that have to be decoded');
+  assert.equal(stub.rasterizerCalls.length, 1, 'and the rasterizer ran after they had');
 });
 
 test('F24.4: filters out data-export-ignore controls from final render', async () => {
-  const card = new DomElement('DIV');
-  const control = new DomElement('BUTTON');
-  control.setAttribute('data-export-ignore', 'true');
-  card.appendChild(control);
+  // The filter is a callback the engine hands the rasterizer, so the rasterizer
+  // is the one that calls it. Here the test stands in for that one call.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
 
-  function filterNode(node: DomElement): boolean {
-    return node.getAttribute('data-export-ignore') !== 'true';
-  }
-  assert.equal(filterNode(control), false);
+  await withMountedCard(THREAD, async (card, doc) => {
+    await engine.renderCardToBlob(card);
+
+    // The filter is evaluated inside the environment: it asks
+    // `node instanceof HTMLElement`, and that global only exists while the
+    // container env is installed.
+    const copy = stub.rasterizerCalls[0].target as DomElement;
+    const { options } = stub.rasterizerCalls[0];
+    assert.equal(typeof options.filter, 'function', 'the rasterizer is handed a filter');
+
+    const marked = copy.querySelectorAll('[data-html2canvas-ignore="true"]');
+    assert.ok(marked.length > 0, 'the card has to mark its UI-only controls for the rasterizer to skip');
+    for (const node of marked) {
+      assert.equal(options.filter(node), false, 'a marked control was left in the picture');
+    }
+    assert.equal(options.filter(copy), true, 'and the filter does not simply drop everything');
+
+    // Built off the document rather than off the copy: the engine removes the
+    // copy's wrapper on the way out, which leaves the copy detached.
+    const alias = doc.createElement('div');
+    alias.setAttribute('data-export-ignore', 'true');
+    assert.equal(options.filter(alias), false, 'the older spelling is honoured too');
+  });
 });
 
-test('F24.4b: the real export filter honours the attribute the card actually emits', async () => {
-  // The card marks its UI-only bits with `data-html2canvas-ignore`, but the
-  // filter used to test only `data-export-ignore` — so the on-card exclude
-  // button was silently baked into the PNG. The two spellings live in files that
-  // cannot import each other, so one side is read and the other is rendered: the
-  // filter's literal is asserted here, and the card is asked for its markup.
-  const src = fs.readFileSync(path.resolve(__dirname, '../../src/content/engine/export.ts'), 'utf-8');
-  assert.ok(
-    src.includes("getAttribute('data-html2canvas-ignore')"),
-    'export filter must recognise the attribute the card emits'
-  );
-  const html = await renderCard({ data: THREAD });
-  assert.ok(
-    html.includes('data-html2canvas-ignore="true"'),
-    'the on-card exclude button must stay marked ignore'
-  );
+test('F24.5: export uses transparent background so rounded corners render cleanly', async () => {
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    await engine.renderCardToBlob(card);
+    await engine.renderCardToBlob(card, { backgroundColor: '#123456' });
+  });
+
+  assert.equal(stub.rasterizerCalls[0].options.backgroundColor, null,
+    'a default background would paint the rounded corners square');
+  assert.equal(stub.rasterizerCalls[1].options.backgroundColor, '#123456',
+    'and an explicit one is still honoured');
 });
 
-test('F24.5: export uses transparent background so rounded corners render cleanly', () => {
-  const options = { backgroundColor: null };
-  assert.equal(options.backgroundColor, null);
+test('F24.6: the node rasterized is an off-screen copy, not the live card', async () => {
+  // The preview scales the card with `zoom` to fit a narrow window, and the
+  // rasterizer lays out whatever it is handed — so capturing the live card
+  // produced a shrunk PNG whose footer wrapped.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+
+  let live: DomElement | null = null;
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    live = card;
+    await engine.renderCardToBlob(card);
+  });
+
+  const target = stub.rasterizerCalls[0].target as DomElement;
+  assert.notEqual(target, live, 'the live preview must not be the thing captured');
+  assert.equal(target.getAttribute('id'), null, 'the copy drops the id, which would then appear twice');
+  assert.match(String(target.parentNode!.style.cssText), /left:\s*-100000px/, 'and is parked off-screen');
+  assert.ok(target.querySelectorAll('.media-box').length > 0, 'the copy is the card, not an empty shell');
+});
+
+test('F24.7: a rasterizer failure reaches the user as the reason, not as a silent no-op', async () => {
+  // `exportCard` deliberately lets the rasterizer's own failure through -- a
+  // screenshot that never happened is a defect, not an outcome -- so the preview
+  // is the only thing that can tell the user. This drives that hand-off end to
+  // end: the stand-in rejects, and the string the user ends up reading is the
+  // reason it gave.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  stub.failNextRasterization('canvas exploded');
+  const engine = await exportEngine();
+
+  await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+    // A stand-in for the real hand-off in `content/index.ts`, which is exactly
+    // `exportCard(target, { action })`. Whether the engine resolves or throws is
+    // what the preview has to cope with.
+    let settled = false;
+    const container = openCardModal(EXPORT_THREAD, (target: HTMLElement, action: string) =>
+      engine.exportCard(target, { action }).finally(() => { settled = true; })
+    );
+    await flushEffects();
+
+    const download = container.shadow.querySelector('.export-actions .btn-secondary');
+    assert.ok(download, 'the preview has no download control to press');
+    download.click();
+    // The rejection travels back through the engine and the preview's own catch
+    // before it becomes a status line, which is several ticks after the click.
+    for (let i = 0; i < 40; i++) {
+      await flushEffects();
+      const shown = container.shadow.querySelector('.status-message');
+      if (settled && shown && shown.className.includes('is-error')) break;
+    }
+
+    const status = container.shadow.querySelector('.status-message');
+    assert.ok(status, 'a failed export said nothing at all');
+    assert.equal(status.textContent, 'canvas exploded',
+      'the reason the export failed never reached the user');
+    assert.ok(status.className.includes('is-error'),
+      'a failure was announced as an ordinary status');
+  });
 });
 
 // -------------------------------------------------------------
 // F25: Canvas CORS Taint Prevention
+//
+// The guarantee is not "the canvas survives a tainting image" — it is that a
+// remote URL never reaches the canvas at all. So these run the card the preview
+// builds through the real pre-render pass and look at what the rasterizer was
+// actually handed.
 // -------------------------------------------------------------
-test('F25.1: unproxied external twimg image taints canvas and throws SecurityError on toBlob', async () => {
-  const card = new DomElement('DIV');
-  const img = new DomImageElement();
-  img.src = 'https://pbs.twimg.com/media/unproxied.jpg';
-  card.appendChild(img);
 
-  await assert.rejects(async () => {
-    await mockDomToBlob(card);
-  }, /SecurityError/);
+/** Every `img` src inside `root`, in document order. */
+function imageSources(root: DomElement): string[] {
+  return root.querySelectorAll('img').map((img) => img.getAttribute('src') || '');
+}
+
+test('F25.1: no remote image URL reaches the rasterizer; every one is a Base64 data URL', async () => {
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    assert.ok(imageSources(card).some((src) => src.startsWith('https://')),
+      'the card starts out holding remote pictures');
+    await engine.renderCardToBlob(card);
+  });
+
+  const sources = imageSources(stub.rasterizerCalls[0].target as DomElement);
+  assert.ok(sources.length >= 3, 'the card carries an avatar and two photos');
+  for (const src of sources) {
+    assert.ok(src.startsWith('data:'), `an unproxied image would taint the canvas: ${src}`);
+  }
 });
 
-test('F25.2: Base64 proxied image does NOT taint canvas and succeeds cleanly', async () => {
-  const card = new DomElement('DIV');
-  const img = new DomImageElement();
-  img.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD...';
-  card.appendChild(img);
+test('F25.2: the card is put back exactly as it was found after the export', async () => {
+  const engine = await exportEngine();
 
-  const blob = await mockDomToBlob(card);
-  assert.ok(blob);
-  assert.equal(blob.type, 'image/png');
+  let before: string[] = [];
+  let after: string[] = [];
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    before = imageSources(card);
+    await engine.renderCardToBlob(card);
+    after = imageSources(card);
+  });
+
+  assert.ok(before.some((src) => src.startsWith('https://')));
+  assert.deepEqual(after, before, 'the export must not leave the live preview holding placeholders');
 });
 
-test('F25.3: pre-render pipeline substitutes avatar URLs with Base64 Data URLs', () => {
-  const tweet: TweetData = {
-    id: '1',
-    url: 'https://x.com/a/status/1',
-    author: {
-      name: 'A',
-      handle: '@a',
-      avatarUrl: 'https://pbs.twimg.com/avatar.jpg',
-    },
-    text: 'Hello',
-    timestamp: '2026-01-01',
+test('F25.3: a quoted post’s media is cleaned too', async () => {
+  const quoted: ThreadData = {
+    ...EXPORT_THREAD,
+    tweets: [
+      {
+        ...EXPORT_THREAD.tweets[0],
+        media: [],
+        quotePost: {
+          author: { name: 'Sam', handle: '@sama' },
+          text: 'GPT-5.5 is now rolling out to all users.',
+          url: 'https://x.com/sama/status/4999',
+          media: [{ type: 'image', url: 'https://pbs.twimg.com/media/quote_photo.jpg' }],
+        },
+      },
+    ],
   };
 
-  const cloned = { ...tweet, author: { ...tweet.author } };
-  cloned.author.avatarUrl = 'data:image/jpeg;base64,mockedavatar==';
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
 
-  assert.ok(cloned.author.avatarUrl.startsWith('data:'));
-  assert.ok(tweet.author.avatarUrl.startsWith('https://'), 'Original tweet object should remain immutable');
+  await withMountedCard(quoted, async (card) => {
+    await engine.renderCardToBlob(card);
+  });
+
+  const quote = (stub.rasterizerCalls[0].target as DomElement).querySelector('.quote-card');
+  assert.ok(quote, 'the quoted post did not render');
+  const sources = imageSources(quote);
+  assert.ok(sources.length > 0, 'the quoted post has a picture');
+  for (const src of sources) {
+    assert.ok(src.startsWith('data:'), `the quoted post's picture was left remote: ${src}`);
+  }
 });
 
-test('F25.4: pre-render pipeline substitutes media grid URLs with Base64 Data URLs', () => {
-  const media = [
-    { type: 'image' as const, url: 'https://pbs.twimg.com/p1.jpg' },
-    { type: 'image' as const, url: 'https://pbs.twimg.com/p2.jpg' },
-  ];
-  const substituted = media.map(m => ({ ...m, url: `data:image/jpeg;base64,p_${m.url}` }));
-  assert.ok(substituted[0].url.startsWith('data:'));
-  assert.ok(substituted[1].url.startsWith('data:'));
+test('F25.4: an image the proxy cannot fetch becomes the placeholder, not a remote URL', async () => {
+  const engine = await exportEngine();
+  await withContainerEnv(async () => {
+    // This is the case where the extension's background proxy is not there to
+    // ask, which is what the page falls back from.
+    const scope = globalThis as Record<string, unknown>;
+    const savedChrome = scope.chrome;
+    delete scope.chrome;
+
+    try {
+      const url = 'https://pbs.twimg.com/media/unreachable.jpg';
+      assert.equal(await engine.fetchImageAsBase64(url, true), engine.FALLBACK_PLACEHOLDER_DATA_URL);
+      assert.equal(await engine.fetchImageAsBase64(url, false), url,
+        'and is passed through when no placeholder was asked for');
+    } finally {
+      if (savedChrome !== undefined) scope.chrome = savedChrome;
+    }
+  });
 });
 
-test('F25.5: pre-render pipeline substitutes quote post media URLs', () => {
-  const quoteMedia = [{ type: 'image' as const, url: 'https://pbs.twimg.com/quote.jpg' }];
-  const proxied = quoteMedia.map(m => ({ ...m, url: 'data:image/jpeg;base64,quote==' }));
-  assert.ok(proxied[0].url.startsWith('data:'));
+test('F25.5: an image that is already a data URL is not sent through the proxy', async () => {
+  const engine = await exportEngine();
+  await withContainerEnv(async () => {
+    const dataUrl = 'data:image/png;base64,AAAA';
+    assert.equal(await engine.fetchImageAsBase64(dataUrl, true), dataUrl);
+    assert.equal(await engine.fetchImageAsBase64('', true), '', 'and an empty source stays empty');
+  });
 });
 
 // -------------------------------------------------------------
 // F26: Clipboard Copy with Fallback
+//
+// The decision is `exportBlobWithFallback`'s, and where the blob ended up is
+// read off the page: a copy is what the clipboard was handed, a download is the
+// `<a download>` the fallback appended and clicked.
 // -------------------------------------------------------------
-test('F26.1: navigator.clipboard.write succeeds when document has focus', async () => {
-  const clipboard = new MockClipboard();
-  const blob = new Blob(['pngdata'], { type: 'image/png' });
-  const item = new MockClipboardItem({ 'image/png': blob });
+const pngBlob = (): Blob => new Blob(['pngdata'], { type: 'image/png' });
 
-  await clipboard.write([item]);
-  assert.equal(clipboard.writtenItems.length, 1);
+/**
+ * Installs a clipboard on `navigator` for the duration of `body` and returns the
+ * download anchors left in the document. Read before the cleanup timer fires.
+ */
+test('F26.1: navigator.clipboard.write succeeds when document has focus', async () => {
+  await withContainerEnv(async () => {
+    const engine = await exportEngine();
+    const anchors = await withClipboard('none', async (clipboard) => {
+      const result = await engine.exportBlobWithFallback(pngBlob(), 'copy');
+      assert.equal(result.success, true);
+      assert.equal(result.method, 'clipboard', 'a working clipboard is the path taken');
+      assert.equal(clipboard.writtenItems.length, 1, 'the PNG is what has to be on the clipboard');
+      assert.deepEqual(clipboard.writtenItems[0].types, ['image/png']);
+    });
+    assert.equal(anchors.length, 0, 'a copy that worked must not also download');
+  });
 });
 
+/** The refusal modes all end the same way, and the blob has to leave the page. */
+async function expectDownloadFallback(mode: ClipboardFailureMode, filename?: string): Promise<void> {
+  await withContainerEnv(async () => {
+    const engine = await exportEngine();
+    let result: { success: boolean; method: string; filename: string } | null = null;
+
+    const anchors = await withClipboard(mode, async () => {
+      result = await engine.exportBlobWithFallback(pngBlob(), 'copy', filename);
+    });
+
+    assert.equal(result!.success, true, 'a refused clipboard that ends in a download is not a failure');
+    assert.equal(result!.method, 'download');
+    assert.equal(anchors.length, 1, 'the blob has to get out of the page somehow');
+    assert.equal(anchors[0].getAttribute('download'), result!.filename);
+  });
+}
+
 test('F26.2: falls back to download when document is unfocused', async () => {
-  const clipboard = new MockClipboard();
-  clipboard.failureMode = 'unfocused';
-
-  const tracker = new DownloadTracker();
-  const blob = new Blob(['pngdata'], { type: 'image/png' });
-
-  let methodUsed = '';
-  try {
-    const item = new MockClipboardItem({ 'image/png': blob });
-    await clipboard.write([item]);
-    methodUsed = 'clipboard';
-  } catch {
-    tracker.trackDownload(blob, 'post-to-card-20.png');
-    methodUsed = 'download';
-  }
-
-  assert.equal(methodUsed, 'download');
-  assert.equal(tracker.downloads.length, 1);
-  assert.equal(tracker.downloads[0].filename, 'post-to-card-20.png');
+  await expectDownloadFallback('unfocused', 'post-to-card-20.png');
 });
 
 test('F26.3: falls back to download when user activation gesture expires', async () => {
-  const clipboard = new MockClipboard();
-  clipboard.failureMode = 'gesture_expired';
-
-  const tracker = new DownloadTracker();
-  const blob = new Blob(['pngdata'], { type: 'image/png' });
-
-  let methodUsed = '';
-  try {
-    const item = new MockClipboardItem({ 'image/png': blob });
-    await clipboard.write([item]);
-    methodUsed = 'clipboard';
-  } catch {
-    tracker.trackDownload(blob, 'post-to-card-100.png');
-    methodUsed = 'download';
-  }
-
-  assert.equal(methodUsed, 'download');
-  assert.equal(tracker.downloads.length, 1);
+  await expectDownloadFallback('gesture_expired', 'post-to-card-100.png');
 });
 
 test('F26.4: falls back to download when clipboard permission is denied', async () => {
-  const clipboard = new MockClipboard();
-  clipboard.failureMode = 'permission_denied';
-
-  const tracker = new DownloadTracker();
-  const blob = new Blob(['pngdata'], { type: 'image/png' });
-
-  let methodUsed = '';
-  try {
-    const item = new MockClipboardItem({ 'image/png': blob });
-    await clipboard.write([item]);
-    methodUsed = 'clipboard';
-  } catch {
-    tracker.trackDownload(blob, 'post-to-card-200.png');
-    methodUsed = 'download';
-  }
-
-  assert.equal(methodUsed, 'download');
-  assert.equal(tracker.downloads.length, 1);
+  await expectDownloadFallback('permission_denied', 'post-to-card-200.png');
 });
 
-test('F26.5: download trigger creates hidden anchor, clicks it, and revokes object URL', () => {
-  const tracker = new DownloadTracker();
-  const blob = new Blob(['imagedata'], { type: 'image/png' });
-  tracker.trackDownload(blob, 'card.png');
+test('F26.5: download trigger creates hidden anchor, clicks it, and revokes object URL', async () => {
+  await withContainerEnv(async ({ doc }) => {
+    const engine = await exportEngine();
 
-  assert.equal(tracker.downloads[0].clicked, true);
-  tracker.markRevoked('card.png');
-  assert.equal(tracker.downloads[0].revoked, true);
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const realCreate = URL.createObjectURL;
+    const realRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = (blob: Blob) => {
+      const url = realCreate(blob);
+      created.push(url);
+      return url;
+    };
+    URL.revokeObjectURL = (url: string) => {
+      revoked.push(url);
+      realRevoke(url);
+    };
+
+    let clicked = 0;
+    const realClick = DomAnchorElement.prototype.click;
+    DomAnchorElement.prototype.click = function () {
+      clicked++;
+      realClick.call(this);
+    };
+
+    try {
+      engine.downloadBlobAsPng(pngBlob(), 'card.png');
+
+      const anchors = doc.body.querySelectorAll('a[download]');
+      assert.equal(anchors.length, 1, 'the download is an anchor in the page');
+      assert.equal(anchors[0].getAttribute('download'), 'card.png');
+      assert.equal(anchors[0].style.display, 'none', 'and it is not something for the user to see');
+      assert.equal(clicked, 1, 'the anchor has to be clicked for the browser to save anything');
+      assert.deepEqual(created.length, 1, 'the blob was given a URL to be saved from');
+
+      // The cleanup is on a timer, so the anchor outlives the call on purpose.
+      await new Promise((resolve) => setTimeout(resolve, 2100));
+
+      assert.equal(doc.body.querySelectorAll('a[download]').length, 0, 'the anchor is cleaned up');
+      // Only this test's URL is asserted on: the earlier fallback tests left
+      // their own anchors on the same timer, and those fire during this wait.
+      assert.ok(revoked.includes(created[0]), 'and the object URL is released rather than leaked');
+    } finally {
+      URL.createObjectURL = realCreate;
+      URL.revokeObjectURL = realRevoke;
+      DomAnchorElement.prototype.click = realClick;
+    }
+  });
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2900,6 +3760,22 @@ test('F29.1: detects GIF media vs standard video containers', () => {
   assert.equal(typeOf(VIDEO_POSTER_ONLY_HTML), 'video', 'and a video poster without one stays a video');
 });
 
+test('F29.1b: a player marked only by its aria-label is the container the card reads', () => {
+  // Of the four ways production names a video container, this is the one whose
+  // attribute value contains a space. The selector engine used to split members
+  // on whitespace, so it read `div[aria-label="Embedded` — no closing bracket,
+  // no match — and the `<video>` element itself became the container. The
+  // duration lives on the player, beside the poster, so the card lost it: the
+  // frame rendered with no `1:42` on it.
+  const tweet = extractTweetData(createDomElement(VIDEO_ARIA_LABEL_ONLY_HTML) as unknown as Element);
+  assert.equal(tweet?.media?.[0]?.type, 'video', 'the post is a video');
+  assert.equal(
+    tweet?.media?.[0]?.duration,
+    '1:42',
+    'and the duration beside the poster is read off the player that holds it'
+  );
+});
+
 test('F29.2: extracts video duration timestamp from video controls', () => {
   const media = extractTweetData(createDomElement(VIDEO_WITH_DURATION_HTML) as unknown as Element)?.media;
 
@@ -3026,6 +3902,299 @@ test('F30.6: the popup switch paints a focus ring on the control that is visible
 });
 
 
+/**
+ * The popup's own copy table, read out of the shipped file.
+ *
+ * The popup cannot export anything: it is a plain script loaded by a `<script>`
+ * tag, not a build entry. Its user-facing strings are data in that file, so the
+ * test reads them from the source rather than restating them — a rewording stays
+ * allowed, and the assertion is still about what the popup actually shows.
+ */
+const POPUP_SOURCE = fs.readFileSync(path.resolve(__dirname, '../../public/popup.js'), 'utf-8');
+
+function popupCopy(key: string, locale: string): string {
+  const block = POPUP_SOURCE.slice(POPUP_SOURCE.indexOf(`'${locale}':`));
+  const match = new RegExp(`${key}:\\s*'([^']*)'`).exec(block);
+  assert.ok(match, `public/popup.js has no ${locale} copy for ${key}`);
+  return match![1];
+}
+
+/**
+ * Loads the real popup against a document holding its markup, then clicks the
+ * quick-trigger button with `chrome.tabs.sendMessage` answering `outcome`.
+ *
+ * The popup is the one shipped file nothing loaded: `node --check` only parses
+ * it, and no test drove it, so its three send outcomes could collapse into one
+ * branch without failing anything. It goes through the SSR pipeline the way
+ * `index.ts` does — with a distinct query per load, since a plain script has no
+ * exports and the module cache would otherwise make the second load a no-op.
+ *
+ * The locale comes from the popup itself (`documentElement.lang`, which it
+ * writes from the browser's language) rather than being assumed: the copy table
+ * is per locale, and a test that hard-coded `en-US` would fail on a machine
+ * whose browser is not English.
+ */
+let popupLoads = 0;
+
+function popupMarkup(): string {
+  return `
+    <span id="toggle-title"></span><span id="toggle-desc"></span><span id="tip-text"></span>
+    <input id="toggle-button" type="checkbox"><span id="btn-text"></span>
+    <button id="btn-trigger-now"></button><div id="status-text"></div>`;
+}
+
+async function withPopup(
+  outcome: SendOutcome,
+  body: (env: {
+    status: () => string;
+    closed: () => boolean;
+    locale: string;
+    sent: () => unknown;
+    /** The node the popup paints a given string into, by its id. */
+    text: (id: string) => string;
+    /** Whether the button-hiding checkbox ended up ticked. */
+    checked: () => boolean;
+    /** The preference the popup left in storage, read back through the API. */
+    storedPrefs: () => Promise<Record<string, unknown>>;
+    /** Lets the popup's own deferred work (its status timer, its close) run. */
+    settle: (ms: number) => Promise<void>;
+  }) => Promise<void>,
+  options: {
+    /** What `chrome.storage.local` already holds when the popup loads. */
+    prefs?: Record<string, unknown>;
+    /** What the browser reports as its language. */
+    language?: string;
+    /** What `chrome.tabs` looks like: one tab, none, or no API at all. */
+    tabs?: 'one' | 'none' | 'absent';
+    /** What the user does to the popup. Defaults to pressing the trigger. */
+    interact?: (doc: DomDocument) => void;
+  } = {}
+): Promise<void> {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = {
+    document: scope.document,
+    chrome: scope.chrome,
+    window: scope.window,
+  };
+  // Node defines `navigator` as a getter-only accessor, so the language has to
+  // go in through the descriptor rather than by assignment.
+  const savedNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const doc = new DomDocument();
+  doc.body.innerHTML = popupMarkup();
+
+  const chromeMock = createChromeMock();
+  chromeMock.tabs.outcome = outcome;
+  if (options.tabs === 'none') chromeMock.tabs.queryReturnsNone = true;
+  if (options.tabs === 'absent') delete (chromeMock as unknown as { tabs?: unknown }).tabs;
+  // Seeded through the same API the popup reads, rather than by reaching into
+  // the mock, so the popup sees exactly what a returning user's profile holds.
+  if (options.prefs) await chromeMock.storage.local.set({ post_to_card_user_prefs: options.prefs });
+
+  let didClose = false;
+
+  scope.document = doc;
+  scope.chrome = chromeMock;
+  scope.window = { close: () => { didClose = true; } };
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { language: options.language ?? 'en-US' },
+    configurable: true,
+    writable: true,
+  });
+
+  const savedLog = console.log;
+  console.log = () => {};
+  try {
+    popupLoads++;
+    await loadModule(`/public/popup.js?load=${popupLoads}`);
+    (options.interact ?? ((d: DomDocument) => d.getElementById('btn-trigger-now')!.click()))(doc);
+    await body({
+      status: () => doc.getElementById('status-text')!.textContent,
+      closed: () => didClose,
+      locale: doc.documentElement.lang,
+      sent: () => (options.tabs === 'absent' ? [] : chromeMock.tabs.sent),
+      text: (id) => doc.getElementById(id)!.textContent,
+      checked: () => Boolean((doc.getElementById('toggle-button') as unknown as { checked?: boolean }).checked),
+      storedPrefs: async () => {
+        const items = await chromeMock.storage.local.get('post_to_card_user_prefs');
+        return (items?.post_to_card_user_prefs ?? {}) as Record<string, unknown>;
+      },
+      settle: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
+  } finally {
+    console.log = savedLog;
+    scope.document = saved.document;
+    scope.chrome = saved.chrome;
+    scope.window = saved.window;
+    if (savedNavigator) Object.defineProperty(globalThis, 'navigator', savedNavigator);
+    else delete scope.navigator;
+  }
+}
+
+test('F30.7: the popup tells a missing receiver apart from a receiver that found no tweet', async () => {
+  // The two are different problems with different fixes -- "open X" versus
+  // "hover a tweet" -- and the manifest grants neither "tabs" nor "activeTab",
+  // so `activeTab.url` cannot tell them apart. Only the send can: Chrome sets
+  // `runtime.lastError` when there is no content script to receive at all.
+  await withPopup({ kind: 'no-receiver' }, ({ status, closed, locale }) => {
+    assert.equal(
+      status(),
+      popupCopy('notOnX', locale),
+      'a send with no receiver is the tab not being X, not a missing hover'
+    );
+    assert.equal(closed(), false, 'the popup stays open when nothing was opened');
+  });
+
+  await withPopup({ kind: 'response', response: { success: false } }, ({ status, closed, locale }) => {
+    assert.equal(
+      status(),
+      popupCopy('hoverFirst', locale),
+      'a receiver that has no tweet under the pointer asks for a hover instead'
+    );
+    assert.equal(closed(), false);
+  });
+
+  await withPopup({ kind: 'response', response: { success: true } }, async ({ status, closed, locale, settle }) => {
+    assert.equal(status(), popupCopy('cardOpened', locale));
+    assert.equal(closed(), false, 'the popup lingers for a moment so the message is readable');
+    await settle(450);
+    // The popup gets out of the way once the card is open, which is the point
+    // of the button. Waited for rather than asserted immediately: the close is
+    // on a 400ms timer, and asserting before it fires would be asserting the
+    // absence of the behaviour.
+    assert.equal(closed(), true, 'a card that opened closes the popup');
+  });
+});
+
+test('F30.8: the popup asks the content script for the active tab, with the trigger message', async () => {
+  // The send is the thing that decides all three outcomes above, so what it
+  // carries is part of the contract: the content script answers
+  // `TRIGGER_ACTIVE_CARD` and nothing else, and it is addressed to the tab the
+  // query returned rather than to the extension.
+  await withPopup({ kind: 'response', response: { success: false } }, ({ sent }) => {
+    assert.deepEqual(
+      sent(),
+      [{ tabId: 1, message: { type: 'TRIGGER_ACTIVE_CARD' } }],
+      'the popup must ask the active tab for its card, once'
+    );
+  });
+});
+
+test('F30.9: the popup paints the stored preference over the browser default', async () => {
+  // Both branches of the read the popup does on load were unreachable from a
+  // test: `withPopup` never seeded storage, so the checkbox was `true` whether
+  // the popup honoured the stored value or hard-coded it, and the locale block
+  // no-opped. A returning user who had hidden the button got it ticked back, and
+  // nothing could fail on it.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ checked, locale, text }) => {
+      assert.equal(checked(), false, 'a stored "off" leaves the box unticked');
+      assert.equal(locale, 'zh-CN', 'and a stored locale beats the browser language');
+      assert.equal(
+        text('toggle-title'),
+        popupCopy('toggleTitle', 'zh-CN'),
+        'the whole panel is repainted in the stored language, not only its lang attribute'
+      );
+    },
+    { prefs: { showActionBarButton: false, locale: 'zh-CN' }, language: 'en-US' }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ checked, locale }) => {
+      assert.equal(checked(), true, 'an explicit "on" leaves the box ticked');
+      assert.equal(locale, 'en-US', 'and a stored locale the popup does not know is ignored');
+    },
+    { prefs: { showActionBarButton: true, locale: 'klingon' }, language: 'en-US' }
+  );
+});
+
+test('F30.10: the popup reads its language off the browser when storage has none', async () => {
+  // The locale table is hand-synced with `src/content/i18n.ts` -- public/ is
+  // copied into the bundle verbatim and cannot import from src/ -- so the only
+  // thing keeping the duplicate honest is a test that drives it. Nothing pinned
+  // `browserLocale`, and a mutation to a constant survived.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ locale, text }) => {
+      assert.equal(locale, 'zh-CN', 'a Chinese browser gets the Chinese popup');
+      assert.equal(text('btn-text'), popupCopy('trigger', 'zh-CN'));
+    },
+    { language: 'zh-CN', prefs: {} }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ locale, text }) => {
+      assert.equal(locale, 'en-US', 'and anything else gets English');
+      assert.equal(text('btn-text'), popupCopy('trigger', 'en-US'));
+    },
+    { language: 'de-DE', prefs: {} }
+  );
+});
+
+test('F30.11: the toggle writes the preference back and says so', async () => {
+  // The change handler is the only writer of `showActionBarButton`, and it was
+  // outside every tier: no test dispatched a change on the checkbox, so both the
+  // stored value and the status string could have been wrong without a failure.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    async ({ status, storedPrefs }) => {
+      assert.equal(status(), popupCopy('buttonHidden', 'en-US'), 'turning it off says so');
+      assert.equal(
+        (await storedPrefs()).showActionBarButton,
+        false,
+        'and the preference is written to the key the content script reads, not only painted'
+      );
+    },
+    {
+      prefs: { showActionBarButton: true },
+      interact: (doc) => {
+        const box = doc.getElementById('toggle-button') as unknown as { checked: boolean };
+        box.checked = false;
+        box.dispatchEvent({ type: 'change', preventDefault: () => {} });
+      },
+    }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    async ({ status, storedPrefs }) => {
+      assert.equal(status(), popupCopy('buttonEnabled', 'en-US'), 'turning it back on says so');
+      assert.equal((await storedPrefs()).showActionBarButton, true);
+    },
+    {
+      prefs: { showActionBarButton: false },
+      interact: (doc) => {
+        const box = doc.getElementById('toggle-button') as unknown as { checked: boolean };
+        box.checked = true;
+        box.dispatchEvent({ type: 'change', preventDefault: () => {} });
+      },
+    }
+  );
+});
+
+test('F30.12: a popup with no active tab says so instead of doing nothing', async () => {
+  // `query` answering an empty list is the reachable half of the guard; the
+  // `chrome.tabs` guard is defensive, but a popup that stays silent on either
+  // looks identical to one that worked.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ status }) => {
+      assert.equal(status(), popupCopy('noActiveTab', 'en-US'), 'no tab is its own message');
+    },
+    { tabs: 'none' }
+  );
+
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ status }) => {
+      assert.equal(status(), popupCopy('noTabAccess', 'en-US'), 'no tabs API is another');
+    },
+    { tabs: 'absent' }
+  );
+});
+
 // -------------------------------------------------------------
 // F32: Truncated Post Indicator
 // X renders long posts in the timeline as a preview plus a "Show more"
@@ -3116,26 +4285,203 @@ test('F32.5: both locales name the truncated state', () => {
   assert.ok(TRANSLATIONS['en-US'].truncatedContent, 'en-US has the notice copy');
 });
 
+// -------------------------------------------------------------
+// F31: Content Script Entry Wiring
+//
+// `src/content/index.ts` is the file the manifest loads, and nothing imported
+// it: the bridge it installs before the first scan, the click that opens the
+// card, and the message the popup sends were all unverified, so a broken wire
+// between the two halves of the extension could not fail a single test.
+// -------------------------------------------------------------
+
+/**
+ * Installs everything the entry point reads, loads it, then runs `body`.
+ *
+ * The entry is a module with import-time side effects, so it goes through the
+ * SSR pipeline — with a distinct query each load, because the pipeline caches
+ * by id and a second load would otherwise be a no-op the test would read as
+ * "the entry did nothing".
+ */
+async function withEntryEnv(
+  options: {
+    readyState?: 'loading' | 'complete';
+    /** Fills the page before the entry loads, as a real page already is. */
+    before?: (doc: DomDocument) => void;
+    /**
+     * `inert` (the default) installs a MutationObserver that never delivers
+     * anything, so the only thing that can find a post is the entry's own scan.
+     *
+     * It defaults to inert because `injection.ts` keeps its observer in a
+     * module-level variable and the container's document is reused across these
+     * tests: an observer left live by one load keeps watching the same body for
+     * the rest of the file, so a later test could not tell its own scan from an
+     * earlier load's observer.
+     */
+    observer?: 'live' | 'inert';
+  },
+  body: (env: {
+    doc: DomDocument;
+    chrome: ReturnType<typeof createChromeMock>;
+    /** Window event types, in the order the entry registered them. */
+    registered: string[];
+    flushEffects: () => Promise<void>;
+  }) => Promise<void>
+): Promise<void> {
+  await withContainerEnv(async ({ doc, closeCardModal, flushEffects }) => {
+    const scope = globalThis as Record<string, unknown>;
+    const saved = { chrome: scope.chrome, MutationObserver: scope.MutationObserver };
+    const chromeMock = createChromeMock();
+    scope.chrome = chromeMock;
+    scope.MutationObserver =
+      options.observer === 'live'
+        ? DomMutationObserver
+        : class {
+            observe(): void {}
+            disconnect(): void {}
+            takeRecords(): unknown[] {
+              return [];
+            }
+          };
+    doc.readyState = options.readyState ?? 'complete';
+
+    const savedLog = console.log;
+    console.log = () => {};
+
+    // The order the entry wires things up in is part of the claim, so the
+    // registrations are recorded rather than merely counted.
+    const registered: string[] = [];
+    const liveWindow = scope.window as { addEventListener: (type: string, cb: (evt: any) => void) => void };
+    const realAdd = liveWindow.addEventListener.bind(liveWindow);
+    liveWindow.addEventListener = (type: string, cb: (evt: any) => void) => {
+      registered.push(type);
+      realAdd(type, cb);
+    };
+
+    try {
+      options.before?.(doc);
+      entryLoads++;
+      await loadModule(`/src/content/index.ts?load=${entryLoads}`);
+      await body({ doc, chrome: chromeMock, registered, flushEffects });
+    } finally {
+      liveWindow.addEventListener = realAdd;
+      console.log = savedLog;
+      closeCardModal();
+      if (saved.chrome !== undefined) scope.chrome = saved.chrome;
+      else delete scope.chrome;
+      scope.MutationObserver = saved.MutationObserver;
+    }
+  });
+}
+
+/** Distinct per load, so the SSR module cache cannot turn a load into a no-op. */
+let entryLoads = 0;
+
+/** A page that already has one post on it, as the content script finds it. */
+const withOnePost = (doc: DomDocument): void => {
+  doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+};
+
+test('F31.1: the entry installs the GraphQL bridge before anything else it wires', async () => {
+  await withEntryEnv({ before: withOnePost }, async ({ registered }) => {
+    // The bridge installs itself once per page, so this is only observable on
+    // the first entry load — which is what this is.
+    assert.ok(registered.includes('message'), 'the entry never installed the GraphQL bridge');
+    // The bridge is installed first on purpose: a payload that arrives during
+    // startup would be dropped by a bridge that came up after the injection.
+    assert.ok(
+      registered.indexOf('message') < registered.indexOf('keydown'),
+      `the bridge has to be listening before the injection wires up: ${registered.join(', ')}`
+    );
+  });
+});
+
+test('F31.2: while the document is still loading the entry waits for DOMContentLoaded', async () => {
+  await withEntryEnv({ readyState: 'loading', before: withOnePost }, async ({ doc, registered }) => {
+    assert.deepEqual(registered, [], 'nothing may be wired while the document is still parsing');
+
+    doc.readyState = 'complete';
+    doc.dispatchEvent({ type: 'DOMContentLoaded' });
+
+    assert.ok(doc.querySelector('[data-post-to-card-btn="true"]'),
+      'the deferred start has to run once the document is ready');
+    assert.ok(registered.includes('keydown'), 'and to wire the same things it would have anyway');
+  });
+});
+
+test('F31.3: the first scan injects a trigger, and clicking it opens the card for that post', async () => {
+  await withEntryEnv({ before: withOnePost }, async ({ doc, flushEffects }) => {
+    const trigger = doc.querySelector('[data-post-to-card-btn="true"]');
+    assert.ok(trigger, 'the entry has to scan the page it starts on');
+
+    trigger.click();
+    await flushEffects();
+
+    const container = doc.querySelector('post-to-card-container') as any;
+    assert.ok(container, 'clicking the trigger must open the card');
+    const card = container.shadow.querySelector('#post-to-card-export-target');
+    assert.ok(card, 'the card did not render into the shadow root');
+    assert.ok(card.innerHTML.includes('Jack Dorsey'),
+      'the card has to be built from the post the trigger belongs to');
+  });
+});
+
+test('F31.4: the popup’s TRIGGER_ACTIVE_CARD message is answered', async () => {
+  await withEntryEnv({ before: withOnePost }, async ({ doc, chrome }) => {
+    const listener = chrome.runtime.listeners[0];
+    assert.ok(listener, 'the entry never listened for extension messages');
+
+    let response: { success?: boolean } | null = null;
+    listener({ type: 'TRIGGER_ACTIVE_CARD' } as never, {} as never, (value) => {
+      response = value as { success?: boolean };
+    });
+
+    assert.deepEqual(response, { success: true },
+      'the popup is told whether a card opened, and the post on screen is the one it opens');
+    assert.ok(doc.querySelector('post-to-card-container'), 'and the card really opened');
+  });
+});
+
+test('F31.5b: the second deferred scan covers a post the first one could not see', async () => {
+  // Two scans, and the entry runs them for a reason: X hydrates a deep-linked
+  // feed in stages, and a post that lands after the first scan has no other
+  // way in here. F31.5 only proves the 500ms pass works — it appends the post
+  // at startup and waits 600ms — so deleting the 1500ms pass left the suite
+  // green. This one appends *after* the first scan has run.
+  await withEntryEnv({}, async ({ doc }) => {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    assert.equal(doc.querySelector('[data-post-to-card-btn="true"]'), null,
+      'the first scan has already run and found nothing');
+
+    doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    assert.ok(doc.querySelector('[data-post-to-card-btn="true"]'),
+      'the later scan is what covers a post arriving after the first one');
+  });
+});
+
+test('F31.5: the deferred scans pick up a post that was not there at startup', async () => {
+  // A post that arrives after startup can only be found by the entry's own
+  // deferred scans, because the observer is inert here. With a live observer this
+  // claim was not tested at all: the observer fires at 150ms, well before the
+  // first scan at 500ms, and deleting both scans left the test green.
+  await withEntryEnv({}, async ({ doc }) => {
+    assert.equal(doc.querySelector('[data-post-to-card-btn="true"]'), null,
+      'the page starts with no posts on it');
+
+    // A feed hydrates its posts after the content script runs.
+    doc.body.appendChild(createDomElement(SINGLE_TWEET_HTML));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    assert.ok(doc.querySelector('[data-post-to-card-btn="true"]'),
+      'the deferred scan is what covers posts the first pass could not see');
+  });
+});
+
 
 // -------------------------------------------------------------
 // Test Execution Runner for Tier 1
 // -------------------------------------------------------------
-export async function runTier1(): Promise<{ total: number; passed: number; failed: number; results: TestResult[] }> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: any) {
-      results.push({ name: t.name, passed: false, error: err?.message || String(err), durationMs: Date.now() - start });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTier1() {
+  return run();
 }

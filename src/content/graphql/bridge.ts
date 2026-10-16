@@ -7,8 +7,9 @@
  * adapter.
  *
  * Every captured payload also feeds the reply-linkage index, which is the only
- * proof of a thread a list view can offer (see `replyLinks.ts`). That read
- * happens before the body is dropped, so only conversation bodies are retained.
+ * proof of a thread a list view can offer (the index lives in this file). That
+ * read happens before the body is dropped, so only conversation bodies are
+ * retained.
  */
 
 import type { ThreadData } from '../../types/tweet.ts';

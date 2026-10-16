@@ -12,14 +12,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseTweetDetailResponse, parseReplyLinkage } from '../../src/content/graphql/parse.ts';
 import { applyDomTranslation } from '../../src/content/graphql/bridge.ts';
+import { createSuite } from '../env/harness.ts';
 import type { ThreadData } from '../../src/types/tweet.ts';
 import {
   TWEET_DETAIL_THREAD_JSON,
   TWEET_DETAIL_QUOTE_JSON,
   TWEET_DETAIL_RETWEET_JSON,
   TWEET_DETAIL_TOMBSTONE_JSON,
+  TWEET_DETAIL_QUOTE_TOMBSTONE_JSON,
   TWEET_DETAIL_CURSOR_ONLY_JSON,
   TWEET_DETAIL_VISIBILITY_JSON,
+  TWEET_RESULT_BY_REST_ID_JSON,
   TWEET_DETAIL_NEW_USER_SHAPE_JSON,
   TWEET_DETAIL_ENTITIES_JSON,
   TWEET_DETAIL_MEDIA_PERMALINK_JSON,
@@ -29,20 +32,7 @@ import {
   TWEET_DETAIL_NESTED_QUOTE_JSON,
 } from '../fixtures/graphql.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 test('gql.1: a conversation yields every tweet and marks the thread', () => {
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1');
@@ -533,28 +523,41 @@ test('gql.30: a chain deeper than the card prints is not extracted', () => {
   assert.equal(inner!.quotePost, undefined, 'and the third is not: the card prints two');
 });
 
-export async function runTierGraphQL(): Promise<{
-  total: number;
-  passed: number;
-  failed: number;
-  results: TestResult[];
-}> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
+test('gql.31: a TweetResultByRestId body is read as a one-post thread', () => {
+  // The operation is watched and cached by name, so a body it delivers has to
+  // be usable. It carries no instruction list -- only `data.tweet.result` --
+  // and before this branch existed every such payload reported "no tweets in
+  // response" and the status page silently lost its GraphQL channel.
+  const parsed = parseTweetDetailResponse(TWEET_RESULT_BY_REST_ID_JSON, 'TweetResultByRestId', 'q1');
+  assert.ok(parsed.thread, `expected a thread, got ${parsed.parseError}`);
+  assert.equal(parsed.thread!.tweets.length, 1, 'this operation carries exactly the post it was asked for');
+  assert.equal(parsed.thread!.isSingle, true);
+  assert.equal(parsed.thread!.tweets[0].id, '6001');
+  assert.equal(parsed.thread!.tweets[0].author.handle, '@rest');
 
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      results.push({ name: t.name, passed: true, durationMs: Date.now() - start });
-      passed++;
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.stack || err.message : String(err);
-      results.push({ name: t.name, passed: false, error: errorMsg, durationMs: Date.now() - start });
-      failed++;
-    }
-  }
+  // And the target-id contract still holds: a different id is a miss, not a
+  // card for whatever post the payload happened to hold.
+  const miss = parseTweetDetailResponse(TWEET_RESULT_BY_REST_ID_JSON, 'TweetResultByRestId', 'q1', '6002');
+  assert.equal(miss.thread, null);
+});
 
-  return { total: tests.length, passed, failed, results };
+test('gql.32: a quote of a deleted post is a tombstone, not the absence of a quote', () => {
+  // `quoted_status_result` present with a tombstone result and no
+  // `quoted_status_result` at all are different posts, and the DOM channel
+  // answers them differently (`extractor.ts` `isUnavailableMarker` ->
+  // `Card.tsx` tombstone branch). Collapsing both to `undefined` made the card
+  // depend on which channel answered.
+  const parsed = parseTweetDetailResponse(TWEET_DETAIL_QUOTE_TOMBSTONE_JSON, 'TweetDetail', 'q1');
+  const quote = parsed.thread?.tweets[0].quotePost;
+  assert.ok(quote, 'a quoted-but-deleted post still produces a quote level');
+  assert.equal(quote!.isUnavailable, true);
+  assert.equal(quote!.text, '', 'the tombstone carries no body to print');
+
+  // The control: the same post without the field quotes nobody.
+  const noQuote = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1');
+  assert.equal(noQuote.thread?.tweets[0].quotePost, undefined);
+});
+
+export function runTierGraphQL() {
+  return run();
 }

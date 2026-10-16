@@ -6,6 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { DomElement } from '../env/browser.ts';
+import { createSuite } from '../env/harness.ts';
 import {
   TRANSLATIONS,
   getTranslation,
@@ -16,20 +17,7 @@ import {
   type Locale,
 } from '../../src/content/i18n.ts';
 
-export interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export type TestFn = () => void | Promise<void>;
-
-const tests: Array<{ name: string; fn: TestFn }> = [];
-
-function test(name: string, fn: TestFn) {
-  tests.push({ name, fn });
-}
+const { test, run } = createSuite();
 
 // 1. Translation Dictionary Parity
 test('i18n.1: TRANSLATIONS dictionary has 100% key parity between zh-CN and en-US', () => {
@@ -239,30 +227,6 @@ test('i18n.9: the preview summary has a singular form for a one-post card', () =
   }
 });
 
-export async function runTierI18n(): Promise<{
-  total: number;
-  passed: number;
-  failed: number;
-  results: TestResult[];
-}> {
-  const results: TestResult[] = [];
-  let passed = 0;
-  let failed = 0;
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      await t.fn();
-      const elapsed = Date.now() - start;
-      results.push({ name: t.name, passed: true, durationMs: elapsed });
-      passed++;
-    } catch (err: unknown) {
-      const elapsed = Date.now() - start;
-      const errorMsg = err instanceof Error ? err.stack || err.message : String(err);
-      results.push({ name: t.name, passed: false, error: errorMsg, durationMs: elapsed });
-      failed++;
-    }
-  }
-
-  return { total: tests.length, passed, failed, results };
+export function runTierI18n() {
+  return run();
 }

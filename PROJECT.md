@@ -27,7 +27,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 5. **Clean Multi-Entry Vite Build Pipeline**:
    - `background.js` 输出为标准 ESM 脚本。
    - `content.js` 输出为完全自包含的 IIFE 脚本（无顶层 import/export）。
-   - 严控依赖：仅 `preact`, `modern-screenshot`, `qrcode-generator`，零外部依赖，100% 离线运行。
+   - 严控依赖：仅 `preact`, `modern-screenshot`, `qrcode-generator`, `lucide-preact`，零外部服务，100% 离线运行。
 
 ---
 
@@ -36,7 +36,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 |---|---------|-------------|-----------|--------|
 | F1 | Multi-Entry Build Pipeline | Vite 打包出 IIFE content.js 与 ESM background.js，支持 TS 检查与 Manifest V3 | M1 | ORIGINAL_REQUEST §R4 |
 | F2 | Manifest V3 Packaging | manifest.json 配置，申明权限、twimg 域名权限、content_scripts | M1 | ORIGINAL_REQUEST §R4 |
-| F3 | Minimal Dependencies | 仅引入 preact, modern-screenshot, qrcode-generator | M1 | ORIGINAL_REQUEST §R4 |
+| F3 | Minimal Dependencies | 仅引入 preact, modern-screenshot, qrcode-generator, lucide-preact | M1 | ORIGINAL_REQUEST §R4 |
 | F4 | Background CORS Image Proxy | Background Service Worker 监听消息代理请求 twimg 图片并返回 Base64 Data URL | M2 | ORIGINAL_REQUEST §R3 |
 | F5 | Offline & Security Guarantee | 零外部远程调用，仅在本地及 twimg 授权域名内请求资源 | M2 | ORIGINAL_REQUEST §R3 |
 | F6 | Tweet Action Bar Injection | 在 div[role="group"] 中动态插入 "✨" 按钮，携带防重复属性 | M3 | ORIGINAL_REQUEST §R1 |
@@ -60,7 +60,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F24 | Modern-Screenshot Retina Export | 调用 modern-screenshot 生成 2x/3x 高分辨率 PNG | M5 | ORIGINAL_REQUEST §R3 |
 | F25 | Canvas CORS Taint Prevention | 导出前置换 Base64 Data URL，彻底阻绝 SecurityError | M5 | ORIGINAL_REQUEST §R3 |
 | F26 | Clipboard Copy with Fallback | 复制图片至剪贴板，异常时自动平滑降级为本地 PNG 下载 | M5 | ORIGINAL_REQUEST §R3 |
-| F27 | E2E Testing Suite (Tiers 1-4) | 4 层验收测试套件，全面覆盖全部特性与真实用例 | M-TEST | Acceptance Criteria |
+| F27 | E2E Testing Suite (Tiers 1-4 + 5 个专项 tier) | 4 层验收测试套件（功能/边界/交互/真实用例）加 i18n、GraphQL、resolver、article、hygiene 五个专项 tier，全面覆盖全部特性与真实用例 | M-TEST | Acceptance Criteria |
 | F28 | Adversarial Testing & Audit | Tier 5 对抗性边缘强化与 Forensic Auditor 门禁审计 | M6 | Integrity Forensics |
 | F29 | Non-Obstructive Video Styling | 视频帖不透明胶囊角标，无渐变进度条、无压暗层（角标已自带底色），不遮挡高清 poster 与烧录字幕 | M6 | Feature Enhancement |
 | F30 | Configurable Action Button | 支持推文卡片按钮显隐开关、Popup 快捷管理、Alt+C 快捷键与多标签实时同步 | M6 | Feature Enhancement |
@@ -72,7 +72,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M-TEST | E2E Testing Track | 构建测试运行器、模拟 DOM 夹具、Tiers 1-4 全面测试集，输出 TEST_READY.md | none | DONE |
+| M-TEST | E2E Testing Track | 构建测试运行器、模拟 DOM 夹具、Tiers 1-4 全面测试集与 5 个专项 tier，输出 TEST_READY.md | none | DONE |
 | M1 | Project Setup & Clean Vite Packaging | package.json, tsconfig, vite multi-entry build, manifest.json, 类型定义 | none | DONE |
 | M2 | Background Service Worker & Image Proxy | Background 脚本、CORS 图片抓取与 Base64 转换、本地内存缓存 | M1 | DONE |
 | M3 | Twitter/X Platform Adapter & Extractor | 注入按钮、防抖 MutationObserver、推文与 Thread 连续提取、Emoji/URL 升级 | M1 | DONE |
@@ -109,7 +109,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 ```
 d:/Project/post-to-card/
 ├── manifest.json                  # Manifest V3 模板/配置
-├── package.json                   # 核心依赖 (preact, modern-screenshot, qrcode-generator)
+├── package.json                   # 核心依赖 (preact, lucide-preact, modern-screenshot, qrcode-generator)
 ├── tsconfig.json                  # TypeScript 配置
 ├── vite.config.ts                 # 三模式/多入口 Vite 构建管道
 ├── dev/                           # 仅开发用：可视化 UI harness
@@ -130,7 +130,8 @@ d:/Project/post-to-card/
 
 ## Data Channels
 
-推文数据有两条独立通道，`src/content/index.ts` 的 `resolveThreadData` 负责调度：
+推文数据有两条独立通道，`src/content/adapter/resolver.ts` 的 `resolveThread` 负责调度
+（`src/content/index.ts` 只是调用方）：
 
 | 通道 | 入口 | 何时使用 |
 |---|---|---|
