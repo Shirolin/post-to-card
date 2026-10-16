@@ -118,7 +118,7 @@ Every single feature defined in `PROJECT.md` has a minimum of 5 rigorous specifi
 - **F18 (Padding & Radius)**: 16px/32px/48px padding, follow-theme plus 0px/12px/20px radius, padding fallback, radius fallback, media corner synchronization, per-theme corner deferral.
 - **F19 (Fluid Expansion)**: Auto ratio unconstrained, 3:4 ratio 853px min-height, 16:9 ratio 360px min-height, downward expansion without clipping, overflow: visible.
 - **F20 (Offline QR Code)**: Vector SVG generation, UTM/tracking parameter stripping, crispEdges shape rendering, long URL support, 100% offline.
-- **F21 (Controls & Toggles)**: showQrCode toggle, showStats toggle, showTimestamp toggle, showWatermark toggle, reactive state updates.
+- **F21 (Controls & Toggles)**: showQrCode/showStats/showTimestamp toggles, showWatermark toggle, blurAuthor toggle, showPlayButton toggle, showActionBarButton toggle, reactive state updates, footer-switch suppression when the post lacks url/stats/timestamp, privacy group isolation, export-size hint beside the export button.
 - **F22 (Author Privacy Blur)**: CSS filter blur(6px), blurred display name class, blurred handle class, avatar overflow clipping, clean toggle removal.
 - **F23 (Modal UX & Scroll Lock)**: Esc key dismissal, backdrop click dismiss, dialog click stopPropagation, body overflow scroll lock, scrollbar width compensation.
 - **F24 (Retina Export)**: scale: 2 Retina export, scale: 3 Ultra-HD export, image decoding wait, data-export-ignore filter, transparent background.

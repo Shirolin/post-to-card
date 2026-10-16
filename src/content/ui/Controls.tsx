@@ -6,14 +6,13 @@ import { getTranslation, sanitizeLocale } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadScope, tweetKey, toggleExcluded, selectCurrentOnly } from './threadScope.ts';
+import { hasRenderableStats } from './Card.tsx';
 import {
   Languages,
   Palette,
   Maximize2,
   Scaling,
-  Space,
   Square,
-  SlidersHorizontal,
   Copy,
   Download,
   ListFilter,
@@ -24,11 +23,16 @@ import {
 } from 'lucide-preact';
 
 /**
- * How many themes the grid shows before "all themes" is expanded. Two rows in
- * the narrow panel: enough to show the rotation's range without an unbroken
- * wall of swatches pushing the controls below it off the screen.
+ * How many themes the grid shows before "all themes" is expanded.
+ *
+ * One row of four, not two rows of three. The grid is the single largest block in
+ * the panel, and two rows of swatches pushed every control below it -- the toggles
+ * included -- past the first screen. Dropping to a row buys back roughly 90px,
+ * which is what lets the footer toggles and the privacy toggle land in view too.
+ * Four still spans both ends of the rotation: a light paper, a dark one, a glassy
+ * one and a textured one.
  */
-const THEME_GRID_VISIBLE = 6;
+const THEME_GRID_VISIBLE = 4;
 
 export interface ControlsProps {
   config: CardConfig;
@@ -50,6 +54,8 @@ export interface ControlsProps {
 interface ToggleSpec {
   key: keyof CardConfig;
   label: string;
+  /** Why the toggle is there, shown on hover. The label alone does not say it. */
+  title?: string;
 }
 
 /**
@@ -96,7 +102,17 @@ function Segmented<T extends string>({
   );
 }
 
-function Toggle({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }): JSX.Element {
+function Toggle({
+  label,
+  checked,
+  onToggle,
+  title,
+}: {
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+  title?: string;
+}): JSX.Element {
   return (
     <button
       type="button"
@@ -104,6 +120,7 @@ function Toggle({ label, checked, onToggle }: { label: string; checked: boolean;
       aria-checked={checked}
       class="toggle-item"
       onClick={onToggle}
+      title={title}
     >
       <span class="toggle-title">{label}</span>
       <span class={`toggle-switch ${checked ? 'is-checked' : ''}`} aria-hidden="true">
@@ -127,10 +144,20 @@ export function Controls({
   const t = getTranslation(sanitizeLocale(config.locale));
   const [showMore, setShowMore] = useState<boolean>(false);
   const [showAllThemes, setShowAllThemes] = useState<boolean>(false);
+  /**
+   * Starts collapsed on the string renderer (no window to measure) and on the
+   * string renderer only. A real viewport starts expanded.
+   *
+   * The bottom sheet used to start collapsed on every screen at most 900px wide,
+   * which meant the first thing a phone showed was a "展开菜单" handle and nothing
+   * else: the whole panel, controls included, was behind one more tap. The sheet
+   * still collapses, and still takes a share of the height rather than all of it,
+   * so the collapse is available rather than imposed. Wide screens were already
+   * expanded and stay that way.
+   */
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    return typeof window !== 'undefined' && typeof window.innerWidth === 'number'
-      ? window.innerWidth <= 900
-      : true;
+    if (typeof window === 'undefined' || typeof window.innerWidth !== 'number') return true;
+    return window.innerWidth > 900;
   });
   const moreId = useId();
   const themeGridId = useId();
@@ -176,6 +203,84 @@ export function Controls({
   );
   const totalTweets = totalCount;
 
+  /**
+   * The post the card actually prints its footer from.
+   *
+   * The panel is handed the thread, not the scope, so it derives the same one the
+   * card does rather than reading the first tweet it is given. The two name
+   * different posts whenever a target or an exclusion moves it, and the panel
+   * would then offer a toggle for a footer the card is not drawing.
+   */
+  const activeTweets = (threadData?.tweets || []).filter(
+    (tweet, idx) => !excluded.has(tweetKey(tweet, idx))
+  );
+  const fallbackIndex = threadData?.targetTweetIndex ?? 0;
+  const fallbackTweet = threadData?.tweets[fallbackIndex] || threadData?.tweets[0];
+  const mainTweet = (activeTweets.length > 0 ? activeTweets : fallbackTweet ? [fallbackTweet] : [])[0];
+
+  /**
+   * Whether the post this card shows actually carries what each footer toggle
+   * claims to add.
+   *
+   * A switch that cannot change anything is worse than no switch: it invites the
+   * user to conclude the panel is broken. The card already refuses to draw a
+   * footer with nothing in it, so the panel refuses to offer the matching control
+   * rather than inventing a disabled state of its own.
+   *
+   * Without a thread -- the string renderer, or a mount that has not resolved one
+   * yet -- there is nothing to judge, so every control is offered.
+   */
+  const canDecide = Boolean(mainTweet);
+  const hasQrTarget = !canDecide || Boolean(mainTweet?.url);
+  const hasStatsData = !canDecide || hasRenderableStats(mainTweet?.stats);
+  const hasTimestamp = !canDecide || Boolean(mainTweet?.timestamp);
+
+  /**
+   * The footer toggles, in order of how often they get touched.
+   *
+   * All three print into the same footer, so they belong in one group with one
+   * promise: every switch here puts information on the card. That is what keeps
+   * them apart from the privacy toggle below, which is the only one that takes
+   * information away.
+   */
+  const footerToggles: ToggleSpec[] = [
+    { key: 'showStats', label: t.metricsAndStats },
+    { key: 'showTimestamp', label: t.timestamp },
+    { key: 'showQrCode', label: t.qrCode },
+  ];
+
+  /**
+   * Which of those the current post can actually use, in the same order.
+   *
+   * One map from key to verdict, rather than a condition per switch at the call
+   * site: adding a fourth footer control should mean adding one entry here, not
+   * remembering to thread another boolean through the JSX.
+   */
+  const footerToggleAvailable: Record<string, boolean> = {
+    showStats: hasStatsData,
+    showTimestamp: hasTimestamp,
+    showQrCode: hasQrTarget,
+  };
+  const visibleFooterToggles = footerToggles.filter((item) =>
+    footerToggleAvailable[String(item.key)]
+  );
+
+  /**
+   * Kept behind the disclosure. Neither changes what a post says; they change how
+   * it is presented, and both are set once and forgotten.
+   *
+   * The `titles` carry the meanings the labels do not: the credit is a one-line
+   * byline with a build number rather than a layer over the image, the play badge
+   * is a corner marker on a still image rather than a control, and the action
+   * button lives on X rather than on the card. The label strings stay as they are
+   * -- the tests and the popup both read them -- so the explanation goes here.
+   */
+  const presentationToggles: ToggleSpec[] = [
+    { key: 'showPlayButton', label: t.videoPlayButton, title: t.videoPlayButtonTitle },
+    { key: 'showWatermark', label: t.watermark, title: t.watermarkHint },
+    { key: 'showActionBarButton', label: t.tweetActionButton, title: t.actionButtonHint },
+  ];
+
   const handleToggleExclude = (key: string) => {
     updateConfig({ excludedTweetIds: toggleExcluded(threadData, config.excludedTweetIds, key) });
   };
@@ -192,14 +297,6 @@ export function Controls({
     if (!threadData) return;
     updateConfig({ excludedTweetIds: selectCurrentOnly(threadData) });
   };
-
-  const toggles: ToggleSpec[] = [
-    { key: 'showQrCode', label: t.qrCode },
-    { key: 'showStats', label: t.metricsAndStats },
-    { key: 'showTimestamp', label: t.timestamp },
-    { key: 'showWatermark', label: t.watermark },
-    { key: 'blurAuthor', label: t.blurAuthor },
-  ];
 
   return (
     <div class={`controls-panel ${isCollapsed ? 'is-collapsed' : ''}`}>
@@ -302,7 +399,43 @@ export function Controls({
           </section>
         )}
 
-        {/* 2. Theme — the single most impactful visual choice */}
+        {/* Language sits permanently in view. It is the one control that
+            re-labels the panel the user is reading, so discoverability outranks
+            frequency here: buried behind the disclosure it cost a bilingual user a
+            tap every time, and the disclosure itself used to be three screens
+            down. One row, no group of its own. */}
+        <section class="control-section control-row-inline">
+          <span class="control-label">
+            <Languages size={14} strokeWidth={2} />
+            <span>{t.language}</span>
+          </span>
+          <Segmented
+            name={t.language}
+            options={['zh-CN', 'en-US'] as const}
+            value={sanitizeLocale(config.locale)}
+            onSelect={(next) => updateConfig({ locale: next })}
+            labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
+          />
+        </section>
+
+        {/* Aspect ratio ahead of the theme: three options in the width of one
+            segmented control, and it decides the card's height -- the thing that
+            decides whether the card is usable on the platform it is going to. */}
+        <section class="control-section">
+          <span class="control-label">
+            <Maximize2 size={14} strokeWidth={2} />
+            <span>{t.aspectRatio}</span>
+          </span>
+          <Segmented
+            name={t.aspectRatio}
+            options={ASPECT_RATIO_OPTIONS}
+            value={config.aspectRatio}
+            onSelect={(next) => updateConfig({ aspectRatio: next })}
+            labels={{ auto: t.aspectAuto }}
+          />
+        </section>
+
+        {/* Theme — the single most impactful visual choice */}
         <section class="control-section">
           <span class="control-label">
             <Palette size={14} strokeWidth={2} />
@@ -329,7 +462,11 @@ export function Controls({
                       (next) => updateConfig({ theme: next })
                     )
                   }
-                  title={displayName}
+                  title={
+                    EXPERIMENTAL_THEMES.has(th.id)
+                      ? `${displayName} — ${t.experimentalTheme}`
+                      : displayName
+                  }
                 >
                   <span class="theme-swatch" style={{ background: themePreview(th.id) }} aria-hidden="true">
                     {isActive && (
@@ -366,59 +503,50 @@ export function Controls({
           )}
         </section>
 
-        {/* 3. Aspect ratio */}
-        <section class="control-section">
-          <span class="control-label">
-            <Maximize2 size={14} strokeWidth={2} />
-            <span>{t.aspectRatio}</span>
-          </span>
-          <Segmented
-            name={t.aspectRatio}
-            options={ASPECT_RATIO_OPTIONS}
-            value={config.aspectRatio}
-            onSelect={(next) => updateConfig({ aspectRatio: next })}
-            labels={{ auto: t.aspectAuto }}
-          />
-          {/* Hidden until the card has been measured rather than showing a
-              zero-height figure for a frame. */}
-          {exportSize && (
-            <span class="control-hint">
-              {t.exportSize
-                .replace('{w}', String(exportSize.width))
-                .replace('{h}', String(exportSize.height))}
+        {/* Footer content: every switch here adds information to the card. The
+            whole section goes rather than showing a heading over an empty list --
+            a post with no link, metrics or timestamp has no footer to fill, and a
+            labelled group with nothing in it reads as a broken panel. */}
+        {visibleFooterToggles.length > 0 && (
+          <section class="control-section">
+            <span class="control-label">
+              <span>{t.cardFooter}</span>
             </span>
-          )}
-        </section>
+            <div class="toggles-list">
+              {visibleFooterToggles.map((item) => (
+                <Toggle
+                  key={String(item.key)}
+                  label={item.label}
+                  checked={Boolean(config[item.key])}
+                  onToggle={() =>
+                    updateConfig({ [item.key]: !config[item.key] } as Partial<CardConfig>)
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-        {/* 4. Element toggles */}
+        {/* Privacy gets its own group rather than a slot in the list above. It is
+            the only control that removes something from the card, and the only one
+            that ships off -- so "everything in this group hides" is a promise the
+            heading can actually keep. Promoting it inside the footer list would
+            leave it sitting among four switches that add. */}
         <section class="control-section">
           <span class="control-label">
-            <SlidersHorizontal size={14} strokeWidth={2} />
-            <span>{t.elementsAndPrivacy}</span>
+            <span>{t.privacy}</span>
           </span>
           <div class="toggles-list">
-            {toggles.map((item) => (
-              <Toggle
-                key={String(item.key)}
-                label={item.label}
-                checked={Boolean(config[item.key])}
-                onToggle={() => updateConfig({ [item.key]: !config[item.key] } as Partial<CardConfig>)}
-              />
-            ))}
             <Toggle
-              label={t.tweetActionButton}
-              checked={config.showActionBarButton !== false}
-              onToggle={() => updateConfig({ showActionBarButton: config.showActionBarButton === false })}
-            />
-            <Toggle
-              label={t.videoPlayButton}
-              checked={config.showPlayButton !== false}
-              onToggle={() => updateConfig({ showPlayButton: config.showPlayButton === false })}
+              label={t.blurAuthor}
+              checked={Boolean(config.blurAuthor)}
+              onToggle={() => updateConfig({ blurAuthor: !config.blurAuthor })}
+              title={t.blurAuthorHint}
             />
           </div>
         </section>
 
-        {/* 5. Collapsible low-frequency settings */}
+        {/* Collapsible low-frequency settings */}
         <section class="control-section more-section">
           <button
             type="button"
@@ -432,23 +560,30 @@ export function Controls({
           </button>
 
           <div id={moreId} class="more-body" hidden={!showMore}>
+            {/* Layout first, and this order is the point. Padding and radius are the
+                knobs that go with the theme chosen above, so keeping them at the top
+                of the disclosure puts them one tap away from it rather than a screen
+                and a half. */}
             <div class="control-section">
               <span class="control-label">
-                <Languages size={14} strokeWidth={2} />
-                <span>{t.language}</span>
+                <span>{t.layoutAndStyle}</span>
               </span>
+              <span class="control-sub-label">{t.padding}</span>
               <Segmented
-                name={t.language}
-                options={['zh-CN', 'en-US'] as const}
-                value={sanitizeLocale(config.locale)}
-                onSelect={(next) => updateConfig({ locale: next })}
-                labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
+                name={t.padding}
+                options={PADDING_OPTIONS}
+                value={config.padding}
+                onSelect={(next) => updateConfig({ padding: next as PaddingOption })}
               />
-              {/* The card's own copy stays verbatim from X -- a translated-from
-                  notice is attribution, not UI -- so this knob only reaches the
-                  card's dates. Saying so is cheaper than letting someone expect a
-                  re-localized notice. */}
-              <span class="control-hint">{t.languageCardHint}</span>
+              <span class="control-sub-label">{t.borderRadius}</span>
+              <Segmented
+                name={t.borderRadius}
+                options={RADIUS_OPTIONS}
+                value={config.borderRadius}
+                onSelect={(next) => updateConfig({ borderRadius: next as RadiusOption })}
+                labels={{ theme: t.borderRadiusFollowTheme }}
+                titles={{ theme: t.borderRadiusFollowTheme }}
+              />
             </div>
 
             <div class="control-section">
@@ -483,30 +618,22 @@ export function Controls({
 
             <div class="control-section">
               <span class="control-label">
-                <Space size={14} strokeWidth={2} />
-                <span>{t.padding}</span>
-              </span>
-              <Segmented
-                name={t.padding}
-                options={PADDING_OPTIONS}
-                value={config.padding}
-                onSelect={(next) => updateConfig({ padding: next as PaddingOption })}
-              />
-            </div>
-
-            <div class="control-section">
-              <span class="control-label">
                 <Square size={14} strokeWidth={2} />
-                <span>{t.borderRadius}</span>
+                <span>{t.presentation}</span>
               </span>
-              <Segmented
-                name={t.borderRadius}
-                options={RADIUS_OPTIONS}
-                value={config.borderRadius}
-                onSelect={(next) => updateConfig({ borderRadius: next as RadiusOption })}
-                labels={{ theme: t.borderRadiusFollowTheme }}
-                titles={{ theme: t.borderRadiusFollowTheme }}
-              />
+              <div class="toggles-list">
+                {presentationToggles.map((item) => (
+                  <Toggle
+                    key={String(item.key)}
+                    label={item.label}
+                    checked={config[item.key] !== false}
+                    title={item.title}
+                    onToggle={() =>
+                      updateConfig({ [item.key]: config[item.key] === false } as Partial<CardConfig>)
+                    }
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -521,6 +648,20 @@ export function Controls({
             </div>
           )}
         </div>
+        {/* The exported pixel size belongs here rather than under the aspect ratio,
+            which it used to sit beneath. It is not that control's output: the card's
+            height moves with padding, radius and the media grid as well, so under the
+            ratio it read as though only the ratio changed it. Stated next to the
+            button that produces it, it reads as what it is -- what you are about to
+            export. Hidden until the card has been measured, so a frame does not show a
+            zero-height figure. */}
+        {exportSize && (
+          <span class="control-hint export-size-hint">
+            {t.exportSize
+              .replace('{w}', String(exportSize.width))
+              .replace('{h}', String(exportSize.height))}
+          </span>
+        )}
         <div class="export-buttons">
           <button
             type="button"

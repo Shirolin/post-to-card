@@ -472,6 +472,40 @@
   flex-shrink: 0;
 }
 
+/* A control that shares its row with its own label rather than sitting under it.
+   Used for the language picker: it re-labels the panel the user is reading, so it
+   stays permanently in view, and one row instead of two keeps that affordable. */
+.control-row-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.control-row-inline .control-label {
+  min-width: 0;
+}
+
+.control-row-inline .btn-group {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.control-row-inline .btn-group-item {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+}
+
+/* A sub-label inside a section that already has a heading of its own -- the
+   padding and radius controls, which share one group. Same type as the section
+   labels but without the uppercase treatment, so the hierarchy stays readable at
+   this size and the two are not mistaken for peers. */
+.control-sub-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ptc-text-muted);
+}
+
 .control-count {
   margin-left: auto;
   padding: 1px 7px;
@@ -494,11 +528,15 @@
   color: var(--ptc-text-muted);
 }
 
-/* Theme Swatches Grid */
+/* Theme Swatches Grid
+   Four across, one row. The grid is the largest block in the panel, and two rows
+   of swatches pushed every control below it -- the toggles included -- past the
+   first screen. One row buys back roughly 90px, which is what lets the footer
+   group, the privacy group and the disclosure itself land in view. */
 .theme-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
 }
 
 .theme-button {
@@ -694,6 +732,16 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* The row carries no border of its own besides the divider between rows, so
+   without this a keyboard user tabbing the switches had nothing to show where
+   focus had landed. `:focus-visible` rather than `:focus`, so a mouse click does
+   not leave the ring behind. */
+.toggle-item:focus-visible {
+  outline: 2px solid var(--ptc-accent-ink);
+  outline-offset: -2px;
+  border-radius: var(--ptc-radius-sm);
+}
+
 .toggle-title {
   font-size: 13.5px;
   font-weight: 500;
@@ -809,6 +857,14 @@
   align-items: center;
   justify-content: center;
   min-height: 16px;
+}
+
+/* The exported pixel size, read beside the button that produces it. Only rendered
+   once the card has been measured -- before that there is no figure to state, and
+   a placeholder would reserve a line for a number that may never arrive. */
+.export-size-hint {
+  display: block;
+  text-align: center;
 }
 
 .status-message {

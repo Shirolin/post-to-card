@@ -2813,6 +2813,126 @@ test('F20.6: the QR tooltip is localized, not a hard-coded English literal', asy
 // -------------------------------------------------------------
 // F21: Interactive Controls & Toggles
 // -------------------------------------------------------------
+
+/**
+ * Which footer switches the controls panel offers for a given post.
+ *
+ * The panel groups by what a control does rather than by its widget type, and
+ * withholds a switch the post cannot use. Both claims are about the group's
+ * membership, so they are read off the rendered roles rather than off class names
+ * -- a relabelled heading or a reordered list is not a regression, but a switch
+ * offered for a card that has nothing to print is.
+ *
+ * An empty array is also the answer for "there is no footer group at all", so a
+ * caller asserting emptiness cannot tell the two apart. `footerGroupPresent`
+ * does, because the group is the thing that should disappear entirely.
+ */
+async function footerSwitches(
+  threadData: ThreadData
+): Promise<{ labels: string[]; groupPresent: boolean }> {
+  const html = await renderControls({ threadData });
+  const footer = html.match(
+    /<section class="control-section">\s*<span class="control-label"><span>Card Footer<\/span><\/span>([\s\S]*?)<\/section>/
+  );
+  return {
+    labels: footer
+      ? [...footer[1].matchAll(/class="toggle-title"[^>]*>([^<]+)</g)].map((m) => m[1].trim())
+      : [],
+    groupPresent: Boolean(footer),
+  };
+}
+
+test('F21.7: a footer switch is withheld when the post has nothing to print', async () => {
+  // A post with no link, no metrics and no timestamp. Each of the three footer
+  // switches would render the same card either way, so offering it invites the
+  // user to conclude the panel is broken.
+  const bare = {
+    id: 'bare',
+    author: VIDEO_TWEET.author,
+    text: 'a post with nothing on it',
+    media: [],
+  } as unknown as TweetData;
+  const thread = { author: VIDEO_TWEET.author, isSingle: true, targetTweetIndex: 0, tweets: [bare] };
+
+  // The group goes too. A heading over an empty list would spend panel space
+  // advertising a footer that this card does not draw, which is the same "this
+  // panel is broken" reading the suppression exists to avoid.
+  const none = await footerSwitches(thread);
+  assert.deepEqual(none.labels, [], 'no footer switch is offered for a post the card prints no footer for');
+  assert.equal(none.groupPresent, false, 'and the empty heading is not left behind');
+
+  // And the other way round: the same switch reappears once the data is there.
+  // url is stripped so the QR stays withheld — this post gains metrics but no link.
+  const { url: _drop, ...noUrl } = VIDEO_TWEET;
+  const withStats = { ...noUrl, stats: { replies: '3', reposts: '2', likes: '9', views: '10' } };
+  const thread2 = { ...thread, tweets: [withStats] };
+  const some = await footerSwitches(thread2);
+  assert.equal(some.groupPresent, true, 'the group returns once a switch is worth offering');
+  assert.ok(some.labels.includes('Metrics &amp; Stats'), 'the stats switch returns once the post has metrics');
+  assert.ok(some.labels.includes('Timestamp'), 'so does the timestamp one');
+  assert.ok(!some.labels.includes('QR Code'), 'but not the QR — this post still has no link');
+});
+
+test('F21.8: with no post to judge, every footer switch is offered', async () => {
+  const html = await renderControls();
+  // SSR HTML-escapes ampersands, so `Metrics &amp; Stats` is the expected form.
+  const switches = [...html.matchAll(/class="toggle-title"[^>]*>([^<]+)</g)].map((m) => m[1].trim());
+  assert.ok(switches.includes('Metrics &amp; Stats'), 'the stats switch is offered');
+  assert.ok(switches.includes('Timestamp'), 'so is the timestamp one');
+  assert.ok(switches.includes('QR Code'), 'and the QR one');
+});
+
+test('F21.9: the toggles are grouped by what they change, not by widget type', async () => {
+  const html = await renderControls();
+
+  // Every switch in the footer group adds information to the card. The one switch
+  // that removes something -- the privacy blur -- has a heading of its own, so
+  // "everything in this group hides" is a promise the group can keep.
+  assert.ok(html.includes('<span>Privacy</span>'), 'privacy is its own group');
+  const privacy = html.match(
+    /<span>Privacy<\/span>[\s\S]*?class="toggle-title"[^>]*>([^<]+)</
+  );
+  assert.equal(privacy![1].trim(), 'Blur Author (Privacy)', 'and holds the one switch that hides');
+
+  // The controls that change how a post is presented rather than what it says sit
+  // behind the disclosure, each with a title explaining what the label does not.
+  for (const title of ['Video Play Button', 'Credit &amp; build', 'Tweet Card Button']) {
+    assert.ok(html.includes(`>${title}</span>`), `the "${title}" switch is offered`);
+  }
+  assert.ok(
+    html.includes('While hidden, hover a post and press Alt + C'),
+    'the action-bar switch says how to reach the card once the button is hidden'
+  );
+});
+
+test('F21.10: the exported pixel size is read beside the export button', async () => {
+  const html = await renderControls();
+  assert.ok(
+    !html.includes('export-size-hint'),
+    'no figure is printed before the card has been measured — a frame has no height yet'
+  );
+
+  // With a size in hand it belongs to the action bar, not to the aspect ratio it
+  // used to sit under: the height moves with padding, radius and the media grid
+  // too, so under the ratio it read as though only the ratio changed it.
+  const mod = await loadModule('/src/content/ui/Controls.tsx');
+  const sized = renderToStaticMarkup(
+    h(mod.Controls as never, {
+      config: { ...CARD_CONFIG },
+      onChange: () => {},
+      onExportCopy: () => {},
+      onExportDownload: () => {},
+      exportSize: { width: 1280, height: 960 },
+    })
+  );
+  assert.ok(sized.includes('export-size-hint'), 'the figure is rendered');
+  assert.ok(/class="export-actions"[\s\S]*export-size-hint/.test(sized), 'inside the export action bar');
+  assert.ok(
+    sized.indexOf('export-size-hint') < sized.indexOf('btn-primary'),
+    'and above the button it describes'
+  );
+});
+
 test('F21.1: toggling showQrCode hides or displays QR element in DOM', async () => {
   const shown = await renderCard({ config: { showQrCode: true } });
   const hidden = await renderCard({ config: { showQrCode: false } });
