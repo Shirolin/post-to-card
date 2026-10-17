@@ -646,7 +646,7 @@
    otherwise paint the mount transparent. The padding is inside the box (the
    item is border-box), so the frame never grows the grid track. */
 .post-to-card-target[data-media-frame="mat"] .media-grid .media-item {
-  padding: 8px;
+  padding: var(--media-mount, 8px);
 }
 
 /* The mount colour, stated once. The video item is a media item too, so the
@@ -827,6 +827,68 @@
 .post-to-card-target[data-ratio="16:9"] .media-grid[data-layout="grid"][data-count="4"] {
   aspect-ratio: 21 / 9;
   max-height: 180px;
+}
+
+/* ---------------- 完整展示 (Contain) in the Auto Ratio: exact packing ----------------
+   A cell is a frame — it carries the mounting ink, the gutter and the play badge.
+   完整展示 therefore cannot letterbox a picture inside a cell of some other shape:
+   the frame would be drawn around empty space, with the picture floating in the
+   middle of it, and the ring would sit a gutter away from the picture's edge.
+   Instead each cell *is* its picture's rectangle, and the grid is laid out as
+   lines of pictures that share a height.
+
+   The widths are not computed here: `planMediaGrid` hands each cell a width in
+   proportion to its picture's own shape, less its share of the line's gutters.
+   The browser only has to keep them on one line, which is what `flex-wrap` with
+   those widths does. A line is therefore as wide as the track, every picture in
+   it is the same height, and the cell's edge meets the picture's edge.
+
+   The selectors outrank the per-count blocks above, which state a fixed shape
+   for the grid and its tracks. Those stay for `cover` (a crop wants a box to
+   crop into) and for the poster ratios (the user picked the canvas). */
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  aspect-ratio: unset;
+  min-height: unset;
+  max-height: unset;
+}
+
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] .media-item {
+  /* The width is the plan's, inline. */
+  flex: 0 0 auto;
+  display: block;
+  height: auto;
+}
+
+/* The picture's box fills its cell, so the cell's two dimensions are the
+   picture's. Height comes from the box's own ratio, which the plan supplies:
+   a box with both dimensions stated would letterbox the picture again.
+
+   The cell is `overflow: visible` here rather than clipping: a mount makes the
+   cell's border-box taller than its content box by a constant, and the cell's
+   height follows from its picture's shape, so the two cannot agree to the
+   pixel. The ring is drawn on the cell, so a picture that stands a pixel over
+   its content box passes under it rather than being cut off by it — which is
+   the only one of the two errors that is invisible. */
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] .media-item {
+  overflow: visible;
+}
+
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] .media-item > .media-box {
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+}
+
+/* Left-hero cannot be a line: the hero holds a column to itself and the other
+   two divide the second. It stays a two-column grid, sized by the plan's column
+   weights, with rows that take their height from the pictures in them. */
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count][data-grid-layout="left-hero"] {
+  display: grid;
+  grid-template-rows: auto auto;
 }
 
 /* ---------------- Multi Images (Stack Mode: 100% Full Display) ---------------- */

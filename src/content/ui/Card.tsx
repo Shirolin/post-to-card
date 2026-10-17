@@ -155,9 +155,6 @@ function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
   advanceImageFallback(event.currentTarget);
 }
 
-/** Narrowest shape (width / height) a lone auto-ratio picture is shown at: 3:4. */
-const MIN_LONE_RATIO = 0.75;
-
 function renderMediaGrid(
   media: MediaItem[] | undefined,
   altPrefix: string = 'Tweet photo',
@@ -178,34 +175,27 @@ function renderMediaGrid(
   // One plan, made from whatever shapes are known now. The images re-plan
   // through the same module when their real shapes arrive, so a grid can only
   // settle differently if the pictures told it something new.
-  const gridOptions = { aspectRatio, mediaLayout };
+  const gridOptions = { aspectRatio, mediaLayout, imageFit };
   const plan = planMediaGrid(items, gridOptions);
 
-  // A lone picture in the auto ratio fills the column, so its height follows
-  // from its shape. Floor that shape at 3:4: anything taller (a 9:16 video, a
-  // long screenshot) is cropped to it, which bounds the card at 4/3 of the
-  // column instead of an absolute ceiling that left the recess showing beside
-  // a picture it had shrunk. Poster ratios and stack have their own rules.
-  const floorsShape = count === 1 && aspectRatio === 'auto' && mediaLayout !== 'stack';
-  const shapeOf = (ratio: number) => (floorsShape ? Math.max(ratio, MIN_LONE_RATIO) : ratio);
-
   // Both an image and a video poster settle the grid the same way: record the
-  // shape it reported, re-plan, and write the plan back.
+  // shape it reported, re-plan, and write the plan back. Nothing here floors or
+  // crops a shape: 完整展示 means the card grows to the picture, not the picture
+  // to the card, and a crop is only ever what `cover` itself asks for.
   const settleGrid = (imgEl: HTMLImageElement, index: number) => {
     if (!imgEl.naturalWidth || !imgEl.naturalHeight) return;
     const ratio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
-    // The picture's box is the picture's rectangle, so it takes the shape the
-    // browser actually decoded: X's own width/height were only a first guess.
-    const box = imgEl.closest ? (imgEl.closest('.media-box') as HTMLElement | null) : null;
-    if (box) box.style.aspectRatio = String(shapeOf(ratio));
-    if (shapeOf(ratio) !== ratio) imgEl.style.objectFit = 'cover';
     const settled = recordShape(items, index, ratio);
     if (settled === items) return;
     items = settled;
+    const next = planMediaGrid(items, gridOptions);
     const grid = imgEl.closest ? (imgEl.closest('.media-grid') as HTMLElement) : null;
-    if (grid) {
-      applyMediaGridPlan(grid, planMediaGrid(items, gridOptions));
-    }
+    if (grid) applyMediaGridPlan(grid, next);
+    // The picture's box is the picture's rectangle, so it takes the shape the
+    // browser actually decoded — the plan's slot when it has one, because that
+    // is the shape the cell beside it was weighted against.
+    const box = imgEl.closest ? (imgEl.closest('.media-box') as HTMLElement | null) : null;
+    if (box) box.style.aspectRatio = String(next.slots?.[index]?.ratio ?? ratio);
   };
 
   return (
@@ -218,10 +208,15 @@ function renderMediaGrid(
       data-grid-layout={plan.layout}
       style={{
         aspectRatio: plan.aspectRatio,
+        gridTemplateColumns: plan.columns,
       }}
     >
       {items.map((m, idx) => {
         const isVideo = m.type === 'video' || m.type === 'gif';
+        // In 完整展示 the plan gives each cell the width its own picture takes of
+        // its line; a crop keeps the track the stylesheet gives it.
+        const slot = plan.slots?.[idx];
+        const boxRatio = slot ? slot.ratio : m.aspectRatio;
 
         return (
           <div
@@ -229,18 +224,18 @@ function renderMediaGrid(
             class={`media-item ${isVideo ? 'media-video-item ' : ''}${fitClass} ${layoutClass}`}
             data-fit={imageFit}
             data-layout={mediaLayout}
+            style={slot ? { width: slot.width } : undefined}
           >
             {/* The cell is the grid's track. This is the picture's own box: the
                 one the fit mode sizes, and the corner the play badge sits on.
                 Its ratio starts from X's own width/height, when the extractor
                 read them, and is corrected below once the picture has loaded. */}
-            <div class="media-box" style={{ aspectRatio: m.aspectRatio ? `${shapeOf(m.aspectRatio)}` : undefined }}>
+            <div class="media-box" style={{ aspectRatio: boxRatio ? `${boxRatio}` : undefined }}>
               <img
                 src={m.url}
                 alt={m.alt || `${altPrefix} ${idx + 1}`}
                 class={`media-picture ${fitClass}`}
                 data-fit={imageFit}
-                style={m.aspectRatio && shapeOf(m.aspectRatio) !== m.aspectRatio ? { objectFit: 'cover' } : undefined}
                 loading="eager"
                 {...imageFallbackAttrs(m)}
                 onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
@@ -761,6 +756,10 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
         '--signature-height': tokens.signature.height,
         '--rhythm-gap': tokens.rhythm.gap,
         '--media-gap': tokens.rhythm.mediaGap,
+        // What a cell adds around its picture besides its ring: the passe-partout
+        // where the material mounts pictures that way. The grid planner reads it
+        // so a line of mounted pictures still comes out one height.
+        '--media-mount': tokens.mediaFrame === 'mat' ? '8px' : '0px',
         '--media-radius': mediaRadius,
         '--font-display': tokens.fontDisplay,
         '--font-body': tokens.fontBody,

@@ -3893,7 +3893,11 @@ function photo(ratio: number): MediaItem {
   return { type: 'image', url: `https://pbs.twimg.com/media/p${ratio}.jpg`, aspectRatio: ratio };
 }
 
-const AUTO_GRID = { aspectRatio: 'auto' as const, mediaLayout: 'grid' as const };
+/** The fixed-shape grid: a crop wants a box to crop into. */
+const AUTO_GRID = { aspectRatio: 'auto' as const, mediaLayout: 'grid' as const, imageFit: 'cover' as const };
+
+/** 完整展示 in the auto ratio: every cell is its picture's own rectangle. */
+const CONTAIN_GRID = { ...AUTO_GRID, imageFit: 'contain' as const };
 
 test('F28.2: Card renders data-grid-layout="top-hero" for 3 landscape/square images', () => {
   // A wide first picture takes the full width of row 1; a tall one takes the
@@ -3927,6 +3931,44 @@ test('F28.5: Dual portrait images calculate dynamic combined aspect-ratio (r0 + 
   const plan = planMediaGrid([photo(0.46), photo(0.46)], AUTO_GRID);
   assert.equal(plan.layout, 'portrait-columns');
   assert.equal(plan.aspectRatio, '0.92');
+});
+
+test('F28.7: 完整展示 plans a cell for each picture and states no grid shape', async () => {
+  // The plan, the card and the stylesheet have to agree on one thing: in
+  // 完整展示 every cell is its picture's own rectangle. The plan supplies each
+  // cell's width, the card writes it, and card.css lays the cells out as lines.
+  const plan = planMediaGrid([photo(1.778), photo(0.8)], CONTAIN_GRID);
+  assert.equal(plan.aspectRatio, undefined, 'a packed grid takes its height from its pictures');
+  assert.ok(plan.slots, '完整展示 plans a place for every picture');
+  assert.equal(plan.slots!.length, 2);
+
+  const html = await renderCard({
+    data: {
+      id: '92001',
+      url: 'https://x.com/ada/status/92001',
+      author: { name: 'Ada', handle: '@ada' },
+      text: 'two pictures',
+      timestamp: '2026-10-14T04:29:00.000Z',
+      media: [
+        { type: 'image', url: 'https://pbs.twimg.com/media/wide.jpg', aspectRatio: 1.778 },
+        { type: 'image', url: 'https://pbs.twimg.com/media/tall.jpg', aspectRatio: 0.8 },
+      ],
+    } satisfies TweetData,
+    config: { imageFit: 'contain', aspectRatio: 'auto', mediaLayout: 'grid' },
+  });
+
+  const gridTag = /<div class="media-grid[^>]*>/.exec(html)?.[0];
+  assert.ok(gridTag, 'the card renders a media grid');
+  assert.ok(!gridTag!.includes('aspect-ratio'), 'the grid states no shape of its own');
+  for (const slot of plan.slots!) {
+    assert.ok(html.includes(slot.width), `the card must write each planned cell width: ${slot.width}`);
+  }
+
+  // The stylesheet gives those widths a line to live on, and drops the fixed
+  // grid shape the cover path keeps.
+  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  assert.ok(cssContent.includes('[data-fit="contain"][data-ratio="auto"]'), 'the packed grid has its own rules');
+  assert.ok(cssContent.includes('flex-wrap: wrap;'), 'cells of one line stay on that line');
 });
 
 test('F28.6: 3-image layout uses left-hero for square/portrait (ratio < 1.2) with 1.6fr:1fr columns and dynamic ratio', () => {
