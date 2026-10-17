@@ -25,10 +25,15 @@
  * width. On the shapes X actually serves this leaves no dead space in a cell,
  * where the fixed grid it replaces left 8–34% of the cell empty.
  *
- * The grouping itself is unchanged — a five-picture post still gets the same
- * hero, quad or pair decision — because that decision is about composition, and
- * only the size of each track was wrong. `cover` keeps the fixed grid, because a
- * crop is what it asks for.
+ * The grouping itself is unchanged — a three-picture post still gets the same
+ * hero decision and a four-picture one the same quad — because that decision is
+ * about composition, and only the size of each track was wrong. `cover` keeps
+ * the fixed grid, because a crop is what it asks for.
+ *
+ * The widths are computed here rather than left to flex's `flex-grow`: a line's
+ * wrap point is decided from the flex base size, so equal-basis cells all land
+ * on one line however the ratios differ. Stating each cell's width is what keeps
+ * the lines the layout chose.
  */
 
 import type { MediaItem } from '../../types/tweet.ts';
@@ -244,8 +249,10 @@ const LINES_BY_LAYOUT: Record<BandLayout, number[][]> = {
  * line of its own.
  *
  * The table is read off the layout and the layout is chosen off the count, so
- * the two cannot disagree. The guard stays because a plan that quietly dropped a
- * picture would render an empty cell instead of failing.
+ * the two cannot disagree. A picture the table leaves out is still given a line
+ * of its own rather than dropped: the table is a statement about composition,
+ * and losing a picture to a mismatch in it would be a worse failure than a line
+ * that is one picture short.
  */
 function linesFor(layout: BandLayout, count: number): number[][] {
   const lines = LINES_BY_LAYOUT[layout]
@@ -259,14 +266,18 @@ function linesFor(layout: BandLayout, count: number): number[][] {
 }
 
 /**
- * What a cell adds around its picture: the ring on both sides and, under a
- * material that mounts pictures on a passe-partout, the mount. Only the
- * picture's own box has to be proportional to its shape, so this fixed inset
- * comes out of the line before the shares divide it and is added back to each
- * cell — otherwise a line under a mat frame would come out with unequal
- * heights, the mount being a constant against pictures of different shapes.
+ * What a cell adds on one side of its picture: the ring, and under a material
+ * that mounts pictures on a passe-partout, the mount. Only the picture's own box
+ * has to be proportional to its shape, so this fixed inset comes out of the line
+ * before the shares divide it and is added back to each cell — otherwise a line
+ * under a mat frame would come out with unequal heights, the mount being a
+ * constant against pictures of different shapes. It is per side because a line
+ * pays it once per side and the hero column pays it twice.
  */
-const CELL_INSET = '(var(--border-width, 1px) + var(--media-mount, 0px)) * 2';
+const EDGE = '(var(--border-width, 1px) + var(--media-mount, 0px))';
+
+/** Both sides of a cell. */
+const CELL_INSET = `${EDGE} * 2`;
 
 /** A coefficient and its term, with the sign spelled out for `calc()`. */
 function term(coefficient: number, expression: string): string {
@@ -314,19 +325,16 @@ function shapedPlan(items: MediaItem[], layout: GridLayout): Pick<MediaGridPlan,
     // moves to the other side of the equation as `n * inset`.
     const [hero, second, third] = ratios;
     const gutter = 'var(--media-gap, 4px)';
-    // The hero's picture stands (c0 - 2b) / r0 tall; the pair's two stand
-    // (c1 - 2b) / r1 + (c1 - 2b) / r2 plus their gutter. Setting the two column
-    // heights equal, with the two column widths adding up to the track, gives
-    // the hero's width below. `b` is one cell's inset per side — its ring and,
-    // under a mat material, its mount — so it is subtracted once per side:
-    // twice across the track, and four times down the pair's column, which has
-    // two cells in it.
-    const b = '(var(--border-width, 1px) + var(--media-mount, 0px))';
+    // The hero's picture stands (c0 - 2·EDGE) / r0 tall; the pair's two stand
+    // (c1 - 2·EDGE) / r1 + (c1 - 2·EDGE) / r2 plus their gutter. Setting the two
+    // column heights equal, with the two column widths adding up to the track,
+    // gives the hero's width below. EDGE is paid once per side: twice across the
+    // track, and four times down the pair's column, which has two cells in it.
     const weight = 1 / second + 1 / third;
     const divisor = (1 + hero * weight).toFixed(4);
-    const pairRoom = `100% - ${(1 + hero).toFixed(4)} * ${gutter} - ${(4 + 2 * hero).toFixed(4)} * ${b}`;
+    const pairRoom = `100% - ${(1 + hero).toFixed(4)} * ${gutter} - ${(4 + 2 * hero).toFixed(4)} * ${EDGE}`;
     const columns =
-      `calc(100% - ${gutter} - 2 * ${b} - (${pairRoom}) / ${divisor})` +
+      `calc(100% - ${gutter} - 2 * ${EDGE} - (${pairRoom}) / ${divisor})` +
       ' minmax(0, 1fr)';
     return { slots: ratios.map(ratio => ({ ratio, width: '100%' })), columns };
   }

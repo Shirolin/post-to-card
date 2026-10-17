@@ -3971,6 +3971,34 @@ test('F28.7: 完整展示 plans a cell for each picture and states no grid shape
   assert.ok(cssContent.includes('flex-wrap: wrap;'), 'cells of one line stay on that line');
 });
 
+test('F28.8: the lone-picture 3:4 floor stays on cover and is gone from 完整展示', async () => {
+  // A 9:16 video poster. Under cover the card has no picture shape to grow to,
+  // so it crops the poster to 3:4 and stays bounded; under 完整展示 the card
+  // grows to the picture, which is the promise that mode makes.
+  const tall = {
+    id: '92002',
+    url: 'https://x.com/ada/status/92002',
+    author: { name: 'Ada', handle: '@ada' },
+    text: 'one tall picture',
+    timestamp: '2026-10-14T04:29:00.000Z',
+    media: [{ type: 'image', url: 'https://pbs.twimg.com/media/tall.jpg', aspectRatio: 0.5625 }],
+  } satisfies TweetData;
+
+  const cover = await renderCard({
+    data: tall,
+    config: { imageFit: 'cover', aspectRatio: 'auto', mediaLayout: 'grid' },
+  });
+  assert.ok(cover.includes('aspect-ratio:0.75'), 'cover still floors the lone picture at 3:4');
+  assert.ok(cover.includes('object-fit:cover'), 'and crops the picture to that box');
+
+  const contain = await renderCard({
+    data: tall,
+    config: { imageFit: 'contain', aspectRatio: 'auto', mediaLayout: 'grid' },
+  });
+  assert.ok(contain.includes('aspect-ratio:0.5625'), '完整展示 keeps the picture\'s own shape');
+  assert.ok(!contain.includes('object-fit:cover'), '完整展示 never crops');
+});
+
 test('F28.6: 3-image layout uses left-hero for square/portrait (ratio < 1.2) with 1.6fr:1fr columns and dynamic ratio', () => {
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
   assert.ok(cssContent.includes('minmax(0, 1.6fr) minmax(0, 1fr)'), 'Left hero must allocate 1.6fr to 1fr column width');
