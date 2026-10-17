@@ -1924,6 +1924,50 @@ test('Tier 2.76e: only a local write of the preferences key reaches the subscrib
   });
 });
 
+test('Tier 2.76f: a partial stored object cannot take the defaults with it', async () => {
+  // The popup's toggle writes back the object it read, and on a profile that has
+  // saved nothing yet that object holds one key. Loading it must leave every
+  // field it never mentioned alone.
+  //
+  // `sanitizeRadius` answers '12px' for an absent value while the shipped
+  // default is 'theme' -- the one field where the two disagree -- so calling it
+  // unguarded after the merge pinned a fresh profile to 12px for good: the panel
+  // reads that 12px, shows it as the chosen corner, and writes it back into
+  // every later save.
+  await withInjectionEnv(async ({ chrome }) => {
+    await chrome.storage.local.set({ [STORAGE_KEY]: { showActionBarButton: false } });
+
+    const prefs = await loadUserPreferences();
+    assert.equal(
+      prefs.borderRadius,
+      DEFAULT_CARD_CONFIG.borderRadius,
+      'the corner the user never chose stays the shipped default'
+    );
+    assert.equal(prefs.theme, DEFAULT_CARD_CONFIG.theme, 'and so does every other absent field');
+    assert.equal(prefs.showActionBarButton, false, 'while the key that was stored still wins');
+  });
+});
+
+test('Tier 2.76g: the live-sync subscription hands over a complete configuration', async () => {
+  // The subscriber is what a card mounts on, and the popup's write is a partial
+  // object: forwarded raw, it would have handed the panel `theme: undefined`,
+  // which `THEMES[config.theme].tokens` cannot survive.
+  await withInjectionEnv(async ({ chrome }) => {
+    const seen: CardConfig[] = [];
+    const unsubscribe = subscribePreferences((prefs) => seen.push(prefs));
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY]: { showActionBarButton: false } });
+
+      assert.equal(seen.length, 1, 'a local write of the key reaches the subscriber');
+      assert.equal(seen[0].theme, DEFAULT_CARD_CONFIG.theme, 'and carries the defaults for what it omits');
+      assert.equal(seen[0].borderRadius, DEFAULT_CARD_CONFIG.borderRadius);
+      assert.equal(seen[0].showActionBarButton, false, 'alongside the value that was written');
+    } finally {
+      unsubscribe();
+    }
+  });
+});
+
 test('Tier 2.77: Alt+C hands the tweet under the pointer to the card, and nothing else does', async () => {
   // F30.4's claim, driven rather than read: the shortcut exists so a card can be
   // opened without reaching for the injected trigger, which only helps if it

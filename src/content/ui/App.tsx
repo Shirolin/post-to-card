@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig } from '../../types/card.ts';
 import { DEFAULT_CARD_CONFIG, THEMES } from './themes.ts';
-import { loadUserPreferences, saveUserPreferences } from '../prefs.ts';
+import { loadUserPreferences, saveUserPreferences, subscribePreferences } from '../prefs.ts';
 import { setInjectedButtonVisibility } from '../adapter/injection.ts';
 import { Card } from './Card.tsx';
 import { Controls } from './Controls.tsx';
@@ -230,8 +230,20 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
         setInjectedButtonVisibility(saved.showActionBarButton !== false);
       }
     });
+
+    // Follow changes this panel did not make: the popup's toggle, another tab's
+    // panel. Without it this mount keeps its own copy and the next edit writes
+    // that copy back whole, so the external change is undone by whichever
+    // control the user reaches for next.
+    const unsubscribe = subscribePreferences((next) => {
+      if (!mounted) return;
+      setConfig(next);
+      setInjectedButtonVisibility(next.showActionBarButton !== false);
+    });
+
     return () => {
       mounted = false;
+      unsubscribe();
     };
     // Mount-only by intent: `initialConfig` is a harness override that must not be
     // re-read, and reading it as a dependency would re-run the effect whenever the

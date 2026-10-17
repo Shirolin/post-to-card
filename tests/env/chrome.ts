@@ -99,6 +99,19 @@ type StorageChangeListener = (
   areaName: string
 ) => void;
 
+/**
+ * A copy, the way the real API hands one over.
+ *
+ * `chrome.storage` serializes across the boundary in both directions, so no
+ * caller can reach the stored object itself. The mock used to hand the store's
+ * own object to `get` callers and to listeners, which let `popup.js`'s
+ * read-modify-write change storage without calling `set` at all: a test of that
+ * write passed while the write was missing or aimed at the wrong key.
+ */
+function detached<T>(value: T): T {
+  return structuredClone(value);
+}
+
 class ChromeStorageAreaMock {
   private store = new Map<string, any>();
   private readonly areaName: string;
@@ -125,7 +138,7 @@ class ChromeStorageAreaMock {
       const oldValue = this.store.get(key);
       if (oldValue === value) continue;
       this.store.set(key, value);
-      changes[key] = { oldValue, newValue: value };
+      changes[key] = { oldValue, newValue: detached(value) };
     }
 
     for (const key of removals) {
@@ -144,16 +157,16 @@ class ChromeStorageAreaMock {
     return new Promise(resolve => {
       const result: Record<string, any> = {};
       if (keys === null) {
-        this.store.forEach((v, k) => { result[k] = v; });
+        this.store.forEach((v, k) => { result[k] = detached(v); });
       } else if (typeof keys === 'string') {
-        if (this.store.has(keys)) result[keys] = this.store.get(keys);
+        if (this.store.has(keys)) result[keys] = detached(this.store.get(keys));
       } else if (Array.isArray(keys)) {
         keys.forEach(k => {
-          if (this.store.has(k)) result[k] = this.store.get(k);
+          if (this.store.has(k)) result[k] = detached(this.store.get(k));
         });
       } else if (typeof keys === 'object') {
         Object.keys(keys).forEach(k => {
-          result[k] = this.store.has(k) ? this.store.get(k) : keys[k];
+          result[k] = this.store.has(k) ? detached(this.store.get(k)) : detached(keys[k]);
         });
       }
       if (callback) callback(result);
