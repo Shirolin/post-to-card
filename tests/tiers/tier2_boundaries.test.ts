@@ -1027,7 +1027,11 @@ function picture(ratio?: number): MediaItem {
   return item;
 }
 
-const AUTO_GRID = { aspectRatio: 'auto' as const, mediaLayout: 'grid' as const };
+/** The fixed-shape grid: a crop wants a box to crop into. */
+const AUTO_GRID = { aspectRatio: 'auto' as const, mediaLayout: 'grid' as const, imageFit: 'cover' as const };
+
+/** 完整展示 in the auto ratio: every cell is its picture's own rectangle. */
+const CONTAIN_GRID = { ...AUTO_GRID, imageFit: 'contain' as const };
 
 test('Tier 2.45: the 1.2 hero threshold puts each side on its own side of it', () => {
   // Below 1.2 the first picture is tall or square and takes the left column;
@@ -1099,9 +1103,9 @@ test('Tier 2.49: only auto mode lets the pictures shape the grid', () => {
 
   // A poster ratio or a stacked grid has a shape of its own, which the stylesheet
   // already states, so the plan must not also state one inline.
-  assert.equal(planMediaGrid(items, { aspectRatio: '3:4', mediaLayout: 'grid' }).aspectRatio, undefined);
-  assert.equal(planMediaGrid(items, { aspectRatio: '16:9', mediaLayout: 'grid' }).aspectRatio, undefined);
-  assert.equal(planMediaGrid(items, { aspectRatio: 'auto', mediaLayout: 'stack' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, { aspectRatio: '3:4', mediaLayout: 'grid', imageFit: 'cover' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, { aspectRatio: '16:9', mediaLayout: 'grid', imageFit: 'cover' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, { aspectRatio: 'auto', mediaLayout: 'stack', imageFit: 'cover' }).aspectRatio, undefined);
   assert.equal(planMediaGrid(items, AUTO_GRID).aspectRatio, '0.92');
 });
 
@@ -1135,6 +1139,92 @@ test('Tier 2.51: a re-plan replaces the previous layout instead of adding to it'
   assert.ok(!grid.classList.contains('grid-default'), 'the previous layout class must be gone');
   assert.ok(!grid.classList.contains('grid-columns'), 'no other layout class may linger');
   assert.equal(grid.style.aspectRatio, '0.92');
+});
+
+/** A width of the form `calc(<share>% - <gaps> - <insets> - 0.25px)`, read back. */
+function sharesOf(widths: string[]): number[] {
+  return widths.map(width => {
+    const match = /^calc\(([\d.]+)%/.exec(width);
+    assert.ok(match, `a line width states its share first: ${width}`);
+    return Number(match[1]);
+  });
+}
+
+test('Tier 2.52: 完整展示 gives each cell its picture\'s own share of the line', () => {
+  // Two pictures on one line: each takes the line in proportion to its own
+  // shape, so both come out the same height and each cell is its picture's
+  // rectangle. The shares are of the line's width, and they sum to it.
+  const mixed = planMediaGrid([picture(1.6), picture(0.8)], CONTAIN_GRID);
+  assert.equal(mixed.layout, 'columns');
+  assert.equal(mixed.aspectRatio, undefined, 'a packed grid has no shape of its own to state');
+  assert.equal(mixed.columns, undefined, 'only the hero layout needs column weights');
+  assert.ok(mixed.slots, '完整展示 plans a place for every picture');
+  assert.deepEqual(mixed.slots!.map(slot => slot.ratio), [1.6, 0.8]);
+  const shares = sharesOf(mixed.slots!.map(slot => slot.width));
+  assert.ok(Math.abs(shares[0] + shares[1] - 100) < 0.01, `shares must fill the line: ${shares.join(' + ')}`);
+  assert.ok(Math.abs(shares[0] / shares[1] - 2) < 0.001, 'the wider picture takes twice the line');
+
+  // The gutter is subtracted in proportion to the share, and the insets cancel:
+  // a line of two cells adds back exactly what it took out.
+  assert.ok(mixed.slots![0].width.includes('var(--media-gap, 4px)'), 'the gap is part of the same percent');
+  assert.ok(mixed.slots![0].width.includes('var(--border-width, 1px)'), 'the ring is accounted for');
+
+  // A single picture is the whole line, and its slot is its own shape — no
+  // floor and no crop, which is what 完整展示 promises a tall screenshot.
+  const lone = planMediaGrid([picture(0.4)], CONTAIN_GRID);
+  assert.equal(lone.layout, 'default');
+  assert.deepEqual(lone.slots, [{ ratio: 0.4, width: 'calc(100% - 0.25px)' }]);
+});
+
+test('Tier 2.53: a line of three splits into the layout\'s own lines', () => {
+  // Top-hero is a wide picture over a pair: the hero is its own line, and the
+  // pair divides the second in proportion to their shapes.
+  const hero = planMediaGrid([picture(1.6), picture(1.5), picture(0.75)], CONTAIN_GRID);
+  assert.equal(hero.layout, 'top-hero');
+  assert.equal(hero.slots![0].width, 'calc(100% - 0.25px)', 'the hero has the line to itself');
+  const pair = sharesOf([hero.slots![1].width, hero.slots![2].width]);
+  assert.ok(Math.abs(pair[0] + pair[1] - 100) < 0.01, 'the pair fills its line');
+  assert.ok(Math.abs(pair[0] / pair[1] - 2) < 0.001, '1.5 : 0.75 is 2 : 1');
+
+  // Left-hero stays a two-column grid, because the hero holds a column and no
+  // line can say that. Its hero column is weighted from the three shapes.
+  const left = planMediaGrid([picture(1), picture(1), picture(1)], CONTAIN_GRID);
+  assert.equal(left.layout, 'left-hero');
+  assert.ok(left.columns, 'left-hero states its column weights');
+  assert.match(left.columns!, /minmax\(0, 1fr\)$/, 'the second column takes the rest');
+  assert.equal(left.aspectRatio, undefined, 'the grid takes its height from the pictures');
+});
+
+test('Tier 2.54: a re-plan writes each slot onto its own cell', () => {
+  // The load path re-plans a grid whose pictures have reported their shapes.
+  // The cells are the grid's children, in item order, and each takes the width
+  // the plan computed for it.
+  const grid = new DomElement('DIV');
+  for (let i = 0; i < 2; i++) grid.appendChild(new DomElement('DIV'));
+
+  const plan = planMediaGrid([picture(1.6), picture(0.8)], CONTAIN_GRID);
+  applyMediaGridPlan(grid, plan);
+
+  assert.equal(grid.children[0].style.width, plan.slots![0].width);
+  assert.equal(grid.children[1].style.width, plan.slots![1].width);
+  assert.equal(grid.style.gridTemplateColumns, '', 'a line layout clears any hero weights');
+});
+
+test('Tier 2.55: cover and the poster ratios keep the fixed grid', () => {
+  // A crop wants a box to crop into, and a poster ratio is a canvas the user
+  // picked. Neither takes a slot plan; both keep the grid's own shape.
+  const covered = planMediaGrid([picture(1.4), picture(0.6)], AUTO_GRID);
+  assert.equal(covered.layout, 'columns');
+  assert.equal(covered.slots, undefined);
+  assert.equal(covered.aspectRatio, '2');
+
+  const poster = planMediaGrid([picture(1.4), picture(0.6)], { aspectRatio: '3:4', mediaLayout: 'grid', imageFit: 'contain' });
+  assert.equal(poster.slots, undefined);
+  assert.equal(poster.aspectRatio, undefined);
+
+  const stack = planMediaGrid([picture(1.4), picture(0.6)], { aspectRatio: 'auto', mediaLayout: 'stack', imageFit: 'contain' });
+  assert.equal(stack.slots, undefined);
+  assert.equal(stack.aspectRatio, undefined);
 });
 
 // -------------------------------------------------------------

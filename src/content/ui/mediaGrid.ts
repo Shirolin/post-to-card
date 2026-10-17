@@ -8,18 +8,31 @@
  * real shapes arrived from the network. The two copies drifted, so a grid could
  * render one way and settle into another.
  *
- * `planMediaGrid` is the interface: it takes the items plus the two options and
+ * `planMediaGrid` is the interface: it takes the items plus the options and
  * returns what the grid should be. `applyMediaGridPlan` writes a plan onto a
  * rendered grid and makes no decisions of its own, so the two call sites — the
  * initial render and the re-plan after a shape arrives — can only ever disagree
  * about the input, never about the rule.
  *
- * The render and re-plan adapters are both inside Card.tsx; this module exists
- * so the rule behind them is written once.
+ * 完整展示 asks for the opposite of a crop, and that decides where a picture's
+ * frame goes. A cell is a frame: it carries the material's mounting ink and its
+ * corner, and the play badge hangs on the picture's own box inside it. So a
+ * contained picture may not sit letterboxed inside a cell of some other shape —
+ * the cell has to *be* the picture's rectangle, or the frame is drawn around
+ * empty space with the picture floating in it. That is what a plan's `slots`
+ * carry: each picture's shape plus the width it takes of the media track, in
+ * proportions that give every picture in a line the same height and its own
+ * width. On the shapes X actually serves this leaves no dead space in a cell,
+ * where the fixed grid it replaces left 8–34% of the cell empty.
+ *
+ * The grouping itself is unchanged — a five-picture post still gets the same
+ * hero, quad or pair decision — because that decision is about composition, and
+ * only the size of each track was wrong. `cover` keeps the fixed grid, because a
+ * crop is what it asks for.
  */
 
 import type { MediaItem } from '../../types/tweet.ts';
-import type { AspectRatioOption, MediaLayoutOption } from '../../types/card.ts';
+import type { AspectRatioOption, ImageFitOption, MediaLayoutOption } from '../../types/card.ts';
 
 /** The arrangements card.css knows how to draw. */
 export type GridLayout =
@@ -41,10 +54,30 @@ const GRID_LAYOUTS: readonly GridLayout[] = [
   'quad',
 ];
 
+/** Every layout except the one that divides the grid into two columns. */
+type BandLayout = Exclude<GridLayout, 'left-hero'>;
+
 export interface MediaGridOptions {
   /** 'auto' lets the pictures shape the grid; the poster ratios are fixed. */
   aspectRatio: AspectRatioOption;
   mediaLayout: MediaLayoutOption;
+  /**
+   * Which of the two fit modes the plan is for. It is an input because the two
+   * want different things from the same pictures: a crop wants a grid of fixed
+   * shapes to crop into, a full display wants the pictures' own shapes.
+   */
+  imageFit: ImageFitOption;
+}
+
+/**
+ * One picture's place in a shaped grid: the shape it was planned against, and
+ * the width it takes of its line as a CSS value.
+ */
+export interface MediaSlot {
+  /** The picture's own shape, or the fallback when it has not reported one. */
+  ratio: number;
+  /** The width to write on the cell, already in proportions and gaps. */
+  width: string;
 }
 
 export interface MediaGridPlan {
@@ -56,9 +89,23 @@ export interface MediaGridPlan {
   layoutClass: string;
   /**
    * Inline `aspect-ratio` for the grid, or undefined to leave the shape to
-   * card.css. Only `auto` in grid mode produces one.
+   * card.css. Only a fixed-shape grid — cover, or a poster ratio — has one: a
+   * grid whose tracks are the pictures' own rectangles has no shape of its own
+   * to state, and card.css drops the one it would otherwise apply.
    */
   aspectRatio?: string;
+  /**
+   * 完整展示 in the auto ratio: one slot per picture, in item order. Absent when
+   * the grid keeps a shape of its own.
+   */
+  slots?: MediaSlot[];
+  /**
+   * 完整展示 in the left-hero arrangement: the grid's two column weights. The
+   * hero holds a column to itself and the other two divide the second, which no
+   * single line can express, so that one arrangement stays a two-column grid and
+   * is sized here instead.
+   */
+  columns?: string;
 }
 
 /**
@@ -168,6 +215,133 @@ function shapeForLayout(count: number, layout: GridLayout, items: MediaItem[]): 
 }
 
 /**
+ * The shape a picture is planned against before it has reported one.
+ *
+ * Square is the one shape that claims nothing: a slot has to have a height
+ * before the picture arrives, or the row collapses to nothing and the card jumps
+ * when it lands, and a wrong-but-neutral box is better than a box the width of
+ * the card. The picture's real shape replaces it on load.
+ */
+const UNKNOWN_SHAPE = 1;
+
+function plannedShape(item: MediaItem | undefined): number {
+  const ratio = item?.aspectRatio;
+  return ratio !== undefined && ratio > 0 ? ratio : UNKNOWN_SHAPE;
+}
+
+/** Which pictures share each line, keyed by the layout that chose the grouping. */
+const LINES_BY_LAYOUT: Record<BandLayout, number[][]> = {
+  default: [[0]],
+  columns: [[0, 1]],
+  'portrait-columns': [[0, 1]],
+  stacked: [[0], [1]],
+  quad: [[0, 1], [2, 3]],
+  'top-hero': [[0], [1, 2]],
+};
+
+/**
+ * The lines a grouping draws, with any picture the table does not name left on a
+ * line of its own.
+ *
+ * The table is read off the layout and the layout is chosen off the count, so
+ * the two cannot disagree. The guard stays because a plan that quietly dropped a
+ * picture would render an empty cell instead of failing.
+ */
+function linesFor(layout: BandLayout, count: number): number[][] {
+  const lines = LINES_BY_LAYOUT[layout]
+    .map(line => line.filter(index => index < count))
+    .filter(line => line.length > 0);
+  const named = new Set(lines.flat());
+  for (let index = 0; index < count; index++) {
+    if (!named.has(index)) lines.push([index]);
+  }
+  return lines;
+}
+
+/**
+ * What a cell adds around its picture: the ring on both sides and, under a
+ * material that mounts pictures on a passe-partout, the mount. Only the
+ * picture's own box has to be proportional to its shape, so this fixed inset
+ * comes out of the line before the shares divide it and is added back to each
+ * cell — otherwise a line under a mat frame would come out with unequal
+ * heights, the mount being a constant against pictures of different shapes.
+ */
+const CELL_INSET = '(var(--border-width, 1px) + var(--media-mount, 0px)) * 2';
+
+/** A coefficient and its term, with the sign spelled out for `calc()`. */
+function term(coefficient: number, expression: string): string {
+  return `${coefficient < 0 ? '-' : '+'} ${Math.abs(coefficient).toFixed(4)} * ${expression}`;
+}
+
+/**
+ * The width a picture takes of its line, as a CSS value.
+ *
+ * The shares are the pictures' own shapes, which is what makes a line come out
+ * with every picture the same height and each one its own rectangle: a cell's
+ * width is its share of the line's width less its share of the gutters and the
+ * fixed insets, plus its own inset. The gap is part of the same hundred percent
+ * the shares divide — a line filled to the percent would push its last picture
+ * onto the line below — so it comes off in proportion to the share, and the line
+ * as a whole stops a quarter pixel short so that rounding cannot decide the
+ * wrap. A one-picture line is the same sum with nothing to subtract.
+ */
+function lineWidth(share: number, lineSize: number): string {
+  if (lineSize === 1) return 'calc(100% - 0.25px)';
+  const percent = (share * 100).toFixed(3);
+  const gaps = term(-share * (lineSize - 1), 'var(--media-gap, 4px)');
+  const insets = term(-share * lineSize + 1, CELL_INSET);
+  return `calc(${percent}% ${gaps} ${insets} - 0.25px)`;
+}
+
+/**
+ * The slots and columns for 完整展示 in the auto ratio: every cell the picture's
+ * own rectangle, every line as wide as the track.
+ */
+function shapedPlan(items: MediaItem[], layout: GridLayout): Pick<MediaGridPlan, 'slots' | 'columns'> {
+  const ratios = items.map(plannedShape);
+
+  if (layout === 'left-hero') {
+    // The hero holds a column to itself and the other two divide the second. A
+    // picture of shape r0 filling a column of width w0 stands w0 / r0 tall, and
+    // the pair in the other column stands w1 / r1 + w1 / r2 plus the gutter
+    // between them. Solving the two for a common height gives the hero's width,
+    // and the second column is whatever is left, so the plan states one width
+    // and lets the grid fill the rest. The gutter and the cell insets are lengths
+    // only the browser knows, so they stay `var()`s here rather than numbers:
+    // with them in the sum the hero's cell and its picture agree to the pixel,
+    // where weighting the columns alone left the hero up to one gutter short of
+    // its frame. Each column's inset is constant across its own pictures, so it
+    // moves to the other side of the equation as `n * inset`.
+    const [hero, second, third] = ratios;
+    const gutter = 'var(--media-gap, 4px)';
+    // The hero's picture stands (c0 - 2b) / r0 tall; the pair's two stand
+    // (c1 - 2b) / r1 + (c1 - 2b) / r2 plus their gutter. Setting the two column
+    // heights equal, with the two column widths adding up to the track, gives
+    // the hero's width below. `b` is one cell's inset per side — its ring and,
+    // under a mat material, its mount — so it is subtracted once per side:
+    // twice across the track, and four times down the pair's column, which has
+    // two cells in it.
+    const b = '(var(--border-width, 1px) + var(--media-mount, 0px))';
+    const weight = 1 / second + 1 / third;
+    const divisor = (1 + hero * weight).toFixed(4);
+    const pairRoom = `100% - ${(1 + hero).toFixed(4)} * ${gutter} - ${(4 + 2 * hero).toFixed(4)} * ${b}`;
+    const columns =
+      `calc(100% - ${gutter} - 2 * ${b} - (${pairRoom}) / ${divisor})` +
+      ' minmax(0, 1fr)';
+    return { slots: ratios.map(ratio => ({ ratio, width: '100%' })), columns };
+  }
+
+  const slots: MediaSlot[] = new Array(items.length);
+  for (const line of linesFor(layout, items.length)) {
+    const total = line.reduce((sum, index) => sum + ratios[index], 0);
+    for (const index of line) {
+      slots[index] = { ratio: ratios[index], width: lineWidth(ratios[index] / total, line.length) };
+    }
+  }
+  return { slots };
+}
+
+/**
  * Decides how a set of media should be arranged.
  *
  * Call it with whatever shapes are known. Re-calling it after an image reports
@@ -182,19 +356,22 @@ export function planMediaGrid(
   // before it is planned rather than after.
   const visible = items.slice(0, 4);
   const layout = chooseLayout(visible.length, visible);
+  const plan: MediaGridPlan = { layout, layoutClass: `grid-${layout}` };
 
-  // card.css carries a default shape per (count, layout, poster ratio), so a
-  // plan only states one when the pictures are the thing being fitted.
-  const fitToPictures = options.aspectRatio === 'auto' && options.mediaLayout !== 'stack';
-  const shaped = visible.length >= 2 && fitToPictures
+  // 完整展示 in the auto ratio fits the pictures, so the plan states a place for
+  // each one and no shape for the grid; every other case states a grid shape and
+  // lets card.css's own table of (count, layout, poster ratio) defaults stand,
+  // which is why those branches come out with no `aspectRatio` of their own.
+  if (options.imageFit === 'contain' && options.aspectRatio === 'auto' && options.mediaLayout === 'grid') {
+    return { ...plan, ...shapedPlan(visible, layout) };
+  }
+
+  const fitToGrid = options.aspectRatio === 'auto' && options.mediaLayout !== 'stack';
+  const shaped = visible.length >= 2 && fitToGrid
     ? shapeForLayout(visible.length, layout, visible)
     : undefined;
 
-  return {
-    layout,
-    layoutClass: `grid-${layout}`,
-    aspectRatio: shaped === undefined ? undefined : `${shaped}`,
-  };
+  return { ...plan, aspectRatio: shaped === undefined ? undefined : `${shaped}` };
 }
 
 /**
@@ -218,7 +395,8 @@ export function recordShape(items: MediaItem[], index: number, ratio: number): M
  *
  * No decisions here: the layout classes are cleared wholesale and the planned
  * one put back, because the previous arrangement is not always one of the three
- * the re-plan used to enumerate by hand.
+ * the re-plan used to enumerate by hand. The slots are written in item order
+ * onto the grid's children, which is the order the card renders them in.
  */
 export function applyMediaGridPlan(grid: HTMLElement, plan: MediaGridPlan): void {
   for (const layout of GRID_LAYOUTS) {
@@ -229,4 +407,13 @@ export function applyMediaGridPlan(grid: HTMLElement, plan: MediaGridPlan): void
   if (plan.aspectRatio !== undefined) {
     grid.style.aspectRatio = plan.aspectRatio;
   }
+  // Cleared as well as set: a grid that was a two-column split still carries the
+  // weights of the arrangement it has left.
+  grid.style.gridTemplateColumns = plan.columns ?? '';
+  if (!plan.slots) return;
+  const cells = grid.children;
+  plan.slots.forEach((slot, index) => {
+    const cell = cells[index] as HTMLElement | undefined;
+    if (cell?.style) cell.style.width = slot.width;
+  });
 }
