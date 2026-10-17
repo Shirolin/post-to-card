@@ -2933,6 +2933,90 @@ test('F21.10: the exported pixel size is read beside the export button', async (
   );
 });
 
+/**
+ * Which of the two media controls the panel offers, read off the radio groups'
+ * accessible names rather than off a wrapper element, so the assertion is about
+ * whether the control is offered rather than about how the markup nests.
+ */
+async function mediaControls(threadData?: ThreadData): Promise<string[]> {
+  const html = await renderControls({ threadData });
+  const en = TRANSLATIONS['en-US'];
+  return [...html.matchAll(/role="radiogroup" aria-label="([^"]+)"/g)]
+    .map((m) => m[1])
+    .filter((name) => name === en.imageFit || name === en.mediaLayout);
+}
+
+test('F21.11: the media controls are withheld when the card draws no picture', async () => {
+  // Fit and layout act on pictures. A post with none renders the same card in
+  // either setting, so offering them is the same "this panel is broken" reading
+  // the footer switches are already withheld to avoid.
+  const textOnly = {
+    id: 'text-only',
+    author: VIDEO_TWEET.author,
+    text: 'a post with no picture on it',
+    media: [],
+  } as unknown as TweetData;
+  const bare = {
+    author: VIDEO_TWEET.author,
+    isSingle: true,
+    targetTweetIndex: 0,
+    tweets: [textOnly],
+  };
+
+  assert.deepEqual(
+    await mediaControls(bare),
+    [],
+    'neither media control is offered for a post the card prints no picture for'
+  );
+
+  // They come back as soon as there is something to lay out -- including when the
+  // picture is not on the first post, because the card draws media for every post
+  // it prints, not only the first.
+  const both = [TRANSLATIONS['en-US'].imageFit, TRANSLATIONS['en-US'].mediaLayout];
+
+  assert.deepEqual(
+    await mediaControls({ ...bare, tweets: [textOnly, VIDEO_TWEET] }),
+    both,
+    'a picture further down the thread brings both back'
+  );
+
+  // A quoted post's picture counts as well: the card mounts it with the same fit
+  // and layout rules as any other.
+  const quoted = {
+    ...textOnly,
+    quotePost: { ...VIDEO_TWEET, quotePost: undefined },
+  } as unknown as TweetData;
+  assert.deepEqual(
+    await mediaControls({ ...bare, tweets: [quoted] }),
+    both,
+    "a quoted post's picture counts too"
+  );
+
+  // And with nothing to judge -- the string renderer, or a mount that has not
+  // resolved a thread yet -- both are offered rather than guessed away.
+  assert.deepEqual(await mediaControls(), both, 'with no post to judge, both are offered');
+});
+
+test('F21.12: the media controls lead the panel, ahead of the choices that hold', async () => {
+  // Fit and layout are the only controls whose right answer is a property of the
+  // post rather than of the user, so they expire per post while every other
+  // answer here holds for weeks. That is why they come first.
+  // The language label carries an ampersand, and SSR escapes it inside the
+  // attribute, so the needle is escaped the same way before searching.
+  const html = await renderControls();
+  const en = TRANSLATIONS['en-US'];
+  const at = (label: string) => html.indexOf(`aria-label="${label.replace(/&/g, '&amp;')}"`);
+  const fit = at(en.imageFit);
+  assert.ok(fit > -1, 'the fit control is rendered');
+  assert.ok(fit < at(en.aspectRatio), 'ahead of the aspect ratio');
+  assert.ok(fit < at(en.theme), 'ahead of the theme');
+  assert.ok(at(en.language) > -1, 'the language picker is still rendered');
+  assert.ok(
+    fit < at(en.language),
+    'and well ahead of the language picker, which lives in the disclosure'
+  );
+});
+
 test('F21.1: toggling showQrCode hides or displays QR element in DOM', async () => {
   const shown = await renderCard({ config: { showQrCode: true } });
   const hidden = await renderCard({ config: { showQrCode: false } });

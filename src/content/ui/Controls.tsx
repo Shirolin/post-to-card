@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import type { ThreadData } from '../../types/tweet.ts';
+import type { ThreadData, TweetData } from '../../types/tweet.ts';
 import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../types/card.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS, IMAGE_FIT_OPTIONS, MEDIA_LAYOUT_OPTIONS, themePreview } from './themes.ts';
 import { getTranslation, sanitizeLocale } from '../i18n.ts';
@@ -130,6 +130,28 @@ function Toggle({
   );
 }
 
+/**
+ * Whether a post puts any picture on the card at all.
+ *
+ * The card draws media from a post's own attachment, an article's cover, and the
+ * same two on a quoted post -- through however many quotes are nested, because a
+ * quote of a quote renders as its own panel rather than as a flat body. An
+ * unavailable quote renders as one line of text with no media of its own, so it
+ * contributes nothing and the walk stops there.
+ */
+function postHasMedia(tweet: TweetData | undefined): boolean {
+  if (!tweet) return false;
+  if (tweet.media && tweet.media.length > 0) return true;
+  if (tweet.article && tweet.article.cover) return true;
+  return quoteHasMedia(tweet.quotePost);
+}
+
+function quoteHasMedia(quote: TweetData['quotePost']): boolean {
+  if (!quote || quote.isUnavailable) return false;
+  if (quote.media && quote.media.length > 0) return true;
+  return quoteHasMedia(quote.quotePost);
+}
+
 export function Controls({
   config,
   onChange,
@@ -216,7 +238,11 @@ export function Controls({
   );
   const fallbackIndex = threadData?.targetTweetIndex ?? 0;
   const fallbackTweet = threadData?.tweets[fallbackIndex] || threadData?.tweets[0];
-  const mainTweet = (activeTweets.length > 0 ? activeTweets : fallbackTweet ? [fallbackTweet] : [])[0];
+  // The same effective set the card draws from, so every question asked below
+  // about "this post" is asked about the posts that will actually be printed.
+  const effectiveTweets =
+    activeTweets.length > 0 ? activeTweets : fallbackTweet ? [fallbackTweet] : [];
+  const mainTweet = effectiveTweets[0];
 
   /**
    * Whether the post this card shows actually carries what each footer toggle
@@ -234,6 +260,15 @@ export function Controls({
   const hasQrTarget = !canDecide || Boolean(mainTweet?.url);
   const hasStatsData = !canDecide || hasRenderableStats(mainTweet?.stats);
   const hasTimestamp = !canDecide || Boolean(mainTweet?.timestamp);
+
+  /**
+   * Whether the card will draw a picture, and so whether the two media controls
+   * have anything to act on. Same reasoning as the footer switches above: a pair
+   * of switches that cannot change the output invites the user to conclude the
+   * panel is broken. Counted over every post the card prints, not just the first
+   * -- a thread whose second post carries the picture still needs them.
+   */
+  const hasMedia = !canDecide || effectiveTweets.some(postHasMedia);
 
   /**
    * The footer toggles, in order of how often they get touched.
@@ -363,7 +398,7 @@ export function Controls({
                   tweet.text || (tweet.richTokens ?? []).map((token) => token.value).join('');
                 const trimmedText = source.replace(/\s+/g, ' ').trim();
                 const snippet = trimmedText ? trimmedText.slice(0, 30) : t.mediaOnlyTweet;
-                const hasMedia = tweet.media && tweet.media.length > 0;
+                const tweetHasMedia = tweet.media && tweet.media.length > 0;
                 const isOnlyOneActive = !canExcludeMore && !isExcluded;
 
                 return (
@@ -386,7 +421,7 @@ export function Controls({
                     </span>
                     <span class="tweet-index-badge">#{idx + 1}</span>
                     <span class="tweet-snippet">{snippet}{trimmedText.length > 30 ? '…' : ''}</span>
-                    {hasMedia && (
+                    {tweetHasMedia && (
                       <span class="tweet-media-indicator" aria-hidden="true">
                         <LayoutGrid size={10} strokeWidth={2} />
                         {tweet.media!.length}
@@ -399,24 +434,46 @@ export function Controls({
           </section>
         )}
 
-        {/* Language sits permanently in view. It is the one control that
-            re-labels the panel the user is reading, so discoverability outranks
-            frequency here: buried behind the disclosure it cost a bilingual user a
-            tap every time, and the disclosure itself used to be three screens
-            down. One row, no group of its own. */}
-        <section class="control-section control-row-inline">
-          <span class="control-label">
-            <Languages size={14} strokeWidth={2} />
-            <span>{t.language}</span>
-          </span>
-          <Segmented
-            name={t.language}
-            options={['zh-CN', 'en-US'] as const}
-            value={sanitizeLocale(config.locale)}
-            onSelect={(next) => updateConfig({ locale: next })}
-            labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
-          />
-        </section>
+        {/* The two media controls lead the panel, behind only the thread scope.
+            They are the only pair here whose right answer is a property of the
+            post rather than of the user: which fit and which layout look right
+            depend on whether this picture is tall, wide, or one of four, and that
+            answer expires the moment the next post loads. Everything below them
+            answers a question about the user or the destination instead, and
+            survives the next post, which is what lets it sit lower. */}
+        {hasMedia && (
+          <>
+            <section class="control-section">
+              <span class="control-label">
+                <Scaling size={14} strokeWidth={2} />
+                <span>{t.imageFit}</span>
+              </span>
+              <Segmented
+                name={t.imageFit}
+                options={IMAGE_FIT_OPTIONS}
+                value={config.imageFit || 'contain'}
+                onSelect={(next) => updateConfig({ imageFit: next })}
+                labels={{ contain: t.fitContain, cover: t.fitCover }}
+                titles={{ contain: t.fitContain, cover: t.fitCover }}
+              />
+            </section>
+
+            <section class="control-section">
+              <span class="control-label">
+                <LayoutGrid size={14} strokeWidth={2} />
+                <span>{t.mediaLayout}</span>
+              </span>
+              <Segmented
+                name={t.mediaLayout}
+                options={MEDIA_LAYOUT_OPTIONS}
+                value={config.mediaLayout || 'grid'}
+                onSelect={(next) => updateConfig({ mediaLayout: next })}
+                labels={{ grid: t.layoutGrid, stack: t.layoutStack }}
+                titles={{ grid: t.layoutGrid, stack: t.layoutStack }}
+              />
+            </section>
+          </>
+        )}
 
         {/* Aspect ratio ahead of the theme: three options in the width of one
             segmented control, and it decides the card's height -- the thing that
@@ -560,10 +617,28 @@ export function Controls({
           </button>
 
           <div id={moreId} class="more-body" hidden={!showMore}>
-            {/* Layout first, and this order is the point. Padding and radius are the
-                knobs that go with the theme chosen above, so keeping them at the top
-                of the disclosure puts them one tap away from it rather than a screen
-                and a half. */}
+            {/* Language opens the disclosure. It is the slowest-moving control in
+                the panel -- set once, then read rather than changed -- and it is
+                the one about to grow past two options, which is a shape a fixed
+                row cannot hold. Inside here it costs one tap when it is actually
+                wanted and nothing when it is not. */}
+            <div class="control-section control-row-inline">
+              <span class="control-label">
+                <Languages size={14} strokeWidth={2} />
+                <span>{t.language}</span>
+              </span>
+              <Segmented
+                name={t.language}
+                options={['zh-CN', 'en-US'] as const}
+                value={sanitizeLocale(config.locale)}
+                onSelect={(next) => updateConfig({ locale: next })}
+                labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
+              />
+            </div>
+
+            {/* Padding and radius are the knobs that go with the theme chosen
+                above, so the settings proper open with them -- one tap from the
+                theme rather than a screen and a half. */}
             <div class="control-section">
               <span class="control-label">
                 <span>{t.layoutAndStyle}</span>
@@ -583,36 +658,6 @@ export function Controls({
                 onSelect={(next) => updateConfig({ borderRadius: next as RadiusOption })}
                 labels={{ theme: t.borderRadiusFollowTheme }}
                 titles={{ theme: t.borderRadiusFollowTheme }}
-              />
-            </div>
-
-            <div class="control-section">
-              <span class="control-label">
-                <Scaling size={14} strokeWidth={2} />
-                <span>{t.imageFit}</span>
-              </span>
-              <Segmented
-                name={t.imageFit}
-                options={IMAGE_FIT_OPTIONS}
-                value={config.imageFit || 'contain'}
-                onSelect={(next) => updateConfig({ imageFit: next })}
-                labels={{ contain: t.fitContain, cover: t.fitCover }}
-                titles={{ contain: t.fitContain, cover: t.fitCover }}
-              />
-            </div>
-
-            <div class="control-section">
-              <span class="control-label">
-                <LayoutGrid size={14} strokeWidth={2} />
-                <span>{t.mediaLayout}</span>
-              </span>
-              <Segmented
-                name={t.mediaLayout}
-                options={MEDIA_LAYOUT_OPTIONS}
-                value={config.mediaLayout || 'grid'}
-                onSelect={(next) => updateConfig({ mediaLayout: next })}
-                labels={{ grid: t.layoutGrid, stack: t.layoutStack }}
-                titles={{ grid: t.layoutGrid, stack: t.layoutStack }}
               />
             </div>
 

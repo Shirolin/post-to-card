@@ -473,8 +473,8 @@
 }
 
 /* A control that shares its row with its own label rather than sitting under it.
-   Used for the language picker: it re-labels the panel the user is reading, so it
-   stays permanently in view, and one row instead of two keeps that affordable. */
+   Used for the language picker: its two options fit beside the label, so it does
+   not spend a second row on itself inside the disclosure. */
 .control-row-inline {
   flex-direction: row;
   align-items: center;
