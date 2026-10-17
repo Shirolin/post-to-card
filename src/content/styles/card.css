@@ -671,9 +671,11 @@
    there, which is the cell's `max-height: unset` below, and the box has to
    agree. */
 /* Auto has no absolute ceiling: a 520px one shrank a 1:1 video below the column
-   width and left the recess showing beside it. Height is bounded by shape
-   instead -- Card.tsx floors a lone picture's ratio at 3:4, so the tallest it
-   gets is 4/3 of the column. The poster ratios below keep their own ceilings. */
+   width and left the recess showing beside it. Height follows from the shape
+   instead. Under `cover` Card.tsx floors a lone picture's ratio at 3:4, so the
+   tallest that mode gets is 4/3 of the column; under 完整展示 there is no floor
+   and the card grows to a tall picture, which is what that mode promises. The
+   poster ratios below keep their own ceilings. */
 .media-grid[data-count="1"] {
   --media-height-cap: none;
 }

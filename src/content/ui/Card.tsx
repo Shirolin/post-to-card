@@ -155,6 +155,9 @@ function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
   advanceImageFallback(event.currentTarget);
 }
 
+/** Narrowest shape (width / height) a lone cover picture is shown at: 3:4. */
+const MIN_LONE_RATIO = 0.75;
+
 function renderMediaGrid(
   media: MediaItem[] | undefined,
   altPrefix: string = 'Tweet photo',
@@ -178,10 +181,18 @@ function renderMediaGrid(
   const gridOptions = { aspectRatio, mediaLayout, imageFit };
   const plan = planMediaGrid(items, gridOptions);
 
+  // A lone picture under `cover` is the one shape the plan does not settle from
+  // the picture: there is no line to share and no neighbour to agree with, so a
+  // 9:16 video would run the card to nearly twice the column's height. Floor it
+  // at 3:4 and crop to that, which bounds the card at 4/3 of the column. 完整展示
+  // has no floor — it is the mode that promises the card grows to the picture —
+  // and poster ratios and stack state their own ceilings.
+  const floorsShape = count === 1 && imageFit === 'cover' && aspectRatio === 'auto' && mediaLayout !== 'stack';
+  const shapeOf = (ratio: number) => (floorsShape ? Math.max(ratio, MIN_LONE_RATIO) : ratio);
+
   // Both an image and a video poster settle the grid the same way: record the
-  // shape it reported, re-plan, and write the plan back. Nothing here floors or
-  // crops a shape: 完整展示 means the card grows to the picture, not the picture
-  // to the card, and a crop is only ever what `cover` itself asks for.
+  // shape it reported, re-plan, and write the plan back. The plan takes the
+  // picture's own shape; only the lone-cover floor above can overrule it.
   const settleGrid = (imgEl: HTMLImageElement, index: number) => {
     if (!imgEl.naturalWidth || !imgEl.naturalHeight) return;
     const ratio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
@@ -195,7 +206,14 @@ function renderMediaGrid(
     // browser actually decoded — the plan's slot when it has one, because that
     // is the shape the cell beside it was weighted against.
     const box = imgEl.closest ? (imgEl.closest('.media-box') as HTMLElement | null) : null;
-    if (box) box.style.aspectRatio = String(next.slots?.[index]?.ratio ?? ratio);
+    if (box) {
+      const boxRatio = shapeOf(next.slots?.[index]?.ratio ?? ratio);
+      box.style.aspectRatio = String(boxRatio);
+      // The first paint only knew X's declared shape; if the decoded one is
+      // taller and the cover floor crops it, the picture has to cover the box
+      // it was just given, not letterbox inside it.
+      if (boxRatio !== ratio) imgEl.style.objectFit = 'cover';
+    }
   };
 
   return (
@@ -216,7 +234,10 @@ function renderMediaGrid(
         // In 完整展示 the plan gives each cell the width its own picture takes of
         // its line; a crop keeps the track the stylesheet gives it.
         const slot = plan.slots?.[idx];
-        const boxRatio = slot ? slot.ratio : m.aspectRatio;
+        const boxRatio = slot ? slot.ratio : m.aspectRatio === undefined ? undefined : shapeOf(m.aspectRatio);
+        // A floored box is a crop, so the picture has to cover it; 完整展示 and
+        // the unfloored crop both leave the picture to its own fit rule.
+        const cropsToFloor = boxRatio !== undefined && m.aspectRatio !== undefined && boxRatio !== m.aspectRatio;
 
         return (
           <div
@@ -236,6 +257,7 @@ function renderMediaGrid(
                 alt={m.alt || `${altPrefix} ${idx + 1}`}
                 class={`media-picture ${fitClass}`}
                 data-fit={imageFit}
+                style={cropsToFloor ? { objectFit: 'cover' } : undefined}
                 loading="eager"
                 {...imageFallbackAttrs(m)}
                 onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
