@@ -100,13 +100,19 @@ type StorageChangeListener = (
 ) => void;
 
 /**
- * A copy, the way the real API hands one over.
+ * A copy, the way the real API hands one over on the way out.
  *
- * `chrome.storage` serializes across the boundary in both directions, so no
- * caller can reach the stored object itself. The mock used to hand the store's
- * own object to `get` callers and to listeners, which let `popup.js`'s
- * read-modify-write change storage without calling `set` at all: a test of that
- * write passed while the write was missing or aimed at the wrong key.
+ * The mock used to hand the store's own object to `get` callers and to
+ * listeners, which let `popup.js`'s read-modify-write change storage without
+ * calling `set` at all: a test of that write passed while the write was missing
+ * or aimed at the wrong key. Both exits now copy.
+ *
+ * The write side does not, so `set` still holds the caller's own object and a
+ * caller that kept a reference could change storage by mutating it. Nothing
+ * shipped does that -- the read-side copy above is what closed the one path
+ * that did -- and closing it would mean deciding how a write of an identical
+ * value behaves, which the storage API's own docs do not state. That would put
+ * a guess into the harness, so it stays as it is until something needs it.
  */
 function detached<T>(value: T): T {
   return structuredClone(value);
@@ -153,6 +159,18 @@ class ChromeStorageAreaMock {
     }
   }
 
+  /**
+   * How long a read takes to answer, in ms. Zero answers in the same task.
+   *
+   * The real API answers in a later task, and that gap is load-bearing: a reader
+   * registers its change listener right after it asks, so a write landing in
+   * between reaches the listener *before* the read's own snapshot does -- and
+   * that snapshot, taken when the read was asked for, is already stale. The
+   * synchronous mock could not express the ordering at all, so the test that is
+   * about it raises this.
+   */
+  public readDelayMs = 0;
+
   public get(keys: string | string[] | Record<string, any> | null, callback?: (items: Record<string, any>) => void): Promise<Record<string, any>> {
     return new Promise(resolve => {
       const result: Record<string, any> = {};
@@ -169,8 +187,15 @@ class ChromeStorageAreaMock {
           result[k] = this.store.has(k) ? detached(this.store.get(k)) : detached(keys[k]);
         });
       }
-      if (callback) callback(result);
-      resolve(result);
+      // The snapshot is built above, before any wait, because that is what a
+      // delayed read hands back: the value as it stood when it was asked for,
+      // not as it stands when it answers.
+      const answer = () => {
+        if (callback) callback(result);
+        resolve(result);
+      };
+      if (this.readDelayMs > 0) setTimeout(answer, this.readDelayMs);
+      else answer();
     });
   }
 
