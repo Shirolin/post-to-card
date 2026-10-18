@@ -123,9 +123,16 @@ function installFetchHook(): void {
     //
     // The clone is taken synchronously -- it has to be, since the page starts
     // consuming the body the moment it has the response -- and only then is the
-    // response returned. The read itself continues on its own afterwards; the
-    // bridge keeps only the newest body per operation, so a read that finishes
-    // late is still the one that matters.
+    // response returned. The read continues on its own afterwards.
+    //
+    // That does mean posts can now land in completion order rather than response
+    // order, and the bridge keeps whichever arrived last. It is harmless for the
+    // case that matters: a superseded request is aborted by X's own navigation,
+    // which rejects this read and posts nothing at all, and the bridge's stale
+    // body is already the documented path -- the detail parse reports a miss for
+    // a tweet the body lacks and the caller routes to the DOM channel. X's own
+    // client sends these over XHR besides, whose handler posts at body arrival
+    // and is not affected by any of this.
     const clone = response.status === 200 ? response.clone() : null;
     if (clone) {
       void clone

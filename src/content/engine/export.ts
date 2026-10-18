@@ -25,13 +25,14 @@ export const DEFAULT_EXPORT_SCALE = 2;
 /**
  * The largest canvas edge Chrome will actually allocate.
  *
- * A canvas above this fails rather than shrinking: `domToBlob` hands back
- * nothing, and the export reports a failure the user cannot act on. A long
- * thread multiplied by the retina scale reaches it -- the card is a fixed 640px
- * wide, so it is the height that grows -- which is why the scale is reduced to
- * fit rather than passed through unchecked.
+ * Measured rather than assumed: on Chrome 152 a 640x65535 canvas draws and
+ * encodes, and 640x65536 comes back empty. The first value used here was 16384,
+ * which is a different number -- the edge of a *square* canvas at the area cap
+ * (sqrt(2^28)) -- and it shrank exports that would have succeeded. The card is a
+ * fixed 640px wide, so it is the height that grows, and the height is what this
+ * bound applies to.
  */
-const MAX_CANVAS_EDGE = 16384;
+const MAX_CANVAS_EDGE = 65535;
 
 export interface RenderOptions {
   scale?: number;
@@ -198,6 +199,13 @@ function mountUnzoomedCopy(card: HTMLElement): { copy: HTMLElement; dispose: () 
  * Returns the requested scale untouched when the card has not been laid out
  * (a zero measurement, as in a headless render) -- guessing a factor there would
  * shrink exports that were never at risk.
+ *
+ * The reduction stops at 1. A card taller than the edge limit cannot be exported
+ * at any scale this could return -- at 1x it is already taller than the canvas
+ * the rasterizer would need -- so going below 1 would only produce a picture
+ * smaller than the card, against the fixed 640px width the preview and the size
+ * readout both promise. A card that deep is a failure either way; this keeps it
+ * a failure rather than a mis-sized success.
  */
 function clampScaleToCanvas(card: HTMLElement, scale: number): number {
   const width = card.offsetWidth;
