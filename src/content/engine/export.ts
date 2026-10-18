@@ -22,6 +22,17 @@ export const FALLBACK_PLACEHOLDER_DATA_URL =
  */
 export const DEFAULT_EXPORT_SCALE = 2;
 
+/**
+ * The largest canvas edge Chrome will actually allocate.
+ *
+ * A canvas above this fails rather than shrinking: `domToBlob` hands back
+ * nothing, and the export reports a failure the user cannot act on. A long
+ * thread multiplied by the retina scale reaches it -- the card is a fixed 640px
+ * wide, so it is the height that grows -- which is why the scale is reduced to
+ * fit rather than passed through unchecked.
+ */
+const MAX_CANVAS_EDGE = 16384;
+
 export interface RenderOptions {
   scale?: number;
   backgroundColor?: string | null;
@@ -79,19 +90,50 @@ export async function fetchImageAsBase64(
 export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Promise<() => void> {
   const images = Array.from(cardElement.querySelectorAll('img'));
   const originalSources: Array<{ img: HTMLImageElement; originalSrc: string }> = [];
+  const pending: Array<{ img: HTMLImageElement; src: string }> = [];
 
   for (const img of images) {
     const currentSrc = img.src || img.getAttribute('src') || '';
     if (currentSrc && !currentSrc.startsWith('data:') && !currentSrc.startsWith('blob:')) {
       originalSources.push({ img, originalSrc: currentSrc });
-      const base64Url = await fetchImageAsBase64(currentSrc, true);
-      img.src = base64Url;
+      pending.push({ img, src: currentSrc });
     }
   }
 
-  // Wait for images to complete decoding
+  // One round trip per distinct URL, not per image. A thread card repeats the
+  // same avatar on every post, so the same address was being asked for once per
+  // post; the in-flight promise is shared instead.
+  const byUrl = new Map<string, Promise<string>>();
+  const resolveSrc = (src: string): Promise<string> => {
+    let inflight = byUrl.get(src);
+    if (!inflight) {
+      inflight = fetchImageAsBase64(src, true);
+      byUrl.set(src, inflight);
+    }
+    return inflight;
+  };
+
+  // Bounded rather than one `Promise.all` over every image: each fetch is a
+  // message to the service worker, and a media-heavy card can carry a dozen.
+  // Four at a time keeps the round trips overlapping without opening all of
+  // them at once.
+  const CONCURRENCY = 4;
+  let next = 0;
+  const fill = async (): Promise<void> => {
+    while (next < pending.length) {
+      const item = pending[next++];
+      item.img.src = await resolveSrc(item.src);
+    }
+  };
   await Promise.all(
-    images.map(async (img) => {
+    Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => fill())
+  );
+
+  // Wait for the swapped images to finish decoding. Only the ones this call
+  // touched are waited on: an image already carrying a data URL was never
+  // rewritten and has nothing to settle.
+  await Promise.all(
+    pending.map(async ({ img }) => {
       if (img.complete) return;
       if (typeof img.decode === 'function') {
         try {
@@ -150,6 +192,31 @@ function mountUnzoomedCopy(card: HTMLElement): { copy: HTMLElement; dispose: () 
  * saw. A third implementation used to rewrite the TweetData model instead of
  * either; nothing reached it, because the card is rasterized from the DOM.
  */
+/**
+ * Reduces `scale` until the card's rasterized box fits in a canvas.
+ *
+ * Returns the requested scale untouched when the card has not been laid out
+ * (a zero measurement, as in a headless render) -- guessing a factor there would
+ * shrink exports that were never at risk.
+ */
+function clampScaleToCanvas(card: HTMLElement, scale: number): number {
+  const width = card.offsetWidth;
+  const height = card.offsetHeight;
+  if (!width || !height) return scale;
+
+  const longestEdge = Math.max(width, height);
+  const fitted = MAX_CANVAS_EDGE / longestEdge;
+  if (scale <= fitted) return scale;
+
+  // Floor rather than round, so the result is never a hair over the limit.
+  const reduced = Math.max(1, Math.floor(fitted * 100) / 100);
+  console.warn(
+    `[Post-to-Card] Card measures ${width}x${height}; scale ${scale} would exceed the ` +
+    `canvas limit, so the export uses ${reduced} instead.`
+  );
+  return reduced;
+}
+
 export async function renderCardToBlob(
   cardElement: HTMLElement,
   options: RenderOptions = {}
@@ -163,7 +230,8 @@ export async function renderCardToBlob(
   );
 
   try {
-    const scale = options.scale ?? DEFAULT_EXPORT_SCALE;
+    const requestedScale = options.scale ?? DEFAULT_EXPORT_SCALE;
+    const scale = clampScaleToCanvas(copy, requestedScale);
     const backgroundColor = options.backgroundColor !== undefined ? options.backgroundColor : null;
 
     const filter = (node: Node): boolean => {

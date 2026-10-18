@@ -287,11 +287,37 @@ export function isThreadConnectedPair(
  * (e.g. root tweet and direct parent replies) provides crucial conversation context
  * across both status detail views and timeline feeds.
  */
+/**
+ * Memoizes `extractTweetData` for the length of one resolution.
+ *
+ * Every walk below -- the predecessor scan, the ancestor chain's three signals,
+ * the parent's own predecessors, the successor scan -- is a loop over the same
+ * `allArticles` array, and each one asks about articles an earlier one already
+ * read. `extractTweetData` is not cheap: it is a chain of sub-extractors that
+ * includes two walks of the post's own text. The same article was being
+ * extracted several times per resolution.
+ *
+ * The scope is a single call on purpose. `TweetData` is a snapshot of the DOM as
+ * it was when it was read, so a cache that outlived the resolution would hand
+ * back stale posts to the next one -- and the observer can fire again while the
+ * page is still mutating.
+ */
+function createTweetReader(): (article: Element) => TweetData | null {
+  const cache = new Map<Element, TweetData | null>();
+  return (article) => {
+    if (cache.has(article)) return cache.get(article) ?? null;
+    const tweet = extractTweetData(article);
+    cache.set(article, tweet);
+    return tweet;
+  };
+}
+
 function resolveAncestorChain(
   headArt: Element,
   headTweet: TweetData,
   headIndex: number,
   allArticles: Element[],
+  readTweet: (article: Element) => TweetData | null,
   isDetailPage: boolean = true
 ): TweetData[] {
   const ancestors: TweetData[] = [];
@@ -327,7 +353,7 @@ function resolveAncestorChain(
           hasNativeThreadConnector(currChildArt, 'up') ||
           hasNativeThreadConnector(prevArt, 'down');
         if (hasConnector) {
-          const prevTweet = extractTweetData(prevArt);
+          const prevTweet = readTweet(prevArt);
           if (prevTweet && isTemporallyConnected(prevTweet, currChildTweet, true)) {
             matchedParentIndex = prevIndex;
           }
@@ -347,7 +373,7 @@ function resolveAncestorChain(
         for (let p = currChildIndex - 1; p >= minP; p--) {
           const pArt = allArticles[p];
           if (isAdOrSponsored(pArt)) continue;
-          const pTweet = extractTweetData(pArt);
+          const pTweet = readTweet(pArt);
           if (
             pTweet &&
             pTweet.author.handle.toLowerCase().replace(/^@/, '') === targetHandle &&
@@ -365,7 +391,7 @@ function resolveAncestorChain(
     if (isDetailPage && matchedParentIndex === -1 && currChildIndex > 0) {
       const rootArt = allArticles[0];
       if (!isAdOrSponsored(rootArt) && !visitedIndices.has(0)) {
-        const rootTweet = extractTweetData(rootArt);
+        const rootTweet = readTweet(rootArt);
         const replyHandle = getReplyingToHandle(currChildArt);
         const rootHandle = rootTweet?.author.handle.toLowerCase().replace(/^@/, '');
         const targetHandle = replyHandle?.toLowerCase().replace(/^@/, '');
@@ -385,7 +411,7 @@ function resolveAncestorChain(
 
     visitedIndices.add(matchedParentIndex);
     const parentArt = allArticles[matchedParentIndex];
-    const parentTweet = extractTweetData(parentArt);
+    const parentTweet = readTweet(parentArt);
     if (!parentTweet) {
       break;
     }
@@ -397,7 +423,7 @@ function resolveAncestorChain(
     let curPTweet = parentTweet;
     for (let p = matchedParentIndex - 1; p >= 0; p--) {
       const prevPArt = allArticles[p];
-      const prevPTweet = extractTweetData(prevPArt);
+      const prevPTweet = readTweet(prevPArt);
       if (!prevPTweet) break;
       if (!isThreadConnectedPair(curPArt, prevPArt, curPTweet, prevPTweet, false, isDetailPage)) {
         break;
@@ -431,7 +457,8 @@ export function extractContinuousThread(
   targetArticle: Element,
   rootContainer?: ParentNode | null
 ): ThreadData {
-  const targetTweet = extractTweetData(targetArticle);
+  const readTweet = createTweetReader();
+  const targetTweet = readTweet(targetArticle);
   if (!targetTweet) {
     return {
       author: { name: '', handle: '', avatarUrl: '' },
@@ -477,7 +504,7 @@ export function extractContinuousThread(
   let currentTweet = targetTweet;
   for (let i = targetIndex - 1; i >= 0; i--) {
     const prevArt = allArticles[i];
-    const prevTweet = extractTweetData(prevArt);
+    const prevTweet = readTweet(prevArt);
     if (!prevTweet) break;
 
     if (!isThreadConnectedPair(currentArt, prevArt, currentTweet, prevTweet, false, isDetailPage)) {
@@ -496,7 +523,7 @@ export function extractContinuousThread(
   if (headIndex > 0) {
     const headArt = allArticles[headIndex];
     const headTweet = predecessors.length > 0 ? predecessors[0] : targetTweet;
-    const ancestorChain = resolveAncestorChain(headArt, headTweet, headIndex, allArticles, isDetailPage);
+    const ancestorChain = resolveAncestorChain(headArt, headTweet, headIndex, allArticles, readTweet, isDetailPage);
     if (ancestorChain.length > 0) {
       predecessors.unshift(...ancestorChain);
     }
@@ -508,7 +535,7 @@ export function extractContinuousThread(
   currentTweet = targetTweet;
   for (let i = targetIndex + 1; i < allArticles.length; i++) {
     const nextArt = allArticles[i];
-    const nextTweet = extractTweetData(nextArt);
+    const nextTweet = readTweet(nextArt);
     if (!nextTweet) break;
 
     if (!isThreadConnectedPair(currentArt, nextArt, currentTweet, nextTweet, true, isDetailPage)) {
