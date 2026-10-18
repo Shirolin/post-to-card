@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
         outDir: 'dist',
         emptyOutDir: false,
         target: 'esnext',
-        minify: false,
+        minify: true,
         lib: {
           entry: resolve(__dirname, 'src/content/graphql/hook.ts'),
           name: 'PostToCardGraphQLHook',
@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
         outDir: 'dist',
         emptyOutDir: false,
         target: 'esnext',
-        minify: false,
+        minify: true,
         lib: {
           entry: resolve(__dirname, 'src/background/index.ts'),
           formats: ['es'],
@@ -105,7 +105,7 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       emptyOutDir: false,
       target: 'esnext',
-      minify: false,
+      minify: true,
       lib: {
         entry: resolve(__dirname, 'src/content/index.ts'),
         name: 'PostToCardContent',

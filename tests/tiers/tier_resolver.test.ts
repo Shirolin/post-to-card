@@ -54,14 +54,14 @@ function seedGraphQLCache(body: string, operationName = 'TweetDetail', queryId =
   mockWindow.dispatchEvent({
     type: 'message',
     origin: 'https://x.com',
-    data: JSON.stringify({
+    data: {
       source: 'post-to-card-graphql',
       type: 'post-to-card:graphql-payload',
       operationName,
       queryId,
       status: 200,
       body,
-    }),
+    },
   });
 }
 

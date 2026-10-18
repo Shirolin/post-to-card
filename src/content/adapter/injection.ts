@@ -474,6 +474,47 @@ function isTopLevelActionBar(el: Element): boolean {
 }
 
 /**
+ * True when a batch of mutation records could have produced a new injection
+ * point.
+ *
+ * The observer watches all of `document.body` with `subtree: true`, so on a live
+ * timeline it fires continuously for reasons that have nothing to do with this
+ * extension: a virtual-scroll cell recycled, a hover card opened, a poll's timer
+ * ticking, an ad slot rotating. Each of those used to schedule a full-document
+ * query for the action-bar selector -- a descendant-combinator query over every
+ * article on the page. Reading the records lets the ones that cannot matter fall
+ * through instead.
+ *
+ * Two shapes both matter, and they are why this checks more than "is the added
+ * node a tweet":
+ *
+ *   - a whole post inserted into the page (or into a virtual-scroll cell), where
+ *     the added node is, or contains, an article; and
+ *   - a post whose own subtree was filled in afterwards. X inserts the article's
+ *     skeleton first and hydrates the action bar into it, so the change that
+ *     matters has the article as its *target* and carries no added node that
+ *     matches.
+ *
+ * Removals are not read: taking a node away cannot create an injection point.
+ */
+function mutationsMayAffectTweets(records: MutationRecord[]): boolean {
+  for (const record of records) {
+    const target = record.target;
+    if (target.nodeType === 1 && (target as Element).closest(TWEET_ARTICLE_SELECTOR)) {
+      return true;
+    }
+    for (const node of record.addedNodes) {
+      if (node.nodeType !== 1) continue;
+      const el = node as Element;
+      if (el.matches(TWEET_ARTICLE_SELECTOR) || el.querySelector(TWEET_ARTICLE_SELECTOR)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Initializes continuous dynamic injection on Twitter/X Web App:
  * 1. Executes immediate initial injection scan.
  * 2. Establishes a 150ms debounced MutationObserver on document.body for virtual scrolling.
@@ -605,8 +646,10 @@ export function initTwitterInjection(
 
   // MutationObserver setup
   if (document.body) {
-    observer = new MutationObserver(() => {
-      scheduleScan();
+    observer = new MutationObserver((records) => {
+      if (mutationsMayAffectTweets(records)) {
+        scheduleScan();
+      }
     });
 
     observer.observe(document.body, {

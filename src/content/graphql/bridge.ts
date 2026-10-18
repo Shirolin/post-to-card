@@ -24,8 +24,18 @@ export interface ReplyLink {
 const MESSAGE_SOURCE = 'post-to-card-graphql';
 const MESSAGE_TYPE = 'post-to-card:graphql-payload';
 
-/** Only the newest payload per operation is worth keeping. */
-const cache = new Map<string, { body: string; queryId: string; observedAt: number }>();
+/**
+ * Only the newest payload per operation is worth keeping.
+ *
+ * The entry carries the reply linkage read from `body`. Every captured payload
+ * is parsed for one anyway (see `handleMessage`), and the detail parse needs the
+ * same map, so keeping the one that was already built saves parsing the same
+ * body twice.
+ */
+const cache = new Map<
+  string,
+  { body: string; queryId: string; observedAt: number; replyLinks: Map<string, ReplyLink> }
+>();
 
 const MAX_REPLY_LINKS = 4000;
 const replyLinks = new Map<string, ReplyLink>();
@@ -60,9 +70,12 @@ function currentTweetIdFromUrl(): string | undefined {
 
 function handleMessage(event: MessageEvent): void {
   if (event.origin !== window.location.origin) return;
-  if (typeof event.data !== 'string') return;
+  // The hook posts the payload object, so it arrives as plain data through the
+  // structured clone. Anything of another shape on `window`'s message channel
+  // belongs to the page, not to us.
+  if (typeof event.data !== 'object' || event.data === null) return;
 
-  let payload: {
+  const payload = event.data as {
     source?: string;
     type?: string;
     operationName?: string;
@@ -70,28 +83,26 @@ function handleMessage(event: MessageEvent): void {
     body?: string;
     status?: number;
   };
-  try {
-    payload = JSON.parse(event.data);
-  } catch {
-    return;
-  }
 
-  if (payload?.source !== MESSAGE_SOURCE || payload?.type !== MESSAGE_TYPE) return;
+  if (payload.source !== MESSAGE_SOURCE || payload.type !== MESSAGE_TYPE) return;
   if (!payload.operationName || !payload.body || payload.status !== 200) return;
 
-  // Only a conversation body is retained; everything else is read below and
-  // dropped.
+  // Which post each post answers is the one fact that proves a thread in a list
+  // view, and every payload states it, so this read is not gated on the list.
+  const replyLinks = parseReplyLinkage(payload.body);
+  rememberReplyLinks(replyLinks);
+
+  // Only a conversation body is retained; everything else is read above and
+  // dropped. The linkage read above is kept with it rather than thrown away,
+  // because the detail parse wants exactly this map for exactly this body.
   if (DETAIL_OPERATIONS[payload.operationName] === true) {
     cache.set(payload.operationName, {
       body: payload.body,
       queryId: payload.queryId || '',
       observedAt: Date.now(),
+      replyLinks,
     });
   }
-
-  // Which post each post answers is the one fact that proves a thread in a list
-  // view, and every payload states it, so this read is not gated on the list.
-  rememberReplyLinks(parseReplyLinkage(payload.body));
 }
 
 /**
@@ -132,7 +143,8 @@ export function lookupFromGraphQL(targetTweetId?: string): GraphQLLookup {
       entry.body,
       operationName,
       entry.queryId,
-      id
+      id,
+      entry.replyLinks
     );
     if (parsed.thread) {
       return { thread: parsed.thread, operationName, queryId: entry.queryId };

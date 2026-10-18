@@ -680,7 +680,16 @@ export function parseTweetDetailResponse(
   body: string,
   operationName: string,
   queryId: string,
-  targetTweetId?: string
+  targetTweetId?: string,
+  /**
+   * The reply linkage of `body`, when the caller already has it.
+   *
+   * The bridge parses every captured body for its reply links anyway -- that
+   * index is the only way a list view can prove thread membership -- so passing
+   * the result down saves a second full `JSON.parse` plus walk of a body that
+   * can run to megabytes. Omitted, this parses the body itself.
+   */
+  knownReplyLinks?: Map<string, ReplyLink>
 ): ParsedGraphQL {
   const base: ParsedGraphQL = { thread: null, tombstones: 0, operationName, queryId };
 
@@ -745,7 +754,7 @@ export function parseTweetDetailResponse(
 
   let scopedTweets = tweets;
   if (targetTweetId && !isPureSingleAuthor) {
-    const replyLinks = parseReplyLinkage(body);
+    const replyLinks = knownReplyLinks ?? parseReplyLinkage(body);
     const targetTweet = tweets[targetTweetIndex];
 
     const ancestors: TweetData[] = [];
@@ -866,7 +875,14 @@ export function parseReplyLinkage(body: string): Map<string, ReplyLink> {
       }
     }
 
-    for (const value of Object.values(tweet)) stack.push(value);
+    // `for...in` with an own-property guard, rather than `Object.values`: the
+    // walk visits up to MAX_LINKAGE_NODES objects on a timeline body, and
+    // `Object.values` allocates a fresh array of every value per node. The
+    // guard keeps the same set -- an own enumerable key, the only kind
+    // `Object.values` would have returned.
+    for (const key in tweet) {
+      if (Object.hasOwn(tweet, key)) stack.push(tweet[key]);
+    }
   }
 
   return found;

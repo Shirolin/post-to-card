@@ -25,7 +25,7 @@ interface GraphQLPayload {
   type: typeof MESSAGE_TYPE;
   operationName: string;
   queryId: string;
-  /** Serialized response body. Kept as text so it crosses the world boundary safely. */
+  /** The response body, as text -- this is what X itself received. */
   body: string;
   status: number;
   observedAt: number;
@@ -47,12 +47,15 @@ function extractRequestInfo(url: string): { operationName: string; queryId: stri
 
 function post(payload: GraphQLPayload): void {
   try {
-    // Structured clone cannot cross the world boundary safely, so the body
-    // travels as a JSON string.
-    window.postMessage(JSON.stringify(payload), window.location.origin);
+    // The payload is all primitives, so the structured clone `postMessage`
+    // performs crosses the world boundary as it is. It used to be
+    // `JSON.stringify`d first, which walked the whole response body twice --
+    // once to escape it into a string, once in the receiver to parse it back --
+    // for a body that is already a string.
+    window.postMessage(payload, window.location.origin);
   } catch {
-    // A response that cannot be serialized is simply not usable; the DOM
-    // channel remains available.
+    // A response that cannot be cloned is simply not usable; the DOM channel
+    // remains available.
   }
 }
 
@@ -112,21 +115,43 @@ function installFetchHook(): void {
     if (!info) return callThrough();
 
     const response = await callThrough();
-    try {
-      // Clone so the page can still consume the body.
-      const body = response.status === 200 ? await response.clone().text() : '';
-      post({
-        source: MESSAGE_SOURCE,
-        type: MESSAGE_TYPE,
-        operationName: info.operationName,
-        queryId: info.queryId,
-        body,
-        status: response.status,
-        observedAt: Date.now(),
-      });
-    } catch {
-      // An unreadable body is not an error worth surfacing; the DOM channel
-      // covers the gap.
+
+    // The page is awaiting this call, so nothing here may sit between the
+    // response arriving and it being handed back. Reading the body used to be
+    // awaited before the return, which made X wait for this hook to finish
+    // parsing a multi-megabyte timeline payload before its own promise resolved.
+    //
+    // The clone is taken synchronously -- it has to be, since the page starts
+    // consuming the body the moment it has the response -- and only then is the
+    // response returned. The read continues on its own afterwards.
+    //
+    // That does mean posts can now land in completion order rather than response
+    // order, and the bridge keeps whichever arrived last. It is harmless for the
+    // case that matters: a superseded request is aborted by X's own navigation,
+    // which rejects this read and posts nothing at all, and the bridge's stale
+    // body is already the documented path -- the detail parse reports a miss for
+    // a tweet the body lacks and the caller routes to the DOM channel. X's own
+    // client sends these over XHR besides, whose handler posts at body arrival
+    // and is not affected by any of this.
+    const clone = response.status === 200 ? response.clone() : null;
+    if (clone) {
+      void clone
+        .text()
+        .then((body) => {
+          post({
+            source: MESSAGE_SOURCE,
+            type: MESSAGE_TYPE,
+            operationName: info.operationName,
+            queryId: info.queryId,
+            body,
+            status: response.status,
+            observedAt: Date.now(),
+          });
+        })
+        .catch(() => {
+          // An unreadable body is not an error worth surfacing; the DOM channel
+          // covers the gap.
+        });
     }
     return response;
   } as typeof window.fetch;
