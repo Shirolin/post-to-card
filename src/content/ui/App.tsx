@@ -22,8 +22,9 @@ import { getTranslation, sanitizeLocale, formatPreviewSummary } from '../i18n.ts
  * same thing on every screen and a chosen level survives a window resize. `fit` is
  * the exception: it is resolved per render against the card's measured height, so
  * it shows the whole card at whatever scale the window turns out to allow. It
- * leads the list because it is the only level that stays useful on a phone, where
- * the fixed levels are all capped away.
+ * leads the list, and is the default, because it is the only level that stays
+ * useful on a phone, where the fixed levels are all capped away -- and because
+ * "show me the card I just asked for" is the question a preview opens on.
  */
 const ZOOM_LEVELS = ['fit', 0.5, 0.75, 1] as const;
 type ZoomLevel = (typeof ZOOM_LEVELS)[number];
@@ -74,7 +75,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   // Preview-only scale. The export captures a copy of the card outside this
   // zoom (see mountUnzoomedCopy in engine/export.ts), so exported dimensions
   // stay at the fixed 640px card width.
-  const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.length - 1);
+  const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.indexOf('fit'));
   const level = ZOOM_LEVELS[zoomIndex];
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -187,8 +188,10 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    *
    * Snapping down to the largest reachable fixed level costs some preview -- 0.902
    * to 0.75 on a 1024px window, 0.558 to 0.5 on a phone -- and buys a control that
-   * says what it is showing. `fit` is the fallback only when every fixed level is
-   * capped away, which is also the case where the toolbar hides itself.
+   * says what it is showing. `fit` is never capped (it is defined by the stage), so
+   * a selection made there is left alone by this effect; it is also the fallback
+   * when every fixed level is capped away, which is the case where the toolbar
+   * hides itself.
    *
    * Runs on `maxScale` rather than once at mount, so rotating a tablet into a
    * narrower stage corrects the selection too. It does not restore the previous

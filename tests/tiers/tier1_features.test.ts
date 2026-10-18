@@ -3337,6 +3337,50 @@ test('F23.5: scroll lock calculates and compensates for scrollbar width', async 
   });
 });
 
+test('F23.7: the preview opens on 适应', async () => {
+  // The preview answers "show me the card I just asked for" before anything else,
+  // so the level it opens on is the one that shows the whole card. It is also the
+  // only level that stays meaningful on a phone, where every fixed percentage is
+  // capped away -- and there the toolbar is the only control left, so opening on
+  // a capped level would mean opening on a dead button.
+  //
+  // Nothing asserted this before: the selection was read off `ZOOM_LEVELS.length`
+  // at mount, and swapping that for any other index kept every gate green.
+  //
+  // The locale is seeded because the radio is found by its label, and the default
+  // comes off the machine's own `navigator.language`.
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+  const chromeMock = createChromeMock();
+  await chromeMock.storage.local.set({ post_to_card_user_prefs: { locale: 'en-US' } });
+  scope.chrome = chromeMock;
+
+  try {
+    await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+      const container = openCardModal(CONTAINER_THREAD);
+      await flushEffects();
+
+      const en = TRANSLATIONS['en-US'];
+      const group = container.shadow.querySelector(
+        `[role="radiogroup"][aria-label="${en.zoomLabel}"]`
+      ) as any;
+      assert.ok(group, 'the preview toolbar has to be on screen to answer this');
+
+      const radios = [...(group.querySelectorAll('[role="radio"]') as any)] as any[];
+      const checked = radios.filter((radio) => radio.getAttribute('aria-checked') === 'true');
+      assert.equal(checked.length, 1, `exactly one level is selected, got ${checked.length}`);
+      assert.equal(checked[0].textContent.trim(), en.zoomFit, 'and it is 适应');
+      assert.ok(
+        checked[0].classList.contains('is-active'),
+        'the selected level is the one styled as active'
+      );
+    });
+  } finally {
+    if (savedChrome !== undefined) scope.chrome = savedChrome;
+    else delete scope.chrome;
+  }
+});
+
 test('F23.6: a hidden preview toolbar is actually hidden, not just marked', () => {
   // The `hidden` attribute is a user-agent style, and the toolbar's own
   // `display: flex` is an author rule, so it won every time: on a window
