@@ -108,6 +108,11 @@ if (toggleInput) {
     const enabled = toggleInput.checked;
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       chrome.storage.local.get(STORAGE_KEY, (items) => {
+        // A read that failed hands the callback no items at all, and the set
+        // below would then write the one-field object built from that over every
+        // other preference. Nothing to toggle is the safe outcome; the stored
+        // value is whatever the page's own card still reads.
+        if (chrome.runtime.lastError) return;
         const prefs = items && items[STORAGE_KEY] ? items[STORAGE_KEY] : {};
         prefs.showActionBarButton = enabled;
         chrome.storage.local.set({ [STORAGE_KEY]: prefs }, () => {

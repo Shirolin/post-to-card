@@ -13,13 +13,13 @@ The final exportable visual artifact presenting tweet content, author informatio
 A continuous, chronological chain of consecutive tweets authored by the same user, excluding ads, unrelated replies, and retweets.
 
 ### Thread Session
-The active, in-memory editing lifecycle of a specific thread inside the card preview modal. Governs which tweets within the thread are currently included or excluded from the card rendering. It is transient and distinct from user preferences.
+The active, in-memory editing lifecycle of a specific thread inside the card preview modal. Governs which tweets within the thread are currently included or excluded from the card rendering. The lifecycle is transient; the exclusions are not — they are saved in User Preferences (below), so a tweet excluded once stays excluded in any later card that contains it.
 
 ### Thread Resolution
 The multi-channel intake pipeline that produces structured `ThreadData` from a target post. Prioritizes intercepted GraphQL conversation trees and client-side translations, falling back to chronological DOM timeline extraction corroborated by snowflake ordering, visual connectors, and GraphQL reply linkage.
 
 ### User Preferences
-The persistent styling and layout configuration (visual theme, padding tier, border radius, aspect ratio, image fit, media layout, interface and card language, and display toggles) stored in extension storage and reused across all card generations.
+The persistent styling and layout configuration (visual theme, padding tier, corner, aspect ratio, image fit, media layout, interface and card language, display toggles, and the thread exclusions of a Thread Session) stored in extension storage and reused across all card generations.
 
 Interface and card language is one setting with two scopes, deliberately. It localizes the modal's own chrome and the extension popup, and it also formats the dates printed inside the card, because a card is shared with people who read the poster's language rather than the reader's. It does **not** reach the card's prose or a translated-from notice: those are reproduced verbatim from the source page, since they are the author's words and X's own attribution rather than card UI.
 

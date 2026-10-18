@@ -1043,11 +1043,14 @@ export function sanitizePadding(val: string): PaddingOption {
  * them on the default.
  */
 export function sanitizeTheme(val?: string | null): ThemeId {
-  if (val && val in THEMES) {
+  // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so `constructor`
+  // or `__proto__` would be taken for a live theme id and handed to
+  // `THEMES[id].tokens`, which is the crash this sanitizer exists to prevent.
+  if (val && Object.hasOwn(THEMES, val)) {
     return val as ThemeId;
   }
-  if (val && val in LEGACY_THEME_ALIASES) {
-    // `in` proves the key exists; TS cannot narrow a `string` to the key union.
+  if (val && Object.hasOwn(LEGACY_THEME_ALIASES, val)) {
+    // `hasOwn` proves the key exists; TS cannot narrow a `string` to the key union.
     return LEGACY_THEME_ALIASES[val as LegacyThemeId];
   }
   return DEFAULT_CARD_CONFIG.theme;

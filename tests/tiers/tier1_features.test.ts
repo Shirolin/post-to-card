@@ -2238,6 +2238,15 @@ test('F17.6: retired presets migrate to a live theme instead of resetting', () =
   assert.equal(sanitizeTheme('notion-clean-white'), 'gallery');
   assert.equal(sanitizeTheme('nonsense'), 'minimal');
   assert.equal(sanitizeTheme(undefined), 'minimal');
+  // Names that live on `Object.prototype` are not theme ids. The sanitizer used
+  // to ask `val in THEMES`, which walks the prototype chain, so these passed for
+  // live ids -- and `sanitizeTheme`'s answer is fed straight to
+  // `THEMES[id].tokens`, which is the crash it exists to prevent. `hasOwn` is
+  // what closes that, and only these names can tell the two apart: a test over
+  // the real ids and the retired ones passes either way.
+  for (const hostile of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+    assert.equal(sanitizeTheme(hostile), 'minimal', `${hostile} must not resolve to a theme`);
+  }
   for (const alias of Object.keys(LEGACY_THEME_ALIASES)) {
     assert.ok(THEMES[sanitizeTheme(alias)], `legacy id ${alias} must resolve to a live theme`);
   }
@@ -4446,6 +4455,140 @@ test('F30.11: the toggle writes the preference back and says so', async () => {
       },
     }
   );
+});
+
+test('F30.13: the open panel follows a preference changed outside it, and does not undo it', async () => {
+  // The panel read the stored preferences once, on mount, and never listened.
+  // A card that was already open therefore could not be told about the popup's
+  // toggle — and the panel's next click wrote its own stale copy back whole,
+  // putting the old value back in storage and in every other tab. The injected
+  // triggers followed the popup (Tier 2.63); the card did not, so F30's
+  // multi-tab live sync held for one of its two readers.
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+  const chromeMock = createChromeMock();
+  const write = (fields: Record<string, unknown>) =>
+    chromeMock.storage.local.set({ post_to_card_user_prefs: fields });
+  // The locale is seeded rather than left to the default: the panel is found by
+  // its labels below, and `detectDefaultLocale` answers off the machine's own
+  // `navigator.language`, which would make this test read differently on a
+  // different machine.
+  await write({ theme: 'gallery', blurAuthor: false, showActionBarButton: false, locale: 'en-US' });
+  scope.chrome = chromeMock;
+
+  try {
+    await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+      const container = openCardModal(CONTAINER_THREAD);
+      await flushEffects();
+
+      const card = () => container.shadow.querySelector('#post-to-card-export-target') as any;
+      assert.equal(card().getAttribute('data-theme'), 'gallery', 'the mount reads what storage holds');
+
+      // Another context — the popup, or a panel in a second tab — moves a
+      // preference this card is showing. The blur toggle is left alone so the
+      // panel's own next edit is a distinct change rather than a round trip.
+      await write({ theme: 'terminal', blurAuthor: false, showActionBarButton: true, locale: 'en-US' });
+      await flushEffects();
+
+      assert.equal(
+        card().getAttribute('data-theme'),
+        'terminal',
+        'the open card has to follow a change it did not make'
+      );
+
+      const switches = [...(container.mountPoint.querySelectorAll('.toggle-item') as any)] as any[];
+      const privacy = switches.find((node) =>
+        node.textContent.includes(TRANSLATIONS['en-US'].blurAuthor)
+      );
+      assert.ok(
+        privacy,
+        `the privacy switch was not found among ${switches.length} toggles`
+      );
+      privacy.click();
+
+      const stored = await chromeMock.storage.local.get('post_to_card_user_prefs');
+      assert.equal(
+        stored.post_to_card_user_prefs.theme,
+        'terminal',
+        'the panel must save the preference it was told about, not the one it read at mount'
+      );
+      assert.equal(
+        stored.post_to_card_user_prefs.blurAuthor,
+        true,
+        'and the edit the user just made, beside it'
+      );
+    });
+  } finally {
+    if (savedChrome !== undefined) scope.chrome = savedChrome;
+    else delete scope.chrome;
+  }
+});
+
+test('F30.14: a change that beats the panel\'s own read is not undone by it', async () => {
+  // The mount has two sources for the same value and they can arrive in either
+  // order. A change landing while the read is still in flight reaches the panel
+  // first, and the read then answers with the snapshot it took when it was asked
+  // for -- the value from before the change. Applying that afterwards puts the
+  // old value back, and the panel's next edit writes it down as the user's own,
+  // which is the very defect the subscription was added to remove. F30.13 writes
+  // before the mount, so it never reaches this ordering.
+  //
+  // The read is delayed to open the window the race needs. The real API always
+  // has one -- it answers in a later task -- and the mock answered in the same
+  // one, so the ordering was not expressible at all before this.
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+  const chromeMock = createChromeMock();
+  const write = (fields: Record<string, unknown>) =>
+    chromeMock.storage.local.set({ post_to_card_user_prefs: fields });
+  // Seeded for the same reason F30.13 seeds it: the panel is found by its label
+  // below, and the default locale comes off the machine's `navigator.language`.
+  await write({ theme: 'gallery', blurAuthor: false, showActionBarButton: false, locale: 'en-US' });
+  scope.chrome = chromeMock;
+  chromeMock.storage.local.readDelayMs = 120;
+
+  try {
+    await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+      const container = openCardModal(CONTAINER_THREAD);
+      // Past the 35ms the effects are deferred by, so the read is in flight, and
+      // short of the 120ms it takes to answer.
+      await flushEffects();
+
+      await write({ theme: 'terminal', blurAuthor: false, showActionBarButton: true, locale: 'en-US' });
+
+      // Long enough for the read to have answered.
+      await flushEffects();
+      await flushEffects();
+
+      const card = container.shadow.querySelector('#post-to-card-export-target') as any;
+      assert.equal(
+        card.getAttribute('data-theme'),
+        'terminal',
+        'the change that beat the read is the one the panel must be showing'
+      );
+
+      // The panel has to be *holding* the newer value, not the snapshot: its
+      // next write carries whatever it holds, so one more edit is what would
+      // make a reverted preference permanent.
+      const switches = [...(container.mountPoint.querySelectorAll('.toggle-item') as any)] as any[];
+      const privacy = switches.find((node) =>
+        node.textContent.includes(TRANSLATIONS['en-US'].blurAuthor)
+      );
+      assert.ok(privacy, `the privacy switch was not found among ${switches.length} toggles`);
+      privacy.click();
+
+      const stored = await chromeMock.storage.local.get('post_to_card_user_prefs');
+      assert.equal(
+        stored.post_to_card_user_prefs.theme,
+        'terminal',
+        'the panel must save the preference it was told about, not the one its read returned'
+      );
+      assert.equal(stored.post_to_card_user_prefs.blurAuthor, true, 'and the edit the user just made');
+    });
+  } finally {
+    if (savedChrome !== undefined) scope.chrome = savedChrome;
+    else delete scope.chrome;
+  }
 });
 
 test('F30.12: a popup with no active tab says so instead of doing nothing', async () => {

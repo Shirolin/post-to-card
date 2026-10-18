@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig } from '../../types/card.ts';
 import { DEFAULT_CARD_CONFIG, THEMES } from './themes.ts';
-import { loadUserPreferences, saveUserPreferences } from '../prefs.ts';
+import { loadUserPreferences, saveUserPreferences, subscribePreferences } from '../prefs.ts';
 import { setInjectedButtonVisibility } from '../adapter/injection.ts';
 import { Card } from './Card.tsx';
 import { Controls } from './Controls.tsx';
@@ -224,14 +224,38 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   useEffect(() => {
     if (initialConfig) return;
     let mounted = true;
+
+    // This mount now has two sources for the same value, and they can arrive in
+    // either order. The read is asynchronous, so a change can come back over the
+    // subscription first -- the popup's toggle while the card is opening is
+    // enough. Applying the snapshot afterwards puts the old value back, which
+    // the panel's next edit then writes down as the user's own. So a value that
+    // arrived by change wins, and the snapshot applies only while nothing has.
+    // The same guard, for the same reason, as the triggers' own reader in
+    // `adapter/injection.ts`.
+    let preferenceChangedSinceLoad = false;
+
     loadUserPreferences().then((saved) => {
-      if (mounted) {
+      if (mounted && !preferenceChangedSinceLoad) {
         setConfig(saved);
         setInjectedButtonVisibility(saved.showActionBarButton !== false);
       }
     });
+
+    // Follow changes this panel did not make: the popup's toggle, another tab's
+    // panel. Without it this mount keeps its own copy and the next edit writes
+    // that copy back whole, so the external change is undone by whichever
+    // control the user reaches for next.
+    const unsubscribe = subscribePreferences((next) => {
+      if (!mounted) return;
+      preferenceChangedSinceLoad = true;
+      setConfig(next);
+      setInjectedButtonVisibility(next.showActionBarButton !== false);
+    });
+
     return () => {
       mounted = false;
+      unsubscribe();
     };
     // Mount-only by intent: `initialConfig` is a harness override that must not be
     // re-read, and reading it as a dependency would re-run the effect whenever the
