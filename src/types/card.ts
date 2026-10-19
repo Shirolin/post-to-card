@@ -47,6 +47,31 @@ export type PaddingOption = '16px' | '32px' | '48px';
 export type RadiusOption = 'theme' | '0px' | '12px' | '20px';
 export type AspectRatioOption = 'auto' | '3:4' | '16:9';
 
+/**
+ * The shape of the exported canvas, which is not the shape of the card.
+ *
+ * `aspectRatio` above sets a floor on the card's own height; this one sets a
+ * floor on the mat the card is mounted on. They compose rather than replace:
+ * a 3:4 card on a 1:1 canvas is a 3:4 sheet centred in a square. Like
+ * `aspectRatio`, these are floors -- a card taller than the canvas shape simply
+ * makes a taller picture, so no setting here can ever crop a post.
+ */
+export type CanvasRatioOption = 'auto' | '1:1' | '4:5' | '3:4' | '16:9';
+
+/**
+ * What the mat is painted with. The ids name the value; see
+ * `CANVAS_BACKGROUNDS` in `content/ui/themes.ts` for the table and for what
+ * `'theme'` resolves to.
+ */
+export type CanvasBackgroundId =
+  | 'none'
+  | 'theme'
+  | 'paper'
+  | 'ink'
+  | 'stone'
+  | 'dusk'
+  | 'linen';
+
 export type Locale = 'zh-CN' | 'en-US';
 
 export type ImageFitOption = 'contain' | 'cover';
@@ -68,4 +93,8 @@ export interface CardConfig {
   showPlayButton?: boolean;
   locale?: Locale;
   excludedTweetIds?: string[];
+  /** The exported canvas shape. `'auto'` shrinks the mat to the card. */
+  canvasRatio?: CanvasRatioOption;
+  /** What the mat is painted with. `'none'` exports the card alone. */
+  canvasBackground?: CanvasBackgroundId;
 }

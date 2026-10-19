@@ -30,7 +30,7 @@ import { isAllowedHost } from '../../src/background/proxy.ts';
 import { loadUserPreferences, saveUserPreferences } from '../../src/content/prefs.ts';
 
 import type { TweetData, ThreadData } from '../../src/types/tweet.ts';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../src/types/card.ts';
+import type { CardConfig, ThemeId, PaddingOption, RadiusOption, CanvasRatioOption, CanvasBackgroundId } from '../../src/types/card.ts';
 import type { Locale } from '../../src/content/i18n.ts';
 
 const { test, run } = createSuite();
@@ -63,11 +63,19 @@ const TWEET: TweetData = {
 
 const renderCard = cardRenderer(BASE_CONFIG, TWEET);
 
-/** The card's own root element, as rendered — attributes and inline style. */
+/**
+ * The card's own root element, as rendered — attributes and inline style.
+ *
+ * Found by its class rather than taken as the first tag: the outermost element
+ * is now the mat the card is mounted on, and the mat carries the export id and
+ * an inline style of its own, so "the first tag" would answer with the picture
+ * instead of the card.
+ */
 function rootTag(html: string): string {
-  const end = html.indexOf('>');
-  assert.ok(end > 0 && html.startsWith('<div'), `card markup does not start with an element: ${html.slice(0, 60)}`);
-  return html.slice(0, end + 1);
+  const at = html.indexOf('<div class="post-to-card-target');
+  assert.ok(at >= 0, `the card root is not in the rendered markup: ${html.slice(0, 60)}`);
+  const end = html.indexOf('>', at);
+  return html.slice(at, end + 1);
 }
 
 function styleAttr(html: string): string {
@@ -340,6 +348,8 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
       aspectRatio: '3:4',
       showStats: false,
       blurAuthor: true,
+      canvasRatio: '21:9' as CanvasRatioOption,
+      canvasBackground: 'plaid' as CanvasBackgroundId,
     };
 
     await saveUserPreferences(saved);
@@ -351,6 +361,18 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
     assert.equal(restored.aspectRatio, '3:4', 'a valid choice must survive the round trip');
     assert.equal(restored.showStats, false);
     assert.equal(restored.blurAuthor, true);
+
+    // The canvas pair is the newest, and a sanitizer whose fallback differs from
+    // `DEFAULT_CARD_CONFIG` is the exact shape of the bug that once rewrote a
+    // saved radius on every load: the value would come back not-null, so the
+    // `??` in `normalizeStoredConfig` would keep the wrong one. Asserting both
+    // the fallback and the survival pins that pairing, not just the field.
+    assert.equal(restored.canvasRatio, DEFAULT_CARD_CONFIG.canvasRatio);
+    assert.equal(restored.canvasBackground, DEFAULT_CARD_CONFIG.canvasBackground);
+
+    await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, canvasRatio: '4:5', canvasBackground: 'dusk' });
+    assert.equal((await loadUserPreferences()).canvasRatio, '4:5');
+    assert.equal((await loadUserPreferences()).canvasBackground, 'dusk');
 
     // The locale is the one field whose default is not a constant: it follows
     // the machine's language, so a test that saved a fixed value could agree

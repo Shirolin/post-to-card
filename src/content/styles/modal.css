@@ -629,6 +629,56 @@
   font-weight: 600;
 }
 
+/* Canvas Background Swatches
+   One row of paint chips. Sized to content rather than stretched, so the chips
+   keep a square-ish shape whatever the panel width is; a stretched row would
+   turn seven gradients into seven wide bands and read as a different control
+   from the theme grid above. */
+.swatch-row {
+  display: flex;
+  gap: 6px;
+}
+
+.swatch {
+  flex: 1;
+  height: 30px;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.swatch:hover {
+  border-color: rgba(255, 255, 255, 0.44);
+}
+
+/* Selection is drawn as a ring in the accent ink, the same mark the theme grid
+   uses, so the panel has one way of saying "this is the chosen one". A border
+   colour alone cannot do it here: the chips are the colours themselves, and
+   several of them are close to the border they would have to contrast with. */
+.swatch.is-active {
+  border-color: var(--ptc-accent-ink);
+  box-shadow: 0 0 0 1px var(--ptc-accent-ink), 0 0 0 4px var(--ptc-accent-soft);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--ptc-accent-ring-on-fill);
+  outline-offset: 2px;
+}
+
+/* "No background" is the absence of paint, so it is drawn as the absence of
+   paint: a crossed-out chip. Without this it would be an empty rectangle next
+   to six colours and read as a chip that failed to load. */
+.swatch.is-none {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.03);
+  background-image:
+    linear-gradient(to top right, transparent calc(50% - 1px), var(--ptc-danger) calc(50% - 1px),
+      var(--ptc-danger) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
 /* Reveals the themes the grid holds back. Deliberately carries no styling of
    its own: it reuses `.more-toggle` whole, so the panel has one disclosure
    idiom rather than two. It used to override `justify-content` and `font-size`

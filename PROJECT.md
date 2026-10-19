@@ -17,6 +17,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
      - 12 套材质主题（Minimal / Midnight / Liquid Glass / Material 3 / Gallery / Darkroom / Riso / Sumi / Clay / Terminal / Receipt，外加实验性 Brutalist，默认关闭）：每套由纸面色、边线、字对、强调色、签名装饰线与呼吸节奏共同定义，取代早期 6 套渐变皮肤与上一版材质集。旧主题 id 经 `sanitizeTheme` 映射到最接近的在用材质而非重置用户选择（Linear Dark→Darkroom、OLED Black→Darkroom、Notion White→Gallery）；`LEGACY_THEME_ALIASES` 是这份映射的唯一来源。认证徽标用纸面墨色而非 Twitter 蓝——卡面上只允许一个强调色。所有主题色值只有 `themes.ts` 一处来源，由 `Card.tsx` 注入 CSS 自定义属性；签名装饰与字阶也由 token 表驱动，`card.css` 只做一次 style→伪元素映射。引号推文按材质分「填充型 / 描边型」两种呈现。
      - 3 档内边距 (16/32/48px)、3 档圆角 (0/12/20px)。
      - Auto 及 3:4 / 16:9 画幅（弹性下限法则 `min-height` + `height: auto`，向下平滑延展，绝不截断长文本）。
+     - 外层画布（mat）：输出画幅 1:1 / 4:5 / 3:4 / 16:9 与画布背景（跟随主题 / 纯色 / 渐变）各自独立，两者默认关闭；卡片是挂在 mat 上的图层，mat 才是导出目标（`#post-to-card-export-target` 已随之移到 mat 上）。
      - 离线矢量 SVG 二维码生成 (`qrcode-generator`)。
      - 7 个独立开关，按作用范围分组而非按控件类型堆叠：卡片页脚（原文二维码、互动数据、发布时间，帖子缺对应数据时该开关不出现）、隐私（作者隐私脱敏）、呈现细节（视频播放角标、署名与版本、推文卡片按钮，后两项在折叠区）。「推文卡片按钮」控制的是推文操作栏的注入，不进卡片，见 F30。
      - 背景无抖动滚动锁、Esc 快捷键及点击蒙层关闭。
@@ -66,6 +67,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F30 | Configurable Action Button | 支持推文卡片按钮显隐开关、Popup 快捷管理、Alt+C 快捷键与多标签实时同步 | M6 | Feature Enhancement |
 | F31 | Long-form Post (Article) Rendering | 识别 X 长文推文（文章以嵌套 `<article>` 渲染在推文内），抽出封面 / 眉标 / 标题与导语（推文无正文时取文章开头行）并以文章版式呈现；同时修正文章被误判为引用推文而导致的互动数据与封面丢失 | M6 | Feature Enhancement |
 | F32 | Truncated Post Indicator | X 时间线里的长推文在 DOM 中只有截断预览（其余在 GraphQL 的 `note_tweet` 里），DOM 通道据此标记为截断：正文末尾补省略号并加「内容有删减」提示，且不把「显示更多」这个 UI 控件当正文 | M6 | Feature Enhancement |
+| F36 | Canvas Mat & Output Ratio | 卡片挂在一层可导出的外层画布（mat）上：可选输出画幅（跟随卡片 / 1:1 / 4:5 / 3:4 / 16:9）与画布背景（无 / 跟随主题 / 纯色 / 渐变），使成品直接适合信息流投放；画幅只是 `min-height` 下限，卡片更高时画布跟着长高，绝不裁剪。两项默认均为「关闭」，默认导出与改动前逐像素一致 | M6 | Feature Enhancement |
 
 ---
 
@@ -97,7 +99,9 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 
 见 `src/types/card.ts`。`ThemeId` 是 12 个在用材质 id（`minimal` … `brutalist`），已退役的旧 id 在
 `LegacyThemeId` 里、经 `sanitizeTheme` 映射；`CardConfig` 还带 `imageFit`、`mediaLayout`、`locale`、
-`showActionBarButton`、`showPlayButton`、`excludedTweetIds`。
+`showActionBarButton`、`showPlayButton`、`excludedTweetIds`、`canvasRatio`、`canvasBackground`。
+最后两项的取值表与解析器在 `src/content/ui/themes.ts`（`CANVAS_BACKGROUNDS` / `resolveCanvasBackground`），
+几何规则在 `src/content/styles/card.css` 的 `.ptc-mat`——它们不是字段而是配置面，所以只在这里点名。
 
 ### 3. Background Proxy Message Protocol
 

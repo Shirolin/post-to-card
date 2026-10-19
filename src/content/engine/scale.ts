@@ -20,6 +20,34 @@
  */
 export const MAX_CANVAS_EDGE = 65535;
 
+/**
+ * How many times taller than wide a picture can be before a feed makes it
+ * unreadable.
+ *
+ * A canvas edge says whether a file can be *made*; this says whether it can be
+ * *read*. Feeds cap how tall an image is shown before cropping it, and they
+ * show it at column width, so a 640px-wide card scaled into a ~500px column
+ * lands its 16px body text at ~12px -- legible -- while a 4:1 sheet drops it
+ * under 8px. Four is a quiet line: two posts in a thread measure about 1.4 and
+ * five about 3.4, so only a genuinely long run trips it.
+ */
+export const LONG_CARD_RATIO = 4;
+
+/**
+ * True when the picture is tall enough that a feed will shrink its text.
+ *
+ * Takes the readout's own numbers rather than the card's, because the picture
+ * is what a reader sees: a mat that pads the card square can pull a tall card
+ * back under the line, and warning about the card instead would contradict the
+ * size printed next to it.
+ */
+export function isLongCard(readout: Pick<ExportSizeReadout, 'width' | 'height'>): boolean {
+  if (!Number.isFinite(readout.width) || !Number.isFinite(readout.height) || readout.width <= 0) {
+    return false;
+  }
+  return readout.height > readout.width * LONG_CARD_RATIO;
+}
+
 export interface MeasuredBox {
   width: number;
   height: number;

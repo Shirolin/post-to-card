@@ -12,6 +12,8 @@ import type { CardConfig } from '../types/card.ts';
 import { sanitizeLocale } from './i18n.ts';
 import {
   DEFAULT_CARD_CONFIG,
+  sanitizeCanvasBackground,
+  sanitizeCanvasRatio,
   sanitizeImageFit,
   sanitizeMediaLayout,
   sanitizePadding,
@@ -52,6 +54,8 @@ function normalizeStoredConfig(saved: Record<string, any> | null | undefined): C
     borderRadius: sanitizeRadius(saved.borderRadius ?? DEFAULT_CARD_CONFIG.borderRadius),
     imageFit: sanitizeImageFit(saved.imageFit),
     mediaLayout: sanitizeMediaLayout(saved.mediaLayout),
+    canvasRatio: sanitizeCanvasRatio(saved.canvasRatio),
+    canvasBackground: sanitizeCanvasBackground(saved.canvasBackground),
     showActionBarButton: saved.showActionBarButton !== false,
     showPlayButton: saved.showPlayButton !== false,
     locale: sanitizeLocale(saved.locale),

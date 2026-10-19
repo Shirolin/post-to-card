@@ -35,7 +35,7 @@ import { toggleExcluded, selectCurrentOnly } from '../../src/content/ui/threadSc
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS, getTranslation, sanitizeLocale } from '../../src/content/i18n.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, PADDING_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, sanitizePadding, getAspectMinHeight, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout } from '../../src/content/ui/themes.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, PADDING_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, sanitizePadding, getAspectMinHeight, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout, CANVAS_RATIO_OPTIONS, CANVAS_BACKGROUNDS, CANVAS_BACKGROUND_ORDER, resolveCanvasBackground, sanitizeCanvasRatio, sanitizeCanvasBackground } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 import { isAllowedHost, clearImageCache, getImageCacheSize } from '../../src/background/proxy.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../../src/content/adapter/urls.ts';
@@ -91,9 +91,13 @@ const renderCard = cardRenderer(CARD_CONFIG, VIDEO_TWEET);
  * Read off the root element rather than searched for across the whole document:
  * a media box or an avatar legitimately carries a fixed height, and a
  * document-wide regex cannot tell those apart from the card being clipped.
+ *
+ * Matched by class, not by `id="post-to-card-export-target"`: that id is on the
+ * mat the card is mounted on, and the mat carries a style of its own, so the
+ * id would hand back the picture's inline style instead of the card's.
  */
 function cardRootStyle(html: string): string {
-  const tag = html.match(/<div[^>]*id="post-to-card-export-target"[^>]*>/);
+  const tag = html.match(/<div[^>]*class="post-to-card-target[^"]*"[^>]*>/);
   assert.ok(tag, 'the card root is not in the rendered markup');
   return (tag![0].match(/\sstyle="([^"]*)"/) || [])[1] || '';
 }
@@ -3477,7 +3481,13 @@ const EXPORT_THREAD: ThreadData = {
   ],
 };
 
-/** The card as the preview mounts it, inside the container's shadow root. */
+/**
+ * The exported element — the mat — as the preview mounts it.
+ *
+ * This is what the engine is handed, so a test that exports wants this one. A
+ * test that reads the *card's* own attributes wants `cardRoot` instead: the mat
+ * is an outer box and carries none of them.
+ */
 async function withMountedCard(
   thread: ThreadData,
   body: (card: DomElement, doc: DomDocument) => Promise<void>
@@ -4463,6 +4473,190 @@ test('F35.7: exportCard carries the engine report into the outcome the panel rea
 });
 
 // -------------------------------------------------------------
+// F36: The canvas the card is exported on
+// -------------------------------------------------------------
+//
+// The mat is an outer element the card is mounted on, and it is the export
+// target. Its whole geometry is CSS -- a `min-height` floor per ratio -- so
+// these tests read the two things the shim can actually answer: the markup the
+// card renders, and the stylesheet it renders against. There is no layout
+// engine here, so a claim about a pixel is a claim about the rule that would
+// produce it.
+
+/** The opening tag of the exported element — the mat the card is mounted on. */
+function matTag(html: string): string {
+  const at = html.indexOf('<div id="post-to-card-export-target"');
+  assert.ok(at >= 0, `the export target is not in the rendered markup: ${html.slice(0, 60)}`);
+  return html.slice(at, html.indexOf('>', at) + 1);
+}
+
+test('F36.1: an untouched canvas exports exactly the card, with no ring and no paint', async () => {
+  const tag = matTag(await renderCard({ data: THREAD }));
+
+  assert.match(tag, /data-canvas-ratio="auto"/);
+  // Both defaults are "off", and off has to mean the mat contributes nothing at
+  // all. This is the one regression that would reach every existing user: a mat
+  // that padded or painted by default would repaint the PNG they already had.
+  assert.match(tag, /--mat-pad:0px/, `the default mat must not pad the picture: ${tag}`);
+  assert.ok(!tag.includes('--mat-bg'), `the default mat must not paint: ${tag}`);
+});
+
+test('F36.2: either canvas control alone is enough to turn the ring on', async () => {
+  const shapes = [
+    { canvasRatio: '1:1' as const },
+    { canvasBackground: 'paper' as const },
+  ];
+  for (const config of shapes) {
+    const tag = matTag(await renderCard({ data: THREAD, config }));
+    assert.match(
+      tag,
+      /--mat-pad:48px/,
+      `${Object.keys(config)[0]} has to make room for the card to sit in: ${tag}`
+    );
+  }
+});
+
+test('F36.3: card.css floors every canvas ratio at the exact ratio, outer edge to outer edge', () => {
+  // Read from the sheet rather than from a second copy of the arithmetic in the
+  // test: a table re-derived here would agree with itself while the sheet it
+  // ships alongside drifted. `border-box` plus the *outer* width in the
+  // numerator is what makes the floor exact -- the padding is part of the
+  // picture, so it has to be part of the ratio.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+
+  for (const ratio of CANVAS_RATIO_OPTIONS) {
+    if (ratio === 'auto') {
+      assert.ok(
+        !css.includes(`[data-canvas-ratio="${ratio}"]`),
+        'Auto is the absence of a floor, so it must have no rule of its own'
+      );
+      continue;
+    }
+
+    const block = new RegExp(`\\[data-canvas-ratio="${ratio}"\\]\\s*\\{([^}]*)\\}`).exec(css);
+    assert.ok(block, `card.css declares no floor for the ${ratio} canvas`);
+
+    // The numerator has to be the *outer* width, padding included: the ring is
+    // part of the picture, so leaving it out would make every ratio wrong by
+    // 2 x 48px. `border-box` (asserted below) is the other half of that.
+    assert.match(
+      block![1],
+      /640px\s*\+\s*2\s*\*\s*var\(--mat-pad/,
+      `${ratio} computes its floor from the card's width alone, not the picture's`
+    );
+
+    const divisor = /\/\s*([\d.]+)\s*\)/.exec(block![1]);
+    assert.ok(divisor, `${ratio} declares a floor with no ratio in it: ${block![1]}`);
+
+    const [w, h] = ratio.split(':').map(Number);
+    const declared = Number(divisor![1]);
+    const expected = w / h;
+    assert.ok(
+      Math.abs(declared - expected) < 1e-3,
+      `${ratio} floors at ${declared} but the ratio is ${expected}`
+    );
+  }
+
+  assert.match(
+    css,
+    /\.ptc-mat\s*\{[^}]*box-sizing:\s*border-box/s,
+    'without border-box the padding would sit outside the ratio the floor computes'
+  );
+  assert.match(
+    css,
+    /\.ptc-mat\s*\{[^}]*min-height:\s*var\(--mat-min-height/s,
+    'the per-ratio value has to be the floor, never a fixed height'
+  );
+});
+
+test('F36.4: the floor is a floor, so no canvas can ever crop a post', async () => {
+  // `min-height` and nothing else. A fixed height would clip a card taller than
+  // the canvas, which is the one thing this feature must never do; the same
+  // reasoning F19.4 already applies to the card's own aspect ratio.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const block = /\.ptc-mat\s*\{([^}]*)\}/s.exec(css);
+  assert.ok(block, 'card.css has no .ptc-mat block');
+
+  assert.ok(
+    !/(^|;|\s)height:/.test(block![1]),
+    `the mat must not carry a fixed height: ${block![1]}`
+  );
+  assert.match(block![1], /overflow:\s*visible/, 'and must not clip what overflows it');
+});
+
+test('F36.5: Follow-theme resolves to the material it is sitting in, not a copy of it', () => {
+  for (const theme of THEME_ORDER) {
+    assert.equal(
+      resolveCanvasBackground('theme', theme),
+      THEMES[theme].tokens.canvas,
+      `${theme}'s canvas is the token the material already declares`
+    );
+  }
+
+  assert.equal(resolveCanvasBackground('none', 'minimal'), '', 'None paints nothing at all');
+  assert.match(resolveCanvasBackground('dusk', 'minimal'), /^linear-gradient\(/, 'and a gradient is a gradient');
+});
+
+test('F36.6: every canvas id in the picker is a real entry, and unknown ids degrade to the defaults', () => {
+  assert.deepEqual(
+    [...CANVAS_BACKGROUND_ORDER].sort(),
+    Object.keys(CANVAS_BACKGROUNDS).sort(),
+    'the order list and the table must not be able to disagree'
+  );
+  assert.equal(new Set(CANVAS_BACKGROUND_ORDER).size, CANVAS_BACKGROUND_ORDER.length, 'and no id twice');
+
+  // The fallbacks have to *be* the defaults. A sanitizer that answered with a
+  // different value would come back not-null, so the `??` in
+  // `normalizeStoredConfig` would keep it -- the shape of the bug that once
+  // rewrote a saved radius on every load.
+  assert.equal(sanitizeCanvasRatio('21:9'), DEFAULT_CARD_CONFIG.canvasRatio);
+  assert.equal(sanitizeCanvasRatio(undefined), DEFAULT_CARD_CONFIG.canvasRatio);
+  assert.equal(sanitizeCanvasBackground('plaid'), DEFAULT_CARD_CONFIG.canvasBackground);
+  assert.equal(sanitizeCanvasBackground(undefined), DEFAULT_CARD_CONFIG.canvasBackground);
+  assert.equal(sanitizeCanvasRatio('4:5'), '4:5', 'and a real choice survives');
+  assert.equal(sanitizeCanvasBackground('dusk'), 'dusk');
+});
+
+test('F36.7: the chosen paint reaches the exported element itself', async () => {
+  const tag = matTag(await renderCard({ data: THREAD, config: { canvasBackground: 'dusk' } }));
+
+  // Inline, not from a class: the exporter clones this element and rasterizes
+  // it, and a paint that only existed in the sheet would depend on the clone
+  // carrying the sheet. Every other colour on the card is injected the same way.
+  assert.match(tag, /--mat-bg:linear-gradient\(135deg/, `the paint is not on the export target: ${tag}`);
+});
+
+test('F36.8: the readability warning fires past the line, and not at it', async () => {
+  const { isLongCard, LONG_CARD_RATIO } = await loadModule('/src/content/engine/scale.ts');
+
+  assert.equal(LONG_CARD_RATIO, 4, 'the line moved; the copy below it was written for this one');
+  assert.equal(isLongCard({ width: 640, height: 640 * LONG_CARD_RATIO }), false, 'exactly at it is not past it');
+  assert.equal(isLongCard({ width: 640, height: 640 * LONG_CARD_RATIO + 1 }), true);
+  // Before the card is measured the box is zero, and a warning about a picture
+  // that does not exist yet is noise on the first frame of every export.
+  assert.equal(isLongCard({ width: 0, height: 0 }), false);
+  assert.equal(isLongCard({ width: 0, height: 90000 }), false);
+});
+
+test('F36.9: the panel says so beside the size, and only when the picture is long', async () => {
+  const render = (exportSize: Record<string, number | boolean>) =>
+    renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
+      config: CARD_CONFIG,
+      onChange: () => {},
+      onExportCopy: () => {},
+      onExportDownload: () => {},
+      exportSize,
+    });
+
+  const long = await render({ width: 1280, height: 1280 * 4 + 2, scale: 2, reduced: false, impossible: false });
+  assert.match(long, /very tall/, 'a 4:1 picture is announced as one');
+  assert.match(long, /Exports at/, 'and still quotes the size it is talking about');
+
+  const short = await render({ width: 1280, height: 1920, scale: 2, reduced: false, impossible: false });
+  assert.ok(!short.includes('very tall'), 'an ordinary card must not be warned about');
+});
+
+// -------------------------------------------------------------
 // F26 continued: the refusal keeps its reason
 // -------------------------------------------------------------
 
@@ -5273,7 +5467,7 @@ test('F30.13: the open panel follows a preference changed outside it, and does n
       const container = openCardModal(CONTAINER_THREAD);
       await flushEffects();
 
-      const card = () => container.shadow.querySelector('#post-to-card-export-target') as any;
+      const card = () => container.shadow.querySelector('.post-to-card-target') as any;
       assert.equal(card().getAttribute('data-theme'), 'gallery', 'the mount reads what storage holds');
 
       // Another context — the popup, or a panel in a second tab — moves a
@@ -5352,7 +5546,7 @@ test('F30.14: a change that beats the panel\'s own read is not undone by it', as
       await flushEffects();
       await flushEffects();
 
-      const card = container.shadow.querySelector('#post-to-card-export-target') as any;
+      const card = container.shadow.querySelector('.post-to-card-target') as any;
       assert.equal(
         card.getAttribute('data-theme'),
         'terminal',

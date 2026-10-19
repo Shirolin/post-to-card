@@ -95,17 +95,28 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   const level = ZOOM_LEVELS[zoomIndex];
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  // The card's height at scale 1. Zero until the first measurement, which leaves
-  // the height axis out of `fit` for a frame rather than guessing at it.
+  // The exported element's size at scale 1: the mat, which is the card's own box
+  // when no canvas is selected and is wider and/or taller than it when one is.
+  // Zero until the first measurement, which leaves the height axis out of `fit`
+  // for a frame rather than guessing at it.
   const [cardHeight, setCardHeight] = useState<number>(0);
+  const [cardWidth, setCardWidth] = useState<number>(0);
   const [availableWidth, setAvailableWidth] = useState<number>(0);
   const [availableHeight, setAvailableHeight] = useState<number>(0);
 
   /**
-   * The ceiling on the *fixed* levels: the card must never run past the mat
+   * The width the exported picture actually has. `CARD_WIDTH` is only the
+   * first-frame stand-in: a selected canvas pads the mat out beyond the card,
+   * and every figure below -- the zoom ceiling, the fit scale, the size readout
+   * -- is about the picture the user gets, not about the sheet inside it.
+   */
+  const exportWidth = cardWidth || CARD_WIDTH;
+
+  /**
+   * The ceiling on the *fixed* levels: the export must never run past the mat
    * sideways, and a user who picks 100% on a tall card accepts scrolling.
    */
-  const maxScale = availableWidth > 0 ? availableWidth / CARD_WIDTH : 1;
+  const maxScale = availableWidth > 0 ? availableWidth / exportWidth : 1;
 
   /**
    * The scale `fit` resolves to: the whole card has to clear the mat in both
@@ -124,9 +135,9 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * on a phone can look tiny here and still export at full width.
    */
   // The same arithmetic the exporter runs, so the figure here is the figure in
-  // the file: both call `fitScaleToCanvas` with the card's 640px width, and the
+  // the file: both call `fitScaleToCanvas` with the measured width, and the
   // pure function is what keeps them from drifting apart again.
-  const exportSize = exportSizeFor(CARD_WIDTH, cardHeight, DEFAULT_EXPORT_SCALE);
+  const exportSize = exportSizeFor(exportWidth, cardHeight, DEFAULT_EXPORT_SCALE);
 
   const t = getTranslation(sanitizeLocale(config.locale));
 
@@ -175,8 +186,18 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
 
       const card = cardRef.current;
       if (!card) return;
-      const natural = card.offsetHeight;
-      if (natural > 0) setCardHeight((prev) => (Math.abs(prev - natural) > 0.5 ? natural : prev));
+      const naturalHeight = card.offsetHeight;
+      const naturalWidth = card.offsetWidth;
+      if (naturalHeight > 0) {
+        setCardHeight((prev) => (Math.abs(prev - naturalHeight) > 0.5 ? naturalHeight : prev));
+      }
+      // Read alongside the height because the two move together: selecting a
+      // canvas ratio changes both axes at once, and a width that lagged a frame
+      // behind would misreport the export size in exactly the state the user
+      // just switched into.
+      if (naturalWidth > 0) {
+        setCardWidth((prev) => (Math.abs(prev - naturalWidth) > 0.5 ? naturalWidth : prev));
+      }
     };
 
     measure();

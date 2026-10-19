@@ -3,7 +3,11 @@
    100% self-contained styling for the exported card
    ========================================================================== */
 
-#post-to-card-export-target,
+/* The card is the sheet, not the picture. `#post-to-card-export-target` is the
+   mat it is mounted on, and it is the mat that carries the fixed width -- see
+   `.ptc-mat` below. This selector used to be a list of both spellings, which
+   would now stretch the mat to the card's 640px and leave the ring of mat with
+   nowhere to be. */
 .post-to-card-target {
   width: 640px;
   min-width: 640px;
@@ -19,6 +23,56 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* -------------------------------------------------------------
+   The mat: the exported picture, which the card is mounted on
+
+   This is the element `#post-to-card-export-target` names, so it is what the
+   rasterizer captures and what the card's own width no longer bounds. Every
+   part of its shape is set inline by Card.tsx from two custom properties:
+   `--mat-pad` (0 when nothing is selected) and `--mat-bg`.
+
+   `min-height` is a floor, never a clamp, and that is the whole of "fill,
+   never crop": a card taller than the chosen shape simply makes a taller
+   picture. The ratio is therefore exact only while the card is shorter than
+   it, which is the case it exists for -- a card that is already taller keeps
+   its own proportions rather than being squeezed into a frame that would cut
+   the post.
+
+   The ratio is derived from the outer width so that `border-box` makes it
+   true: 640 + 2 * 48 = 736, and 736 / 920 = 0.8 for 4:5.
+   ------------------------------------------------------------- */
+.ptc-mat {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Explicit rather than `fit-content`: the export clones this element into a
+     shrink-to-fit wrapper, and `max-content` does not consult that wrapper's
+     available width. */
+  width: max-content;
+  min-width: calc(640px + 2 * var(--mat-pad, 0px));
+  min-height: var(--mat-min-height, auto);
+  padding: var(--mat-pad, 0px);
+  background: var(--mat-bg, none);
+  overflow: visible;
+}
+
+.ptc-mat[data-canvas-ratio="1:1"] {
+  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 1);
+}
+
+.ptc-mat[data-canvas-ratio="4:5"] {
+  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 0.8);
+}
+
+.ptc-mat[data-canvas-ratio="3:4"] {
+  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 0.75);
+}
+
+.ptc-mat[data-canvas-ratio="16:9"] {
+  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 1.7778);
 }
 
 /* -------------------------------------------------------------

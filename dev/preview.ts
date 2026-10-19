@@ -12,7 +12,7 @@ import '../src/content/container/element';
 import { App } from '../src/content/ui/App';
 import { Card } from '../src/content/ui/Card';
 import { Controls } from '../src/content/ui/Controls';
-import { DEFAULT_CARD_CONFIG, sanitizeRadius, sanitizeTheme } from '../src/content/ui/themes';
+import { DEFAULT_CARD_CONFIG, sanitizeRadius, sanitizeTheme, sanitizeCanvasRatio, sanitizeCanvasBackground } from '../src/content/ui/themes';
 import modalCss from '../src/content/styles/modal.css?inline';
 import cardCss from '../src/content/styles/card.css?inline';
 
@@ -409,7 +409,7 @@ const params = new URLSearchParams(location.search);
 
 /**
  * Optional overrides so a single card state can be inspected without clicking
- * through the panel: ?theme=riso&ratio=3:4&padding=48px&radius=20px
+ * through the panel: ?theme=riso&ratio=3:4&padding=48px&radius=20px&bg=paper&canvas=4:5
  *
  * These apply in every mode, not just `bare`. `bare` renders the panel and card on
  * their own; `modal=1` and the default mount the real modal, so
@@ -481,6 +481,11 @@ if (params.get('padding')) harnessConfig.padding = params.get('padding') as type
 if (params.get('radius')) harnessConfig.borderRadius = sanitizeRadius(params.get('radius')!);
 if (params.get('fit')) harnessConfig.imageFit = params.get('fit') as typeof harnessConfig.imageFit;
 if (params.get('layout')) harnessConfig.mediaLayout = params.get('layout') as typeof harnessConfig.mediaLayout;
+// ?canvas=1:1 / ?bg=paper — the mat, for eyeballing one shape or one paint
+// without walking the panel. Both go through the real sanitizers so a typo
+// lands on the default rather than rendering a mat no user could reach.
+if (params.get('canvas')) harnessConfig.canvasRatio = sanitizeCanvasRatio(params.get('canvas')!);
+if (params.get('bg')) harnessConfig.canvasBackground = sanitizeCanvasBackground(params.get('bg')!);
 if (params.get('locale')) harnessConfig.locale = params.get('locale') as typeof harnessConfig.locale;
 // ?no=qr,stats,time,wm,watermark turns the corresponding card footer pieces off.
 const offParts = new Set((params.get('no') || '').split(',').filter(Boolean));

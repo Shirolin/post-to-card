@@ -3,7 +3,13 @@ import type { JSX, Ref } from 'preact';
 import type { TweetData, ThreadData, AuthorInfo, MediaItem, TweetStats, QuoteDepth } from '../../types/tweet.ts';
 import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, Locale } from '../../types/card.ts';
 import { CardQrCode } from './qrcode.ts';
-import { resolveRadius, getAspectMinHeight, THEMES } from './themes.ts';
+import {
+  MAT_PADDING,
+  resolveCanvasBackground,
+  resolveRadius,
+  getAspectMinHeight,
+  THEMES,
+} from './themes.ts';
 import { planMediaGrid, applyMediaGridPlan, recordShape } from './mediaGrid.ts';
 import { imageFallbackAttrs, advanceImageFallback } from './imageFallback.ts';
 import { threadScope, tweetKey } from './threadScope.ts';
@@ -16,8 +22,11 @@ export interface CardProps {
   config: CardConfig;
   onExcludeTweet?: (tweetId: string) => void;
   /**
-   * The card's root node, so a host can measure the card it renders. The preview
-   * needs the height to resolve its fit-to-window zoom level. Optional because the
+   * The exported element — the mat the card is mounted on, which is also what a
+   * host measures. The preview needs its height to resolve its fit-to-window
+   * zoom level, and it is the node the exporter is handed, so it is the mat
+   * rather than the card: with a canvas background or a canvas ratio selected
+   * the two differ by the ring of mat around the sheet. Optional because the
    * dev harness and the tests render the card with nothing to measure against.
    */
   cardRef?: Ref<HTMLDivElement>;
@@ -730,24 +739,44 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
   );
   const showFooter = hasFooterLeft || hasFooterRight;
 
+  // The mat is the exported picture; the card is what is mounted on it. Both
+  // options default to "off", and `matActive` is what keeps that literal: with
+  // neither selected the mat contributes no padding and no background, so the
+  // export is the card's own box, exactly as it was before the mat existed.
+  const canvasRatio = config.canvasRatio ?? 'auto';
+  const canvasBackground = config.canvasBackground ?? 'none';
+  const matActive = canvasBackground !== 'none' || canvasRatio !== 'auto';
+  const matBackground = resolveCanvasBackground(canvasBackground, config.theme);
+
   return (
     <div
       id="post-to-card-export-target"
       ref={cardRef}
-      class={cardClasses}
-      data-theme={config.theme}
-      data-padding={config.padding}
-      data-radius={config.borderRadius}
-      data-ratio={config.aspectRatio}
-      data-fit={imageFit}
-      data-media-layout={mediaLayout}
-      data-signature={tokens.signature.style === 'none' ? undefined : tokens.signature.style}
-      data-quote-style={tokens.quoteStyle}
-      data-media-frame={tokens.mediaFrame}
-      data-meta-divider={tokens.metaDivider ? 'on' : undefined}
-      data-keyline={tokens.keyline ? 'on' : undefined}
-      data-stat-chip={tokens.statChip ? 'on' : undefined}
+      class="ptc-mat"
+      data-canvas-ratio={canvasRatio}
       style={{
+        '--mat-pad': matActive ? MAT_PADDING : '0px',
+        // Omitted rather than set to 'none': an unset custom property and a
+        // `none` background paint the same, and leaving it off keeps the
+        // default export's inline style identical to the pre-mat one.
+        '--mat-bg': matBackground || undefined,
+      }}
+    >
+      <div
+        class={cardClasses}
+        data-theme={config.theme}
+        data-padding={config.padding}
+        data-radius={config.borderRadius}
+        data-ratio={config.aspectRatio}
+        data-fit={imageFit}
+        data-media-layout={mediaLayout}
+        data-signature={tokens.signature.style === 'none' ? undefined : tokens.signature.style}
+        data-quote-style={tokens.quoteStyle}
+        data-media-frame={tokens.mediaFrame}
+        data-meta-divider={tokens.metaDivider ? 'on' : undefined}
+        data-keyline={tokens.keyline ? 'on' : undefined}
+        data-stat-chip={tokens.statChip ? 'on' : undefined}
+        style={{
         padding: config.padding,
         borderRadius: radius.card,
         boxShadow: tokens.shadow,
@@ -853,6 +882,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

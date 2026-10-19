@@ -1,12 +1,13 @@
 import type { JSX } from 'preact';
 import type { ThreadData, TweetData } from '../../types/tweet.ts';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption } from '../../types/card.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS, IMAGE_FIT_OPTIONS, MEDIA_LAYOUT_OPTIONS, themePreview } from './themes.ts';
-import { getTranslation, sanitizeLocale } from '../i18n.ts';
+import type { CardConfig, ThemeId, PaddingOption, RadiusOption, CanvasRatioOption, CanvasBackgroundId } from '../../types/card.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS, IMAGE_FIT_OPTIONS, MEDIA_LAYOUT_OPTIONS, CANVAS_RATIO_OPTIONS, CANVAS_BACKGROUNDS, CANVAS_BACKGROUND_ORDER, resolveCanvasBackground, themePreview } from './themes.ts';
+import { getTranslation, sanitizeLocale, type Translations } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadScope, tweetKey, toggleExcluded, selectCurrentOnly } from './threadScope.ts';
 import { hasRenderableStats } from './Card.tsx';
+import { isLongCard } from '../engine/scale.ts';
 import {
   Languages,
   Palette,
@@ -127,6 +128,63 @@ function Segmented<T extends string>({
   );
 }
 
+/**
+ * Single-choice control whose options are colours, not words.
+ *
+ * A `Segmented` cannot carry this one: the seven backgrounds have no labels a
+ * user could choose between at a glance, and the two gradients have no single
+ * colour to print on a button. So each option is a chip of the value itself.
+ * It is still a radio group, and it shares `handleRadioKeyDown` with
+ * `Segmented` rather than re-deriving roving tabindex and arrow keys -- the two
+ * controls sit in the same panel and a keyboard user should not be able to tell
+ * which is which from the behaviour.
+ *
+ * The chip is painted with the same resolver the card uses, so `'theme'` shows
+ * the active material's own mat rather than a hardcoded approximation of it.
+ * `'none'` gets the crossed-out treatment instead of a colour, because it is
+ * not a colour.
+ */
+function SwatchRow({
+  name,
+  options,
+  value,
+  onSelect,
+  labels,
+  theme,
+}: {
+  name: string;
+  options: readonly CanvasBackgroundId[];
+  value: CanvasBackgroundId;
+  onSelect: (next: CanvasBackgroundId) => void;
+  labels: Record<string, string>;
+  /** The active material, so `'theme'` previews the mat it will actually use. */
+  theme: ThemeId;
+}): JSX.Element {
+  return (
+    <div class="swatch-row" role="radiogroup" aria-label={name}>
+      {options.map((opt) => {
+        const isActive = value === opt;
+        const paint = resolveCanvasBackground(opt, theme);
+        return (
+          <button
+            key={opt}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            tabIndex={isActive ? 0 : -1}
+            class={`swatch ${isActive ? 'is-active' : ''} ${opt === 'none' ? 'is-none' : ''}`}
+            onClick={() => onSelect(opt)}
+            onKeyDown={(e) => handleRadioKeyDown(e, options, value, onSelect)}
+            title={labels[opt] || CANVAS_BACKGROUNDS[opt].name}
+            aria-label={labels[opt] || CANVAS_BACKGROUNDS[opt].name}
+            style={paint ? { background: paint } : undefined}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function Toggle({
   label,
   checked,
@@ -153,6 +211,25 @@ function Toggle({
       </span>
     </button>
   );
+}
+
+/**
+ * The dictionary's labels for the canvas backgrounds, keyed by id.
+ *
+ * Built here rather than read off `CANVAS_BACKGROUNDS[id].name` so the names
+ * follow the interface language. The table's own `name` stays as the fallback
+ * for a label a dictionary is missing.
+ */
+function canvasBackgroundLabels(t: Translations): Record<string, string> {
+  return {
+    none: t.canvasBg_none,
+    theme: t.canvasBg_theme,
+    paper: t.canvasBg_paper,
+    stone: t.canvasBg_stone,
+    ink: t.canvasBg_ink,
+    linen: t.canvasBg_linen,
+    dusk: t.canvasBg_dusk,
+  };
 }
 
 /**
@@ -690,6 +767,34 @@ export function Controls({
               />
             </div>
 
+            {/* The canvas: the picture the card is mounted on. It sits with
+                padding and radius rather than with the card's own shape because
+                it is a property of the sheet the card is presented on, not of
+                the card -- and because all three are the knobs a user reaches
+                for once the theme is settled. */}
+            <div class="control-section">
+              <span class="control-label">
+                <span>{t.canvas}</span>
+              </span>
+              <span class="control-sub-label">{t.canvasRatio}</span>
+              <Segmented
+                name={t.canvasRatio}
+                options={CANVAS_RATIO_OPTIONS}
+                value={config.canvasRatio ?? 'auto'}
+                onSelect={(next) => updateConfig({ canvasRatio: next as CanvasRatioOption })}
+                labels={{ auto: t.canvasRatioAuto }}
+              />
+              <span class="control-sub-label">{t.canvasBackground}</span>
+              <SwatchRow
+                name={t.canvasBackground}
+                options={CANVAS_BACKGROUND_ORDER}
+                value={config.canvasBackground ?? 'none'}
+                onSelect={(next) => updateConfig({ canvasBackground: next })}
+                labels={canvasBackgroundLabels(t)}
+                theme={config.theme}
+              />
+            </div>
+
             <div class="control-section">
               <span class="control-label">
                 <Square size={14} strokeWidth={2} />
@@ -755,6 +860,13 @@ export function Controls({
               .replace('{h}', String(exportSize.height))
               .replace('{scale}', String(exportSize.scale ?? ''))}
           </span>
+        )}
+        {/* Beside the size, not inside it: the size is a fact and this is advice
+            about the file that fact describes. A square mat pulls a tall card
+            back under the line, so it is the readout's own numbers that decide --
+            see `isLongCard`. */}
+        {exportSize && isLongCard(exportSize) && (
+          <span class="control-hint long-card-hint">{t.longCardWarning}</span>
         )}
         <div class="export-buttons">
           <button

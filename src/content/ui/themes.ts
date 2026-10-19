@@ -1,4 +1,4 @@
-import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig, LegacyThemeId } from '../../types/card.ts';
+import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig, LegacyThemeId, CanvasRatioOption, CanvasBackgroundId } from '../../types/card.ts';
 import { detectDefaultLocale } from '../i18n.ts';
 
 /**
@@ -50,10 +50,13 @@ export interface ThemeTokens {
   /** The material's letterforms. See `TypeScale`. */
   type: TypeScale;
   /**
-   * The mat the sheet is mounted on, used by the preview stage. Kept at least
-   * 1.15:1 off `surface` so the card reads as an object lying on a board rather
-   * than a slightly-off patch. The exported PNG is unaffected — this never
-   * reaches the export target.
+   * The mat the sheet is mounted on. Kept at least 1.15:1 off `surface` so the
+   * card reads as an object lying on a board rather than a slightly-off patch.
+   *
+   * It paints the preview stage, and it is also what the `'theme'` canvas
+   * background resolves to — so a material still carries its own mat into the
+   * PNG when the user asks for one. Choosing no background leaves this out of
+   * the export entirely, which is the default.
    */
   canvas: string;
   surface: string;
@@ -988,6 +991,101 @@ export const IMAGE_FIT_OPTIONS: ImageFitOption[] = ['contain', 'cover'];
 export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
 
 /**
+ * The exported canvas shape, in picker order. Square first because it is the
+ * one the platforms this exists for actually render natively.
+ *
+ * Same rule as `ASPECT_RATIO_OPTIONS`: these strings are persisted config and
+ * are read back as literals by `data-canvas-ratio` in card.css, so only `auto`
+ * needs a translation and it goes through the control's labels map.
+ */
+export const CANVAS_RATIO_OPTIONS: CanvasRatioOption[] = ['auto', '1:1', '4:5', '3:4', '16:9'];
+
+/**
+ * The ring of mat left showing around the card when a canvas is switched on.
+ *
+ * Fixed rather than user-adjustable: the geometry below derives the canvas
+ * shape from this number, so a slider here would be a second control whose
+ * only visible effect is to make the first one's output bigger. It is 0 when
+ * nothing is selected, which is what keeps the default export byte-identical
+ * to the card alone.
+ */
+export const MAT_PADDING = '48px';
+
+/**
+ * What the mat can be painted with.
+ *
+ * A table rather than a colour picker: every entry is a CSS literal, so the
+ * whole feature stays offline and nothing is fetched at export time. `'theme'`
+ * is the one entry that is not a literal — it resolves to the active material's
+ * own `canvas` token, which is why it is the default choice: the twelve
+ * materials already ship twelve mats that were tuned against their sheets, and
+ * picking `'theme'` reuses that work instead of asking the user to match a
+ * background to a card by eye.
+ */
+export interface CanvasBackgroundDefinition {
+  id: CanvasBackgroundId;
+  /**
+   * How the mat gets its value. `'none'` and `'theme'` are not literals and are
+   * resolved at render time; the other two are read straight off `css`.
+   */
+  kind: 'none' | 'theme' | 'solid' | 'gradient';
+  /** A CSS `background` value. Empty for `'none'` and `'theme'`. */
+  css: string;
+  /** Fallback label. The panel prefers `canvasBg_<id>` from the dictionary. */
+  name: string;
+}
+
+export const CANVAS_BACKGROUNDS: Record<CanvasBackgroundId, CanvasBackgroundDefinition> = {
+  none: { id: 'none', kind: 'none', css: '', name: 'None' },
+  theme: { id: 'theme', kind: 'theme', css: '', name: 'Follow theme' },
+  // Two papers and an ink: the same three tones the materials are built from,
+  // so a solid choice reads as a material decision rather than a colour one.
+  paper: { id: 'paper', kind: 'solid', css: '#faf9f5', name: 'Paper' },
+  stone: { id: 'stone', kind: 'solid', css: '#deddd6', name: 'Stone' },
+  ink: { id: 'ink', kind: 'solid', css: '#141413', name: 'Ink' },
+  // Gradients run light-to-dark along the diagonal, which is the direction the
+  // preview's own mat shading runs; a card dropped on one reads as lit from the
+  // top-left the same way it does on a solid material.
+  linen: {
+    id: 'linen',
+    kind: 'gradient',
+    css: 'linear-gradient(135deg, #fdfcf9 0%, #e6e2d6 100%)',
+    name: 'Linen',
+  },
+  dusk: {
+    id: 'dusk',
+    kind: 'gradient',
+    css: 'linear-gradient(135deg, #3a3550 0%, #12111a 100%)',
+    name: 'Dusk',
+  },
+};
+
+/** Picker order: no background, then the theme's own, then the rest. */
+export const CANVAS_BACKGROUND_ORDER: CanvasBackgroundId[] = [
+  'none',
+  'theme',
+  'paper',
+  'stone',
+  'ink',
+  'linen',
+  'dusk',
+];
+
+/**
+ * The CSS `background` the mat is painted with.
+ *
+ * Shaped like `resolveRadius` below: `'theme'` is the only entry that needs the
+ * active material, so the material is a parameter rather than something this
+ * reads for itself.
+ */
+export function resolveCanvasBackground(id: CanvasBackgroundId, theme: ThemeId): string {
+  const definition = CANVAS_BACKGROUNDS[id];
+  if (!definition || definition.kind === 'none') return '';
+  if (definition.kind === 'theme') return THEMES[theme].tokens.canvas;
+  return definition.css;
+}
+
+/**
  * Picker order and visibility.
  *
  * The first six are the everyday rotation, light and dark mixed so the picker's
@@ -1028,6 +1126,10 @@ export const DEFAULT_CARD_CONFIG: CardConfig = {
   showPlayButton: true,
   locale: detectDefaultLocale(),
   excludedTweetIds: [],
+  // Both default to "leave the export alone". A default of anything else would
+  // repaint every existing user's PNG the moment they upgrade.
+  canvasRatio: 'auto',
+  canvasBackground: 'none',
 };
 
 export function sanitizePadding(val: string): PaddingOption {
@@ -1075,6 +1177,35 @@ export function sanitizeMediaLayout(val?: string): MediaLayoutOption {
     return val;
   }
   return 'grid';
+}
+
+/**
+ * Both of these answer their own default for an absent value, which is what
+ * `normalizeStoredConfig` needs: the two ship as `'auto'` and `'none'`, so the
+ * sanitizer's fallback and `DEFAULT_CARD_CONFIG` agree and the `??` that
+ * `borderRadius` needs would be dead weight here.
+ */
+export function sanitizeCanvasRatio(val?: string): CanvasRatioOption {
+  if (
+    val === 'auto' ||
+    val === '1:1' ||
+    val === '4:5' ||
+    val === '3:4' ||
+    val === '16:9'
+  ) {
+    return val;
+  }
+  return 'auto';
+}
+
+export function sanitizeCanvasBackground(val?: string): CanvasBackgroundId {
+  // `Object.hasOwn`, for the same prototype-chain reason `sanitizeTheme` gives:
+  // an id is used to index `CANVAS_BACKGROUNDS`, and `'constructor'` would be
+  // found by `in` and then handed to `resolveCanvasBackground`.
+  if (val && Object.hasOwn(CANVAS_BACKGROUNDS, val)) {
+    return val as CanvasBackgroundId;
+  }
+  return 'none';
 }
 
 /**

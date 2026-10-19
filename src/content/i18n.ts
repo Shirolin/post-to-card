@@ -23,6 +23,18 @@ export interface Translations {
   themesShowLess: string;
   aspectRatio: string;
   aspectAuto: string;
+  /** The exported picture's canvas: its shape, and what it is painted with. */
+  canvas: string;
+  canvasRatio: string;
+  canvasRatioAuto: string;
+  canvasBackground: string;
+  canvasBg_none: string;
+  canvasBg_theme: string;
+  canvasBg_paper: string;
+  canvasBg_stone: string;
+  canvasBg_ink: string;
+  canvasBg_linen: string;
+  canvasBg_dusk: string;
   exportSize: string;
   exportSizeReduced: string;
   exportSizeImpossible: string;
@@ -95,6 +107,11 @@ export interface Translations {
   exportScaleReduced: string;
   statusSeparator: string;
   retryExport: string;
+  /**
+   * Shown beside the size readout when the picture is so much taller than it is
+   * wide that a feed will shrink it below reading size.
+   */
+  longCardWarning: string;
 
   // Preview
   zoomLabel: string;
@@ -136,8 +153,19 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     theme: '视觉主题',
     themesShowAll: '展开其余 {count} 款',
     themesShowLess: '收起主题',
-    aspectRatio: '画幅比例',
+    aspectRatio: '卡片形状',
     aspectAuto: '自适应',
+    canvas: '输出画布',
+    canvasRatio: '输出画幅',
+    canvasRatioAuto: '跟随卡片',
+    canvasBackground: '画布背景',
+    canvasBg_none: '无背景',
+    canvasBg_theme: '跟随主题',
+    canvasBg_paper: '纸白',
+    canvasBg_stone: '石灰',
+    canvasBg_ink: '墨黑',
+    canvasBg_linen: '亚麻',
+    canvasBg_dusk: '暮色',
     exportSize: '导出尺寸 {w} × {h} px',
     exportSizeReduced: '导出尺寸 {w} × {h} px（已按画布上限降至 {scale}×）',
     exportSizeImpossible: '卡片高于画布上限，当前设置无法导出',
@@ -205,6 +233,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     exportScaleReduced: '已按画布上限降至 {scale}×',
     statusSeparator: '；',
     retryExport: '重试',
+    longCardWarning: '这张图很高，缩到信息流宽度后文字会很小；长串建议拆成几张',
 
     zoomLabel: '预览缩放',
     zoomFit: '适应',
@@ -242,8 +271,19 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     theme: 'Theme',
     themesShowAll: 'Show {count} more',
     themesShowLess: 'Hide extra themes',
-    aspectRatio: 'Aspect Ratio',
+    aspectRatio: 'Card Shape',
     aspectAuto: 'Auto',
+    canvas: 'Output Canvas',
+    canvasRatio: 'Canvas Shape',
+    canvasRatioAuto: 'Card',
+    canvasBackground: 'Background',
+    canvasBg_none: 'None',
+    canvasBg_theme: 'Theme',
+    canvasBg_paper: 'Paper',
+    canvasBg_stone: 'Stone',
+    canvasBg_ink: 'Ink',
+    canvasBg_linen: 'Linen',
+    canvasBg_dusk: 'Dusk',
     exportSize: 'Exports at {w} × {h} px',
     exportSizeReduced: 'Exports at {w} × {h} px (reduced to {scale}× by the canvas limit)',
     exportSizeImpossible: 'The card is taller than the canvas limit and cannot be exported',
@@ -317,6 +357,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     exportScaleReduced: 'reduced to {scale}× by the canvas limit',
     statusSeparator: '; ',
     retryExport: 'Retry',
+    longCardWarning: 'This picture is very tall; a feed will shrink its text. Consider splitting a long thread',
 
     zoomLabel: 'Preview Zoom',
     zoomFit: 'Fit',
