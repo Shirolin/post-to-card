@@ -11,7 +11,7 @@ import { Modal } from './Modal.tsx';
 import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadScope, toggleExcluded } from './threadScope.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
-import { DEFAULT_EXPORT_SCALE } from '../engine/index.ts';
+import { DEFAULT_EXPORT_SCALE, ExportRenderError, exportSizeFor } from '../engine/index.ts';
 
 import { getTranslation, sanitizeLocale, formatPreviewSummary } from '../i18n.ts';
 
@@ -72,6 +72,22 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isErrorStatus, setIsErrorStatus] = useState<boolean>(false);
+  const [isWarningStatus, setIsWarningStatus] = useState<boolean>(false);
+  /**
+   * The action to re-run, if the last export is worth another attempt.
+   *
+   * A ref rather than a boolean because the retry must repeat the *same* action
+   * the user asked for: a copy that fell back to a download should be retried
+   * as a copy, not silently turned into "download again".
+   */
+  const retryActionRef = useRef<ExportAction | null>(null);
+  const [canRetry, setCanRetry] = useState<boolean>(false);
+  /** The pending "clear the status line" timer, so a new export can cancel it. */
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** False from unmount on; an in-flight export must not write after it. */
+  const mountedRef = useRef<boolean>(true);
+  /** Focus target when the retry button is about to be removed. */
+  const exportPrimaryRef = useRef<HTMLButtonElement | null>(null);
   // Preview-only scale. The export captures a copy of the card outside this
   // zoom (see mountUnzoomedCopy in engine/export.ts), so exported dimensions
   // stay at the fixed 640px card width.
@@ -107,13 +123,10 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * on the clipboard. It has nothing to do with the preview's zoom: a long thread
    * on a phone can look tiny here and still export at full width.
    */
-  const exportSize =
-    cardHeight > 0
-      ? {
-          width: Math.round(CARD_WIDTH * DEFAULT_EXPORT_SCALE),
-          height: Math.round(cardHeight * DEFAULT_EXPORT_SCALE),
-        }
-      : null;
+  // The same arithmetic the exporter runs, so the figure here is the figure in
+  // the file: both call `fitScaleToCanvas` with the card's 640px width, and the
+  // pure function is what keeps them from drifting apart again.
+  const exportSize = exportSizeFor(CARD_WIDTH, cardHeight, DEFAULT_EXPORT_SCALE);
 
   const t = getTranslation(sanitizeLocale(config.locale));
 
@@ -265,6 +278,22 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     // caller passed a fresh object literal.
   }, []);
 
+  // The status timer must not outlive the modal: it holds a closure over this
+  // component's setter, and a pending timeout firing after unmount is a leak.
+  // The flag matters as much as the clear: an export can still be awaiting
+  // `onExport` when Escape closes the dialog, and its continuation would
+  // otherwise schedule a fresh timer that this cleanup has already run past.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (statusTimerRef.current) {
+        clearTimeout(statusTimerRef.current);
+        statusTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleConfigChange = (newConfig: CardConfig) => {
     setConfig(newConfig);
     setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
@@ -281,47 +310,173 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     return document.querySelector('#post-to-card-export-target') as HTMLElement | null;
   };
 
+  const clearStatusTimer = () => {
+    if (statusTimerRef.current) {
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
+  };
+
+  /**
+   * Replaces the pending status-clear timer.
+   *
+   * Cancelling here is not enough on its own: the paths that keep their message
+   * on screen never call this, so a timer left by the previous, clean export
+   * would still fire and wipe the new warning -- leaving a retry button with no
+   * text beside it. `handleExport` therefore clears at its own start.
+   */
+  const scheduleStatusClear = (delayMs: number) => {
+    clearStatusTimer();
+    // Nothing here should outlive the modal; see the cleanup effect.
+    if (!mountedRef.current) return;
+    statusTimerRef.current = setTimeout(() => {
+      statusTimerRef.current = null;
+      setStatusMessage('');
+    }, delayMs);
+  };
+
+  const setRetry = (action: ExportAction | null) => {
+    retryActionRef.current = action;
+    setCanRetry(action !== null);
+  };
+
+  /**
+   * How a clipboard refusal is worded. The download already happened, so the
+   * first clause says so; the reason follows, and only when the error message
+   * actually named one (`other` stays vague on purpose).
+   */
+  const clipboardFallbackText = (reason: ExportOutcome['clipboardFailure']): string => {
+    switch (reason) {
+      case 'unsupported':
+        return t.clipboardFallbackUnsupported;
+      case 'permission':
+        return t.clipboardFallbackPermission;
+      case 'unfocused-or-gesture':
+        return t.clipboardFallbackActivation;
+      default:
+        return t.clipboardFallbackNotice;
+    }
+  };
+
+  /**
+   * The outcome, in one line: where the file went, then what about it is worth
+   * knowing. A degraded export is not a failure -- the file exists -- so the
+   * warnings are clauses on the success sentence, not a replacement for it.
+   */
+  const describeOutcome = (outcome: ExportOutcome, action: ExportAction): string => {
+    if (!outcome.success) {
+      return outcome.error ? `${t.exportFailed}: ${outcome.error}` : t.exportFailed;
+    }
+
+    const base =
+      outcome.method === 'clipboard'
+        ? t.copiedSuccess
+        : action === 'copy'
+          ? clipboardFallbackText(outcome.clipboardFailure)
+          : t.downloadSuccess;
+
+    const notes: string[] = [];
+    if (outcome.degradedImageCount) {
+      notes.push(
+        t.imagesUnavailableCount.replace('{count}', String(outcome.degradedImageCount))
+      );
+    }
+    if (outcome.scaleReduced && outcome.appliedScale) {
+      notes.push(t.exportScaleReduced.replace('{scale}', String(outcome.appliedScale)));
+    }
+
+    return notes.length ? `${base}${t.statusSeparator}${notes.join(t.statusSeparator)}` : base;
+  };
+
   const handleExport = async (action: ExportAction) => {
+    // Before anything else, and on every path out of this function: the clear
+    // timer belongs to the *previous* export, and several paths below replace
+    // the message without scheduling a new one.
+    clearStatusTimer();
+
     const target = getExportTarget();
     if (!target) {
       setStatusMessage(t.targetNotFound);
       setIsErrorStatus(true);
+      setIsWarningStatus(false);
+      setRetry(action);
       return;
     }
 
     setIsExporting(true);
     setStatusMessage(action === 'copy' ? t.copying : t.generatingPng);
     setIsErrorStatus(false);
+    setIsWarningStatus(false);
+    setRetry(null);
 
     try {
       // The message follows the outcome, not the button that was pressed. A
       // clipboard that refuses is not a failure the user caused, but it is also
       // not a copy -- so it gets its own wording rather than "copied".
+      let needsAttention = false;
       if (onExport) {
         const outcome = await onExport(target, action);
+        // Escape can close the modal while this is in flight; nothing below has
+        // a component to write to after that, and the timer in particular must
+        // not be created past the unmount cleanup.
+        if (!mountedRef.current) return;
+        const degraded = Boolean(
+          outcome.degradedImageCount || outcome.scaleReduced || outcome.clipboardFailure
+        );
         setIsErrorStatus(!outcome.success);
-        if (!outcome.success) {
-          setStatusMessage(
-            outcome.error ? `${t.exportFailed}: ${outcome.error}` : t.exportFailed
-          );
-        } else if (outcome.method === 'clipboard') {
-          setStatusMessage(t.copiedSuccess);
-        } else {
-          setStatusMessage(
-            action === 'copy' ? t.clipboardFallbackNotice : t.downloadSuccess
-          );
-        }
+        setIsWarningStatus(outcome.success && degraded);
+        setStatusMessage(describeOutcome(outcome, action));
+        // Anything short of a clean copy/download can be worth another try --
+        // except a clipboard this browser simply does not have. Retrying that
+        // can only fail the same way and save a second copy of the PNG.
+        needsAttention =
+          !outcome.success ||
+          Boolean(outcome.degradedImageCount || outcome.scaleReduced) ||
+          Boolean(outcome.clipboardFailure && outcome.clipboardFailure !== 'unsupported');
+        setRetry(needsAttention ? action : null);
       }
-      setTimeout(() => setStatusMessage(''), 2500);
+      // A warning stays until the next export. Auto-clearing it while the
+      // button that earned it is still on screen is how the warning was missed
+      // the first time round: 2.5s is shorter than reading a three-clause line.
+      // The clean path keeps the short timer; a retryable outcome does not.
+      if (!needsAttention) scheduleStatusClear(2500);
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       console.error('[Post-to-Card] Export error:', err);
-      const msg = err instanceof Error ? err.message : t.exportFailed;
+      const msg = !(err instanceof ExportRenderError)
+        ? err instanceof Error
+          ? err.message
+          : t.exportFailed
+        : err.code === 'empty-blob'
+          ? t.exportEmpty
+          : err.code === 'too-tall'
+            ? t.exportTooTall
+            : err.message;
       setStatusMessage(msg);
       setIsErrorStatus(true);
-      setTimeout(() => setStatusMessage(''), 4000);
+      setIsWarningStatus(false);
+      // An empty image is the one failure a second attempt can plausibly fix
+      // (a transient allocation failure), so it gets a retry button. A
+      // `rasterizer` error means the engine gave us nothing at all, which the
+      // same click cannot change.
+      const retryable = err instanceof ExportRenderError && err.code === 'empty-blob';
+      setRetry(retryable ? action : null);
+      // Same rule as the warning path: a line the user can still act on must
+      // outlive the timer. An unrecognized error has no retry, so it fades.
+      if (!retryable) scheduleStatusClear(4000);
     } finally {
-      setIsExporting(false);
+      if (mountedRef.current) setIsExporting(false);
     }
+  };
+
+  const handleRetry = () => {
+    const action = retryActionRef.current;
+    if (!action) return;
+    // The button is removed by the state update this starts (it disappears
+    // while exporting). Moving focus to the primary action first keeps a
+    // keyboard user inside the dialog instead of dropping them on <body>.
+    exportPrimaryRef.current?.focus();
+    void handleExport(action);
   };
 
   // One scope answers both questions this surface asks: what the card shows,
@@ -444,6 +599,9 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
         isExporting={isExporting}
         statusMessage={statusMessage}
         isErrorStatus={isErrorStatus}
+        isWarningStatus={isWarningStatus}
+        onRetry={canRetry ? handleRetry : undefined}
+        primaryButtonRef={exportPrimaryRef}
         threadData={threadData}
         exportSize={exportSize}
       />

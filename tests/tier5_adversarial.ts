@@ -23,7 +23,7 @@ import { MockClipboard, MockClipboardItem } from './env/clipboard.ts';
 // talking to the real `modern-screenshot` and failing for want of a canvas.
 
 // Clipboard & Fallback engine (direct TS imports)
-import { exportBlobWithFallback } from '../src/content/engine/export.ts';
+import { exportBlobWithFallback, classifyClipboardFailure } from '../src/content/engine/export.ts';
 
 // Background proxy & SSRF shield (direct TS imports)
 import {
@@ -676,6 +676,59 @@ async function runAdversarialSuite() {
       }
       delete (globalThis as any).ClipboardItem;
     }
+  });
+
+  await challenge('T5.2.7: the clipboard classifier never throws on hostile input and never over-claims', async () => {
+    // The function runs inside a catch handler, so an exception here would
+    // replace the original failure with a new one. It is also the only thing
+    // that turns browser text into a claim the UI shows, so the cases where the
+    // evidence is ambiguous must stay `other`.
+    const hostile: unknown[] = [
+      undefined,
+      null,
+      '',
+      'boom',
+      42,
+      {},
+      [],
+      { message: 123, name: 456 },
+      Object.create(null),
+      (() => {
+        const err: any = new Error('x');
+        Object.defineProperty(err, 'message', {
+          get() {
+            throw new Error('message getter exploded');
+          },
+        });
+        return err;
+      })(),
+    ];
+
+    for (const input of hostile) {
+      const result = classifyClipboardFailure(input);
+      assert.ok(['unsupported', 'permission', 'unfocused-or-gesture', 'other'].includes(result.reason));
+      assert.equal(typeof result.message, 'string');
+    }
+
+    // Ambiguous evidence never becomes a specific claim.
+    assert.equal(
+      classifyClipboardFailure(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' })).reason,
+      'other'
+    );
+    assert.equal(
+      classifyClipboardFailure(new Error('SecurityError: blocked')).reason,
+      'other'
+    );
+    // Only explicit wording may move it.
+    assert.equal(
+      classifyClipboardFailure(new Error('Document is not focused.')).reason,
+      'unfocused-or-gesture'
+    );
+    assert.equal(
+      classifyClipboardFailure(new Error('Clipboard permission denied.')).reason,
+      'permission'
+    );
+    assert.equal(unhandledRejectionsCount, 0);
   });
 
   // -------------------------------------------------------------

@@ -53,6 +53,10 @@
      one message in this dialog that could not be read. */
   --ptc-danger: #ff6169;
   --ptc-success: #00ba7c;
+  /* A degraded export is not a failure: the file exists but is missing a
+     picture or some pixels. Amber keeps it visible without borrowing the red
+     that means "nothing was produced". 7.2:1 on the panel. */
+  --ptc-warning: #ffd166;
 
   /* The shell is an off-black rather than `#000000`. A pure black backdrop made
      three things worse and fixed none: the dialog's own drop shadow was drawn in
@@ -850,13 +854,23 @@
   box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, 0.9);
 }
 
-/* Fixed-height live region keeps the buttons from shifting when a
-   status message appears or clears. */
+/* The live region. Fixed-height so the buttons below do not shift when a
+   message appears or clears; the retry button is its sibling rather than its
+   child, which is why the centring is done here and not by the region. */
 .status-region {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* The retry button is a sibling of the live region, sharing its row: a button
+   inside `role="status"` would be announced with every message and would drop
+   a keyboard user's focus when it disappears on retry. The row keeps the
+   column's normal 8px gap, so the layout is the same as when it sat inside. */
+.status-retry-row {
+  display: flex;
+  justify-content: center;
 }
 
 /* The exported pixel size, read beside the button that produces it. Only rendered
@@ -880,6 +894,32 @@
 
 .status-message.is-error {
   color: var(--ptc-danger);
+}
+
+.status-message.is-warning {
+  color: var(--ptc-warning);
+}
+
+/* Outside the live region rather than inside it: the failure text is read
+   verbatim by the panel's own tests, so anything appended would change it, and
+   a control inside `role="status"` would be re-announced with every message. */
+.status-retry {
+  /* A long outcome line wraps; the button must not, or it turns into a
+     two-line "Try / again" and shrinks away from the text it belongs to. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border: 1px solid var(--ptc-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ptc-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.status-retry:hover {
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .export-buttons {

@@ -24,6 +24,8 @@ export interface Translations {
   aspectRatio: string;
   aspectAuto: string;
   exportSize: string;
+  exportSizeReduced: string;
+  exportSizeImpossible: string;
   imageFit: string;
   fitContain: string;
   fitCover: string;
@@ -82,8 +84,17 @@ export interface Translations {
   copiedSuccess: string;
   downloadSuccess: string;
   exportFailed: string;
+  exportEmpty: string;
+  exportTooTall: string;
   targetNotFound: string;
   clipboardFallbackNotice: string;
+  clipboardFallbackUnsupported: string;
+  clipboardFallbackPermission: string;
+  clipboardFallbackActivation: string;
+  imagesUnavailableCount: string;
+  exportScaleReduced: string;
+  statusSeparator: string;
+  retryExport: string;
 
   // Preview
   zoomLabel: string;
@@ -128,6 +139,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     aspectRatio: '画幅比例',
     aspectAuto: '自适应',
     exportSize: '导出尺寸 {w} × {h} px',
+    exportSizeReduced: '导出尺寸 {w} × {h} px（已按画布上限降至 {scale}×）',
+    exportSizeImpossible: '卡片高于画布上限，当前设置无法导出',
     imageFit: '图片适配',
     fitContain: '完整展示',
     fitCover: '填充铺满',
@@ -181,8 +194,17 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     copiedSuccess: '已复制到剪贴板',
     downloadSuccess: 'PNG 图片已保存',
     exportFailed: '导出失败',
+    exportEmpty: '截图引擎返回了空图片，请重试',
+    exportTooTall: '卡片高度超过画布上限，请减少推文或改用纵向平铺后重试',
     targetNotFound: '未找到卡片渲染节点。',
-    clipboardFallbackNotice: '剪贴板写入受限，已自动为您下载高清图片！',
+    clipboardFallbackNotice: '剪贴板写入失败，已自动下载 PNG',
+    clipboardFallbackUnsupported: '此浏览器不支持写入图片剪贴板，已自动下载 PNG',
+    clipboardFallbackPermission: '剪贴板权限被拒绝，已自动下载 PNG',
+    clipboardFallbackActivation: '窗口未聚焦或操作间隔过长，剪贴板写入被拒，已自动下载 PNG',
+    imagesUnavailableCount: '{count} 张配图未能加载',
+    exportScaleReduced: '已按画布上限降至 {scale}×',
+    statusSeparator: '；',
+    retryExport: '重试',
 
     zoomLabel: '预览缩放',
     zoomFit: '适应',
@@ -223,6 +245,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     aspectRatio: 'Aspect Ratio',
     aspectAuto: 'Auto',
     exportSize: 'Exports at {w} × {h} px',
+    exportSizeReduced: 'Exports at {w} × {h} px (reduced to {scale}× by the canvas limit)',
+    exportSizeImpossible: 'The card is taller than the canvas limit and cannot be exported',
     imageFit: 'Image Fit',
     fitContain: 'Fit',
     fitCover: 'Fill',
@@ -281,8 +305,18 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     copiedSuccess: 'Copied to clipboard',
     downloadSuccess: 'PNG downloaded',
     exportFailed: 'Export failed',
+    exportEmpty: 'The screenshot engine returned an empty image; please retry',
+    exportTooTall:
+      'The card is taller than the largest canvas; remove some posts or switch the media layout and try again',
     targetNotFound: 'Export target not found.',
-    clipboardFallbackNotice: 'Clipboard restricted; auto-downloaded PNG!',
+    clipboardFallbackNotice: 'Clipboard write failed; the PNG was downloaded instead',
+    clipboardFallbackUnsupported: 'This browser cannot put images on the clipboard; the PNG was downloaded instead',
+    clipboardFallbackPermission: 'Clipboard permission was denied; the PNG was downloaded instead',
+    clipboardFallbackActivation: 'The window lost focus or the action took too long, so the clipboard refused; the PNG was downloaded instead',
+    imagesUnavailableCount: '{count} image(s) could not be loaded',
+    exportScaleReduced: 'reduced to {scale}× by the canvas limit',
+    statusSeparator: '; ',
+    retryExport: 'Retry',
 
     zoomLabel: 'Preview Zoom',
     zoomFit: 'Fit',

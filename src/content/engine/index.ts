@@ -6,3 +6,5 @@
  */
 
 export * from './export.ts';
+export * from './scale.ts';
+export * from './filename.ts';

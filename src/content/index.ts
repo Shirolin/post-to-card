@@ -6,18 +6,8 @@
 
 import { initTwitterInjection, resolveThread } from './adapter/index.ts';
 import { openCardModal } from './container/element.ts';
-import { exportCard, type ExportAction, type ExportOutcome } from './engine/index.ts';
+import { createExportHandler } from './exportHandler.ts';
 import { initGraphQLBridge } from './graphql/bridge.ts';
-
-// The outcome travels back to the modal untouched. It used to be discarded
-// here, which is how a card the clipboard had refused came to be announced as
-// copied.
-function handleCardExport(
-  target: HTMLElement,
-  action: ExportAction
-): Promise<ExportOutcome> {
-  return exportCard(target, { action });
-}
 
 function initContentScript(): void {
   try {
@@ -29,7 +19,7 @@ function initContentScript(): void {
     const controller = initTwitterInjection((article: Element) => {
       const threadData = resolveThread(article);
 
-      openCardModal(threadData, handleCardExport);
+      openCardModal(threadData, createExportHandler(threadData));
     });
 
     // Supplementary scans for dynamic SPA feed hydration

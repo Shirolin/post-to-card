@@ -34,7 +34,7 @@ import { restoreUnicodeEmojis } from '../../src/content/adapter/emojis.ts';
 import { toggleExcluded, selectCurrentOnly } from '../../src/content/ui/threadScope.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
-import { TRANSLATIONS, getTranslation } from '../../src/content/i18n.ts';
+import { TRANSLATIONS, getTranslation, sanitizeLocale } from '../../src/content/i18n.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, PADDING_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, sanitizePadding, getAspectMinHeight, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 import { isAllowedHost, clearImageCache, getImageCacheSize } from '../../src/background/proxy.ts';
@@ -3779,6 +3779,713 @@ test('F26.3: falls back to download when user activation gesture expires', async
 
 test('F26.4: falls back to download when clipboard permission is denied', async () => {
   await expectDownloadFallback('permission_denied', 'post-to-card-200.png');
+});
+
+// -------------------------------------------------------------
+// F33: Readable export filenames
+// -------------------------------------------------------------
+
+test('F33.1: a filename carries handle, date and an opening-line slug', async () => {
+  const engine = await loadModule('/src/content/engine/index.ts');
+  assert.equal(
+    engine.buildExportFilename({
+      handle: '@Ada',
+      text: 'Shipping the video pass today!',
+      timestamp: '2026-10-02T10:00:00Z',
+    }),
+    'post-to-card_ada_2026-10-02_shipping-the-video-pass-today.png'
+  );
+});
+
+test('F33.2: a missing or unusable handle falls back to `x`', async () => {
+  const engine = await loadModule('/src/content/engine/index.ts');
+  for (const handle of [undefined, '', '@', '@@@', 'a/b:c*d?']) {
+    const name = engine.buildExportFilename({ handle, text: 'hello', timestamp: '2026-10-02T10:00:00Z' });
+    assert.match(name, /^post-to-card_[a-z0-9_]+_2026-10-02/, `unusable handle ${String(handle)}: ${name}`);
+    assert.ok(!/[:<>"\\|?*/]/.test(name), `illegal character in ${name}`);
+  }
+  assert.equal(
+    engine.buildExportFilename({ handle: '@@', timestamp: '2026-10-02T10:00:00Z' }),
+    'post-to-card_x_2026-10-02.png',
+    'and no slug segment is left behind'
+  );
+});
+
+test('F33.3: Windows-illegal characters and trailing dots are removed', async () => {
+  const engine = await loadModule('/src/content/engine/index.ts');
+  const name = engine.buildExportFilename({
+    handle: 'ada',
+    text: 'a<b>c:"d"/e\\f|g?h*i ...  ',
+    timestamp: '2026-10-02T10:00:00Z',
+  });
+  assert.ok(!/[<>:"/\\|?*]/.test(name), `illegal character survived: ${name}`);
+  assert.ok(name.endsWith('.png'));
+  assert.ok(!/[. ]\.png$/.test(name), `a segment ended in a dot or space: ${name}`);
+});
+
+test('F33.4: CJK text is kept, long text is truncated by code point', async () => {
+  const engine = await loadModule('/src/content/engine/index.ts');
+  const cjk = engine.buildExportFilename({
+    handle: 'ada',
+    text: '今天发布了视频功能',
+    timestamp: '2026-10-02T10:00:00Z',
+  });
+  assert.ok(cjk.includes('今天发布了视频功能'), `CJK was dropped: ${cjk}`);
+
+  // Astral letters survive the whitelist (\p{L}), so this is the input that
+  // actually reaches the truncation boundary. Emoji do not: they are filtered
+  // out, which let the old version of this case pass without truncating.
+  const long = engine.buildExportFilename(
+    {
+      handle: 'ada',
+      text: '\u{1D400}'.repeat(200),
+      timestamp: '2026-10-02T10:00:00Z',
+    },
+    // The default 120 cannot be reached from the production caller (the slug is
+    // already capped); a small limit is what exercises the branch.
+    { maxLength: 45 }
+  );
+  assert.ok(Array.from(long).length <= 45, `name too long: ${Array.from(long).length} code points`);
+  assert.ok(
+    !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(long),
+    'a surrogate pair was sliced in half'
+  );
+  assert.ok(!long.includes('�'), 'and replaced with a replacement character');
+});
+
+test('F33.4b: combining marks are kept and equivalent Unicode forms agree', async () => {
+  const engine = await loadModule('/src/content/engine/index.ts');
+  const devanagari = engine.buildExportFilename({
+    handle: 'ada',
+    text: 'हिन्दी',
+    timestamp: '2026-10-02T10:00:00Z',
+  });
+  // Dropping \p{M} leaves a consonant skeleton that no longer spells the word.
+  assert.ok(devanagari.includes('हिन्दी'), `combining marks were dropped: ${devanagari}`);
+
+  const composed = engine.buildExportFilename({
+    handle: 'ada',
+    text: 'café au lait',
+    timestamp: '2026-10-02T10:00:00Z',
+  });
+  // Decomposed e + U+0301, spelled with escapes so an editor cannot normalise
+  // it back to the composed form and quietly make this assertion vacuous.
+  const decomposed = engine.buildExportFilename({
+    handle: 'ada',
+    text: 'café au lait',
+    timestamp: '2026-10-02T10:00:00Z',
+  });
+  assert.equal(decomposed, composed, 'the same post must name its file the same way');
+});
+
+test('F33.5: an unparseable timestamp falls back to the supplied date', async () => {
+  const engine = await loadModule('/src/content/engine/index.ts');
+  const name = engine.buildExportFilename({
+    handle: 'ada',
+    timestamp: 'not-a-date',
+    now: new Date('2026-03-04T00:00:00Z'),
+  });
+  assert.equal(name, 'post-to-card_ada_2026-03-04.png');
+});
+
+test('F33.6: URL-only text produces no slug, and reserved device names are defused', async () => {
+  const engine = await loadModule('/src/content/engine/index.ts');
+  assert.equal(
+    engine.buildExportFilename({
+      handle: 'ada',
+      text: 'https://example.com/some/long/path',
+      timestamp: '2026-10-02T10:00:00Z',
+    }),
+    'post-to-card_ada_2026-10-02.png',
+    'a link is not a title'
+  );
+
+  // The prefix already keeps this out of the reserved set; the check is that a
+  // hostile slug cannot reintroduce it after sanitising.
+  const reserved = engine.buildExportFilename({
+    handle: 'ada',
+    text: 'CON',
+    timestamp: '2026-10-02T10:00:00Z',
+  });
+  assert.match(reserved, /^post-to-card_ada_2026-10-02_con\.png$/);
+});
+
+test('F33.7: the export handler names the file after the target tweet, not the first one', async () => {
+  const entry = await loadModule('/src/content/exportHandler.ts');
+  const thread: ThreadData = {
+    author: { name: 'Ada', handle: '@ada' },
+    isSingle: false,
+    targetTweetIndex: 1,
+    tweets: [
+      { ...CONTAINER_THREAD.tweets[0], text: 'first post', timestamp: '2026-10-01T10:00:00Z' },
+      { ...CONTAINER_THREAD.tweets[0], id: '90002', text: 'second post', timestamp: '2026-10-02T10:00:00Z' },
+    ],
+  };
+
+  const engine = await loadModule('/src/content/engine/index.ts');
+  const expected = engine.buildExportFilename({
+    handle: '@ada',
+    text: 'second post',
+    timestamp: '2026-10-02T10:00:00Z',
+  });
+
+  const handler = entry.createExportHandler(thread) as (
+    target: HTMLElement,
+    action: string
+  ) => Promise<{ filename: string }>;
+
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  await withMountedCard(thread, async (card) => {
+    const result = await handler(card as unknown as HTMLElement, 'download');
+    assert.equal(result.filename, expected);
+  });
+});
+
+// -------------------------------------------------------------
+// F34: The size readout and the exporter share one scale calculation
+// -------------------------------------------------------------
+
+test('F34.1: a tall card is reduced to fit the canvas edge', async () => {
+  const scale = await loadModule('/src/content/engine/scale.ts');
+  const fit = scale.fitScaleToCanvas({ width: 640, height: 40000 }, 2);
+  assert.equal(fit.applied, 1.63, 'floor(65535 / 40000 * 100) / 100');
+  assert.equal(fit.reduced, true);
+
+  // The product must never exceed the edge; rounding up would.
+  assert.ok(fit.applied * 40000 <= scale.MAX_CANVAS_EDGE);
+});
+
+test('F34.2: an unmeasured card is left at the requested scale', async () => {
+  const scale = await loadModule('/src/content/engine/scale.ts');
+  for (const measured of [{ width: 0, height: 0 }, { width: 640, height: 0 }, { width: 0, height: 900 }]) {
+    const fit = scale.fitScaleToCanvas(measured, 2);
+    assert.equal(fit.applied, 2, 'a zero measurement is not evidence of a problem');
+    assert.equal(fit.reduced, false);
+  }
+});
+
+test('F34.3: a card that already fits is not reduced', async () => {
+  const scale = await loadModule('/src/content/engine/scale.ts');
+  const fit = scale.fitScaleToCanvas({ width: 640, height: 1000 }, 3);
+  assert.equal(fit.applied, 3);
+  assert.equal(fit.reduced, false);
+});
+
+test('F34.4: the export reports the scale it actually used', async () => {
+  // The shim has no layout, so the measured height is injected. `renderCardToBlob`
+  // measures the copy it just cloned, which is a fresh node created inside the
+  // engine -- the only place the injection can be aimed at is `cloneNode`, the
+  // one call every copy comes from.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+
+  let report: any = null;
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    const element = card as any;
+    const realClone = element.cloneNode.bind(element);
+    element.cloneNode = (deep?: boolean) => {
+      const copy = realClone(deep);
+      Object.defineProperty(copy, 'offsetWidth', { value: 640, configurable: true });
+      // Tall enough for the limit to bite, short enough that 1x still fits:
+      // past 65535 nothing can be exported, which is F34.7's case.
+      Object.defineProperty(copy, 'offsetHeight', { value: 40000, configurable: true });
+      return copy;
+    };
+
+    try {
+      await engine.renderCardToBlob(card, { report: (next: unknown) => { report = next; } });
+    } finally {
+      element.cloneNode = realClone;
+    }
+  });
+
+  assert.ok(report, 'the engine said nothing about the export');
+  assert.equal(report.requestedScale, 2);
+  assert.equal(report.appliedScale, 1.63, 'floor(65535 / 40000 * 100) / 100');
+  assert.equal(report.scaleReduced, true);
+  assert.equal(stub.rasterizerCalls[0].options.scale, report.appliedScale,
+    'the readout and the renderer must quote the same number');
+});
+
+test('F34.7: a card taller than any canvas is refused, not quoted at a size', async () => {
+  const scale = await loadModule('/src/content/engine/scale.ts');
+  const fit = scale.fitScaleToCanvas({ width: 640, height: 70000 }, 2);
+  assert.equal(fit.impossible, true, '1x is still over the edge');
+
+  // The readout must not promise a file: it says so and offers no size.
+  const readout = scale.exportSizeFor(640, 70000, 2);
+  assert.ok(readout);
+  assert.equal(readout.impossible, true);
+
+  // And the exporter refuses before rasterizing, with an error the panel can
+  // word for the user -- rather than the browser's zero-byte blob.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    const element = card as any;
+    const realClone = element.cloneNode.bind(element);
+    element.cloneNode = (deep?: boolean) => {
+      const copy = realClone(deep);
+      Object.defineProperty(copy, 'offsetWidth', { value: 640, configurable: true });
+      Object.defineProperty(copy, 'offsetHeight', { value: 70000, configurable: true });
+      return copy;
+    };
+    try {
+      await assert.rejects(
+        () => engine.renderCardToBlob(card),
+        (err: any) => err?.code === 'too-tall'
+      );
+    } finally {
+      element.cloneNode = realClone;
+    }
+  });
+  assert.equal(stub.rasterizerCalls.length, 0, 'nothing was handed to the rasterizer');
+
+  const html = await renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
+    config: CARD_CONFIG,
+    onChange: () => {},
+    onExportCopy: () => {},
+    onExportDownload: () => {},
+    exportSize: { ...readout },
+  });
+  assert.match(html, /taller than the canvas limit/, 'the hint explains why');
+  assert.ok(!html.includes('Exports at'), 'and quotes no size');
+  assert.match(html, /btn-primary[^>]*disabled/, 'with nothing to click');
+});
+
+test('F34.5: the preview quotes the reduced size when the canvas limit bites', async () => {
+  const html = await renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
+    config: CARD_CONFIG,
+    onChange: () => {},
+    onExportCopy: () => {},
+    onExportDownload: () => {},
+    exportSize: { width: 1037, height: 64800, scale: 1.62, reduced: true },
+  });
+  assert.match(html, /1\.62×/, 'the readout has to admit the reduction');
+  // The seeded config is en-US, so the hint is the English template.
+  assert.match(html, /Exports at/, 'and still be the size hint');
+});
+
+test('F34.6: the preview does not claim a reduction when there is none', async () => {
+  // The wiring is what matters: the readout must come from the same function
+  // the exporter calls, not from arithmetic written in the panel. This is the
+  // function App feeds with the measured card.
+  const scale = await loadModule('/src/content/engine/scale.ts');
+  assert.deepEqual(
+    scale.exportSizeFor(640, 40000, 2),
+    // 65199, not 65200: the rasterizer sizes the canvas with `Math.floor`, and
+    // the readout has to name the pixel count the file actually has.
+    { width: 1043, height: 65199, scale: 1.63, reduced: true, impossible: false },
+    'a tall card is quoted at the size the engine will produce'
+  );
+  assert.equal(scale.exportSizeFor(640, 0, 2), null, 'and nothing is quoted before the card is measured');
+
+  const html = await renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
+    config: CARD_CONFIG,
+    onChange: () => {},
+    onExportCopy: () => {},
+    onExportDownload: () => {},
+    exportSize: { width: 1280, height: 1920, scale: 2, reduced: false },
+  });
+  assert.match(html, /1280/);
+  // The rendered config is pinned to en-US, so the negative has to be asserted
+  // in English: a Chinese string cannot appear either way, and a hint that
+  // always used the reduced template would slip through.
+  assert.ok(!html.includes('canvas limit'), 'an ordinary export must not carry a caveat');
+  assert.ok(!html.includes('reduced to'), 'nor quote a scale it never applied');
+});
+
+// -------------------------------------------------------------
+// F35: Degraded exports are reported, not dressed as clean ones
+// -------------------------------------------------------------
+
+test('F35.1: a partly-failed image fetch is counted per picture, not per URL', async () => {
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+
+  // The fixture matters as much as the assertion: it has to contain a URL used
+  // by more than one <img>, or per-URL and per-picture counting produce the same
+  // number and the test locks nothing. A two-post thread repeats the avatar.
+  const avatarUrl = 'https://pbs.twimg.com/profile_images/1/ada_normal.jpg';
+  const repeatedAvatar: ThreadData = {
+    author: { name: 'Ada', handle: '@ada', avatarUrl },
+    isSingle: false,
+    targetTweetIndex: 0,
+    tweets: [
+      {
+        id: '91001',
+        url: 'https://x.com/ada/status/91001',
+        author: { name: 'Ada', handle: '@ada', avatarUrl },
+        text: 'first',
+        timestamp: '2026-10-02T10:00:00.000Z',
+        isThreadPart: true,
+        media: [{ type: 'image', url: 'https://pbs.twimg.com/media/two.jpg' }],
+      },
+      {
+        id: '91002',
+        url: 'https://x.com/ada/status/91002',
+        author: { name: 'Ada', handle: '@ada', avatarUrl },
+        text: 'second',
+        timestamp: '2026-10-02T10:05:00.000Z',
+        media: [{ type: 'image', url: 'https://pbs.twimg.com/media/ok.jpg' }],
+      },
+    ],
+  };
+
+  const chromeMock = createChromeMock();
+  chromeMock.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
+    if (message?.type !== 'FETCH_IMAGE_BASE64') return;
+    sendResponse(
+      String(message.url).includes('ok.jpg')
+        ? { success: true, dataUrl: 'data:image/jpeg;base64,OK' }
+        : { success: false, error: 'HTTP 404' }
+    );
+    return false;
+  });
+  scope.chrome = chromeMock;
+
+  try {
+    let report: any = null;
+    await withMountedCard(repeatedAvatar, async (card) => {
+      await engine.renderCardToBlob(card, { report: (next: unknown) => { report = next; } });
+    });
+
+    assert.ok(report, 'the export did not report anything');
+    const avatar = report.imageFailures.find((failure: any) => failure.url === avatarUrl);
+    assert.ok(avatar, 'the repeated avatar was not reported at all');
+    assert.equal(avatar.occurrences, 2, 'the same URL on two posts is two grey squares');
+    assert.equal(report.imageFailures.length, 2, 'the avatar and one photo failed, the ok photo did not');
+    assert.equal(report.failedImageCount, 3, 'two avatars plus one photo');
+  } finally {
+    if (savedChrome !== undefined) scope.chrome = savedChrome;
+    else delete scope.chrome;
+  }
+});
+
+test('F35.2: an export that succeeds with grey squares says so, and offers a retry', async () => {
+  await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+    let calls = 0;
+    const outcomes = [
+      // Clean first, so the timer it schedules is pending when the warning
+      // arrives. Without the clear at the top of `handleExport` that timer
+      // fires 2.5s later and wipes the warning, leaving a retry button with no
+      // text beside it.
+      { success: true, method: 'clipboard', filename: 'a.png' },
+      { success: true, method: 'clipboard', filename: 'a.png', degradedImageCount: 2 },
+      { success: true, method: 'clipboard', filename: 'a.png' },
+    ];
+    const container = openCardModal(EXPORT_THREAD, async () => {
+      const outcome = outcomes[calls++];
+      return outcome as any;
+    });
+    await flushEffects();
+
+    (container.shadow.querySelector('.export-actions .btn-primary') as any).click();
+    for (let i = 0; i < 40; i++) {
+      await flushEffects();
+      const button = container.shadow.querySelector('.export-actions .btn-primary') as any;
+      if (container.shadow.querySelector('.status-message') && !button.disabled) break;
+    }
+    assert.equal(calls, 1);
+
+    // The second export starts inside the first one's 2.5s window.
+    (container.shadow.querySelector('.export-actions .btn-primary') as any).click();
+    for (let i = 0; i < 40; i++) {
+      await flushEffects();
+      if (container.shadow.querySelector('.status-message')?.className.includes('is-warning')) break;
+    }
+    assert.equal(calls, 2, 'the second click ran a second export');
+
+    const status = container.shadow.querySelector('.status-message') as any;
+    assert.ok(status, 'a degraded export said nothing');
+    assert.match(status.textContent, /2/);
+    assert.ok(!status.className.includes('is-error'), 'the file exists, so this is not an error');
+    assert.ok(status.className.includes('is-warning'), 'but it is not a clean success either');
+
+    const retry = container.shadow.querySelector('.status-retry') as any;
+    assert.ok(retry, 'a degraded export is worth another attempt');
+
+    // Outlive the success message's 2.5s timer. Clearing a warning while the
+    // button it belongs to is still there is how it reads as noise rather than
+    // as something to act on.
+    await new Promise((resolve) => setTimeout(resolve, 2700));
+    await flushEffects();
+    assert.ok(
+      container.shadow.querySelector('.status-message')?.className.includes('is-warning'),
+      'the warning has to stay until the next export'
+    );
+
+    (container.shadow.querySelector('.status-retry') as any).click();
+    // The panel's locale follows the machine unless a test pins it, so the
+    // expected success line is read from the same table the panel reads.
+    const copied = TRANSLATIONS[sanitizeLocale(DEFAULT_CARD_CONFIG.locale)].copiedSuccess;
+    for (let i = 0; i < 40; i++) {
+      await flushEffects();
+      if (container.shadow.querySelector('.status-message')?.textContent === copied) break;
+    }
+
+    assert.equal(calls, 3, 'the retry re-ran the export rather than reusing the first result');
+    assert.ok(!container.shadow.querySelector('.status-retry'), 'a clean export leaves nothing to retry');
+  });
+});
+
+test('F35.3: an image with no picture in it is rejected instead of announced as a copy', async () => {
+  const engine = await exportEngine();
+
+  // The shape the shipped scale (2) produces: `toBlob` yields null, the
+  // `toDataURL` fallback gives `data:,`, and the dpi pass rebuilds it into a
+  // 54-byte `image/png` with no signature. A `size === 0` test misses this one
+  // entirely, which is how an unallocatable canvas was announced as a copy.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  stub.failNextRasterizationWithEmptyBlob();
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    await assert.rejects(
+      () => engine.renderCardToBlob(card),
+      (err: any) => err?.code === 'empty-blob'
+    );
+  });
+  assert.equal(stub.rasterizerCalls.length, 1, 'the card was rasterized once, not retried');
+
+  // And the other shape: at scale 1 the dpi pass is skipped, so the fallback
+  // decodes to nothing at all.
+  stub.resetRasterizer();
+  stub.failNextRasterizationWithEmptyBlob(0);
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    await assert.rejects(
+      () => engine.renderCardToBlob(card, { scale: 1 }),
+      (err: any) => err?.code === 'empty-blob'
+    );
+  });
+});
+
+test('F35.4: an empty image reaches the user as actionable text with a retry', async () => {
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  stub.failNextRasterizationWithEmptyBlob();
+  const engine = await exportEngine();
+
+  await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+    const container = openCardModal(EXPORT_THREAD, (target: HTMLElement, action: string) =>
+      engine.exportCard(target, { action })
+    );
+    await flushEffects();
+
+    (container.shadow.querySelector('.export-actions .btn-primary') as any).click();
+    for (let i = 0; i < 40; i++) {
+      await flushEffects();
+      const shown = container.shadow.querySelector('.status-message');
+      if (shown && shown.className.includes('is-error')) break;
+    }
+
+    const status = container.shadow.querySelector('.status-message') as any;
+    assert.ok(status, 'the empty image was reported as nothing at all');
+    // Not the panel's own locale: it follows the machine when a test does not
+    // pin it, so an exact zh-CN comparison would pass here and fail on CI.
+    assert.equal(
+      status.textContent,
+      TRANSLATIONS[sanitizeLocale(DEFAULT_CARD_CONFIG.locale)].exportEmpty
+    );
+    assert.ok(status.className.includes('is-error'));
+    assert.ok(container.shadow.querySelector('.status-retry'), 'an empty image is worth one more try');
+  });
+});
+
+test('F35.5: a mounting failure still restores the live card', async () => {
+  // The copy is mounted inside a try/finally now; before that, a throw between
+  // the image rewrite and the rasterizer left data URLs on the live preview.
+  const engine = await exportEngine();
+
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    const before = imageSources(card);
+    const scope = globalThis as Record<string, unknown>;
+    const savedDocument = scope.document;
+    const doc = scope.document as DomDocument;
+    const realCreate = doc.createElement.bind(doc);
+    (doc as any).createElement = (tag: string) => {
+      if (tag === 'div') throw new Error('mount exploded');
+      return realCreate(tag);
+    };
+
+    try {
+      await assert.rejects(() => engine.renderCardToBlob(card), /mount exploded/);
+    } finally {
+      (doc as any).createElement = realCreate;
+      scope.document = savedDocument;
+    }
+
+    assert.deepEqual(imageSources(card), before, 'the live card was left holding placeholders');
+  });
+});
+
+test('F35.6: a failed image is counted by the fetch result, not by matching the placeholder', async () => {
+  // The reverse of F35.1: a picture whose bytes happen to equal the placeholder
+  // is still a success. A detector that compared pixels would call it broken.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+
+  const chromeMock = createChromeMock();
+  chromeMock.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
+    if (message?.type !== 'FETCH_IMAGE_BASE64') return;
+    sendResponse({ success: true, dataUrl: engine.FALLBACK_PLACEHOLDER_DATA_URL });
+    return false;
+  });
+  scope.chrome = chromeMock;
+
+  try {
+    let report: any = null;
+    await withMountedCard(EXPORT_THREAD, async (card) => {
+      await engine.renderCardToBlob(card, { report: (next: unknown) => { report = next; } });
+    });
+    assert.deepEqual(report.imageFailures, [], 'a successful fetch was mistaken for a failure');
+    assert.equal(report.failedImageCount, 0);
+  } finally {
+    if (savedChrome !== undefined) scope.chrome = savedChrome;
+    else delete scope.chrome;
+  }
+});
+
+test('F35.7: exportCard carries the engine report into the outcome the panel reads', async () => {
+  // F35.1/F35.6 drive `renderCardToBlob` and read the raw report; F35.2 stubs
+  // `onExport`. Neither reaches the merge that is the only thing populating
+  // `degradedImageCount` / `scaleReduced` on a real export -- so the panel's
+  // warning branch could go dark with every test still green.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+
+  const chromeMock = createChromeMock();
+  chromeMock.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
+    if (message?.type !== 'FETCH_IMAGE_BASE64') return;
+    sendResponse(
+      String(message.url).includes('ok.jpg')
+        ? { success: true, dataUrl: 'data:image/jpeg;base64,OK' }
+        : { success: false, error: 'HTTP 404' }
+    );
+    return false;
+  });
+  scope.chrome = chromeMock;
+
+  try {
+    let outcome: any = null;
+    await withMountedCard(EXPORT_THREAD, async (card) => {
+      const element = card as any;
+      const realClone = element.cloneNode.bind(element);
+      element.cloneNode = (deep?: boolean) => {
+        const copy = realClone(deep);
+        Object.defineProperty(copy, 'offsetWidth', { value: 640, configurable: true });
+        Object.defineProperty(copy, 'offsetHeight', { value: 40000, configurable: true });
+        return copy;
+      };
+      try {
+        // A download needs no gesture and no clipboard, so the only thing under
+        // test here is the report merge.
+        await withClipboard('none', async () => {
+          outcome = await engine.exportCard(card, { action: 'download', filename: 'x.png' });
+        });
+      } finally {
+        element.cloneNode = realClone;
+      }
+    });
+
+    assert.ok(outcome, 'the export produced nothing');
+    assert.equal(outcome.success, true, 'the file was delivered; degradation is not failure');
+    assert.equal(outcome.method, 'download');
+    assert.equal(outcome.degradedImageCount, 3, 'two photos plus the avatar');
+    assert.deepEqual(
+      outcome.degradedImages.map((failure: any) => failure.url).sort(),
+      [
+        'https://pbs.twimg.com/media/one.jpg',
+        'https://pbs.twimg.com/media/two.jpg',
+        'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
+      ].sort(),
+      'the failed URLs are carried through, not just counted'
+    );
+    assert.equal(outcome.requestedScale, 2);
+    assert.equal(outcome.appliedScale, 1.63, 'floor(65535 / 40000 * 100) / 100');
+    assert.equal(outcome.scaleReduced, true);
+  } finally {
+    if (savedChrome !== undefined) scope.chrome = savedChrome;
+    else delete scope.chrome;
+  }
+});
+
+// -------------------------------------------------------------
+// F26 continued: the refusal keeps its reason
+// -------------------------------------------------------------
+
+test('F26.6: a refusal keeps its reason without turning a download into a failure', async () => {
+  await withContainerEnv(async () => {
+    const engine = await exportEngine();
+    const cases: Array<[ClipboardFailureMode, string]> = [
+      ['unfocused', 'unfocused-or-gesture'],
+      ['gesture_expired', 'unfocused-or-gesture'],
+      ['permission_denied', 'permission'],
+    ];
+
+    for (const [mode, expected] of cases) {
+      let result: any = null;
+      await withClipboard(mode, async () => {
+        result = await engine.exportBlobWithFallback(pngBlob(), 'copy', 'x.png');
+      });
+      assert.equal(result.success, true, `${mode} still produced a file`);
+      assert.equal(result.method, 'download');
+      assert.equal(result.clipboardFailure, expected, `${mode} lost its reason`);
+      assert.ok(result.clipboardError, 'the underlying message is kept for logs');
+    }
+  });
+});
+
+test('F26.7: an absent clipboard is unsupported, and a bare NotAllowedError is not called a permission problem', async () => {
+  await withContainerEnv(async () => {
+    const engine = await exportEngine();
+
+    // `withClipboard` installs a working clipboard, so the unsupported case is
+    // the absence of one -- which is what the extension meets on an old browser.
+    let missing: any = null;
+    await withClipboard('none', async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(globalThis.navigator, 'clipboard');
+      delete (globalThis.navigator as { clipboard?: unknown }).clipboard;
+      try {
+        missing = await engine.exportBlobWithFallback(pngBlob(), 'copy');
+      } finally {
+        if (descriptor) Object.defineProperty(globalThis.navigator, 'clipboard', descriptor);
+      }
+    });
+    assert.equal(missing.clipboardFailure, 'unsupported');
+    assert.equal(missing.success, true, 'the fallback still delivered the file');
+
+    const bare = engine.classifyClipboardFailure(
+      Object.assign(new Error('The request is not allowed.'), { name: 'NotAllowedError' })
+    );
+    assert.equal(bare.reason, 'other', 'the name alone does not say which of three causes it was');
+
+    assert.equal(engine.classifyClipboardFailure(undefined).reason, 'other');
+    assert.equal(engine.classifyClipboardFailure('boom').reason, 'other');
+  });
+});
+
+test('F26.8: an explicit download never claims a clipboard problem', async () => {
+  await withContainerEnv(async () => {
+    const engine = await exportEngine();
+    let result: any = null;
+    await withClipboard('permission_denied', async () => {
+      result = await engine.exportBlobWithFallback(pngBlob(), 'download', 'x.png');
+    });
+    assert.equal(result.method, 'download');
+    assert.equal(result.clipboardFailure, undefined, 'the user asked for a download; nothing was refused');
+  });
 });
 
 test('F26.5: download trigger creates hidden anchor, clicks it, and revokes object URL', async () => {

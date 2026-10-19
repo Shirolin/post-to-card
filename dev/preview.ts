@@ -427,6 +427,54 @@ const params = new URLSearchParams(location.search);
  * id in a bookmarked URL still resolves to its replacement paper.
  */
 const harnessConfig = { ...DEFAULT_CARD_CONFIG } as typeof DEFAULT_CARD_CONFIG;
+
+/**
+ * ?export=degraded|fallback|empty makes the harness answer the export the way
+ * the engine would in that situation.
+ *
+ * The panel's outcome lines, warning tint and retry button only exist after an
+ * export resolves, and the real engine cannot produce a degraded image in this
+ * harness (its photos are inline SVG, so the proxy never fails). Without this
+ * the one state worth reviewing could only be reached by editing the code under
+ * review.
+ */
+const exportScenario = params.get('export');
+const harnessOnExport = exportScenario
+  ? async (target: HTMLElement, action: 'copy' | 'download') => {
+      // The engine measures the card; this stand-in has no layout of its own.
+      void target;
+      if (exportScenario === 'empty') {
+        const { ExportRenderError } = await import('../src/content/engine/index.ts');
+        throw new ExportRenderError('empty-blob', 'rasterizer returned an empty image');
+      }
+      // Each scenario carries one kind of bad news, and the copy path really
+      // copies: a degraded image is not a clipboard failure, and mixing the two
+      // would make the line under review unreadable.
+      const filename = 'post-to-card_ada_builds_2026-10-19.png';
+      if (exportScenario === 'degraded') {
+        return {
+          success: true,
+          method: action === 'copy' ? ('clipboard' as const) : ('download' as const),
+          filename,
+          degradedImageCount: 2,
+          degradedImages: [{ url: 'https://pbs.twimg.com/media/x.jpg', occurrences: 2 }],
+          requestedScale: 2,
+          appliedScale: 1.63,
+          scaleReduced: true,
+        };
+      }
+      return action === 'copy'
+        ? {
+            success: true,
+            method: 'download' as const,
+            filename,
+            clipboardFailure: 'permission' as const,
+            clipboardError: 'NotAllowedError',
+          }
+        : { success: true, method: 'download' as const, filename };
+    }
+  : undefined;
+
 if (params.get('theme')) harnessConfig.theme = sanitizeTheme(params.get('theme'));
 if (params.get('ratio')) harnessConfig.aspectRatio = params.get('ratio') as typeof harnessConfig.aspectRatio;
 if (params.get('padding')) harnessConfig.padding = params.get('padding') as typeof harnessConfig.padding;
@@ -704,7 +752,12 @@ const auditMode = params.get('a11y');
 if (auditMode === '1' || auditMode === 'radio') {
   // Mount the real modal first, then audit the focus trap it produced.
   render(
-    h(App, { threadData: activeThreadData, onClose: () => {}, initialConfig: harnessConfig }),
+    h(App, {
+      threadData: activeThreadData,
+      onClose: () => {},
+      initialConfig: harnessConfig,
+      onExport: harnessOnExport,
+    }),
     container.mountPoint
   );
   const waitForDialog = (attemptsLeft: number) => {
@@ -755,13 +808,23 @@ if (auditMode === '1' || auditMode === 'radio') {
     h(
       'div',
       { class: 'ptc-scope' },
-      h(App, { threadData: activeThreadData, onClose: () => {}, initialConfig: harnessConfig })
+      h(App, {
+        threadData: activeThreadData,
+        onClose: () => {},
+        initialConfig: harnessConfig,
+        onExport: harnessOnExport,
+      })
     ),
     document.body
   );
 } else {
   render(
-    h(App, { threadData: activeThreadData, onClose: () => {}, initialConfig: harnessConfig }),
+    h(App, {
+      threadData: activeThreadData,
+      onClose: () => {},
+      initialConfig: harnessConfig,
+      onExport: harnessOnExport,
+    }),
     container.mountPoint
   );
 }
