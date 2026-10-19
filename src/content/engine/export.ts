@@ -8,6 +8,7 @@
  */
 
 import { domToBlob } from 'modern-screenshot';
+import { fitScaleToCanvas, type ScaleFit } from './scale.ts';
 
 export const FALLBACK_PLACEHOLDER_DATA_URL =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%23333333"/></svg>';
@@ -22,39 +23,70 @@ export const FALLBACK_PLACEHOLDER_DATA_URL =
  */
 export const DEFAULT_EXPORT_SCALE = 2;
 
-/**
- * The largest canvas edge Chrome will actually allocate.
- *
- * Measured rather than assumed: on Chrome 152 a 640x65535 canvas draws and
- * encodes, and 640x65536 comes back empty. The first value used here was 16384,
- * which is a different number -- the edge of a *square* canvas at the area cap
- * (sqrt(2^28)) -- and it shrank exports that would have succeeded. The card is a
- * fixed 640px wide, so it is the height that grows, and the height is what this
- * bound applies to.
- */
-const MAX_CANVAS_EDGE = 65535;
+/** One `<img>` URL the proxy could not turn into a data URL. */
+export interface ImageLoadFailure {
+  /** The original remote address, never the placeholder that replaced it. */
+  url: string;
+  /** How many `<img>` elements in the card point at it. */
+  occurrences: number;
+}
+
+export interface RenderReport {
+  requestedScale: number;
+  /** What the rasterizer actually used; below `requestedScale` when clamped. */
+  appliedScale: number;
+  scaleReduced: boolean;
+  /** Zero when the card has not been laid out, as in a headless render. */
+  cardWidth: number;
+  cardHeight: number;
+  imageFailures: ImageLoadFailure[];
+  failedImageCount: number;
+}
 
 export interface RenderOptions {
   scale?: number;
   backgroundColor?: string | null;
   filter?: (node: Node) => boolean;
+  /**
+   * Called once, after the card is measured and before it is rasterized.
+   *
+   * A callback rather than a return field because `renderCardToBlob`'s return
+   * type is a public contract with tests and callers that only want the blob,
+   * and because the details are needed on both the success and the failure
+   * path -- an export that throws after clamping still changed the scale.
+   * Throwing from it is swallowed: reporting must not be able to break an
+   * export.
+   */
+  report?: (report: RenderReport) => void;
 }
+
+/**
+ * One image's journey through the proxy, with the outcome kept separate from
+ * the bytes.
+ *
+ * The exporter has to know *whether* a picture was fetched, and the canvas has
+ * to be given *something* either way. Returning only the string conflated the
+ * two: a failed fetch became a grey square, and the only way to notice later
+ * was to compare the picture against the placeholder -- which is wrong as soon
+ * as a tweet legitimately contains that grey square, and couples the report to
+ * an implementation constant.
+ */
+export type ImageFetchResult =
+  | { ok: true; src: string }
+  | { ok: false; src: string };
 
 /**
  * Requests the Background Service Worker to fetch and convert a remote image URL
  * into a Base64 Data URL, bypassing web-page CORS restrictions via MV3 host_permissions.
  */
-export async function fetchImageAsBase64(
-  url: string,
-  fallbackToPlaceholder: boolean = false
-): Promise<string> {
+export async function resolveImageForExport(url: string): Promise<ImageFetchResult> {
   if (!url) {
-    return '';
+    return { ok: true, src: '' };
   }
 
   // Already a Data URL or Blob URL, no proxying required
   if (url.startsWith('data:') || url.startsWith('blob:')) {
-    return url;
+    return { ok: true, src: url };
   }
 
   // Check if Chrome extension messaging is available
@@ -63,7 +95,7 @@ export async function fetchImageAsBase64(
     !chrome.runtime ||
     typeof chrome.runtime.sendMessage !== 'function'
   ) {
-    return fallbackToPlaceholder ? FALLBACK_PLACEHOLDER_DATA_URL : url;
+    return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
   }
 
   try {
@@ -73,22 +105,53 @@ export async function fetchImageAsBase64(
     });
 
     if (response && response.success && typeof response.dataUrl === 'string') {
-      return response.dataUrl;
+      return { ok: true, src: response.dataUrl };
     }
 
-    return fallbackToPlaceholder ? FALLBACK_PLACEHOLDER_DATA_URL : url;
+    return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
   } catch (err) {
     console.warn('[Post-to-Card] Failed to fetch image via background proxy:', err);
-    return fallbackToPlaceholder ? FALLBACK_PLACEHOLDER_DATA_URL : url;
+    return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
   }
 }
 
 /**
- * Traverses an element's subtree and temporarily substitutes remote image src attributes
- * with Base64 Data URLs so the HTML5 canvas remains origin-clean during modern-screenshot export.
- * Returns a restoration function to revert the DOM once snapshotting completes.
+ * The string-only shape the rest of the engine and its tests already use.
+ *
+ * `fallbackToPlaceholder: false` keeps the original address on failure, which
+ * is what the rasterizer's `fetchFn` needs in order to be told `false` and try
+ * the URL itself. The failure is still reported by `resolveImageForExport`
+ * where that matters.
  */
-export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Promise<() => void> {
+export async function fetchImageAsBase64(
+  url: string,
+  fallbackToPlaceholder: boolean = false
+): Promise<string> {
+  const result = await resolveImageForExport(url);
+  if (result.ok) return result.src;
+  return fallbackToPlaceholder ? FALLBACK_PLACEHOLDER_DATA_URL : url;
+}
+
+export interface CardImagePreparation {
+  /** Always safe to call, and safe to call after a partial preparation. */
+  restore: () => void;
+  /** One entry per distinct URL the proxy could not fetch. */
+  failures: ImageLoadFailure[];
+  /** `occurrences` summed: the number of visible pictures that will be grey. */
+  failedImageCount: number;
+}
+
+/**
+ * Traverses an element's subtree and temporarily substitutes remote image src
+ * attributes with Base64 Data URLs so the HTML5 canvas remains origin-clean
+ * during modern-screenshot export, reporting which ones could not be fetched.
+ *
+ * Both facts are needed, so both come back. The card is restored by the caller
+ * in a `finally`; a preparation that fails part-way restores what it already
+ * changed before rethrowing, so a thrown error never leaves data URLs on the
+ * live card.
+ */
+export async function prepareCardImages(cardElement: HTMLElement): Promise<CardImagePreparation> {
   const images = Array.from(cardElement.querySelectorAll('img'));
   const originalSources: Array<{ img: HTMLImageElement; originalSrc: string }> = [];
   const pending: Array<{ img: HTMLImageElement; src: string }> = [];
@@ -101,18 +164,37 @@ export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Pro
     }
   }
 
+  const restore = () => {
+    for (const item of originalSources) {
+      // One detached node must not strand the rest of the card on data URLs.
+      try {
+        item.img.src = item.originalSrc;
+      } catch {
+        // Nothing to restore on a node that can no longer take a src.
+      }
+    }
+  };
+
   // One round trip per distinct URL, not per image. A thread card repeats the
   // same avatar on every post, so the same address was being asked for once per
   // post; the in-flight promise is shared instead.
-  const byUrl = new Map<string, Promise<string>>();
-  const resolveSrc = (src: string): Promise<string> => {
+  const byUrl = new Map<string, Promise<ImageFetchResult>>();
+  const resolveSrc = (src: string): Promise<ImageFetchResult> => {
     let inflight = byUrl.get(src);
     if (!inflight) {
-      inflight = fetchImageAsBase64(src, true);
+      inflight = resolveImageForExport(src);
       byUrl.set(src, inflight);
     }
     return inflight;
   };
+
+  // Counted per `<img>`, not per URL: two pictures of the same avatar that both
+  // failed are two grey squares on the card.
+  const occurrencesByUrl = new Map<string, number>();
+  for (const item of pending) {
+    occurrencesByUrl.set(item.src, (occurrencesByUrl.get(item.src) ?? 0) + 1);
+  }
+  const failedUrls = new Set<string>();
 
   // Bounded rather than one `Promise.all` over every image: each fetch is a
   // message to the service worker, and a media-heavy card can carry a dozen.
@@ -123,34 +205,56 @@ export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Pro
   const fill = async (): Promise<void> => {
     while (next < pending.length) {
       const item = pending[next++];
-      item.img.src = await resolveSrc(item.src);
+      const result = await resolveSrc(item.src);
+      if (!result.ok) failedUrls.add(item.src);
+      item.img.src = result.src;
     }
   };
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => fill())
-  );
 
-  // Wait for the swapped images to finish decoding. Only the ones this call
-  // touched are waited on: an image already carrying a data URL was never
-  // rewritten and has nothing to settle.
-  await Promise.all(
-    pending.map(async ({ img }) => {
-      if (img.complete) return;
-      if (typeof img.decode === 'function') {
-        try {
-          await img.decode();
-        } catch {
-          // Continue if single image decoding fails
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => fill())
+    );
+
+    // Wait for the swapped images to finish decoding. Only the ones this call
+    // touched are waited on: an image already carrying a data URL was never
+    // rewritten and has nothing to settle.
+    await Promise.all(
+      pending.map(async ({ img }) => {
+        if (img.complete) return;
+        if (typeof img.decode === 'function') {
+          try {
+            await img.decode();
+          } catch {
+            // Continue if single image decoding fails
+          }
         }
-      }
-    })
-  );
+      })
+    );
+  } catch (err) {
+    restore();
+    throw err;
+  }
 
-  return () => {
-    for (const item of originalSources) {
-      item.img.src = item.originalSrc;
-    }
+  const failures: ImageLoadFailure[] = Array.from(failedUrls, (url) => ({
+    url,
+    occurrences: occurrencesByUrl.get(url) ?? 1,
+  }));
+
+  return {
+    restore,
+    failures,
+    failedImageCount: failures.reduce((sum, failure) => sum + failure.occurrences, 0),
   };
+}
+
+/**
+ * The original string-returning shape, kept for callers that only need the
+ * restoration handle (the engine's own tests among them).
+ */
+export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Promise<() => void> {
+  const preparation = await prepareCardImages(cardElement);
+  return preparation.restore;
 }
 
 /**
@@ -182,6 +286,32 @@ function mountUnzoomedCopy(card: HTMLElement): { copy: HTMLElement; dispose: () 
 }
 
 /**
+ * Measures the card and applies the canvas limit, logging when it bites.
+ *
+ * The arithmetic lives in `scale.ts` because the preview quotes the same
+ * figure; this wrapper exists only to read the element and to warn, and the
+ * warning stays here rather than in the pure function so the preview does not
+ * log it on every render.
+ */
+function measureAndFit(card: HTMLElement, requested: number): ScaleFit {
+  const width = card.offsetWidth;
+  const height = card.offsetHeight;
+  const fit = fitScaleToCanvas({ width, height }, requested);
+  if (fit.impossible) {
+    console.warn(
+      `[Post-to-Card] Card measures ${width}x${height}; that is taller than the ` +
+      `canvas edge limit, so no scale can export it.`
+    );
+  } else if (fit.reduced) {
+    console.warn(
+      `[Post-to-Card] Card measures ${width}x${height}; scale ${requested} would exceed the ` +
+      `canvas limit, so the export uses ${fit.applied} instead.`
+    );
+  }
+  return fit;
+}
+
+/**
  * Renders the target card DOM node to a high-resolution PNG Blob.
  * Ensures the canvas remains 100% origin-clean without SecurityError.
  *
@@ -193,54 +323,58 @@ function mountUnzoomedCopy(card: HTMLElement): { copy: HTMLElement; dispose: () 
  * saw. A third implementation used to rewrite the TweetData model instead of
  * either; nothing reached it, because the card is rasterized from the DOM.
  */
-/**
- * Reduces `scale` until the card's rasterized box fits in a canvas.
- *
- * Returns the requested scale untouched when the card has not been laid out
- * (a zero measurement, as in a headless render) -- guessing a factor there would
- * shrink exports that were never at risk.
- *
- * The reduction stops at 1. A card taller than the edge limit cannot be exported
- * at any scale this could return -- at 1x it is already taller than the canvas
- * the rasterizer would need -- so going below 1 would only produce a picture
- * smaller than the card, against the fixed 640px width the preview and the size
- * readout both promise. A card that deep is a failure either way; this keeps it
- * a failure rather than a mis-sized success.
- */
-function clampScaleToCanvas(card: HTMLElement, scale: number): number {
-  const width = card.offsetWidth;
-  const height = card.offsetHeight;
-  if (!width || !height) return scale;
-
-  const longestEdge = Math.max(width, height);
-  const fitted = MAX_CANVAS_EDGE / longestEdge;
-  if (scale <= fitted) return scale;
-
-  // Floor rather than round, so the result is never a hair over the limit.
-  const reduced = Math.max(1, Math.floor(fitted * 100) / 100);
-  console.warn(
-    `[Post-to-Card] Card measures ${width}x${height}; scale ${scale} would exceed the ` +
-    `canvas limit, so the export uses ${reduced} instead.`
-  );
-  return reduced;
-}
-
 export async function renderCardToBlob(
   cardElement: HTMLElement,
   options: RenderOptions = {}
 ): Promise<Blob> {
-  const restoreImages = await replaceCardImagesWithBase64(cardElement);
-  const { copy, dispose } = mountUnzoomedCopy(cardElement);
-  await Promise.all(
-    Array.from(copy.querySelectorAll('img')).map((img) =>
-      typeof img.decode === 'function' ? img.decode().catch(() => {}) : undefined
-    )
-  );
+  // Prepared before the `try` that owns the restoration, and restored in the
+  // same `finally` as the copy's disposal: mounting the copy can throw (a
+  // detached card, a hostile document), and that used to leave the live card
+  // holding data URLs until the next export.
+  const preparation = await prepareCardImages(cardElement);
+  let dispose: (() => void) | null = null;
 
   try {
+    const mounted = mountUnzoomedCopy(cardElement);
+    const copy = mounted.copy;
+    dispose = mounted.dispose;
+
+    await Promise.all(
+      Array.from(copy.querySelectorAll('img')).map((img) =>
+        typeof img.decode === 'function' ? img.decode().catch(() => {}) : undefined
+      )
+    );
+
     const requestedScale = options.scale ?? DEFAULT_EXPORT_SCALE;
-    const scale = clampScaleToCanvas(copy, requestedScale);
+    const fit = measureAndFit(copy, requestedScale);
+    const scale = fit.applied;
     const backgroundColor = options.backgroundColor !== undefined ? options.backgroundColor : null;
+
+    // A card over the edge limit cannot be rasterized at any scale, and the
+    // browser's own failure for it is a zero-byte blob. Refusing here says why,
+    // and stops the UI from retrying a click that can never succeed.
+    if (fit.impossible) {
+      throw new ExportRenderError(
+        'too-tall',
+        'The card is taller than the largest canvas, so it cannot be exported at any scale.'
+      );
+    }
+
+    if (options.report) {
+      try {
+        options.report({
+          requestedScale,
+          appliedScale: scale,
+          scaleReduced: fit.reduced,
+          cardWidth: copy.offsetWidth,
+          cardHeight: copy.offsetHeight,
+          imageFailures: preparation.failures,
+          failedImageCount: preparation.failedImageCount,
+        });
+      } catch {
+        // Reporting is a courtesy; it may not break the export.
+      }
+    }
 
     const filter = (node: Node): boolean => {
       if (node instanceof HTMLElement) {
@@ -278,13 +412,43 @@ export async function renderCardToBlob(
     });
 
     if (!blob) {
-      throw new Error('Screenshot engine produced an empty blob.');
+      throw new ExportRenderError('rasterizer', 'Screenshot engine produced an empty blob.');
+    }
+
+    // A zero-byte Blob is what the rasterizer's `toDataURL` fallback produces
+    // when the canvas was too large to allocate. It is truthy, so the check
+    // above let it through and the UI announced a copy of a file that had no
+    // picture in it.
+    if (blob.size === 0) {
+      throw new ExportRenderError(
+        'empty-blob',
+        'Screenshot engine produced a zero-byte image; the card is probably too tall for a canvas.'
+      );
     }
 
     return blob;
   } finally {
-    dispose();
-    restoreImages();
+    dispose?.();
+    preparation.restore();
+  }
+}
+
+export type ExportRenderErrorCode = 'empty-blob' | 'rasterizer' | 'too-tall';
+
+/**
+ * Distinguishes "the rasterizer did not give us a picture" from every other
+ * failure, so the UI can say something actionable instead of printing the
+ * engine's English sentence into a Chinese status line.
+ */
+export class ExportRenderError extends Error {
+  // Assigned in the body rather than as a constructor parameter property:
+  // Node's strip-only TypeScript loader does not support those.
+  readonly code: ExportRenderErrorCode;
+
+  constructor(code: ExportRenderErrorCode, message: string) {
+    super(message);
+    this.name = 'ExportRenderError';
+    this.code = code;
   }
 }
 
@@ -297,6 +461,94 @@ export interface ExportResult {
   filename: string;
   /** Why it did not work, when `success` is false. */
   error?: string;
+
+  // Everything below is optional and was added so the UI can tell a clean
+  // export from one that "succeeded" with grey squares or a reduced scale.
+  // Absent on results produced by callers that only pass a blob.
+
+  /** Distinct URLs the proxy failed to fetch, and how many `<img>` each covers. */
+  degradedImages?: ImageLoadFailure[];
+  /** Summed occurrences: the number of pictures that render as placeholders. */
+  degradedImageCount?: number;
+  requestedScale?: number;
+  appliedScale?: number;
+  /** True when the canvas limit forced `appliedScale` below `requestedScale`. */
+  scaleReduced?: boolean;
+
+  /** Present only when a copy was refused and the blob went to a download. */
+  clipboardFailure?: ClipboardFailureReason;
+  /** The underlying clipboard error, for logs and details. */
+  clipboardError?: string;
+}
+
+export type ClipboardFailureReason =
+  | 'unsupported'
+  | 'permission'
+  | 'unfocused-or-gesture'
+  | 'other';
+
+export interface ClipboardFailure {
+  reason: ClipboardFailureReason;
+  message: string;
+}
+
+/** Thrown when the environment has no image-capable clipboard at all. */
+export class ClipboardUnsupportedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ClipboardUnsupportedError';
+  }
+}
+
+const UNFOCUSED_OR_GESTURE_PATTERNS = [
+  'not focused',
+  'document is not focused',
+  'user gesture',
+  'handling a user gesture',
+  'transient activation',
+  'user activation',
+];
+const PERMISSION_PATTERNS = ['permission denied', 'permissions policy', 'denied by the user'];
+
+/**
+ * Names why a clipboard write was refused, without guessing.
+ *
+ * The browser reports focus loss and an expired gesture with the same
+ * `NotAllowedError`, so those two are one bucket; only a message that says
+ * "permission" is called a permission problem. Everything else -- including a
+ * bare `NotAllowedError`, which can come from any of the cases above -- stays
+ * `other`, because a wrong specific claim is worse than a vague true one.
+ * Never throws: it runs inside a catch handler.
+ */
+export function classifyClipboardFailure(err: unknown): ClipboardFailure {
+  // Every property read is guarded: this runs inside a catch handler, and a
+  // hostile getter throwing here would replace the original failure with a
+  // second, unrelated one.
+  let message = '';
+  let name = '';
+  try {
+    if (err instanceof Error) {
+      message = err.message;
+      name = err.name;
+    } else {
+      message = String(err ?? '');
+    }
+  } catch {
+    message = '';
+  }
+
+  const haystack = `${name} ${message}`.toLowerCase();
+
+  if (err instanceof ClipboardUnsupportedError) {
+    return { reason: 'unsupported', message };
+  }
+  if (UNFOCUSED_OR_GESTURE_PATTERNS.some((pattern) => haystack.includes(pattern))) {
+    return { reason: 'unfocused-or-gesture', message };
+  }
+  if (PERMISSION_PATTERNS.some((pattern) => haystack.includes(pattern))) {
+    return { reason: 'permission', message };
+  }
+  return { reason: 'other', message };
 }
 
 /**
@@ -343,11 +595,11 @@ export async function copyBlobToClipboard(blob: Blob): Promise<void> {
     !navigator.clipboard ||
     typeof navigator.clipboard.write !== 'function'
   ) {
-    throw new Error('Clipboard API is not supported in this environment.');
+    throw new ClipboardUnsupportedError('Clipboard API is not supported in this environment.');
   }
 
   if (typeof ClipboardItem === 'undefined') {
-    throw new Error('ClipboardItem is not supported in this environment.');
+    throw new ClipboardUnsupportedError('ClipboardItem is not supported in this environment.');
   }
 
   const item = new ClipboardItem({ 'image/png': blob });
@@ -389,12 +641,28 @@ export async function exportBlobWithFallback(
       '[Post-to-Card] Clipboard write failed; triggering graceful fallback to download:',
       clipboardErr
     );
+    // The reason travels with the result, but it does not change the verdict:
+    // the blob left the page, which is what `success` has always meant here.
+    const failure = classifyClipboardFailure(clipboardErr);
     try {
       downloadBlobAsPng(blob, filename);
-      return { success: true, method: 'download', filename };
+      return {
+        success: true,
+        method: 'download',
+        filename,
+        clipboardFailure: failure.reason,
+        clipboardError: failure.message,
+      };
     } catch (downloadErr) {
       const errorMsg = downloadErr instanceof Error ? downloadErr.message : String(downloadErr);
-      return { success: false, method: 'download', filename, error: errorMsg };
+      return {
+        success: false,
+        method: 'download',
+        filename,
+        error: errorMsg,
+        clipboardFailure: failure.reason,
+        clipboardError: failure.message,
+      };
     }
   }
 }
@@ -428,6 +696,26 @@ export async function exportCard(
 ): Promise<ExportOutcome> {
   const { action = 'copy', scale = DEFAULT_EXPORT_SCALE, filename, render } = options;
 
-  const blob = await renderCardToBlob(cardElement, { scale, ...render });
-  return exportBlobWithFallback(blob, action, filename);
+  let report: RenderReport | null = null;
+  const blob = await renderCardToBlob(cardElement, {
+    scale,
+    ...render,
+    // After the spread, so a caller-supplied `render` cannot silently drop the
+    // reporting this function is responsible for.
+    report: (next) => {
+      report = next;
+    },
+  });
+  const result = await exportBlobWithFallback(blob, action, filename);
+
+  if (!report) return result;
+  const captured: RenderReport = report;
+  return {
+    ...result,
+    degradedImages: captured.imageFailures,
+    degradedImageCount: captured.failedImageCount,
+    requestedScale: captured.requestedScale,
+    appliedScale: captured.appliedScale,
+    scaleReduced: captured.scaleReduced,
+  };
 }

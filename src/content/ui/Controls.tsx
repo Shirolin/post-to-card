@@ -42,13 +42,38 @@ export interface ControlsProps {
   isExporting?: boolean;
   statusMessage?: string;
   isErrorStatus?: boolean;
+  /**
+   * The export finished but not cleanly -- some pictures are placeholders, or
+   * the canvas limit forced a smaller scale. Rendered as a warning rather than
+   * an error because the file did leave the page.
+   */
+  isWarningStatus?: boolean;
+  /** Present when the last failure is worth another attempt. */
+  onRetry?: () => void;
+  /**
+   * The retry button's replacement focus target. Retrying removes that button
+   * from the DOM, and a keyboard user whose focus is on it would otherwise be
+   * dropped on `<body>`, outside the modal's focus trap until the next Tab.
+   */
+  primaryButtonRef?: { current: HTMLButtonElement | null };
   threadData?: ThreadData;
   /**
    * The exported PNG's pixel size, or null until the preview has measured the
    * card. Shown under the aspect ratio because that is the control that moves the
    * height most, and it is not persisted -- it is a readout, not a preference.
+   *
+   * `scale`/`reduced` come from the same arithmetic the exporter uses, so a card
+   * the canvas limit shrinks is quoted at the size it will actually be.
+   * `impossible` means no scale can export it; the hint says so and the export
+   * buttons are disabled rather than promising a file that cannot exist.
    */
-  exportSize?: { width: number; height: number } | null;
+  exportSize?: {
+    width: number;
+    height: number;
+    scale?: number;
+    reduced?: boolean;
+    impossible?: boolean;
+  } | null;
 }
 
 interface ToggleSpec {
@@ -160,6 +185,9 @@ export function Controls({
   isExporting = false,
   statusMessage = '',
   isErrorStatus = false,
+  isWarningStatus = false,
+  onRetry,
+  primaryButtonRef,
   threadData,
   exportSize,
 }: ControlsProps): JSX.Element {
@@ -688,11 +716,25 @@ export function Controls({
       <div class="export-actions">
         <div class="status-region" role="status" aria-live="polite">
           {statusMessage && (
-            <div class={`status-message ${isErrorStatus ? 'is-error' : ''}`}>
+            <div
+              class={`status-message ${isErrorStatus ? 'is-error' : isWarningStatus ? 'is-warning' : ''}`}
+            >
               {statusMessage}
             </div>
           )}
         </div>
+        {/* Two reasons this is a sibling of the live region rather than a child:
+            the failure text is asserted verbatim (F24.7), so a button next to it
+            must not join `textContent`; and a control inside `role="status"` is
+            announced as part of every message, then removed on retry while it
+            still holds focus -- which drops a keyboard user out of the dialog. */}
+        {onRetry && !isExporting && (
+          <div class="status-retry-row">
+            <button type="button" class="status-retry" onClick={onRetry}>
+              {t.retryExport}
+            </button>
+          </div>
+        )}
         {/* The exported pixel size belongs here rather than under the aspect ratio,
             which it used to sit beneath. It is not that control's output: the card's
             height moves with padding, radius and the media grid as well, so under the
@@ -702,17 +744,24 @@ export function Controls({
             zero-height figure. */}
         {exportSize && (
           <span class="control-hint export-size-hint">
-            {t.exportSize
+            {(exportSize.impossible
+              ? t.exportSizeImpossible
+              : exportSize.reduced
+                ? t.exportSizeReduced
+                : t.exportSize
+            )
               .replace('{w}', String(exportSize.width))
-              .replace('{h}', String(exportSize.height))}
+              .replace('{h}', String(exportSize.height))
+              .replace('{scale}', String(exportSize.scale ?? ''))}
           </span>
         )}
         <div class="export-buttons">
           <button
             type="button"
             class="btn-primary"
+            ref={primaryButtonRef}
             onClick={onExportCopy}
-            disabled={isExporting}
+            disabled={isExporting || exportSize?.impossible === true}
           >
             {isExporting
               ? <span class="spinner" aria-hidden="true" />
@@ -723,7 +772,7 @@ export function Controls({
             type="button"
             class="btn-secondary"
             onClick={onExportDownload}
-            disabled={isExporting}
+            disabled={isExporting || exportSize?.impossible === true}
             aria-label={t.downloadPng}
             title={t.downloadPng}
           >

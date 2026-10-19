@@ -21,15 +21,34 @@ export interface RasterizerCall {
 export const rasterizerCalls: RasterizerCall[] = [];
 
 let failure: string | null = null;
+let nextSize: number | null = null;
 
 /** Makes the next rasterization reject, the way a browser failure would. */
 export function failNextRasterization(message: string): void {
   failure = message;
 }
 
+/**
+ * Makes the next rasterization return a zero-byte Blob.
+ *
+ * This is the shape the real engine produces when the canvas could not be
+ * allocated: `toBlob` yields null, the `toDataURL` fallback returns `data:,`,
+ * and decoding that gives a Blob with a size of zero -- truthy, so it slipped
+ * past the old `!blob` check and was announced as a successful copy.
+ */
+export function failNextRasterizationWithEmptyBlob(): void {
+  nextSize = 0;
+}
+
+/** Overrides the next successful Blob's size, in bytes. */
+export function setNextBlobSize(size: number): void {
+  nextSize = size;
+}
+
 export function resetRasterizer(): void {
   rasterizerCalls.length = 0;
   failure = null;
+  nextSize = null;
 }
 
 export async function domToBlob(target: unknown, options: Record<string, any> = {}): Promise<Blob> {
@@ -41,5 +60,7 @@ export async function domToBlob(target: unknown, options: Record<string, any> = 
     throw new Error(message);
   }
 
-  return new Blob([new Uint8Array(8)], { type: options.type || 'image/png' });
+  const size = nextSize ?? 8;
+  nextSize = null;
+  return new Blob([new Uint8Array(size)], { type: options.type || 'image/png' });
 }

@@ -119,6 +119,10 @@ export interface RasterizerStub {
   rasterizerCalls: RasterizerCall[];
   /** Makes the next rasterization reject, the way a browser failure would. */
   failNextRasterization: (message: string) => void;
+  /** Makes the next rasterization return a zero-byte Blob. */
+  failNextRasterizationWithEmptyBlob: () => void;
+  /** Overrides the next successful Blob's size, in bytes. */
+  setNextBlobSize: (size: number) => void;
   resetRasterizer: () => void;
 }
 
