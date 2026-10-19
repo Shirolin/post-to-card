@@ -4076,7 +4076,9 @@ test('F34.6: the preview does not claim a reduction when there is none', async (
   const scale = await loadModule('/src/content/engine/scale.ts');
   assert.deepEqual(
     scale.exportSizeFor(640, 40000, 2),
-    { width: 1043, height: 65200, scale: 1.63, reduced: true, impossible: false },
+    // 65199, not 65200: the rasterizer sizes the canvas with `Math.floor`, and
+    // the readout has to name the pixel count the file actually has.
+    { width: 1043, height: 65199, scale: 1.63, reduced: true, impossible: false },
     'a tall card is quoted at the size the engine will produce'
   );
   assert.equal(scale.exportSizeFor(640, 0, 2), null, 'and nothing is quoted before the card is measured');
@@ -4233,20 +4235,34 @@ test('F35.2: an export that succeeds with grey squares says so, and offers a ret
   });
 });
 
-test('F35.3: a zero-byte image is rejected instead of being announced as a copy', async () => {
+test('F35.3: an image with no picture in it is rejected instead of announced as a copy', async () => {
+  const engine = await exportEngine();
+
+  // The shape the shipped scale (2) produces: `toBlob` yields null, the
+  // `toDataURL` fallback gives `data:,`, and the dpi pass rebuilds it into a
+  // 54-byte `image/png` with no signature. A `size === 0` test misses this one
+  // entirely, which is how an unallocatable canvas was announced as a copy.
   const stub = await rasterizer();
   stub.resetRasterizer();
   stub.failNextRasterizationWithEmptyBlob();
-  const engine = await exportEngine();
-
   await withMountedCard(EXPORT_THREAD, async (card) => {
     await assert.rejects(
       () => engine.renderCardToBlob(card),
       (err: any) => err?.code === 'empty-blob'
     );
   });
-
   assert.equal(stub.rasterizerCalls.length, 1, 'the card was rasterized once, not retried');
+
+  // And the other shape: at scale 1 the dpi pass is skipped, so the fallback
+  // decodes to nothing at all.
+  stub.resetRasterizer();
+  stub.failNextRasterizationWithEmptyBlob(0);
+  await withMountedCard(EXPORT_THREAD, async (card) => {
+    await assert.rejects(
+      () => engine.renderCardToBlob(card, { scale: 1 }),
+      (err: any) => err?.code === 'empty-blob'
+    );
+  });
 });
 
 test('F35.4: an empty image reaches the user as actionable text with a retry', async () => {
@@ -4332,6 +4348,73 @@ test('F35.6: a failed image is counted by the fetch result, not by matching the 
     });
     assert.deepEqual(report.imageFailures, [], 'a successful fetch was mistaken for a failure');
     assert.equal(report.failedImageCount, 0);
+  } finally {
+    if (savedChrome !== undefined) scope.chrome = savedChrome;
+    else delete scope.chrome;
+  }
+});
+
+test('F35.7: exportCard carries the engine report into the outcome the panel reads', async () => {
+  // F35.1/F35.6 drive `renderCardToBlob` and read the raw report; F35.2 stubs
+  // `onExport`. Neither reaches the merge that is the only thing populating
+  // `degradedImageCount` / `scaleReduced` on a real export -- so the panel's
+  // warning branch could go dark with every test still green.
+  const stub = await rasterizer();
+  stub.resetRasterizer();
+  const engine = await exportEngine();
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+
+  const chromeMock = createChromeMock();
+  chromeMock.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
+    if (message?.type !== 'FETCH_IMAGE_BASE64') return;
+    sendResponse(
+      String(message.url).includes('ok.jpg')
+        ? { success: true, dataUrl: 'data:image/jpeg;base64,OK' }
+        : { success: false, error: 'HTTP 404' }
+    );
+    return false;
+  });
+  scope.chrome = chromeMock;
+
+  try {
+    let outcome: any = null;
+    await withMountedCard(EXPORT_THREAD, async (card) => {
+      const element = card as any;
+      const realClone = element.cloneNode.bind(element);
+      element.cloneNode = (deep?: boolean) => {
+        const copy = realClone(deep);
+        Object.defineProperty(copy, 'offsetWidth', { value: 640, configurable: true });
+        Object.defineProperty(copy, 'offsetHeight', { value: 40000, configurable: true });
+        return copy;
+      };
+      try {
+        // A download needs no gesture and no clipboard, so the only thing under
+        // test here is the report merge.
+        await withClipboard('none', async () => {
+          outcome = await engine.exportCard(card, { action: 'download', filename: 'x.png' });
+        });
+      } finally {
+        element.cloneNode = realClone;
+      }
+    });
+
+    assert.ok(outcome, 'the export produced nothing');
+    assert.equal(outcome.success, true, 'the file was delivered; degradation is not failure');
+    assert.equal(outcome.method, 'download');
+    assert.equal(outcome.degradedImageCount, 3, 'two photos plus the avatar');
+    assert.deepEqual(
+      outcome.degradedImages.map((failure: any) => failure.url).sort(),
+      [
+        'https://pbs.twimg.com/media/one.jpg',
+        'https://pbs.twimg.com/media/two.jpg',
+        'https://pbs.twimg.com/profile_images/1/ada_normal.jpg',
+      ].sort(),
+      'the failed URLs are carried through, not just counted'
+    );
+    assert.equal(outcome.requestedScale, 2);
+    assert.equal(outcome.appliedScale, 1.63, 'floor(65535 / 40000 * 100) / 100');
+    assert.equal(outcome.scaleReduced, true);
   } finally {
     if (savedChrome !== undefined) scope.chrome = savedChrome;
     else delete scope.chrome;

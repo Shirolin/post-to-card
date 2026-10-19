@@ -102,6 +102,11 @@ export interface ExportSizeReadout {
  * Lives here rather than in the panel because it is the same arithmetic the
  * exporter runs, and the two must not be able to drift: the panel used to
  * multiply by the requested scale regardless of what the engine did.
+ *
+ * The rounding matches the rasterizer's, not the nearest integer: it sizes the
+ * canvas with `Math.floor(width * scale)`, so a readout that rounded would
+ * name a pixel count the file does not have -- at applied scales like 1.63 the
+ * two disagree for tens of thousands of heights.
  */
 export function exportSizeFor(
   cardWidth: number,
@@ -114,8 +119,10 @@ export function exportSizeFor(
   }
   const fit = fitScaleToCanvas({ width: cardWidth, height: cardHeight }, requested, maxEdge);
   return {
-    width: Math.round(cardWidth * fit.applied),
-    height: Math.round(cardHeight * fit.applied),
+    // Floor, like the rasterizer's `createCanvas`, so the readout names the
+    // pixel count the PNG actually has.
+    width: Math.floor(cardWidth * fit.applied),
+    height: Math.floor(cardHeight * fit.applied),
     scale: fit.applied,
     reduced: fit.reduced,
     impossible: fit.impossible,

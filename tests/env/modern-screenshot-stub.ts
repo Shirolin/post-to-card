@@ -28,16 +28,21 @@ export function failNextRasterization(message: string): void {
   failure = message;
 }
 
+/** The first 8 bytes of a PNG; a blob without them holds no picture. */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
 /**
- * Makes the next rasterization return a zero-byte Blob.
+ * Makes the next rasterization return a Blob with no picture in it.
  *
- * This is the shape the real engine produces when the canvas could not be
- * allocated: `toBlob` yields null, the `toDataURL` fallback returns `data:,`,
- * and decoding that gives a Blob with a size of zero -- truthy, so it slipped
- * past the old `!blob` check and was announced as a successful copy.
+ * Two shapes, because the real engine produces two. At scale 1 the `data:,`
+ * fallback decodes to zero bytes. At every other scale `domToBlob` rebuilds the
+ * blob through `changePngDpi`, which lays a 54-byte header over an empty source
+ * -- still `image/png`, still truthy, still no PNG signature. The default is
+ * the 54-byte one, because that is the shape the shipped scale (2) produces.
  */
-export function failNextRasterizationWithEmptyBlob(): void {
-  nextSize = 0;
+export function failNextRasterizationWithEmptyBlob(size = 54): void {
+  nextSize = size;
+  nextBlob = 'empty';
 }
 
 /** Overrides the next successful Blob's size, in bytes. */
@@ -45,10 +50,14 @@ export function setNextBlobSize(size: number): void {
   nextSize = size;
 }
 
+/** The next blob is a plausible PNG, not the empty shape. */
+let nextBlob: 'png' | 'empty' = 'png';
+
 export function resetRasterizer(): void {
   rasterizerCalls.length = 0;
   failure = null;
   nextSize = null;
+  nextBlob = 'png';
 }
 
 export async function domToBlob(target: unknown, options: Record<string, any> = {}): Promise<Blob> {
@@ -61,6 +70,15 @@ export async function domToBlob(target: unknown, options: Record<string, any> = 
   }
 
   const size = nextSize ?? 8;
+  const shape = nextBlob;
   nextSize = null;
-  return new Blob([new Uint8Array(size)], { type: options.type || 'image/png' });
+  nextBlob = 'png';
+
+  const bytes = new Uint8Array(size);
+  if (shape === 'png' && size >= PNG_SIGNATURE.length) {
+    // A real PNG starts with these; the engine checks for them, so a stub that
+    // filled the blob with zeroes would look like the empty-canvas shape.
+    bytes.set(PNG_SIGNATURE, 0);
+  }
+  return new Blob([bytes], { type: options.type || 'image/png' });
 }

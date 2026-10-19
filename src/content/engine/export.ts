@@ -285,6 +285,23 @@ function mountUnzoomedCopy(card: HTMLElement): { copy: HTMLElement; dispose: () 
   return { copy, dispose: () => wrapper.remove() };
 }
 
+/** The 8 bytes every PNG starts with. */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/**
+ * Whether the blob actually begins with a PNG.
+ *
+ * The rasterizer can return a truthy, `image/png`-typed Blob with no picture in
+ * it, in two shapes: empty at scale 1, and a 54-byte header written over an
+ * empty source at every other scale. Both fail this check; a real PNG, however
+ * small, passes it.
+ */
+async function looksLikePng(blob: Blob): Promise<boolean> {
+  if (blob.size < PNG_SIGNATURE.length) return false;
+  const head = new Uint8Array(await blob.slice(0, PNG_SIGNATURE.length).arrayBuffer());
+  return PNG_SIGNATURE.every((byte, index) => head[index] === byte);
+}
+
 /**
  * Measures the card and applies the canvas limit, logging when it bites.
  *
@@ -415,14 +432,18 @@ export async function renderCardToBlob(
       throw new ExportRenderError('rasterizer', 'Screenshot engine produced an empty blob.');
     }
 
-    // A zero-byte Blob is what the rasterizer's `toDataURL` fallback produces
-    // when the canvas was too large to allocate. It is truthy, so the check
-    // above let it through and the UI announced a copy of a file that had no
-    // picture in it.
-    if (blob.size === 0) {
+    // An unallocatable canvas comes back as a Blob that is truthy but holds no
+    // picture, so the check above lets it through. `size === 0` is not the
+    // test: that is only what `toDataURL`'s `data:,` fallback decodes to at
+    // scale 1. At every other scale `domToBlob` runs the blob through
+    // `changePngDpi`, which rebuilds it from a 54-byte header written over an
+    // empty source -- 54 bytes, `image/png`, and no PNG signature. Asking
+    // whether the bytes are a PNG covers both shapes, and does not guess from
+    // the length.
+    if (!(await looksLikePng(blob))) {
       throw new ExportRenderError(
         'empty-blob',
-        'Screenshot engine produced a zero-byte image; the card is probably too tall for a canvas.'
+        'Screenshot engine produced an empty image; the card is probably too tall for a canvas.'
       );
     }
 
