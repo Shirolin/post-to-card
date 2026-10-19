@@ -171,6 +171,10 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * The card's own observer covers every content change -- a theme, a different
    * tweet set, an image settling into the grid -- so this effect does not need the
    * config in its dependencies.
+   *
+   * Both axes are measured and both are quantised to whole pixels, because the
+   * height feeds the zoom and the zoom feeds the height. A sub-pixel difference
+   * is enough to make that loop oscillate: see the note on `naturalHeight`.
    */
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -188,17 +192,25 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
 
       const card = cardRef.current;
       if (!card) return;
+      // The comparison tolerates one pixel rather than half of one. This
+      // measurement feeds `fit`, which is written back into the preview's
+      // `zoom`, so it is a feedback loop -- and `zoom` changes the layout's text
+      // metrics, which moves the card's height by a fraction of a pixel. At a
+      // zoom whose product lands near a pixel boundary (observed at 0.434615 on
+      // a 1300.19px card) `offsetHeight` reports 1300 on one frame and 1301 on
+      // the next, forever, and the whole card twitches. Ignoring a one-pixel
+      // delta breaks the loop; nothing a reader can see is one pixel tall.
       const naturalHeight = card.offsetHeight;
       const naturalWidth = card.offsetWidth;
       if (naturalHeight > 0) {
-        setCardHeight((prev) => (Math.abs(prev - naturalHeight) > 0.5 ? naturalHeight : prev));
+        setCardHeight((prev) => (Math.abs(prev - naturalHeight) > 1 ? naturalHeight : prev));
       }
       // Read alongside the height because the two move together: selecting a
       // canvas ratio changes both axes at once, and a width that lagged a frame
       // behind would misreport the export size in exactly the state the user
       // just switched into.
       if (naturalWidth > 0) {
-        setCardWidth((prev) => (Math.abs(prev - naturalWidth) > 0.5 ? naturalWidth : prev));
+        setCardWidth((prev) => (Math.abs(prev - naturalWidth) > 1 ? naturalWidth : prev));
       }
     };
 
