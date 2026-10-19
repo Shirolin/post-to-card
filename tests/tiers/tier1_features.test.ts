@@ -3026,6 +3026,47 @@ test('F21.12: the media controls lead the panel, ahead of the choices that hold'
   );
 });
 
+test('F21.13: the theme count does not move when the settings disclosure opens', async () => {
+  // The label counts what the grid's own button reveals, so a section that has
+  // nothing to do with themes must not change it. It used to be counted from a
+  // pool that "More settings" also widened, so opening that section turned
+  // "expand the other 7" into "the other 8" while the grid itself went on
+  // showing the same four themes -- a number that changes under the user for no
+  // reason they can see.
+  await withContainerEnv(async ({ openCardModal, flushEffects }) => {
+    const container = openCardModal(CONTAINER_THREAD);
+    await flushEffects();
+
+    const grid = container.shadow.querySelector('.theme-grid') as any;
+    assert.ok(grid, 'the theme grid is rendered');
+    const expand = (): any =>
+      container.shadow.querySelector(`.more-toggle[aria-controls="${grid.id}"]`);
+    const settings = (): any => container.shadow.querySelector('.more-section .more-toggle');
+    assert.ok(expand(), 'the grid has its own expansion button');
+    assert.ok(settings(), 'and the settings disclosure is there too');
+
+    const label = expand().textContent;
+    const promised = Number((label.match(/\d+/) || [])[0]);
+    assert.ok(promised > 0, `the label promises a count: ${label}`);
+
+    settings().click();
+    await flushEffects();
+    assert.equal(expand().textContent, label, 'opening the settings left the theme count alone');
+
+    settings().click();
+    await flushEffects();
+    assert.equal(expand().textContent, label, 'and closing them left it alone too');
+
+    // And the number is the truth about this button: expanding reveals exactly
+    // the themes it promised, Brutalist included.
+    const collapsed = container.shadow.querySelectorAll('.theme-button').length;
+    expand().click();
+    await flushEffects();
+    const expanded = container.shadow.querySelectorAll('.theme-button').length;
+    assert.equal(expanded - collapsed, promised, 'the expansion reveals what the label promised');
+  });
+});
+
 test('F21.1: toggling showQrCode hides or displays QR element in DOM', async () => {
   const shown = await renderCard({ config: { showQrCode: true } });
   const hidden = await renderCard({ config: { showQrCode: false } });

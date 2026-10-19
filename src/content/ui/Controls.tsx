@@ -216,29 +216,30 @@ export function Controls({
     onChange({ ...config, ...patch });
   };
 
-  // Brutalist is deliberately experimental, so it is not in the main rotation.
-  // It only joins the picker once the user opens "More", or when it is already
-  // the active theme (otherwise a saved Brutalist config would show no
-  // selection at all).
+  // The picker's pool is the whole rotation, in order, and nothing else in the
+  // panel widens or narrows it.
+  //
+  // Brutalist is deliberately experimental, so it is last and off the primary
+  // row: the grid opens on the everyday rotation, and this grid's own expansion
+  // is what reveals the rest -- Brutalist included, marked as experimental on
+  // its own button. Gating it on the "More settings" disclosure as well moved
+  // the count below from 7 to 8 whenever that unrelated section was opened,
+  // while the grid itself still showed the same four themes.
   const themeList = THEME_ORDER.map((id) => THEMES[id]);
-  const allowedThemes = themeList.filter(
-    (th) => !EXPERIMENTAL_THEMES.has(th.id) || showMore || config.theme === th.id
-  );
 
   // The grid is four rows tall in the narrow panel, which pushed every control
-  // below it off the first screen. It opens on the everyday rotation instead;
-  // the active theme is always kept so a saved choice is never hidden, and
-  // "More" reveals the rest alongside it.
-  const primaryThemes = allowedThemes.slice(0, THEME_GRID_VISIBLE);
-  const activeTheme = allowedThemes.find((th) => th.id === config.theme);
+  // below it off the first screen. It opens on the everyday rotation instead,
+  // and the active theme is always kept so a saved choice is never hidden.
+  const primaryThemes = themeList.slice(0, THEME_GRID_VISIBLE);
+  const activeTheme = themeList.find((th) => th.id === config.theme);
   const collapsedThemes = [
     ...primaryThemes,
     ...(activeTheme && !primaryThemes.includes(activeTheme) ? [activeTheme] : []),
   ];
-  const visibleThemes = showAllThemes ? allowedThemes : collapsedThemes;
+  const visibleThemes = showAllThemes ? themeList : collapsedThemes;
   // Counted from what is actually shown, so pinning the active theme does not
   // leave the label promising more themes than the expansion reveals.
-  const hiddenThemeCount = allowedThemes.length - collapsedThemes.length;
+  const hiddenThemeCount = themeList.length - collapsedThemes.length;
 
   const getThemeDisplayName = (themeId: string, defaultName: string) => {
     const key = `theme_${themeId.replace(/-/g, '_')}` as keyof typeof t;
