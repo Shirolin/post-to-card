@@ -35,6 +35,11 @@ export interface Translations {
   canvasBg_ink: string;
   canvasBg_linen: string;
   canvasBg_dusk: string;
+  /**
+   * Shown when a canvas shape is chosen without a background: the ring is
+   * transparent, so the ring exists but the picture has no field under it.
+   */
+  canvasTransparentHint: string;
   exportSize: string;
   exportSizeReduced: string;
   exportSizeImpossible: string;
@@ -166,6 +171,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     canvasBg_ink: '墨黑',
     canvasBg_linen: '亚麻',
     canvasBg_dusk: '暮色',
+    canvasTransparentHint: '画幅留白是透明的；配一个背景，导出的才是一张有底的图',
     exportSize: '导出尺寸 {w} × {h} px',
     exportSizeReduced: '导出尺寸 {w} × {h} px（已按画布上限降至 {scale}×）',
     exportSizeImpossible: '卡片高于画布上限，当前设置无法导出',
@@ -284,6 +290,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     canvasBg_ink: 'Ink',
     canvasBg_linen: 'Linen',
     canvasBg_dusk: 'Dusk',
+    canvasTransparentHint: 'The canvas around the card is transparent; pick a background to export a finished picture',
     exportSize: 'Exports at {w} × {h} px',
     exportSizeReduced: 'Exports at {w} × {h} px (reduced to {scale}× by the canvas limit)',
     exportSizeImpossible: 'The card is taller than the canvas limit and cannot be exported',

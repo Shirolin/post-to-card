@@ -216,20 +216,19 @@ function Toggle({
 /**
  * The dictionary's labels for the canvas backgrounds, keyed by id.
  *
- * Built here rather than read off `CANVAS_BACKGROUNDS[id].name` so the names
- * follow the interface language. The table's own `name` stays as the fallback
- * for a label a dictionary is missing.
+ * Derived from `CANVAS_BACKGROUND_ORDER` and the `canvasBg_<id>` key the way the
+ * theme grid derives `theme_<id>`: a hand-written map was a fourth copy of the
+ * same seven ids, so adding a background meant remembering to edit it too.
+ * The table's own `name` stays as the fallback for a key a dictionary lacks.
  */
 function canvasBackgroundLabels(t: Translations): Record<string, string> {
-  return {
-    none: t.canvasBg_none,
-    theme: t.canvasBg_theme,
-    paper: t.canvasBg_paper,
-    stone: t.canvasBg_stone,
-    ink: t.canvasBg_ink,
-    linen: t.canvasBg_linen,
-    dusk: t.canvasBg_dusk,
-  };
+  return Object.fromEntries(
+    CANVAS_BACKGROUND_ORDER.map((id) => {
+      const key = `canvasBg_${id}` as keyof typeof t;
+      const label = t[key];
+      return [id, typeof label === 'string' ? label : CANVAS_BACKGROUNDS[id].name];
+    })
+  );
 }
 
 /**
@@ -793,6 +792,13 @@ export function Controls({
                 labels={canvasBackgroundLabels(t)}
                 theme={config.theme}
               />
+              {/* A shape with no paint still reserves its ring, and that ring
+                  is transparent. Not an error -- it is a legitimate export for
+                  anyone compositing later -- but the picker should not let you
+                  believe you have a finished picture when you have a cut-out. */}
+              {config.canvasRatio !== 'auto' && (config.canvasBackground ?? 'none') === 'none' && (
+                <span class="control-hint">{t.canvasTransparentHint}</span>
+              )}
             </div>
 
             <div class="control-section">

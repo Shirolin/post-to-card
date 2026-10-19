@@ -1,7 +1,12 @@
 # Chrome Web Store 上架文案
 
-清单里的 `name` / `description` / 权限理由都从这里取，改一处即可。当前 `manifest.json` 的
-`description` 是英文那版，中英两版保持同义。
+商店后台的字段与 `manifest.json` 的 `name` / `description` 是**两份独立存储**：改这里不会改
+清单，改清单也不会更新商店页。两边要一起改。
+
+下面英文那版是清单 `description` 的**建议替换**：现在 `manifest.json` 里仍是从前那句
+（"Convert Twitter/X posts and threads into beautifully formatted, high-resolution shareable
+card images locally and offline."，122 字符），它同样在限制内，但没提「不经服务器」这个
+真正区别于同类工具的点。要不要换由你决定——换就把这里的英文抄进清单，别只改一边。
 
 ## 名称
 
@@ -11,13 +16,13 @@ Post-to-Card
 
 ## 简短说明（manifest `description`，上限 132 字符）
 
-英文：
+英文（126 字符，在上限以内）：
 
 ```
-Turn X posts and threads into clean, high-resolution card images. Rendered locally in your browser — no account, no upload, no server.
+Turn X posts and threads into clean, high-resolution card images. Rendered in your browser — no account, no upload, no server.
 ```
 
-中文：
+中文（商店页用，不受 132 字符限制）：
 
 ```
 把 X 推文与长串渲染成清晰的高分辨率卡片图。全程在你的浏览器里完成——不登录、不上传、不经服务器。
@@ -46,7 +51,7 @@ PRIVACY
 • No remote calls. Nothing is sent to us or to any third party. The only network requests go to X's own image servers (*.twimg.com) to fetch the pictures that go in the card — without them the canvas would fail outright.
 • No analytics, no telemetry, no remote config.
 • Your settings live in your own browser's local storage.
-• Two permissions: clipboardWrite (to put the image on your clipboard) and storage (to remember your settings).
+• Two API permissions — clipboardWrite (to put the image on your clipboard) and storage (to remember your settings) — plus host access to X's image servers, and nothing else.
 
 Requires no login and no X API access — it reads the posts already rendered on the page you are on.
 
@@ -74,7 +79,7 @@ Post-to-Card 把任意 X（Twitter）推文或长串，渲染成一张可以直�
 • 零外部远程调用。不向我们或任何第三方发送数据。唯一的网络请求发往 X 自己的图片服务器（*.twimg.com）取回卡片里的配图——没有它，Canvas 会直接失败。
 • 无分析、无遥测、无远程配置。
 • 设置存在你自己浏览器的本地存储里。
-• 仅两项权限：clipboardWrite（把图放进剪贴板）与 storage（记住你的设置）。
+• 两项 API 权限——clipboardWrite（把图放进剪贴板）与 storage（记住你的设置），外加对 X 图片域名的访问权，没有别的。
 
 无需登录，也不需要 X API 权限——读的是你当前页面上已经渲染出来的推文。
 

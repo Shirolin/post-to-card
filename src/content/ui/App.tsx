@@ -88,9 +88,10 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   const mountedRef = useRef<boolean>(true);
   /** Focus target when the retry button is about to be removed. */
   const exportPrimaryRef = useRef<HTMLButtonElement | null>(null);
-  // Preview-only scale. The export captures a copy of the card outside this
-  // zoom (see mountUnzoomedCopy in engine/export.ts), so exported dimensions
-  // stay at the fixed 640px card width.
+  // Preview-only scale. The export captures a copy of the mat outside this zoom
+  // (see mountUnzoomedCopy in engine/export.ts), so the exported dimensions are
+  // the mat's own: the card's 640px when no canvas is selected, and whatever the
+  // selected shape and ring make of it otherwise.
   const [zoomIndex, setZoomIndex] = useState<number>(ZOOM_LEVELS.indexOf('fit'));
   const level = ZOOM_LEVELS[zoomIndex];
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -127,12 +128,13 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   const zoom = isFixedLevel(level) ? Math.min(level, maxScale) : fitScale;
 
   /**
-   * The exported PNG's pixel size, or null until the card has been measured.
+   * The exported PNG's pixel size, or null until the mat has been measured.
    *
-   * The export captures an unzoomed copy at the card's own 640px width and
-   * rasterizes it at the engine's default scale, so this is the figure that lands
-   * on the clipboard. It has nothing to do with the preview's zoom: a long thread
-   * on a phone can look tiny here and still export at full width.
+   * The export captures an unzoomed copy of the mat at its own width -- 640px
+   * unless a canvas adds its ring -- and rasterizes it at the engine's default
+   * scale, so this is the figure that lands on the clipboard. It has nothing to
+   * do with the preview's zoom: a long thread on a phone can look tiny here and
+   * still export at full width.
    */
   // The same arithmetic the exporter runs, so the figure here is the figure in
   // the file: both call `fitScaleToCanvas` with the measured width, and the

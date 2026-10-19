@@ -630,10 +630,11 @@
 }
 
 /* Canvas Background Swatches
-   One row of paint chips. Sized to content rather than stretched, so the chips
-   keep a square-ish shape whatever the panel width is; a stretched row would
-   turn seven gradients into seven wide bands and read as a different control
-   from the theme grid above. */
+   One row of paint chips, equal width. Equal rather than intrinsic so the row
+   reads as one control -- seven differently-sized bands would look like seven
+   unrelated buttons. They are chips, not theme cards: 30px tall against the
+   theme grid's 34px swatch plus label, because the background is a single
+   choice and the theme grid is the panel's largest block. */
 .swatch-row {
   display: flex;
   gap: 6px;

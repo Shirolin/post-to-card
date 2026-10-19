@@ -9,6 +9,12 @@ This glossary records the project's domain concepts and their canonical names. U
 ### Card
 The final exportable visual artifact presenting tweet content, author information, media items, metadata, and optional signature decorations according to a curated visual theme.
 
+### Canvas
+The exported picture: the mat the Card is mounted on. A Canvas is not the Card — the Card is the sheet, and the Canvas is the surface it sits on. Canvas Shape (`canvasRatio`) and Canvas Background (`canvasBackground`) are independent, and both default to off, in which case the Canvas *is* the Card's own box. Distinct from a theme's `canvas` token, which is the colour the preview stage is painted with and one of the backgrounds a Canvas can take.
+
+### Mat
+The element that carries the Canvas, styled `.ptc-mat`. The word is deliberately shared with a material's `mediaFrame: 'mat'` — both are the passe-partout a sheet is mounted on — so read the qualifier: *the* mat is the Canvas element, a *media* mat is the mount inside a picture cell.
+
 ### Thread
 A continuous, chronological chain of consecutive tweets authored by the same user, excluding ads, unrelated replies, and retweets.
 
@@ -19,7 +25,7 @@ The active, in-memory editing lifecycle of a specific thread inside the card pre
 The multi-channel intake pipeline that produces structured `ThreadData` from a target post. Prioritizes intercepted GraphQL conversation trees and client-side translations, falling back to chronological DOM timeline extraction corroborated by snowflake ordering, visual connectors, and GraphQL reply linkage.
 
 ### User Preferences
-The persistent styling and layout configuration (visual theme, padding tier, corner, aspect ratio, image fit, media layout, interface and card language, display toggles, and the thread exclusions of a Thread Session) stored in extension storage and reused across all card generations.
+The persistent styling and layout configuration (visual theme, padding tier, corner, aspect ratio, Canvas shape and background, image fit, media layout, interface and card language, display toggles, and the thread exclusions of a Thread Session) stored in extension storage and reused across all card generations.
 
 Interface and card language is one setting with two scopes, deliberately. It localizes the modal's own chrome and the extension popup, and it also formats the dates printed inside the card, because a card is shared with people who read the poster's language rather than the reader's. It does **not** reach the card's prose or a translated-from notice: those are reproduced verbatim from the source page, since they are the author's words and X's own attribution rather than card UI.
 

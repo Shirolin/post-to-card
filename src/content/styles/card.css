@@ -9,9 +9,13 @@
    would now stretch the mat to the card's 640px and leave the ring of mat with
    nowhere to be. */
 .post-to-card-target {
-  width: 640px;
-  min-width: 640px;
-  max-width: 640px;
+  /* The one number the mat's geometry is built on, declared on the mat so the
+     card and the four ratio floors cannot disagree about it. The fallback keeps
+     a card rendered outside a mat (a test harness, a future host) at the fixed
+     width exports have always had. */
+  width: var(--card-width, 640px);
+  min-width: var(--card-width, 640px);
+  max-width: var(--card-width, 640px);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -43,7 +47,12 @@
    The ratio is derived from the outer width so that `border-box` makes it
    true: 640 + 2 * 48 = 736, and 736 / 920 = 0.8 for 4:5.
    ------------------------------------------------------------- */
+/* `--card-width` is the card's fixed width, declared once here so the floors
+   below can be written in terms of it rather than each repeating the number.
+   It is a custom property rather than a preprocessor constant because the value
+   also has to reach a cloned subtree, and custom properties inherit. */
 .ptc-mat {
+  --card-width: 640px;
   box-sizing: border-box;
   display: flex;
   justify-content: center;
@@ -52,27 +61,31 @@
      shrink-to-fit wrapper, and `max-content` does not consult that wrapper's
      available width. */
   width: max-content;
-  min-width: calc(640px + 2 * var(--mat-pad, 0px));
+  min-width: calc(var(--card-width) + 2 * var(--mat-pad, 0px));
   min-height: var(--mat-min-height, auto);
   padding: var(--mat-pad, 0px);
   background: var(--mat-bg, none);
   overflow: visible;
 }
 
+/* Each floor is the outer width (card + ring) divided by the ratio, so the
+   ratio holds edge to edge; the padding is part of the picture. `border-box`
+   is what makes that arithmetic exact. A card taller than the floor simply
+   makes a taller mat -- these are minimums, never fixed heights. */
 .ptc-mat[data-canvas-ratio="1:1"] {
-  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 1);
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 1);
 }
 
 .ptc-mat[data-canvas-ratio="4:5"] {
-  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 0.8);
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 0.8);
 }
 
 .ptc-mat[data-canvas-ratio="3:4"] {
-  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 0.75);
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 0.75);
 }
 
 .ptc-mat[data-canvas-ratio="16:9"] {
-  --mat-min-height: calc((640px + 2 * var(--mat-pad, 0px)) / 1.7778);
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 1.7778);
 }
 
 /* -------------------------------------------------------------

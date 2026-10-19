@@ -1023,12 +1023,15 @@ export const MAT_PADDING = '48px';
  * background to a card by eye.
  */
 export interface CanvasBackgroundDefinition {
-  id: CanvasBackgroundId;
   /**
    * How the mat gets its value. `'none'` and `'theme'` are not literals and are
-   * resolved at render time; the other two are read straight off `css`.
+   * resolved at render time; `'paint'` entries are read straight off `css`.
+   *
+   * Solid and gradient are one kind on purpose: nothing downstream treats them
+   * differently, and a `solid`/`gradient` split would invite a branch that only
+   * ever tests the same `css` twice. It is the mat's `background` either way.
    */
-  kind: 'none' | 'theme' | 'solid' | 'gradient';
+  kind: 'none' | 'theme' | 'paint';
   /** A CSS `background` value. Empty for `'none'` and `'theme'`. */
   css: string;
   /** Fallback label. The panel prefers `canvasBg_<id>` from the dictionary. */
@@ -1036,25 +1039,23 @@ export interface CanvasBackgroundDefinition {
 }
 
 export const CANVAS_BACKGROUNDS: Record<CanvasBackgroundId, CanvasBackgroundDefinition> = {
-  none: { id: 'none', kind: 'none', css: '', name: 'None' },
-  theme: { id: 'theme', kind: 'theme', css: '', name: 'Follow theme' },
+  none: { kind: 'none', css: '', name: 'None' },
+  theme: { kind: 'theme', css: '', name: 'Follow theme' },
   // Two papers and an ink: the same three tones the materials are built from,
   // so a solid choice reads as a material decision rather than a colour one.
-  paper: { id: 'paper', kind: 'solid', css: '#faf9f5', name: 'Paper' },
-  stone: { id: 'stone', kind: 'solid', css: '#deddd6', name: 'Stone' },
-  ink: { id: 'ink', kind: 'solid', css: '#141413', name: 'Ink' },
+  paper: { kind: 'paint', css: '#faf9f5', name: 'Paper' },
+  stone: { kind: 'paint', css: '#deddd6', name: 'Stone' },
+  ink: { kind: 'paint', css: '#141413', name: 'Ink' },
   // Gradients run light-to-dark along the diagonal, which is the direction the
   // preview's own mat shading runs; a card dropped on one reads as lit from the
   // top-left the same way it does on a solid material.
   linen: {
-    id: 'linen',
-    kind: 'gradient',
+    kind: 'paint',
     css: 'linear-gradient(135deg, #fdfcf9 0%, #e6e2d6 100%)',
     name: 'Linen',
   },
   dusk: {
-    id: 'dusk',
-    kind: 'gradient',
+    kind: 'paint',
     css: 'linear-gradient(135deg, #3a3550 0%, #12111a 100%)',
     name: 'Dusk',
   },

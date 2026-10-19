@@ -4497,6 +4497,13 @@ test('F36.1: an untouched canvas exports exactly the card, with no ring and no p
   // Both defaults are "off", and off has to mean the mat contributes nothing at
   // all. This is the one regression that would reach every existing user: a mat
   // that padded or painted by default would repaint the PNG they already had.
+  //
+  // Asserted as the two things that decide the box -- zero padding and no floor
+  // -- rather than as a measured `offsetWidth`. `tests/env/browser.ts` has no
+  // layout engine, so a measured box here would be the shim's answer, not the
+  // browser's. The measurement itself was checked in the dev harness (mat
+  // 640x1305 == card 640x1305 with both defaults, and 736x(card+96) with 4:5);
+  // what this test can lock is that nothing else is asked of the mat.
   assert.match(tag, /--mat-pad:0px/, `the default mat must not pad the picture: ${tag}`);
   assert.ok(!tag.includes('--mat-bg'), `the default mat must not paint: ${tag}`);
 });
@@ -4538,10 +4545,12 @@ test('F36.3: card.css floors every canvas ratio at the exact ratio, outer edge t
 
     // The numerator has to be the *outer* width, padding included: the ring is
     // part of the picture, so leaving it out would make every ratio wrong by
-    // 2 x 48px. `border-box` (asserted below) is the other half of that.
+    // 2 x 48px. It is also written as `--card-width` rather than 640px so the
+    // card's own width and the four floors cannot drift apart; `border-box`
+    // (asserted below) is the other half of the ratio being exact.
     assert.match(
       block![1],
-      /640px\s*\+\s*2\s*\*\s*var\(--mat-pad/,
+      /var\(--card-width\)\s*\+\s*2\s*\*\s*var\(--mat-pad/,
       `${ratio} computes its floor from the card's width alone, not the picture's`
     );
 
@@ -4654,6 +4663,49 @@ test('F36.9: the panel says so beside the size, and only when the picture is lon
 
   const short = await render({ width: 1280, height: 1920, scale: 2, reduced: false, impossible: false });
   assert.ok(!short.includes('very tall'), 'an ordinary card must not be warned about');
+});
+
+test('F36.10: a shape with no paint says the ring is transparent', async () => {
+  const render = (config: Partial<CardConfig>) =>
+    renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
+      config: { ...CARD_CONFIG, ...config },
+      onChange: () => {},
+      onExportCopy: () => {},
+      onExportDownload: () => {},
+    });
+
+  // A shape alone reserves a ring and paints nothing in it. That is a
+  // legitimate export for anyone compositing later, but it is not the finished
+  // picture the shape picker implies, so the panel has to say so -- and stop
+  // saying it the moment a background is chosen.
+  assert.match(
+    await render({ canvasRatio: '4:5', canvasBackground: 'none' }),
+    /transparent/,
+    'a shaped but unpainted canvas has to be explained'
+  );
+  assert.ok(
+    !(await render({ canvasRatio: '4:5', canvasBackground: 'paper' })).includes('transparent'),
+    'and the explanation has to go away once there is paint in the ring'
+  );
+  assert.ok(
+    !(await render({ canvasRatio: 'auto', canvasBackground: 'none' })).includes('transparent'),
+    'the default has no ring, so it has nothing to explain'
+  );
+});
+
+test('F36.11: every background the picker offers has a label in both languages', () => {
+  // The picker no longer keeps its own id->label map; it derives `canvasBg_<id>`
+  // from the dictionary the way the theme grid derives `theme_<id>`. A missing
+  // key would silently fall back to the table's English name, which is exactly
+  // the kind of drift this assertion exists to catch.
+  for (const locale of ['zh-CN', 'en-US'] as const) {
+    for (const id of CANVAS_BACKGROUND_ORDER) {
+      const key = `canvasBg_${id}` as keyof (typeof TRANSLATIONS)[typeof locale];
+      const label = TRANSLATIONS[locale][key];
+      assert.equal(typeof label, 'string', `${locale} has no canvasBg_${id}`);
+      assert.ok((label as string).length > 0, `${locale}'s canvasBg_${id} is empty`);
+    }
+  }
 });
 
 // -------------------------------------------------------------

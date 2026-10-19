@@ -28,6 +28,11 @@ export interface CardProps {
    * rather than the card: with a canvas background or a canvas ratio selected
    * the two differ by the ring of mat around the sheet. Optional because the
    * dev harness and the tests render the card with nothing to measure against.
+   *
+   * Named for the card because that is what a reader of `Card`'s props expects
+   * to be handing over, and because the mat only exists to carry it. The
+   * measurement in `App` is about the picture, which the prop's comment there
+   * says.
    */
   cardRef?: Ref<HTMLDivElement>;
 }
@@ -777,61 +782,61 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
         data-keyline={tokens.keyline ? 'on' : undefined}
         data-stat-chip={tokens.statChip ? 'on' : undefined}
         style={{
-        padding: config.padding,
-        borderRadius: radius.card,
-        boxShadow: tokens.shadow,
-        // Every theme colour, the type pair, the signature geometry and the
-        // rhythm come from the token table and are injected here. card.css only
-        // consumes them, so there is one place to edit a theme and no second
-        // copy to drift out of sync.
-        '--surface': tokens.surface,
-        '--text': tokens.text,
-        '--text-sec': tokens.muted,
-        '--faint': tokens.faint,
-        '--accent': tokens.accent,
-        '--link': tokens.link,
-        '--border-color': tokens.border,
-        '--divider': tokens.divider,
-        '--quote-bg': tokens.quoteBackground,
-        '--quote-border': tokens.quoteBorder,
-        '--qr-fill': tokens.qrFill,
-        '--media-border': tokens.mediaBorder,
-        '--mat': tokens.mat,
-        '--rule-style': tokens.ruleStyle,
-        '--avatar-radius': tokens.avatarRadius,
-        '--avatar-shadow': tokens.avatarShadow,
-        '--card-radius': radius.card,
-        '--surface-texture': tokens.texture,
-        '--rule': tokens.rule,
-        '--border-width': tokens.borderWidth,
-        '--signature-height': tokens.signature.height,
-        '--rhythm-gap': tokens.rhythm.gap,
-        '--media-gap': tokens.rhythm.mediaGap,
-        // What a cell adds around its picture besides its ring: the passe-partout
-        // where the material mounts pictures that way. The grid planner reads it
-        // so a line of mounted pictures still comes out one height.
-        '--media-mount': tokens.mediaFrame === 'mat' ? '8px' : '0px',
-        '--media-radius': mediaRadius,
-        '--font-display': tokens.fontDisplay,
-        '--font-body': tokens.fontBody,
-        // The material's letterforms. card.css applies each of these to the
-        // one element it names, so a new material is a table entry the compiler
-        // checks rather than three rule blocks a reader has to notice.
-        '--type-display-size': tokens.type.displaySize,
-        '--type-display-weight': tokens.type.displayWeight,
-        '--type-display-tracking': tokens.type.displayTracking,
-        '--type-quote-size': tokens.type.quoteSize,
-        '--type-body-size': tokens.type.bodySize,
-        '--type-body-leading': tokens.type.bodyLeading,
-        '--type-meta-size': tokens.type.metaSize,
-        '--type-meta-tracking': tokens.type.metaTracking,
-        '--type-meta-transform': tokens.type.metaUppercase ? 'uppercase' : 'none',
-        '--type-meta-numeric': tokens.type.metaTabular ? 'tabular-nums' : 'normal',
-        minHeight: minHeightStyle === 'auto' ? 'unset' : minHeightStyle,
-        height: 'auto',
-        overflow: 'visible',
-      }}
-    >
+          padding: config.padding,
+          borderRadius: radius.card,
+          boxShadow: tokens.shadow,
+          // Every theme colour, the type pair, the signature geometry and the
+          // rhythm come from the token table and are injected here. card.css only
+          // consumes them, so there is one place to edit a theme and no second
+          // copy to drift out of sync.
+          '--surface': tokens.surface,
+          '--text': tokens.text,
+          '--text-sec': tokens.muted,
+          '--faint': tokens.faint,
+          '--accent': tokens.accent,
+          '--link': tokens.link,
+          '--border-color': tokens.border,
+          '--divider': tokens.divider,
+          '--quote-bg': tokens.quoteBackground,
+          '--quote-border': tokens.quoteBorder,
+          '--qr-fill': tokens.qrFill,
+          '--media-border': tokens.mediaBorder,
+          '--mat': tokens.mat,
+          '--rule-style': tokens.ruleStyle,
+          '--avatar-radius': tokens.avatarRadius,
+          '--avatar-shadow': tokens.avatarShadow,
+          '--card-radius': radius.card,
+          '--surface-texture': tokens.texture,
+          '--rule': tokens.rule,
+          '--border-width': tokens.borderWidth,
+          '--signature-height': tokens.signature.height,
+          '--rhythm-gap': tokens.rhythm.gap,
+          '--media-gap': tokens.rhythm.mediaGap,
+          // What a cell adds around its picture besides its ring: the passe-partout
+          // where the material mounts pictures that way. The grid planner reads it
+          // so a line of mounted pictures still comes out one height.
+          '--media-mount': tokens.mediaFrame === 'mat' ? '8px' : '0px',
+          '--media-radius': mediaRadius,
+          '--font-display': tokens.fontDisplay,
+          '--font-body': tokens.fontBody,
+          // The material's letterforms. card.css applies each of these to the
+          // one element it names, so a new material is a table entry the compiler
+          // checks rather than three rule blocks a reader has to notice.
+          '--type-display-size': tokens.type.displaySize,
+          '--type-display-weight': tokens.type.displayWeight,
+          '--type-display-tracking': tokens.type.displayTracking,
+          '--type-quote-size': tokens.type.quoteSize,
+          '--type-body-size': tokens.type.bodySize,
+          '--type-body-leading': tokens.type.bodyLeading,
+          '--type-meta-size': tokens.type.metaSize,
+          '--type-meta-tracking': tokens.type.metaTracking,
+          '--type-meta-transform': tokens.type.metaUppercase ? 'uppercase' : 'none',
+          '--type-meta-numeric': tokens.type.metaTabular ? 'tabular-nums' : 'normal',
+          minHeight: minHeightStyle === 'auto' ? 'unset' : minHeightStyle,
+          height: 'auto',
+          overflow: 'visible',
+        }}
+      >
       <div class="post-to-card-body-content">
         {!isThread ? (
           renderSingleTweet(mainTweet, config, t, imageFit, mediaLayout)
