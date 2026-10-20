@@ -22,10 +22,19 @@ export interface Translations {
   themesShowAll: string;
   themesShowLess: string;
   aspectRatio: string;
+  /** Disambiguates the card's own shape from the canvas shape below it. */
+  aspectRatioTitle: string;
   aspectAuto: string;
-  /** The exported picture's canvas: its shape, and what it is painted with. */
+  /**
+   * The section heading for the exported picture: its shape, what it is painted
+   * with, and the lift. The controls under it are named relative to it --
+   * 画幅 / 背景, not 输出画幅 / 画布背景 -- because a heading directly above a
+   * sub-label that repeats its words reads as one label stuttering rather than
+   * as a section and a control.
+   */
   canvas: string;
   canvasRatio: string;
+  canvasRatioTitle: string;
   canvasRatioAuto: string;
   canvasBackground: string;
   canvasShadow: string;
@@ -168,11 +177,13 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     themesShowAll: '展开其余 {count} 款',
     themesShowLess: '收起主题',
     aspectRatio: '卡片形状',
+    aspectRatioTitle: '卡片内容的最小形状，卡片文字更长时会向下长高',
     aspectAuto: '自适应',
     canvas: '输出画布',
-    canvasRatio: '输出画幅',
-    canvasRatioAuto: '跟随卡片',
-    canvasBackground: '画布背景',
+    canvasRatio: '画幅',
+    canvasRatioTitle: '导出图片的形状（背景层），卡片始终完整地摆在里面',
+    canvasRatioAuto: '自适应',
+    canvasBackground: '背景',
     canvasShadow: '卡片投影',
     canvasBg_none: '无背景',
     canvasBg_theme: '跟随主题',
@@ -296,10 +307,12 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     themesShowAll: 'Show {count} more',
     themesShowLess: 'Hide extra themes',
     aspectRatio: 'Card Shape',
+    aspectRatioTitle: "The card's minimum shape; it grows taller when the text needs it",
     aspectAuto: 'Auto',
     canvas: 'Output Canvas',
-    canvasRatio: 'Canvas Shape',
-    canvasRatioAuto: 'Card',
+    canvasRatio: 'Shape',
+    canvasRatioTitle: 'The exported picture (the background layer); the card always sits whole inside it',
+    canvasRatioAuto: 'Auto',
     canvasBackground: 'Background',
     canvasShadow: 'Card shadow',
     canvasBg_none: 'None',

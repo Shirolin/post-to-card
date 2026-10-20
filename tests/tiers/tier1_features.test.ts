@@ -4757,6 +4757,29 @@ test('F36.13: the shadow switch is offered only when there is a canvas to fall o
   );
 });
 
+test('F36.14: the canvas is a first-screen section, not a disclosure item', async () => {
+  // The canvas is the largest group in the panel and the one thing this round
+  // added. Behind the disclosure -- whose own button sat below the fold -- it
+  // cost a scroll, a tap and another scroll to find. It follows the theme
+  // because "follow the theme" is literally one of its background options.
+  const html = await renderControls();
+  const at = (needle: string) => html.indexOf(needle);
+
+  assert.match(
+    html,
+    /<section class="control-section">\s*<span class="control-label"><span>Output Canvas<\/span><\/span>/,
+    'the canvas leads with its own top-level heading'
+  );
+  assert.ok(
+    at('<span>Theme</span>') < at('<span>Output Canvas</span>'),
+    'it sits after the theme it can follow'
+  );
+  assert.ok(
+    at('<span>Output Canvas</span>') < at('class="more-body"'),
+    'and ahead of the disclosure rather than inside it'
+  );
+});
+
 // -------------------------------------------------------------
 // F26 continued: the refusal keeps its reason
 // -------------------------------------------------------------

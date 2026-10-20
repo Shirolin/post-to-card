@@ -582,9 +582,11 @@ export function Controls({
 
         {/* Aspect ratio ahead of the theme: three options in the width of one
             segmented control, and it decides the card's height -- the thing that
-            decides whether the card is usable on the platform it is going to. */}
+            decides whether the card is usable on the platform it is going to.
+            The canvas section below carries a shape of its own, so the label
+            says which of the two shapes this one is. */}
         <section class="control-section">
-          <span class="control-label">
+          <span class="control-label" title={t.aspectRatioTitle}>
             <Maximize2 size={14} strokeWidth={2} />
             <span>{t.aspectRatio}</span>
           </span>
@@ -662,6 +664,58 @@ export function Controls({
                   : t.themesShowAll.replace('{count}', String(hiddenThemeCount))}
               </span>
             </button>
+          )}
+        </section>
+
+        {/* The canvas: the picture the card is mounted on. It follows the theme
+            rather than joining padding and radius in the disclosure because it
+            is the other half of the same decision -- and because "theme" is one
+            of its own values: the default background is resolved from the
+            material chosen directly above it. It is also the largest addition
+            since the card was built; behind a disclosure that opens off the
+            first screen, it may as well not exist. */}
+        <section class="control-section">
+          <span class="control-label">
+            <span>{t.canvas}</span>
+          </span>
+          <span class="control-sub-label" title={t.canvasRatioTitle}>
+            {t.canvasRatio}
+          </span>
+          <Segmented
+            name={t.canvasRatio}
+            options={CANVAS_RATIO_OPTIONS}
+            value={config.canvasRatio ?? 'auto'}
+            onSelect={(next) => updateConfig({ canvasRatio: next as CanvasRatioOption })}
+            labels={{ auto: t.canvasRatioAuto }}
+          />
+          <span class="control-sub-label">{t.canvasBackground}</span>
+          <SwatchRow
+            name={t.canvasBackground}
+            options={CANVAS_BACKGROUND_ORDER}
+            value={config.canvasBackground ?? 'none'}
+            onSelect={(next) => updateConfig({ canvasBackground: next })}
+            labels={canvasBackgroundLabels(t)}
+            theme={config.theme}
+          />
+          {/* A shape with no paint still reserves its ring, and that ring
+              is transparent. Not an error -- it is a legitimate export for
+              anyone compositing later -- but the picker should not let you
+              believe you have a finished picture when you have a cut-out. */}
+          {config.canvasRatio !== 'auto' && (config.canvasBackground ?? 'none') === 'none' && (
+            <span class="control-hint">{t.canvasTransparentHint}</span>
+          )}
+          {/* Offered only once there is a canvas. With neither option on the
+              mat is the card's own box, so an outer shadow would be clipped
+              by the export -- a switch that visibly does nothing is worse
+              than one that is not there. */}
+          {(config.canvasRatio !== 'auto' || (config.canvasBackground ?? 'none') !== 'none') && (
+            <div class="toggles-list">
+              <Toggle
+                label={t.canvasShadow}
+                checked={config.canvasShadow === true}
+                onToggle={() => updateConfig({ canvasShadow: config.canvasShadow !== true })}
+              />
+            </div>
           )}
         </section>
 
@@ -764,54 +818,6 @@ export function Controls({
                 labels={{ theme: t.borderRadiusFollowTheme }}
                 titles={{ theme: t.borderRadiusFollowTheme }}
               />
-            </div>
-
-            {/* The canvas: the picture the card is mounted on. It sits with
-                padding and radius rather than with the card's own shape because
-                it is a property of the sheet the card is presented on, not of
-                the card -- and because all three are the knobs a user reaches
-                for once the theme is settled. */}
-            <div class="control-section">
-              <span class="control-label">
-                <span>{t.canvas}</span>
-              </span>
-              <span class="control-sub-label">{t.canvasRatio}</span>
-              <Segmented
-                name={t.canvasRatio}
-                options={CANVAS_RATIO_OPTIONS}
-                value={config.canvasRatio ?? 'auto'}
-                onSelect={(next) => updateConfig({ canvasRatio: next as CanvasRatioOption })}
-                labels={{ auto: t.canvasRatioAuto }}
-              />
-              <span class="control-sub-label">{t.canvasBackground}</span>
-              <SwatchRow
-                name={t.canvasBackground}
-                options={CANVAS_BACKGROUND_ORDER}
-                value={config.canvasBackground ?? 'none'}
-                onSelect={(next) => updateConfig({ canvasBackground: next })}
-                labels={canvasBackgroundLabels(t)}
-                theme={config.theme}
-              />
-              {/* A shape with no paint still reserves its ring, and that ring
-                  is transparent. Not an error -- it is a legitimate export for
-                  anyone compositing later -- but the picker should not let you
-                  believe you have a finished picture when you have a cut-out. */}
-              {config.canvasRatio !== 'auto' && (config.canvasBackground ?? 'none') === 'none' && (
-                <span class="control-hint">{t.canvasTransparentHint}</span>
-              )}
-              {/* Offered only once there is a canvas. With neither option on the
-                  mat is the card's own box, so an outer shadow would be clipped
-                  by the export -- a switch that visibly does nothing is worse
-                  than one that is not there. */}
-              {(config.canvasRatio !== 'auto' || (config.canvasBackground ?? 'none') !== 'none') && (
-                <div class="toggles-list">
-                  <Toggle
-                    label={t.canvasShadow}
-                    checked={config.canvasShadow === true}
-                    onToggle={() => updateConfig({ canvasShadow: config.canvasShadow !== true })}
-                  />
-                </div>
-              )}
             </div>
 
             <div class="control-section">
