@@ -166,14 +166,7 @@ function renderRichTokens(
   );
 }
 
-/**
- * Advances a failed picture to the next URL in its chain.
- *
- * What the chain ends on is the caller's to decide: a media picture ends on the
- * page-rendered URL and is then left broken, so one that is genuinely gone still
- * reads as missing; an avatar ends on the card's silhouette, the same state the
- * card already shows for an author with no avatar.
- */
+/** Advances a failed picture to the next URL in its chain. */
 function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
   advanceImageFallback(event.currentTarget);
 }

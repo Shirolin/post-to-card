@@ -9,6 +9,7 @@
 
 import { domToBlob } from 'modern-screenshot';
 import type { ExtensionResponse } from '../../types/messages.ts';
+import { DEFAULT_AVATAR_SRC } from '../ui/imageFallback.ts';
 import { fitScaleToCanvas, type ScaleFit } from './scale.ts';
 
 export const FALLBACK_PLACEHOLDER_DATA_URL =
@@ -147,13 +148,15 @@ export async function resolveImageForExport(url: string): Promise<ImageFetchResu
       });
 
       if (response && response.success) {
-        return typeof response.dataUrl === 'string'
-          ? { ok: true, src: response.dataUrl }
-          : { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
-      }
-
-      if (response) {
-        retryable = response.retryable === true;
+        if (typeof response.dataUrl === 'string') {
+          return { ok: true, src: response.dataUrl };
+        }
+        // A success carrying no data URL learned nothing about the picture, so
+        // it is a malformed answer rather than a verdict and stays retryable,
+        // like a message that never arrived.
+        failure = 'success response without a data URL';
+      } else if (response) {
+        retryable = response.retryable;
         failure = response.error;
       }
     } catch (err) {
@@ -198,6 +201,22 @@ export interface CardImagePreparation {
   failures: ImageLoadFailure[];
   /** `occurrences` summed: the number of visible pictures that will be grey. */
   failedImageCount: number;
+}
+
+/**
+ * What a picture is left showing in the export once the proxy could not
+ * deliver it.
+ *
+ * A media picture gets the neutral placeholder: the rasterizer has to draw
+ * something in its box, and a missing picture is information the reader wants.
+ * An avatar has a designed state of its own -- the silhouette the card renders
+ * for an author with no picture -- and a dark grey square is not it.
+ */
+function failedImageSrc(img: HTMLImageElement): string {
+  const className = img.getAttribute('class') || '';
+  return /\bauthor-avatar-img\b|\bquote-avatar\b/.test(className)
+    ? DEFAULT_AVATAR_SRC
+    : FALLBACK_PLACEHOLDER_DATA_URL;
 }
 
 /**
@@ -266,7 +285,7 @@ export async function prepareCardImages(cardElement: HTMLElement): Promise<CardI
       const item = pending[next++];
       const result = await resolveSrc(item.src);
       if (!result.ok) failedUrls.add(item.src);
-      item.img.src = result.src;
+      item.img.src = result.ok ? result.src : failedImageSrc(item.img);
     }
   };
 

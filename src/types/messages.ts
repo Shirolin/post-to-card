@@ -21,15 +21,14 @@ export interface FetchImageBase64ErrorResponse {
   success: false;
   error: string;
   /**
-   * Whether the same request could plausibly succeed if it were sent again.
+   * Whether sending the same request again could plausibly succeed.
    *
-   * Only the proxy can tell these apart: it is the one that saw the status code
-   * or the abort. A 404 is X saying the picture is gone and a second ask only
-   * costs a round trip; a 5xx, a 429 or a timeout is the network having a bad
-   * moment. Absent means not retryable, so a caller that does not know about
-   * this field behaves exactly as it did before it existed.
+   * Required, because every error exit has to answer it and the two answers
+   * want opposite handling: a 404 is X saying the picture is gone, while a 5xx
+   * or a reset connection never got an answer about it. Only the proxy saw the
+   * status code or the abort, so it is the only layer that can draw the line.
    */
-  retryable?: boolean;
+  retryable: boolean;
 }
 
 export type ExtensionResponse =

@@ -75,6 +75,8 @@ export async function handleFetchImageBase64(
     return {
       success: false,
       error: 'Invalid URL: URL must be a non-empty string',
+      // The same request would fail the same way.
+      retryable: false,
     };
   }
 
@@ -82,6 +84,7 @@ export async function handleFetchImageBase64(
     return {
       success: false,
       error: 'Forbidden origin: URL must belong to twimg.com via http/https',
+      retryable: false,
     };
   }
 
@@ -113,9 +116,14 @@ export async function handleFetchImageBase64(
       return {
         success: false,
         error: `HTTP ${response.status}: ${response.statusText || 'Fetch failed'}`,
-        // A 404 or a 403 is X answering about the picture itself; a 429 or a
-        // 5xx is the edge having a bad moment and is worth one more ask.
-        retryable: response.status === 429 || response.status >= 500,
+        // A 404 or a 403 is X answering about the picture itself. A 5xx is the
+        // edge having a bad moment and is worth one more ask.
+        //
+        // A 429 is not, even though it looks transient: the caller's whole retry
+        // budget is a few hundred milliseconds, and a rate-limit window does not
+        // open that fast. Marking it retryable would only spend the budget on
+        // asks that are certain to be refused again.
+        retryable: response.status >= 500,
       };
     }
 
@@ -161,7 +169,11 @@ export async function handleFetchImageBase64(
       return {
         success: false,
         error: `Network timeout: request exceeded ${timeoutMs}ms`,
-        retryable: true,
+        // Not retryable, because a retry spends the same full budget again: a
+        // request that could not get a byte in 15s would cost the export 30 more
+        // seconds to learn the same thing, which reads as a hang. The failures
+        // below fail fast, so re-asking them is cheap.
+        retryable: false,
       };
     }
 

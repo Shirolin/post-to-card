@@ -746,41 +746,6 @@ test('Tier 2.37e: a picture with no fallback is mounted without the attribute an
   assert.equal(img.src, item.url, 'a picture with no chain is left untouched');
 });
 
-test('Tier 2.37g: a failed avatar recovers onto the card silhouette, not onto a broken image', () => {
-  // The card mounts the avatar at `_400x400`, an upgrade of whatever the page
-  // rendered. Unlike a photo, X derives every avatar size from the same source
-  // and they have only been observed resolving together, so there is no smaller
-  // copy to walk down to. The one step is the silhouette the card already shows
-  // for an author with no picture at all, which is what makes it a state rather
-  // than a placeholder papering over a missing image.
-  const author: AuthorInfo = {
-    name: 'Someone',
-    handle: '@someone',
-    avatarUrl: 'https://pbs.twimg.com/profile_images/1/x_400x400.jpg',
-  };
-
-  const attrs = avatarFallbackAttrs(author);
-  assert.deepEqual(JSON.parse(attrs['data-fallback'] || 'null'), [DEFAULT_AVATAR_SRC]);
-
-  const img = new DomImageElement();
-  img.setAttribute('src', author.avatarUrl);
-  for (const [name, value] of Object.entries(attrs)) img.setAttribute(name, value);
-
-  advanceImageFallback(img);
-  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'one error lands on the silhouette');
-  assert.equal(img.getAttribute('data-fallback'), '[]', 'and there is nothing left to try');
-  assert.doesNotThrow(() => advanceImageFallback(img), 'a second error must not loop');
-  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'the silhouette stays put');
-
-  // An author with no picture is already rendered with the silhouette, so there
-  // is nothing for it to recover to.
-  assert.deepEqual(
-    avatarFallbackAttrs({ name: 'Nobody', handle: '@nobody', avatarUrl: '' }),
-    {},
-    'no avatarUrl means no fallback to walk'
-  );
-});
-
 test('Tier 2.37f: a video poster never falls back onto the video file', () => {
   // The GraphQL channel stores the mp4 in `originalUrl` and the still frame in
   // `url`/`posterUrl`. Deriving the chain from `originalUrl` made a 404 poster
@@ -808,6 +773,42 @@ test('Tier 2.37f: a video poster never falls back onto the video file', () => {
   };
   assert.match(imageFallbackAttrs(photo)['data-fallback'] || '', /name=large/,
     'a photo still carries its variant chain');
+});
+
+test('Tier 2.37g: a failed avatar recovers onto the card silhouette, not onto a broken image', () => {
+  // The card mounts the avatar at `_400x400`, an upgrade of whatever the page
+  // rendered, but X derives every avatar size from the same source and they have
+  // only been observed resolving or 404ing together (2026-10-20,
+  // `docs/detection-audit.md`), so there is no smaller copy to walk down to. The
+  // one step is the silhouette the card already shows for an author with no
+  // picture at all, which is what makes it a state rather than a placeholder
+  // papering over a missing image.
+  const author: AuthorInfo = {
+    name: 'Someone',
+    handle: '@someone',
+    avatarUrl: 'https://pbs.twimg.com/profile_images/1/x_400x400.jpg',
+  };
+
+  const attrs = avatarFallbackAttrs(author);
+  assert.deepEqual(JSON.parse(attrs['data-fallback'] || 'null'), [DEFAULT_AVATAR_SRC]);
+
+  const img = new DomImageElement();
+  img.setAttribute('src', author.avatarUrl);
+  for (const [name, value] of Object.entries(attrs)) img.setAttribute(name, value);
+
+  advanceImageFallback(img);
+  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'one error lands on the silhouette');
+  assert.equal(img.getAttribute('data-fallback'), '[]', 'and there is nothing left to try');
+  assert.doesNotThrow(() => advanceImageFallback(img), 'a second error must not loop');
+  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'the silhouette stays put');
+
+  // An author with no picture is already rendered with the silhouette, so there
+  // is nothing for it to recover to.
+  assert.deepEqual(
+    avatarFallbackAttrs({ name: 'Nobody', handle: '@nobody', avatarUrl: '' }),
+    {},
+    'no avatarUrl means no fallback to walk'
+  );
 });
 
 test('Tier 2.38: extraction degrades gracefully when no data-testid is present', () => {

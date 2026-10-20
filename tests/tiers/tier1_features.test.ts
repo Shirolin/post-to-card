@@ -354,6 +354,24 @@ test('F4.3: a failing fetch is reported as a failed response, not thrown at the 
       if (res.success) return;
       assert.match(res.error, /404/, 'the status has to survive into the error');
       assert.match(res.error, /Not Found/);
+      assert.equal(res.retryable, false,
+        'a 404 is X answering about the picture; asking again cannot change that answer');
+    }
+  );
+
+  // The other side of the same line, and the reason the proxy is the only layer
+  // that can draw it: the status code is visible nowhere else. A 5xx never
+  // reached the picture, so the caller is allowed to spend a retry on it.
+  await withFetch(
+    () => new Response('boom', { status: 503, statusText: 'Service Unavailable' }),
+    async () => {
+      const res = await chromeMock.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url: 'https://pbs.twimg.com/media/flaky.jpg',
+      });
+      assert.equal(res.success, false);
+      if (res.success) return;
+      assert.equal(res.retryable, true, 'a 5xx is the edge having a bad moment, not a verdict');
     }
   );
 });
@@ -441,6 +459,8 @@ test('F4.7: a fetch that rejects is reported with the reason it failed', async (
       assert.equal(res.success, false, 'a rejected fetch is a failed response, not a throw');
       if (res.success) return;
       assert.equal(res.error, 'socket hang up', 'and the failure reason reaches the caller');
+      assert.equal(res.retryable, true,
+        'the request never got an answer about the picture, so a second ask can still land');
     }
   );
 });
@@ -3833,7 +3853,7 @@ test('F25.6: a message the worker never received is asked again; an answer it ga
       const failing = createChromeMock();
       failing.runtime.sendMessage = async () => {
         answered++;
-        return { success: false, error: 'HTTP 404: Not Found' };
+        return { success: false, error: 'HTTP 404: Not Found', retryable: false };
       };
       scope.chrome = failing;
 
@@ -3856,6 +3876,51 @@ test('F25.6: a message the worker never received is asked again; an answer it ga
       assert.equal(await engine.fetchImageAsBase64(url, true), 'data:image/jpeg;base64,LATE',
         'a 503 is worth one more ask');
       assert.equal(flaky, 2);
+    } finally {
+      if (savedChrome !== undefined) scope.chrome = savedChrome;
+      else delete scope.chrome;
+    }
+  });
+});
+
+test('F25.7: an avatar the proxy cannot deliver exports as the silhouette, not a grey square', async () => {
+  // F25.6 stopped one eviction from greying the whole card. This is the other
+  // half of the same screenshot: when a picture really cannot be fetched, what
+  // the export draws in its place is a per-picture decision. A media picture
+  // gets the neutral square, because a missing picture is information the
+  // reader wants. An avatar has a designed state of its own -- the silhouette
+  // the card already shows for an author with no picture -- and a dark square
+  // where a face belongs is not it.
+  const engine = await exportEngine();
+  await withContainerEnv(async () => {
+    const scope = globalThis as Record<string, unknown>;
+    const savedChrome = scope.chrome;
+
+    try {
+      const mock = createChromeMock();
+      mock.runtime.sendMessage = async () => {
+        throw new Error('Could not establish connection. Receiving end does not exist.');
+      };
+      scope.chrome = mock;
+
+      const card = new DomElement('DIV');
+      const avatar = new DomImageElement();
+      avatar.setAttribute('class', 'author-avatar-img');
+      avatar.setAttribute('src', 'https://pbs.twimg.com/profile_images/1/x_400x400.jpg');
+      const photo = new DomImageElement();
+      photo.setAttribute('class', 'media-picture fit-contain');
+      photo.setAttribute('src', 'https://pbs.twimg.com/media/p.jpg?format=jpg&name=orig');
+      card.appendChild(avatar);
+      card.appendChild(photo);
+
+      const preparation = await engine.prepareCardImages(card);
+
+      assert.ok(avatar.src.includes('%2371767b'),
+        'an avatar falls back to the card silhouette, not the neutral square');
+      assert.ok(photo.src.includes('%23333333'),
+        'a media picture still gets the neutral square');
+      assert.equal(preparation.failedImageCount, 2,
+        'the export is degraded either way; the reader is still told what did not load');
     } finally {
       if (savedChrome !== undefined) scope.chrome = savedChrome;
       else delete scope.chrome;

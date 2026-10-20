@@ -115,6 +115,16 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
  这份 payload 我们**已经在拦**（名单见 `graphql/operations.ts`），`in_reply_to_status_id_str`
  由 `graphql/parse.ts` 收进 `graphql/bridge.ts` 的索引，供列表视图里的 DOM 走查使用。
 - **外链卡片媒体在 GraphQL 与 DOM 均须提取** —— **2026-10-13 实测**：外链推文（如 `summary_large_image`）的封面图不走 `entities.media`，而在 `tweet.card.legacy.binding_values`。GraphQL 通道须解析其 `photo_image_full_size_original` 等原图字段，否则权威通道会将其判为无媒体并短路屏蔽 DOM 通道；DOM 端容器以 `[data-testid="card.wrapper"]`（不绑定 `div` 标签）定位，其内标准 `img` 即为卡片封面。
+- **头像各尺寸同生共死** —— **2026-10-20 实测**：`profile_images` 路径的 `_400x400` / `_normal` /
+  `_bigger` / `_mini` / `_200x200` 五个后缀，对一个存活头像
+  （`pbs.twimg.com/profile_images/2103567689515954176/aR-Kjpp4`，取自未登录 `x.com/elonmusk` 的
+  `og:image`）**全部 200**（28375 / 2111 / 3151 / 1451 / 10960 B）；对一个 X 没有的路径
+  （`pbs.twimg.com/profile_images/1/ada`）**全部 404**；对默认头像占位
+  （`abs.twimg.com/sticky/default_profile_images/default_profile`）**全部 200**
+  （2872 / 504 / 693 / 303 / 1584 B）。
+  即头像**没有**「大图 404、小图还在」的部分失效。照片相反——`orig` 有单独 404 的观测
+  （见 `urls.ts` 的 `upgradePhotoUrl`），所以照片的链要走好几个候选，头像的链只有一步
+  （`imageFallback.ts` 的 `avatarFallbackAttrs`）。
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号
 - `a[href*="/status/"]`、`time[datetime]` —— 结构语义，不会变

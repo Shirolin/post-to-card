@@ -13,9 +13,15 @@
  * whatever source the preview settled on. A closure or a Preact state value
  * would not.
  *
- * An avatar recovers through the same mechanism with a one-entry chain, because
- * what it falls back *to* differs rather than how it walks: see
- * `avatarFallbackAttrs`.
+ * What a chain ends on is what the <img> shows once nothing in it worked, and
+ * that is the one thing an avatar does differently. A media chain ends on the
+ * page-rendered URL and is then left broken, because a missing picture is
+ * information. An avatar chain ends on the silhouette the card already renders
+ * for an author with no picture: a dark square where a face belongs is not
+ * information, it is a rendering leftover. The avatar chain is also one entry
+ * rather than several, because the card mounts the `_400x400` upgrade and every
+ * size X derives from an avatar has been seen to resolve or 404 together
+ * (2026-10-20, `docs/detection-audit.md`) -- there is no smaller copy to walk to.
  */
 
 import type { AuthorInfo, MediaItem } from '../../types/tweet.ts';
@@ -55,18 +61,9 @@ export function imageFallbackAttrs(item: MediaItem): Record<string, string> {
 /**
  * The extra attributes an avatar <img> needs to be able to recover.
  *
- * An avatar gets one step rather than a chain. The card mounts the author's
- * picture at `_400x400`, which is an upgrade of whatever the page rendered, and
- * unlike a photo there is no variant of it observed going missing on its own --
- * every size X derives from an avatar has been seen to resolve or 404 together.
- * So the recovery is not "try a smaller copy of the same person", it is "this
- * picture is not coming".
- *
- * That is why the chain ends on the silhouette instead of on nothing. A media
- * picture is left broken on purpose, because a missing picture is information.
- * An avatar is not: the card already renders this same silhouette for an author
- * with no avatar at all, so an author whose picture will not load lands in the
- * state the card has for exactly that, rather than on a broken-image glyph.
+ * The chain is one entry, the silhouette; why it is one and why it ends there
+ * is in the module comment. An author with no `avatarUrl` is already rendered
+ * with the silhouette, so there is nothing for it to recover to.
  */
 export function avatarFallbackAttrs(author: AuthorInfo): Record<string, string> {
   return author.avatarUrl ? { [FALLBACK_ATTR]: JSON.stringify([DEFAULT_AVATAR_SRC]) } : {};
@@ -75,11 +72,8 @@ export function avatarFallbackAttrs(author: AuthorInfo): Record<string, string> 
 /**
  * Advances a failed picture to the next URL in its chain.
  *
- * What the chain ends on is the caller's to decide. A media chain ends on the
- * page-rendered URL, so an exhausted picture is left broken on purpose: one that
- * is genuinely gone should still read as missing rather than being papered over
- * with something that looks like a successful load. An avatar chain ends on the
- * silhouette, which is the state the card already has for a missing picture.
+ * The chain carries its own ending, so this never decides what a picture shows
+ * once it runs out: it leaves the last URL mounted.
  */
 export function advanceImageFallback(img: HTMLImageElement): void {
   const raw = img.getAttribute(FALLBACK_ATTR);

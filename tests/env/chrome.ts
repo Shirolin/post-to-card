@@ -64,12 +64,16 @@ class ChromeRuntimeMock {
           }
           if (result instanceof Promise) {
             result.then(sendResponse).catch(err => {
-              sendResponse({ success: false, error: err.message });
+              // The stub worker does not claim its failures are worth another
+              // ask. The real proxy always answers `retryable` itself (see
+              // `FetchImageBase64ErrorResponse`); a harness that guessed `true`
+              // here would silently add retries to every mock-driven failure.
+              sendResponse({ success: false, error: err.message, retryable: false });
             });
             return;
           }
         } catch (err: any) {
-          sendResponse({ success: false, error: err.message });
+          sendResponse({ success: false, error: err.message, retryable: false });
           return;
         }
       }
@@ -83,7 +87,11 @@ class ChromeRuntimeMock {
       if (!responded) {
         setTimeout(() => {
           if (!responded) {
-            const errResponse = { success: false, error: 'No response from background listener' } as const;
+            const errResponse = {
+              success: false,
+              error: 'No response from background listener',
+              retryable: false,
+            } as const;
             if (callback) callback(errResponse);
             resolve(errResponse);
           }
