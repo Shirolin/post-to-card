@@ -1339,14 +1339,14 @@ export function getAspectMinHeight(ratio: AspectRatioOption, width: number = 640
  * It is composed from the tokens now, which makes it honest by construction
  * instead of by upkeep. Three signals, in the order they matter:
  *
- *   1. The accent — the one chromatic highlight the card allows itself, and the
- *      token the themes differ most in. Eight of the twelve surfaces are within
- *      1.20:1 of each other (measured; three are within 1.05:1), so surface tone
- *      alone cannot separate them and the accent has to carry the identity.
+ *   1. The sheet and its ink — the one pairing a reader recognises a card by.
+ *      Eight of the twelve surfaces are within 1.20:1 of each other (measured;
+ *      three are within 1.05:1), so surface tone alone cannot separate them;
+ *      one of the flat five is light-on-dark, and that is visible at a glance.
  *   2. The signature mark, drawn with the geometry `card.css` uses for real,
  *      scaled to the swatch. Seven of twelve materials have one; the five that
- *      do not are deliberately flat, and a flat band is the honest answer.
- *   3. A wash of the surface, so a dark sheet reads as dark at a glance.
+ *      do not are deliberately flat, and two ink rules are the honest answer.
+ *   3. The accent, as the card's own link ink rather than as a field.
  *
  * These are `background-image` layers rather than a pseudo-element because the
  * swatch sets its `background` inline, and `background-image` paints front to
@@ -1364,20 +1364,25 @@ export function themePreview(theme: ThemeId): string {
   const mark = signatureMark(t);
   layers.push(...mark);
 
-  // 2. What stands in for a mark when there is none: the sheet falling to the
-  //    accent. Measured, the five flat materials are separated by the accent
-  //    alone and by nothing else — their surfaces are within 1.20:1 of each
-  //    other and three are within 1.05:1 — but their accents differ sharply in
-  //    hue, saturation and lightness (Midnight's is S100 L74 against Liquid
-  //    Glass's S96 L32, and Material 3's is a green at H111). So the accent
-  //    carries the identity here, which is exactly what the card does.
+  // 2. What stands in for a mark when there is none: the card's own two inks on
+  //    its own sheet -- a headline, then a link.
   //
-  //    Only the materials *without* a signature get this: giving a signature
-  //    material a full gradient as well put two competing fields in 34px and
-  //    the mark stopped reading.
+  //    This used to be a diagonal wash from the sheet to the accent, and it was
+  //    the one place the picker lied: Minimal's chip read blue-on-blue, but the
+  //    card it stands for is warm paper with black text, and Midnight's read the
+  //    same blue gradient over a near-black sheet that prints white. Both flat
+  //    materials looked like each other and like neither.
+  //
+  //    The ink carries the identity the accent alone could not: the five flat
+  //    surfaces sit within 1.20:1 of each other (three within 1.05:1), but their
+  //    *text* inks are light-on-dark for one of them and dark-on-light for the
+  //    rest, which is the difference a thumbnail has to show. The accent stays,
+  //    as the card's own link ink rather than as a field.
   if (mark.length === 0) {
     layers.push(
-      `linear-gradient(135deg, ${t.surface} 0%, ${t.accent} 100%) 0 0 / 100% 100% no-repeat`
+      `linear-gradient(${t.text}, ${t.text}) 8% 9px / 46% 3px no-repeat`,
+      `linear-gradient(${t.accent}, ${t.accent}) 8% 17px / 30% 2px no-repeat`,
+      `linear-gradient(${t.surface}, ${t.surface}) center / 100% 100% no-repeat`
     );
   } else {
     // 3. A sheet under the mark, as a wash so the mark shows through it.
