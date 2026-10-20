@@ -14,7 +14,7 @@ import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
 import { isPicMediaLink, normalizeTweetWhitespace, restoreUnicodeEmojis } from '../../src/content/adapter/emojis.ts';
 import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
-import { imageFallbackAttrs, advanceImageFallback } from '../../src/content/ui/imageFallback.ts';
+import { imageFallbackAttrs, avatarFallbackAttrs, advanceImageFallback, DEFAULT_AVATAR_SRC } from '../../src/content/ui/imageFallback.ts';
 import {
   createTriggerButton,
   applyTriggerLocale,
@@ -36,7 +36,7 @@ import { PINNED_HTML } from '../fixtures/pinned.ts';
 import { withoutTestIds } from '../fixtures/strip-testids.ts';
 import { loadUserPreferences, saveUserPreferences, subscribePreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
 import { DEFAULT_CARD_CONFIG } from '../../src/content/ui/themes.ts';
-import type { TweetData, MediaItem, ThreadData } from '../../src/types/tweet.ts';
+import type { TweetData, MediaItem, ThreadData, AuthorInfo } from '../../src/types/tweet.ts';
 import type { CardConfig } from '../../src/types/card.ts';
 
 const { test, run } = createSuite();
@@ -145,6 +145,20 @@ test('Tier 2.7: a post with no avatar URL renders the inline placeholder, not a 
     withAvatar.includes('https://pbs.twimg.com/avatar.jpg'),
     'a real avatar was replaced by the placeholder'
   );
+
+  // The two states have to be wired, not just designed: the avatar <img> is the
+  // only place a failed load can be caught, so a real one carries the chain it
+  // walks on error, and one already showing the placeholder carries nothing --
+  // there is nothing for it to recover to.
+  const avatarTag = withAvatar
+    .slice(withAvatar.indexOf('class="author-avatar-img'))
+    .split('>')[0];
+  assert.ok(avatarTag.includes('data-fallback'), 'a real avatar must be able to recover');
+
+  const placeholderTag = html
+    .slice(html.indexOf('class="author-avatar-img'))
+    .split('>')[0];
+  assert.ok(!placeholderTag.includes('data-fallback'), 'the placeholder has nothing to fall back to');
 });
 
 // Tier 2.8 (a throwing `img.decode` caught by the test's own `.catch`) was
@@ -730,6 +744,41 @@ test('Tier 2.37e: a picture with no fallback is mounted without the attribute an
   img.setAttribute('src', item.url);
   advanceImageFallback(img);
   assert.equal(img.src, item.url, 'a picture with no chain is left untouched');
+});
+
+test('Tier 2.37g: a failed avatar recovers onto the card silhouette, not onto a broken image', () => {
+  // The card mounts the avatar at `_400x400`, an upgrade of whatever the page
+  // rendered. Unlike a photo, X derives every avatar size from the same source
+  // and they have only been observed resolving together, so there is no smaller
+  // copy to walk down to. The one step is the silhouette the card already shows
+  // for an author with no picture at all, which is what makes it a state rather
+  // than a placeholder papering over a missing image.
+  const author: AuthorInfo = {
+    name: 'Someone',
+    handle: '@someone',
+    avatarUrl: 'https://pbs.twimg.com/profile_images/1/x_400x400.jpg',
+  };
+
+  const attrs = avatarFallbackAttrs(author);
+  assert.deepEqual(JSON.parse(attrs['data-fallback'] || 'null'), [DEFAULT_AVATAR_SRC]);
+
+  const img = new DomImageElement();
+  img.setAttribute('src', author.avatarUrl);
+  for (const [name, value] of Object.entries(attrs)) img.setAttribute(name, value);
+
+  advanceImageFallback(img);
+  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'one error lands on the silhouette');
+  assert.equal(img.getAttribute('data-fallback'), '[]', 'and there is nothing left to try');
+  assert.doesNotThrow(() => advanceImageFallback(img), 'a second error must not loop');
+  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'the silhouette stays put');
+
+  // An author with no picture is already rendered with the silhouette, so there
+  // is nothing for it to recover to.
+  assert.deepEqual(
+    avatarFallbackAttrs({ name: 'Nobody', handle: '@nobody', avatarUrl: '' }),
+    {},
+    'no avatarUrl means no fallback to walk'
+  );
 });
 
 test('Tier 2.37f: a video poster never falls back onto the video file', () => {

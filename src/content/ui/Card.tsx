@@ -12,7 +12,12 @@ import {
   THEMES,
 } from './themes.ts';
 import { planMediaGrid, applyMediaGridPlan, recordShape } from './mediaGrid.ts';
-import { imageFallbackAttrs, advanceImageFallback } from './imageFallback.ts';
+import {
+  imageFallbackAttrs,
+  avatarFallbackAttrs,
+  advanceImageFallback,
+  DEFAULT_AVATAR_SRC,
+} from './imageFallback.ts';
 import { threadScope, tweetKey } from './threadScope.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages } from 'lucide-preact';
@@ -162,9 +167,12 @@ function renderRichTokens(
 }
 
 /**
- * Advances a failed picture to the next URL in its fallback chain, or leaves it
- * broken once the chain is exhausted so a genuinely gone picture is still
- * visible as missing rather than silently swapped for a placeholder.
+ * Advances a failed picture to the next URL in its chain.
+ *
+ * What the chain ends on is the caller's to decide: a media picture ends on the
+ * page-rendered URL and is then left broken, so one that is genuinely gone still
+ * reads as missing; an avatar ends on the card's silhouette, the same state the
+ * card already shows for an author with no avatar.
  */
 function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
   advanceImageFallback(event.currentTarget);
@@ -302,17 +310,16 @@ function renderMediaGrid(
   );
 }
 
-const defaultAvatar =
-  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2371767b"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
-
 function renderAuthorAvatar(author: AuthorInfo, isBlurred: boolean) {
   const blurClass = isBlurred ? 'is-blurred' : '';
   return (
     <div class={`author-avatar ${blurClass}`}>
       <img
-        src={author.avatarUrl || defaultAvatar}
+        src={author.avatarUrl || DEFAULT_AVATAR_SRC}
         alt={author.name}
         class={`author-avatar-img ${blurClass}`}
+        {...avatarFallbackAttrs(author)}
+        onError={handleImageError}
       />
     </div>
   );
@@ -475,10 +482,12 @@ function renderQuoteCard(
     <div class="quote-card" data-quote-depth={depth}>
       <div class="quote-author">
         <img
-          src={author.avatarUrl || defaultAvatar}
+          src={author.avatarUrl || DEFAULT_AVATAR_SRC}
           alt={author.name}
           class="quote-avatar"
           loading="eager"
+          {...avatarFallbackAttrs(author)}
+          onError={handleImageError}
         />
         <span class="quote-name">{author.name}</span>
         {author.verified && (
