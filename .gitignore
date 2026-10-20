@@ -16,10 +16,11 @@ build/
 # workflow in AGENTS.md and docs/agents/ instead.
 .claude/
 
-# Agent harness state (screenshots, panel state, issue tracker)
+# Agent harness state (screenshots, panel state, issue tracker, diagram artifacts)
 .openchamber/
 .playwright-mcp/
 .scratch/
+.archify/
 
 # Throwaway probes written while investigating something. They belong in
 # .scratch/; these catch the ones that land in the tree instead, so `git add -A`
