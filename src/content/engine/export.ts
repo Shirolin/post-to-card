@@ -8,6 +8,7 @@
  */
 
 import { domToBlob } from 'modern-screenshot';
+import type { ExtensionResponse } from '../../types/messages.ts';
 import { fitScaleToCanvas, type ScaleFit } from './scale.ts';
 
 export const FALLBACK_PLACEHOLDER_DATA_URL =
@@ -76,8 +77,41 @@ export type ImageFetchResult =
   | { ok: false; src: string };
 
 /**
+ * How many times one picture is asked for before it is given up on.
+ *
+ * The proxy is a message to the MV3 service worker, and that channel fails for
+ * reasons that have nothing to do with the picture: the worker is evicted while
+ * the fetches are still in flight, the extension is reloading, the port closes.
+ * Every picture on the card shares the one worker, so a single eviction takes
+ * the whole card grey at once -- which is what "5 张配图未能加载" on an otherwise
+ * successful export was. The first ask is also what starts the worker, so a
+ * second one usually finds it awake and answers.
+ */
+const IMAGE_FETCH_ATTEMPTS = 3;
+
+/**
+ * Waits before re-asking, growing with the attempt number.
+ *
+ * A worker that has just been torn down needs a moment before it is reachable
+ * again; an immediate retry lands in the same closed port. Kept in the
+ * hundreds of milliseconds because the user is watching this export finish.
+ */
+const IMAGE_FETCH_BACKOFF_MS = 200;
+
+/** Waits before re-asking the worker. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Requests the Background Service Worker to fetch and convert a remote image URL
  * into a Base64 Data URL, bypassing web-page CORS restrictions via MV3 host_permissions.
+ *
+ * A failure is re-asked only when a second ask could plausibly land differently:
+ * a message that reached no worker, or an answer the proxy itself marked
+ * retryable. An answer it did not mark -- a 404, a forbidden origin -- is final,
+ * because re-asking a picture that is not there adds a round trip to every
+ * genuinely missing one and delays the export the user is waiting on.
  */
 export async function resolveImageForExport(url: string): Promise<ImageFetchResult> {
   if (!url) {
@@ -98,20 +132,45 @@ export async function resolveImageForExport(url: string): Promise<ImageFetchResu
     return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
   }
 
-  try {
-    const response = await chrome.runtime.sendMessage({
-      type: 'FETCH_IMAGE_BASE64',
-      url,
-    });
+  for (let attempt = 1; ; attempt++) {
+    // A response the proxy sent is a verdict on the picture, and only the proxy
+    // saw enough to know whether the network might change its mind. Everything
+    // else -- a throw, or the `undefined` Chrome hands back when no listener
+    // answered -- is a lost message that reached no network at all.
+    let retryable = true;
+    let failure: unknown = 'no response';
 
-    if (response && response.success && typeof response.dataUrl === 'string') {
-      return { ok: true, src: response.dataUrl };
+    try {
+      const response: ExtensionResponse | undefined = await chrome.runtime.sendMessage({
+        type: 'FETCH_IMAGE_BASE64',
+        url,
+      });
+
+      if (response && response.success) {
+        return typeof response.dataUrl === 'string'
+          ? { ok: true, src: response.dataUrl }
+          : { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
+      }
+
+      if (response) {
+        retryable = response.retryable === true;
+        failure = response.error;
+      }
+    } catch (err) {
+      // A closed port or an unreachable worker arrives here.
+      failure = err;
     }
 
-    return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
-  } catch (err) {
-    console.warn('[Post-to-Card] Failed to fetch image via background proxy:', err);
-    return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
+    if (!retryable || attempt >= IMAGE_FETCH_ATTEMPTS) {
+      console.warn(
+        `[Post-to-Card] The background proxy could not deliver ${url} after ` +
+        `${attempt} ${attempt === 1 ? 'attempt' : 'attempts'}:`,
+        failure
+      );
+      return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
+    }
+
+    await delay(IMAGE_FETCH_BACKOFF_MS * attempt);
   }
 }
 

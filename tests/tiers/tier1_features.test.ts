@@ -3776,6 +3776,93 @@ test('F25.5: an image that is already a data URL is not sent through the proxy',
   });
 });
 
+test('F25.6: a message the worker never received is asked again; an answer it gave is final', async () => {
+  // The proxy is a message to the MV3 service worker, and that channel fails
+  // for reasons that have nothing to do with the picture: the worker is
+  // evicted mid-export and the port closes. Every picture shares the one
+  // worker, so one eviction used to turn the whole card grey -- the failure
+  // the user saw as "5 张配图未能加载" on an otherwise successful export. A
+  // rejection therefore has to be asked again.
+  const engine = await exportEngine();
+  await withContainerEnv(async () => {
+    const scope = globalThis as Record<string, unknown>;
+    const savedChrome = scope.chrome;
+    const url = 'https://pbs.twimg.com/media/dropped.jpg';
+
+    try {
+      let calls = 0;
+      const retrying = createChromeMock();
+      // A rejecting `sendMessage` is how Chrome reports an unreachable worker;
+      // answering `{ success: false }` instead would be the different case
+      // tested below.
+      retrying.runtime.sendMessage = async () => {
+        calls++;
+        if (calls === 1) {
+          throw new Error('Could not establish connection. Receiving end does not exist.');
+        }
+        return { success: true, dataUrl: 'data:image/jpeg;base64,RETRIED', contentType: 'image/jpeg' };
+      };
+      scope.chrome = retrying;
+
+      assert.equal(
+        await engine.fetchImageAsBase64(url, true),
+        'data:image/jpeg;base64,RETRIED',
+        'a dropped message must not cost the picture'
+      );
+      assert.equal(calls, 2, 'the second ask is what recovered it');
+
+      // Chrome's other shape for the same lost message: a worker that never
+      // registered does not reject, it answers `undefined`. Reading only the
+      // throw would leave this half grey.
+      let silentCalls = 0;
+      const silent = createChromeMock();
+      silent.runtime.sendMessage = async () => {
+        silentCalls++;
+        return undefined as any;
+      };
+      scope.chrome = silent;
+
+      assert.equal(await engine.fetchImageAsBase64(url, true), engine.FALLBACK_PLACEHOLDER_DATA_URL);
+      assert.equal(silentCalls, 3, 'a worker that never answers is asked the full number of times');
+
+      // The other half of the rule. A worker that answered has already been to
+      // the network and reported what it found; a 404 does not become a 200 on
+      // the next ask, so re-asking only adds a round trip to every genuinely
+      // missing picture and delays the export the user is waiting on.
+      let answered = 0;
+      const failing = createChromeMock();
+      failing.runtime.sendMessage = async () => {
+        answered++;
+        return { success: false, error: 'HTTP 404: Not Found' };
+      };
+      scope.chrome = failing;
+
+      assert.equal(await engine.fetchImageAsBase64(url, true), engine.FALLBACK_PLACEHOLDER_DATA_URL);
+      assert.equal(answered, 1, 'an answer is final; only a lost message is retried');
+
+      // And the middle case: an answer the proxy itself marked as the network
+      // having a bad moment. The proxy is the only layer that saw the status
+      // code, so it is the only one that can draw this line.
+      let flaky = 0;
+      const transient = createChromeMock();
+      transient.runtime.sendMessage = async () => {
+        flaky++;
+        return flaky === 1
+          ? { success: false, error: 'HTTP 503: Service Unavailable', retryable: true }
+          : { success: true, dataUrl: 'data:image/jpeg;base64,LATE', contentType: 'image/jpeg' };
+      };
+      scope.chrome = transient;
+
+      assert.equal(await engine.fetchImageAsBase64(url, true), 'data:image/jpeg;base64,LATE',
+        'a 503 is worth one more ask');
+      assert.equal(flaky, 2);
+    } finally {
+      if (savedChrome !== undefined) scope.chrome = savedChrome;
+      else delete scope.chrome;
+    }
+  });
+});
+
 // -------------------------------------------------------------
 // F26: Clipboard Copy with Fallback
 //

@@ -113,6 +113,9 @@ export async function handleFetchImageBase64(
       return {
         success: false,
         error: `HTTP ${response.status}: ${response.statusText || 'Fetch failed'}`,
+        // A 404 or a 403 is X answering about the picture itself; a 429 or a
+        // 5xx is the edge having a bad moment and is worth one more ask.
+        retryable: response.status === 429 || response.status >= 500,
       };
     }
 
@@ -158,13 +161,17 @@ export async function handleFetchImageBase64(
       return {
         success: false,
         error: `Network timeout: request exceeded ${timeoutMs}ms`,
+        retryable: true,
       };
     }
 
+    // DNS, TLS, a connection reset: the request never got an answer about the
+    // picture, so it is the other half of what a second ask can fix.
     const message = err instanceof Error ? err.message : String(err);
     return {
       success: false,
       error: message,
+      retryable: true,
     };
   } finally {
     clearTimeout(timeoutTimer);
