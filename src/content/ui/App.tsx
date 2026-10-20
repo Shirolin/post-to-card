@@ -187,9 +187,9 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * tweet set, an image settling into the grid -- so this effect does not need the
    * config in its dependencies.
    *
-   * Both axes are measured and both are quantised to whole pixels, because the
-   * height feeds the zoom and the zoom feeds the height. A sub-pixel difference
-   * is enough to make that loop oscillate: see the note on `naturalHeight`.
+   * Both axes are measured with the preview's zoom taken off, because the height
+   * feeds the zoom and the zoom feeds the height -- and zoom is not a clean
+   * post-scale, it changes where text breaks. See the note at the measurement.
    */
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -207,16 +207,34 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
 
       const card = cardRef.current;
       if (!card) return;
-      // The comparison tolerates one pixel rather than half of one. This
-      // measurement feeds `fit`, which is written back into the preview's
-      // `zoom`, so it is a feedback loop -- and `zoom` changes the layout's text
-      // metrics, which moves the card's height by a fraction of a pixel. At a
-      // zoom whose product lands near a pixel boundary (observed at 0.434615 on
-      // a 1300.19px card) `offsetHeight` reports 1300 on one frame and 1301 on
-      // the next, forever, and the whole card twitches. Ignoring a one-pixel
-      // delta breaks the loop; nothing a reader can see is one pixel tall.
+      // Measured with the preview's zoom taken off first. This number feeds
+      // `fit`, which is written straight back into that zoom, so measuring
+      // inside it makes the fit a function of itself. It is not only sub-pixel
+      // noise: `zoom` changes how text is rounded, so the same paragraph broke
+      // into three more lines at one zoom than at another -- 8127px against
+      // 8203px on a tall card, far past any pixel-sized tolerance, and the two
+      // zoom levels alternated forever. At 1 the card lays out exactly as the
+      // exporter's unzoomed clone does, which is also what the size readout is
+      // supposed to be quoting. The zoom is restored before the browser can
+      // paint, so nothing flickers.
+      //
+      // The zoom lives on `.preview-scale`, which is *not* the card's parent:
+      // the mat sits between them. Reading `parentElement` here silently wrote
+      // the zoom onto the mat, where it changed nothing, and the loop ran on --
+      // which is exactly how this looked fixed while a tall card still shook.
+      const scale = card.closest('.preview-scale') as HTMLElement | null;
+      // Nothing to remove if the scale has no inline zoom yet (the first
+      // measure can run before Preact's first paint writes it); the layout is
+      // already at 1 in that case.
+      const previousZoom = scale ? scale.style.zoom : '';
+      if (previousZoom) scale!.style.zoom = '1';
       const naturalHeight = card.offsetHeight;
       const naturalWidth = card.offsetWidth;
+      if (previousZoom) scale!.style.zoom = previousZoom;
+
+      // The tolerance is a guard against a real fractional difference between
+      // passes; with the zoom out of the measurement it is no longer what keeps
+      // the loop from running.
       if (naturalHeight > 0) {
         setCardHeight((prev) => (Math.abs(prev - naturalHeight) > 1 ? naturalHeight : prev));
       }
