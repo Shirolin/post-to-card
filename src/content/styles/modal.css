@@ -630,13 +630,19 @@
 }
 
 /* Canvas Background Swatches
-   One row of paint chips, equal width. Equal rather than intrinsic so the row
-   reads as one control -- seven differently-sized bands would look like seven
-   unrelated buttons. They are chips, not theme cards: 30px tall against the
-   theme grid's 34px swatch plus label, because the background is a single
-   choice and the theme grid is the panel's largest block. */
+   Paint chips in a fixed five-column grid, equal width. Equal rather than
+   intrinsic so the grid reads as one control -- differently-sized bands would
+   look like unrelated buttons. Five columns rather than one row: the panel is
+   340px, so fifteen chips in a single row would be ~16px wide each, narrower
+   than the chip's own 4px selection ring, and every gradient would be a sliver
+   too small to judge. At five they are ~53px and the three rows read as a
+   palette.
+   They are chips, not theme cards: 30px tall against the theme grid's 34px
+   swatch plus label, because the background is a single choice and the theme
+   grid is the panel's largest block. */
 .swatch-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
 }
 

@@ -108,22 +108,37 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   /**
    * The width the exported picture actually has. `CARD_WIDTH` is only the
    * first-frame stand-in: a selected canvas pads the mat out beyond the card,
-   * and every figure below -- the zoom ceiling, the fit scale, the size readout
-   * -- is about the picture the user gets, not about the sheet inside it.
+   * and the size readout is about the picture the user gets, not about the sheet
+   * inside it.
    */
   const exportWidth = cardWidth || CARD_WIDTH;
 
   /**
-   * The ceiling on the *fixed* levels: the export must never run past the mat
-   * sideways, and a user who picks 100% on a tall card accepts scrolling.
+   * The ceiling on the *fixed* levels, measured against the card.
+   *
+   * A level is a plain scale applied to the exported picture, so 100% is 1:1 by
+   * definition -- the ring included, with the card at the same 640px it has in
+   * the file. What this number decides is only whether that level is reachable
+   * at the current stage width.
+   *
+   * Measured against the picture, adding a background could push 100% out of
+   * reach, and the effect below would then snap the selection down a level:
+   * choosing a margin silently rescaled what the user was reading. Measured
+   * against the card, the ladder is the one the app had before canvases existed,
+   * and a reachable level renders at exactly the percentage it names.
+   *
+   * The price is that at a fixed level the ring can sit up to 96px x the level
+   * past the stage, to be panned to. `fit` remains the mode that frames the
+   * whole picture.
    */
-  const maxScale = availableWidth > 0 ? availableWidth / exportWidth : 1;
+  const maxScale = availableWidth > 0 ? availableWidth / CARD_WIDTH : 1;
 
   /**
-   * The scale `fit` resolves to: the whole card has to clear the mat in both
-   * axes, so this is the smaller of the two.
+   * The scale `fit` resolves to: the whole picture -- ring included -- has to
+   * clear the stage in both axes, so this is the smaller of the two.
    */
-  const fitScale = cardHeight > 0 ? Math.min(maxScale, availableHeight / cardHeight) : maxScale;
+  const stageScale = availableWidth > 0 ? availableWidth / exportWidth : 1;
+  const fitScale = cardHeight > 0 ? Math.min(stageScale, availableHeight / cardHeight) : stageScale;
 
   const zoom = isFixedLevel(level) ? Math.min(level, maxScale) : fitScale;
 
@@ -144,8 +159,8 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   const t = getTranslation(sanitizeLocale(config.locale));
 
   /**
-   * Measures what the stage can show: the mat's own box, and the card's height at
-   * scale 1.
+   * Measures what the stage can show: the stage's own box, and the exported
+   * element's size at scale 1.
    *
    * The width half is a hard ceiling -- the card is a fixed 640px so exports stay
    * pixel-exact, which is wider than a phone, and letting it overflow relied on
@@ -261,15 +276,15 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   /**
    * Returns the preview to the card's origin whenever its geometry changes.
    *
-   * A preserved scroll offset is only meaningful while the card keeps the same
-   * shape: after a zoom or a theme change the card can be smaller than the
-   * offset, leaving its left edge off-screen behind a scroll the user never
-   * asked for.
+   * A preserved scroll offset is only meaningful while the picture keeps the
+   * same geometry: after a zoom, a theme change or a canvas change the picture
+   * can be smaller than the offset, leaving its left edge off-screen behind a
+   * scroll the user never asked for.
    */
   useEffect(() => {
     const viewport = viewportRef.current;
     if (viewport) viewport.scrollLeft = 0;
-  }, [zoom, config.theme]);
+  }, [zoom, config.theme, config.canvasRatio, config.canvasBackground]);
 
   // Load saved preferences on mount, unless the caller supplied a state to review.
   useEffect(() => {

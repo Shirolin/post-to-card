@@ -56,6 +56,9 @@ function normalizeStoredConfig(saved: Record<string, any> | null | undefined): C
     mediaLayout: sanitizeMediaLayout(saved.mediaLayout),
     canvasRatio: sanitizeCanvasRatio(saved.canvasRatio),
     canvasBackground: sanitizeCanvasBackground(saved.canvasBackground),
+    // Default-off, so anything but a literal `true` is off. The spread above
+    // would take `"false"` -- a string from a hand-edited store -- as truthy.
+    canvasShadow: saved.canvasShadow === true,
     showActionBarButton: saved.showActionBarButton !== false,
     showPlayButton: saved.showPlayButton !== false,
     locale: sanitizeLocale(saved.locale),

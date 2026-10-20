@@ -1012,6 +1012,20 @@ export const CANVAS_RATIO_OPTIONS: CanvasRatioOption[] = ['auto', '1:1', '4:5', 
 export const MAT_PADDING = '48px';
 
 /**
+ * The drop shadow the card takes when "Card shadow" is on.
+ *
+ * Outer rather than inset, which the material tokens deliberately never are:
+ * those are kept inside the card's box because the export used to capture the
+ * card itself. On a mat that changed -- the mat is the exported element now, and
+ * it holds 48px of padding, so there is room for a shadow to fall into. Two
+ * layers: a tight one for the contact edge, a wide soft one for the lift. Black
+ * at these opacities works over both the pale gradients and the dark ones; a
+ * coloured shadow would have to be tuned per background.
+ */
+export const MAT_SHADOW =
+  '0 2px 6px rgba(0, 0, 0, 0.12), 0 16px 40px -8px rgba(0, 0, 0, 0.34)';
+
+/**
  * What the mat can be painted with.
  *
  * A table rather than a colour picker: every entry is a CSS literal, so the
@@ -1041,35 +1055,110 @@ export interface CanvasBackgroundDefinition {
 export const CANVAS_BACKGROUNDS: Record<CanvasBackgroundId, CanvasBackgroundDefinition> = {
   none: { kind: 'none', css: '', name: 'None' },
   theme: { kind: 'theme', css: '', name: 'Follow theme' },
-  // Two papers and an ink: the same three tones the materials are built from,
-  // so a solid choice reads as a material decision rather than a colour one.
+  // The two ends of the range the materials are built from, so a solid choice
+  // reads as a material decision rather than a colour one. They are the only
+  // extremes on purpose: a mid-grey solid would sit within 1.4:1 of half the
+  // twelve sheets, and "Follow theme" already ships a tuned one for each.
   paper: { kind: 'paint', css: '#faf9f5', name: 'Paper' },
-  stone: { kind: 'paint', css: '#deddd6', name: 'Stone' },
   ink: { kind: 'paint', css: '#141413', name: 'Ink' },
-  // Gradients run light-to-dark along the diagonal, which is the direction the
-  // preview's own mat shading runs; a card dropped on one reads as lit from the
-  // top-left the same way it does on a solid material.
-  linen: {
+  // The rest are mid-tone gradients, one per hue family, because that is what a
+  // wallpaper does that a solid cannot: it reads as a surface behind the card
+  // instead of a second sheet under it. Mid-tone is the constraint that makes
+  // them usable with all twelve materials -- each was picked so its *worst*
+  // contrast against any of the twelve sheets is still >= 1.6:1, which is what
+  // keeps a dark card from dissolving into a dark mat and a light one from
+  // glowing out of a light one. Light-to-dark along the diagonal matches the
+  // direction the preview's own mat shading runs, so a card dropped on one
+  // reads as lit from the top-left the way it does on a material.
+  lagoon: {
     kind: 'paint',
-    css: 'linear-gradient(135deg, #fdfcf9 0%, #e6e2d6 100%)',
-    name: 'Linen',
+    css: 'linear-gradient(135deg, #2c6f7e 0%, #24506f 100%)',
+    name: 'Lagoon',
   },
-  dusk: {
+  moss: {
     kind: 'paint',
-    css: 'linear-gradient(135deg, #3a3550 0%, #12111a 100%)',
-    name: 'Dusk',
+    css: 'linear-gradient(135deg, #5a7050 0%, #3d4f38 100%)',
+    name: 'Moss',
+  },
+  steel: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #79808d 0%, #3e4552 100%)',
+    name: 'Steel',
+  },
+  plum: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #6d4a80 0%, #4a3560 100%)',
+    name: 'Plum',
+  },
+  ember: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #a05a48 0%, #7a3a46 100%)',
+    name: 'Ember',
+  },
+  coral: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #d9836f 0%, #a44f5a 100%)',
+    name: 'Coral',
+  },
+  // The five above are quiet on purpose; these are the loud ones. They break
+  // the mid-tone rule the quiet set follows -- higher chroma, and ends that run
+  // from near-white to near-black -- because the point of a wallpaper is to be
+  // seen. The cost is edge contrast: measured against the twelve sheets, the
+  // worst stop here is 1.04:1 (Sunset's peach against Clay's pale blue), where
+  // the quiet set never falls below 1.6:1. That is a silhouette-only number:
+  // the mat is never a field for text, so no text fails on it, but a light card
+  // on Sunset has a softer edge than on Lagoon. They are here because that soft
+  // edge is the look -- the reference for this set is a desktop wallpaper with
+  // the sheet floating on it, not a paper stock.
+  sunset: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #ffd7c2 0%, #f7bfdc 50%, #c9b6f4 100%)',
+    name: 'Sunset',
+  },
+  citrus: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #ffd166 0%, #ff8a5b 50%, #ef476f 100%)',
+    name: 'Citrus',
+  },
+  neon: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #ff2e88 0%, #ff7a3d 100%)',
+    name: 'Neon',
+  },
+  flamingo: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #ff5f8f 0%, #c43de0 55%, #6a2fd1 100%)',
+    name: 'Flamingo',
+  },
+  aurora: {
+    kind: 'paint',
+    css: 'linear-gradient(135deg, #1fd3b0 0%, #2f7cf6 55%, #7b3ff2 100%)',
+    name: 'Aurora',
   },
 };
 
-/** Picker order: no background, then the theme's own, then the rest. */
+/**
+ * Picker order: no background, then the theme's own, then the two solids, then
+ * the quiet gradients in hue order, then the bold ones. The extremes come
+ * first so the left of the grid still reads as "no paint, then a sheet, then
+ * ink"; the bold set is last because it is the deliberate exception.
+ */
 export const CANVAS_BACKGROUND_ORDER: CanvasBackgroundId[] = [
   'none',
   'theme',
   'paper',
-  'stone',
   'ink',
-  'linen',
-  'dusk',
+  'moss',
+  'lagoon',
+  'steel',
+  'plum',
+  'ember',
+  'coral',
+  'sunset',
+  'citrus',
+  'neon',
+  'flamingo',
+  'aurora',
 ];
 
 /**
@@ -1131,6 +1220,7 @@ export const DEFAULT_CARD_CONFIG: CardConfig = {
   // repaint every existing user's PNG the moment they upgrade.
   canvasRatio: 'auto',
   canvasBackground: 'none',
+  canvasShadow: false,
 };
 
 export function sanitizePadding(val: string): PaddingOption {

@@ -5,6 +5,7 @@ import type { CardConfig, ImageFitOption, AspectRatioOption, MediaLayoutOption, 
 import { CardQrCode } from './qrcode.ts';
 import {
   MAT_PADDING,
+  MAT_SHADOW,
   resolveCanvasBackground,
   resolveRadius,
   getAspectMinHeight,
@@ -753,6 +754,15 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
   const matActive = canvasBackground !== 'none' || canvasRatio !== 'auto';
   const matBackground = resolveCanvasBackground(canvasBackground, config.theme);
 
+  // The outer shadow is only added on a mat, and `none` has to be dropped
+  // before joining: `box-shadow: none, 0 2px 6px ...` is an invalid value, and
+  // the browser throws the whole declaration away -- including the theme's own
+  // shadow, which several materials do set.
+  const cardShadow =
+    matActive && config.canvasShadow
+      ? [tokens.shadow === 'none' ? '' : tokens.shadow, MAT_SHADOW].filter(Boolean).join(', ')
+      : tokens.shadow;
+
   return (
     <div
       id="post-to-card-export-target"
@@ -784,7 +794,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
         style={{
           padding: config.padding,
           borderRadius: radius.card,
-          boxShadow: tokens.shadow,
+          boxShadow: cardShadow,
           // Every theme colour, the type pair, the signature geometry and the
           // rhythm come from the token table and are injected here. card.css only
           // consumes them, so there is one place to edit a theme and no second

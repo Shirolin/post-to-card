@@ -799,6 +799,19 @@ export function Controls({
               {config.canvasRatio !== 'auto' && (config.canvasBackground ?? 'none') === 'none' && (
                 <span class="control-hint">{t.canvasTransparentHint}</span>
               )}
+              {/* Offered only once there is a canvas. With neither option on the
+                  mat is the card's own box, so an outer shadow would be clipped
+                  by the export -- a switch that visibly does nothing is worse
+                  than one that is not there. */}
+              {(config.canvasRatio !== 'auto' || (config.canvasBackground ?? 'none') !== 'none') && (
+                <div class="toggles-list">
+                  <Toggle
+                    label={t.canvasShadow}
+                    checked={config.canvasShadow === true}
+                    onToggle={() => updateConfig({ canvasShadow: config.canvasShadow !== true })}
+                  />
+                </div>
+              )}
             </div>
 
             <div class="control-section">

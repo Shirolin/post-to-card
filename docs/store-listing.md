@@ -105,7 +105,7 @@ npx vite --config dev/vite.harness.config.ts
 建议拍四张，覆盖用户最先问的四个问题：
 
 1. `?theme=gallery` — 默认长相（这是绝大多数人看到的第一个界面）
-2. `?theme=riso&bg=dusk&canvas=4:5` — 输出画布开着的样子
+2. `?theme=riso&bg=lagoon&canvas=4:5` — 输出画布开着的样子
 3. `?theme=terminal` 配一条长串 — 串联能力
 4. 弹窗面板本身 — 控件密度
 

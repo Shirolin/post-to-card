@@ -370,9 +370,9 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
     assert.equal(restored.canvasRatio, DEFAULT_CARD_CONFIG.canvasRatio);
     assert.equal(restored.canvasBackground, DEFAULT_CARD_CONFIG.canvasBackground);
 
-    await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, canvasRatio: '4:5', canvasBackground: 'dusk' });
+    await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, canvasRatio: '4:5', canvasBackground: 'plum' });
     assert.equal((await loadUserPreferences()).canvasRatio, '4:5');
-    assert.equal((await loadUserPreferences()).canvasBackground, 'dusk');
+    assert.equal((await loadUserPreferences()).canvasBackground, 'plum');
 
     // The locale is the one field whose default is not a constant: it follows
     // the machine's language, so a test that saved a fixed value could agree

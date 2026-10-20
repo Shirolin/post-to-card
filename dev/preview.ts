@@ -481,11 +481,13 @@ if (params.get('padding')) harnessConfig.padding = params.get('padding') as type
 if (params.get('radius')) harnessConfig.borderRadius = sanitizeRadius(params.get('radius')!);
 if (params.get('fit')) harnessConfig.imageFit = params.get('fit') as typeof harnessConfig.imageFit;
 if (params.get('layout')) harnessConfig.mediaLayout = params.get('layout') as typeof harnessConfig.mediaLayout;
-// ?canvas=1:1 / ?bg=paper — the mat, for eyeballing one shape or one paint
-// without walking the panel. Both go through the real sanitizers so a typo
-// lands on the default rather than rendering a mat no user could reach.
+// ?canvas=1:1 / ?bg=paper / ?shadow=1 — the mat, for eyeballing one shape, one
+// paint or the lift without walking the panel. The first two go through the
+// real sanitizers so a typo lands on the default rather than rendering a mat no
+// user could reach.
 if (params.get('canvas')) harnessConfig.canvasRatio = sanitizeCanvasRatio(params.get('canvas')!);
 if (params.get('bg')) harnessConfig.canvasBackground = sanitizeCanvasBackground(params.get('bg')!);
+if (params.get('shadow') === '1') harnessConfig.canvasShadow = true;
 if (params.get('locale')) harnessConfig.locale = params.get('locale') as typeof harnessConfig.locale;
 // ?no=qr,stats,time,wm,watermark turns the corresponding card footer pieces off.
 const offParts = new Set((params.get('no') || '').split(',').filter(Boolean));

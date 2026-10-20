@@ -4603,7 +4603,7 @@ test('F36.5: Follow-theme resolves to the material it is sitting in, not a copy 
   }
 
   assert.equal(resolveCanvasBackground('none', 'minimal'), '', 'None paints nothing at all');
-  assert.match(resolveCanvasBackground('dusk', 'minimal'), /^linear-gradient\(/, 'and a gradient is a gradient');
+  assert.match(resolveCanvasBackground('lagoon', 'minimal'), /^linear-gradient\(/, 'and a gradient is a gradient');
 });
 
 test('F36.6: every canvas id in the picker is a real entry, and unknown ids degrade to the defaults', () => {
@@ -4623,11 +4623,17 @@ test('F36.6: every canvas id in the picker is a real entry, and unknown ids degr
   assert.equal(sanitizeCanvasBackground('plaid'), DEFAULT_CARD_CONFIG.canvasBackground);
   assert.equal(sanitizeCanvasBackground(undefined), DEFAULT_CARD_CONFIG.canvasBackground);
   assert.equal(sanitizeCanvasRatio('4:5'), '4:5', 'and a real choice survives');
-  assert.equal(sanitizeCanvasBackground('dusk'), 'dusk');
+  assert.equal(sanitizeCanvasBackground('lagoon'), 'lagoon');
+  // Retired ids have to degrade the same way an unknown one does: `stone`,
+  // `linen` and `dusk` were real choices once, so they are sitting in saved
+  // preferences right now.
+  for (const retired of ['stone', 'linen', 'dusk']) {
+    assert.equal(sanitizeCanvasBackground(retired), DEFAULT_CARD_CONFIG.canvasBackground, retired);
+  }
 });
 
 test('F36.7: the chosen paint reaches the exported element itself', async () => {
-  const tag = matTag(await renderCard({ data: THREAD, config: { canvasBackground: 'dusk' } }));
+  const tag = matTag(await renderCard({ data: THREAD, config: { canvasBackground: 'lagoon' } }));
 
   // Inline, not from a class: the exporter clones this element and rasterizes
   // it, and a paint that only existed in the sheet would depend on the clone
@@ -4706,6 +4712,49 @@ test('F36.11: every background the picker offers has a label in both languages',
       assert.ok((label as string).length > 0, `${locale}'s canvasBg_${id} is empty`);
     }
   }
+});
+
+test('F36.12: the card shadow is opt-in, needs a canvas, and never eats the theme shadow', async () => {
+  const shadowOf = async (config: Partial<CardConfig>) =>
+    cardRootStyle(await renderCard({ data: THREAD, config }));
+
+  assert.ok(
+    !(await shadowOf({ canvasBackground: 'lagoon' })).includes('16px 40px'),
+    'a canvas on its own does not lift the card'
+  );
+  assert.ok(
+    !(await shadowOf({ canvasShadow: true })).includes('16px 40px'),
+    'with no canvas the shadow would be clipped, so it must not be drawn'
+  );
+
+  const on = await shadowOf({ canvasBackground: 'lagoon', canvasShadow: true });
+  assert.match(on, /0 16px 40px -8px rgba\(0, 0, 0, 0\.34\)/, 'the lift reaches the exported card');
+
+  // Joining `none` into the list would make the whole declaration invalid and
+  // drop the material's own shadow with it, so the two have to coexist.
+  const glass = await shadowOf({ theme: 'glass', canvasBackground: 'lagoon', canvasShadow: true });
+  assert.match(glass, /0 8px 32px/, "the material's shadow is still there");
+  assert.match(glass, /0 16px 40px -8px/, 'and the mat shadow is added beside it');
+});
+
+test('F36.13: the shadow switch is offered only when there is a canvas to fall on', async () => {
+  const render = (config: Partial<CardConfig>) =>
+    renderComponent('/src/content/ui/Controls.tsx', 'Controls', {
+      config: { ...CARD_CONFIG, ...config },
+      onChange: () => {},
+      onExportCopy: () => {},
+      onExportDownload: () => {},
+    });
+
+  assert.ok(
+    !(await render({ canvasBackground: 'none', canvasShadow: true })).includes('Card shadow'),
+    'a switch that visibly does nothing is worse than no switch'
+  );
+  assert.match(
+    await render({ canvasBackground: 'lagoon' }),
+    /Card shadow/,
+    'and it is offered as soon as a canvas is on'
+  );
 });
 
 // -------------------------------------------------------------

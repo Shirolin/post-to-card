@@ -68,9 +68,17 @@ export type CanvasBackgroundId =
   | 'theme'
   | 'paper'
   | 'ink'
-  | 'stone'
-  | 'dusk'
-  | 'linen';
+  | 'lagoon'
+  | 'moss'
+  | 'steel'
+  | 'plum'
+  | 'ember'
+  | 'coral'
+  | 'sunset'
+  | 'citrus'
+  | 'neon'
+  | 'flamingo'
+  | 'aurora';
 
 export type Locale = 'zh-CN' | 'en-US';
 
@@ -97,4 +105,10 @@ export interface CardConfig {
   canvasRatio?: CanvasRatioOption;
   /** What the mat is painted with. `'none'` exports the card alone. */
   canvasBackground?: CanvasBackgroundId;
+  /**
+   * Lifts the card off the mat with a drop shadow. Only has anywhere to fall
+   * when a canvas is on -- with neither option selected the mat is the card's
+   * own box, so the shadow would be clipped by the export's border box.
+   */
+  canvasShadow?: boolean;
 }

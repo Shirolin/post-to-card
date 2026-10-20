@@ -28,13 +28,22 @@ export interface Translations {
   canvasRatio: string;
   canvasRatioAuto: string;
   canvasBackground: string;
+  canvasShadow: string;
   canvasBg_none: string;
   canvasBg_theme: string;
   canvasBg_paper: string;
-  canvasBg_stone: string;
   canvasBg_ink: string;
-  canvasBg_linen: string;
-  canvasBg_dusk: string;
+  canvasBg_moss: string;
+  canvasBg_lagoon: string;
+  canvasBg_steel: string;
+  canvasBg_plum: string;
+  canvasBg_ember: string;
+  canvasBg_coral: string;
+  canvasBg_sunset: string;
+  canvasBg_citrus: string;
+  canvasBg_neon: string;
+  canvasBg_flamingo: string;
+  canvasBg_aurora: string;
   /**
    * Shown when a canvas shape is chosen without a background: the ring is
    * transparent, so the ring exists but the picture has no field under it.
@@ -164,13 +173,22 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     canvasRatio: '输出画幅',
     canvasRatioAuto: '跟随卡片',
     canvasBackground: '画布背景',
+    canvasShadow: '卡片投影',
     canvasBg_none: '无背景',
     canvasBg_theme: '跟随主题',
     canvasBg_paper: '纸白',
-    canvasBg_stone: '石灰',
     canvasBg_ink: '墨黑',
-    canvasBg_linen: '亚麻',
-    canvasBg_dusk: '暮色',
+    canvasBg_moss: '苔绿',
+    canvasBg_lagoon: '潟湖',
+    canvasBg_steel: '青灰',
+    canvasBg_plum: '梅紫',
+    canvasBg_ember: '余烬',
+    canvasBg_coral: '珊瑚',
+    canvasBg_sunset: '落日',
+    canvasBg_citrus: '柑橘',
+    canvasBg_neon: '霓虹',
+    canvasBg_flamingo: '火烈鸟',
+    canvasBg_aurora: '极光',
     canvasTransparentHint: '画幅留白是透明的；配一个背景，导出的才是一张有底的图',
     exportSize: '导出尺寸 {w} × {h} px',
     exportSizeReduced: '导出尺寸 {w} × {h} px（已按画布上限降至 {scale}×）',
@@ -283,13 +301,22 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     canvasRatio: 'Canvas Shape',
     canvasRatioAuto: 'Card',
     canvasBackground: 'Background',
+    canvasShadow: 'Card shadow',
     canvasBg_none: 'None',
     canvasBg_theme: 'Theme',
     canvasBg_paper: 'Paper',
-    canvasBg_stone: 'Stone',
     canvasBg_ink: 'Ink',
-    canvasBg_linen: 'Linen',
-    canvasBg_dusk: 'Dusk',
+    canvasBg_moss: 'Moss',
+    canvasBg_lagoon: 'Lagoon',
+    canvasBg_steel: 'Steel',
+    canvasBg_plum: 'Plum',
+    canvasBg_ember: 'Ember',
+    canvasBg_coral: 'Coral',
+    canvasBg_sunset: 'Sunset',
+    canvasBg_citrus: 'Citrus',
+    canvasBg_neon: 'Neon',
+    canvasBg_flamingo: 'Flamingo',
+    canvasBg_aurora: 'Aurora',
     canvasTransparentHint: 'The canvas around the card is transparent; pick a background to export a finished picture',
     exportSize: 'Exports at {w} × {h} px',
     exportSizeReduced: 'Exports at {w} × {h} px (reduced to {scale}× by the canvas limit)',
