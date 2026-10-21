@@ -556,7 +556,14 @@ function parseBody(
 }
 
 function parseTweet(entry: Json, fallbackId: string): TweetData | null {
-  const itemContent = isObject(entry.content) ? entry.content.itemContent : undefined;
+  // A standalone entry carries its content at `content.itemContent`; an entry
+  // inside a `TimelineTimelineModule` sits one level deeper, at
+  // `item.itemContent`. Reading only the first shape drops every module post.
+  const content = isObject(entry.content) ? entry.content : undefined;
+  const nested = isObject(entry.item) ? entry.item : undefined;
+  const itemContent =
+    (content && isObject(content.itemContent) ? content.itemContent : undefined) ??
+    (nested && isObject(nested.itemContent) ? nested.itemContent : undefined);
   if (!isObject(itemContent)) return null;
 
   const tweetResults = itemContent.tweet_results;
@@ -640,10 +647,21 @@ function collectTweets(instructions: unknown): TweetData[] {
       const sortIndex = typeof entry.sortIndex === 'string' ? Number(entry.sortIndex) : 0;
 
       if (entryType === 'TimelineTimelineModule' || entryId.startsWith('conversationthread-')) {
-        const items = isObject(entry.content) && Array.isArray(entry.content.items) ? entry.content.items : [];
-        items.forEach((item, index) => {
-          if (isObject(item)) push(item, Number.isFinite(sortIndex) ? sortIndex - index : 0);
-        });
+        // X puts a module's posts on the entry itself (`entry.items`); only
+        // older payloads nest the array under `entry.content.items`. Reading
+        // the nested key alone finds nothing in a current response, which
+        // silently reduced a conversation to its root post.
+        const nestedModule = isObject(entry.content) && Array.isArray(entry.content.items) ? entry.content.items : [];
+        const items = Array.isArray(entry.items) ? entry.items : nestedModule;
+        if (items.length === 0) {
+          // A `conversationthread-` entry may carry its post directly instead
+          // of a module; treating that as an empty module drops the post.
+          push(entry, Number.isFinite(sortIndex) ? sortIndex : 0);
+        } else {
+          items.forEach((item, index) => {
+            if (isObject(item)) push(item, Number.isFinite(sortIndex) ? sortIndex - index : 0);
+          });
+        }
       } else {
         push(entry, Number.isFinite(sortIndex) ? sortIndex : 0);
       }

@@ -63,40 +63,42 @@ export const TWEET_DETAIL_THREAD_JSON = JSON.stringify({
               }
             },
             {
-              entryType: 'TimelineTimelineItem',
+              // A conversation module: X puts the posts on the entry itself
+              // and nests each one an extra level down under `item`.
+              entryType: 'TimelineTimelineModule',
               entryId: 'conversationthread-1000',
               sortIndex: '2',
-              content: {
-                items: [
-                  {
-                    entryType: 'TimelineTimelineItem',
-                    entryId: 'tweet-1002',
-                    content: {
-                      itemContent: {
-                        tweet_results: {
-                          result: {
-                            __typename: 'Tweet',
-                            rest_id: '1002',
-                            core: {
-                              user_results: {
-                                result: {
-                                  legacy: { screen_name: 'ada_builds', name: 'Ada Nakamura' },
-                                  profile_image_url_https: 'https://pbs.twimg.com/profile_images/1/ada.jpg'
-                                }
+              items: [
+                {
+                  entryId: 'tweet-1002',
+                  item: {
+                    clientEventInfo: { component: 'ConversationThread', element: 'Tweet' },
+                    itemContent: {
+                      itemType: 'TimelineTweet',
+                      tweetDisplayType: 'Tweet',
+                      tweet_results: {
+                        result: {
+                          __typename: 'Tweet',
+                          rest_id: '1002',
+                          core: {
+                            user_results: {
+                              result: {
+                                legacy: { screen_name: 'ada_builds', name: 'Ada Nakamura' },
+                                profile_image_url_https: 'https://pbs.twimg.com/profile_images/1/ada.jpg'
                               }
-                            },
-                            legacy: {
-                              full_text: 'Second post',
-                              created_at: 'Mon Dec 22 19:30:00 +0000 2025',
-                              conversation_id_str: '1000'
                             }
+                          },
+                          legacy: {
+                            full_text: 'Second post',
+                            created_at: 'Mon Dec 22 19:30:00 +0000 2025',
+                            conversation_id_str: '1000'
                           }
                         }
                       }
                     }
                   }
-                ]
-              }
+                }
+              ]
             },
             {
               entryType: 'TimelineTimelineItem',

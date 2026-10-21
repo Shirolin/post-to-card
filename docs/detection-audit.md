@@ -138,6 +138,21 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 - `div[data-testid="placementTracking"]` —— 广告，用 `closest()`
 - `div[data-testid="tweet-thread-indicator"]` —— 语义未文档化，仅作弱信号
 - `a[href*="/status/"]`、`time[datetime]` —— 结构语义，不会变
+- **详情页交互条里没有浏览量** —— **2026-10-21 实测**：`/<user>/status/<id>` 的
+  `article[data-testid="tweet"]` 内 `div[role="group"]` 只有 1 个，其 testid 集合是
+  `reply / retweet / like / bookmark`，**既无 `viewCount` 也无 `a[href*="/analytics"]`**。
+  所以 `extractTweetStats` 那两条 views 判据在详情页取不到值，浏览数只能来自载荷
+  （`views.count`）。同处的 `retweet` 数字是**转帖＋引用之和**（实测页面「3 次转帖」对应
+  `retweet_count` 1 + `quote_count` 2），不能直接与 `stats.reposts` 对比。
+  见 `docs/observed-dom-2026-10-21-authenticated.md` §2
+- **GraphQL 模块项的形状** —— **2026-10-21 实测**：`TweetDetail` 的非根帖全在
+  `conversationthread-*` 模块里，`entry.items[i] = { entryId, item: { itemContent } }`
+  ——`items` 直接在 entry 上，**没有 `content` 这一层**，`itemContent` 在**内层 `item`** 上；
+  且这批 entry **没有 `sortIndex`**。6 份真实载荷共 102 个模块：`entry.items` 102/102、
+  `entry.content.items` 0/102。
+  同日按此修复：`collectTweets` 读 `entry.items`、`parseTweet` 接受 `item.itemContent`；
+  夹具 `tests/fixtures/graphql.ts` 原先是 wrapper 上有 `content` 的形状（故 tier 全绿），已改成真实形状。
+  见 `.scratch/live-verification-relay/issues/01-graphql-module-items-dropped.md`
 - **snowflake ID 大小关系** —— X 官方文档背书的时序。但官方措辞是 "roughly time-ordered"，
   故**只能用作否决条件**（排除不可能的前一条），不能用作肯定条件
 
