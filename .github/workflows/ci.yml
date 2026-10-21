@@ -70,10 +70,20 @@ jobs:
       # read that markup through a DOM shim with no layout engine, so a rule
       # that only holds once the browser has laid the page out is not covered
       # by any of them. It never touches x.com, so headless is enough.
+      #
+      # The binary's path is taken from the action's own output rather than
+      # guessed: on Linux it lands in the tool cache under a versioned
+      # directory, and the name is not always `chrome`. `install-dependencies`
+      # is on because a bare runner has no libnss3, and Chrome will not start
+      # without it.
       - name: Chrome (for the extractor check)
-        uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
         with:
           chrome-version: stable
+          install-dependencies: true
 
       - name: Extractor in a real browser (needs the fresh bundle)
         run: pnpm run verify:extractor
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
