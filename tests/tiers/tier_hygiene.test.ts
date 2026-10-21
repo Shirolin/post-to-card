@@ -9,16 +9,18 @@
  *
  *   hygiene.1  a `const current_level` slipped into App.tsx next to camelCase
  *              throughout, and was caught by eye rather than by a tool
- *   hygiene.2  `STORAGE_KEY` is hand-written in two files that cannot import each
- *              other; a rename in one would desync them silently
- *   hygiene.3  the popup's locale list is hand-duplicated for the same reason, and
- *              a third locale added to i18n.ts would leave the popup behind
+ *   hygiene.2  `STORAGE_KEY` was hand-written in two files that could not import
+ *              each other; a rename in one would desync them silently
+ *   hygiene.3  the popup's locale list was hand-duplicated for the same reason,
+ *              and a third locale added to i18n.ts would leave the popup behind
+ *   hygiene.4  the popup's markup shipped the Chinese strings inline while the
+ *              script rewrote them from a table, and nothing kept the two in
+ *              step — so the user read a sentence and watched it change
  *
- * This is deliberately not a linter. It covers the two shapes that actually recurred
+ * This is deliberately not a linter. It covers the shapes that actually recurred
  * and stays dependency-free, so it runs in the existing `npm test` gate. Note what
  * is *already* covered and therefore absent here: `Translations` is an interface, so
- * tsc already rejects a mistyped i18n key (verified by mutation), and `npm run
- * typecheck` parses `public/`, which tsconfig's `include` does not cover.
+ * tsc already rejects a mistyped i18n key (verified by mutation).
  */
 
 import assert from 'node:assert/strict';
@@ -27,6 +29,7 @@ import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSuite } from '../env/harness.ts';
 import { TRANSLATIONS } from '../../src/content/i18n.ts';
+import { POPUP_COPY } from '../../src/content/popupCopy.ts';
 
 const { test, run } = createSuite();
 
@@ -84,54 +87,110 @@ test('hygiene.1: declared identifiers use camelCase, not lower snake_case', () =
   );
 });
 
-// 2. The storage key is declared in two files that cannot import each other:
-// `public/popup.js` is plain script loaded by a <script> tag, `src/content/prefs.ts`
-// is bundled. Both spell it out. They agree today; nothing kept them agreeing.
-test('hygiene.2: STORAGE_KEY is spelled identically in the popup and in prefs.ts', () => {
-  const popup = readFileSync(join(REPO_ROOT, 'public', 'popup.js'), 'utf8');
+// 2. The popup is a build entry now, so it imports the storage key rather than
+// spelling it out. A second spelling would be a silent desync again, so the
+// rule became: there is only one.
+test('hygiene.2: the storage key is declared once, and the popup imports it', () => {
+  const popup = readFileSync(join(REPO_ROOT, 'src', 'content', 'popup.ts'), 'utf8');
   const prefs = readFileSync(join(REPO_ROOT, 'src', 'content', 'prefs.ts'), 'utf8');
 
   const keyOf = (src: string) => (src.match(/STORAGE_KEY\s*=\s*'([^']+)'/) || [])[1];
-  const fromPopup = keyOf(popup);
   const fromPrefs = keyOf(prefs);
 
-  assert.ok(fromPopup, 'could not find a STORAGE_KEY literal in public/popup.js');
   assert.ok(fromPrefs, 'could not find a STORAGE_KEY literal in src/content/prefs.ts');
   assert.equal(
-    fromPopup,
-    fromPrefs,
-    `storage key drifted: popup.js says "${fromPopup}", prefs.ts says "${fromPrefs}"`
+    keyOf(popup),
+    undefined,
+    'the popup must not spell the key out; it imports it from prefs.ts'
+  );
+  assert.ok(
+    popup.includes("import { STORAGE_KEY } from './prefs.ts'"),
+    'the popup must import the key from the module that owns it'
   );
 });
 
-// 3. Same duplication, one level up: the supported locales. popup.js carries its own
-// copy keyed by locale id, and its own comment warns that a third locale means
-// editing both files. This enforces that warning instead of trusting it.
+// 3. Same duplication, one level up: the supported locales. The popup's copy
+// lives in `src/content/popupCopy.ts` now and is keyed by the same locale type,
+// so the two cannot diverge — but the rule is still worth stating, because a
+// locale added to one and not the other would leave the popup showing the
+// browser's default for a preference the modal had already written.
 test('hygiene.3: the popup supports exactly the locales i18n.ts declares', () => {
-  const popup = readFileSync(join(REPO_ROOT, 'public', 'popup.js'), 'utf8');
+  const popupCopy = readFileSync(join(REPO_ROOT, 'src', 'content', 'popupCopy.ts'), 'utf8');
 
-  // Every locale in the bundle must have a hand-written copy block in the popup.
+  // Every locale in the bundle must have a copy block in the popup.
   const missing: string[] = [];
   for (const locale of Object.keys(TRANSLATIONS)) {
-    if (!popup.includes(`'${locale}':`)) missing.push(locale);
+    if (!popupCopy.includes(`'${locale}':`)) missing.push(locale);
   }
-  assert.deepEqual(missing, [], `popup.js has no copy for: ${missing.join(', ')}`);
+  assert.deepEqual(missing, [], `popupCopy.ts has no copy for: ${missing.join(', ')}`);
 
   // And the popup must not carry a locale the bundle dropped, or it ships dead copy.
-  const popupLocales = [...popup.matchAll(/^\s{2}'([a-z]{2}-[A-Z]{2})':\s*\{/gm)].map((m) => m[1]);
+  const popupLocales = [...popupCopy.matchAll(/^\s{2}'([a-z]{2}-[A-Z]{2})':\s*\{/gm)].map((m) => m[1]);
   assert.ok(
     popupLocales.length > 0,
-    'found no locale blocks in popup.js -- if COPY was reformatted, update this test rather than delete it'
+    'found no locale blocks in popupCopy.ts -- if POPUP_COPY was reformatted, update this test rather than delete it'
   );
   const declared = Object.keys(TRANSLATIONS).sort();
   assert.deepEqual(
     popupLocales.slice().sort(),
     declared,
-    'popup.js locale blocks and i18n.ts locales have diverged'
+    'popupCopy.ts locale blocks and i18n.ts locales have diverged'
   );
 });
 
-// 4. Dead imports in the files tsc cannot see.
+// 4. The popup's markup ships the Chinese strings inline, because the popup
+// paints before its script runs. The script then rewrites them from the copy
+// table — so the two spellings have to agree, or the user reads one sentence
+// and then watches it change.
+//
+// Nothing kept them agreeing: the markup is HTML, the copy is TypeScript, and
+// a test that read the source of both would have pinned the prose rather than
+// the words. So the words themselves are compared.
+test('hygiene.4: the popup’s inline Chinese matches the copy the script writes', () => {
+  const html = readFileSync(join(REPO_ROOT, 'public', 'popup.html'), 'utf8');
+  const copy = POPUP_COPY['zh-CN'];
+
+  // The markup's own text for a node, tags and whitespace removed.
+  //
+  // The element's content is read by tag balance rather than by the next
+  // `</`: the tip carries `<kbd>` elements inside it, and a naive match would
+  // stop at the first of them and read half a sentence.
+  const markupText = (id: string): string | null => {
+    // The whole opening tag, so the element's name is known: the tip carries
+    // `<kbd>` elements inside it, and a naive match would stop at the first of
+    // them and read half a sentence.
+    const open = html.match(new RegExp(`<([a-zA-Z]+)[^>]*id="${id}"[^>]*>`));
+    if (!open || open.index === undefined) return null;
+    const start = open.index + open[0].length;
+    const end = html.indexOf(`</${open[1]}>`, start);
+    if (end < 0) return null;
+    return html.slice(start, end).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  };
+
+  // The plain words of a copy line: the markup cannot carry the markup inside
+  // the tip (the <kbd> elements are the point of it), so the tags are dropped
+  // from both sides before they are compared.
+  const plain = (text: string): string => text.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+  const pairs: Array<[string, string]> = [
+    ['toggle-title', copy.toggleTitle],
+    ['toggle-desc', copy.toggleDesc],
+    ['tip-text', copy.tip],
+    ['btn-text', copy.trigger],
+  ];
+
+  for (const [id, expected] of pairs) {
+    const actual = markupText(id);
+    assert.ok(actual !== null, `popup.html has no node with id="${id}"`);
+    assert.equal(
+      plain(actual),
+      plain(expected),
+      `popup.html's "${id}" and POPUP_COPY's Chinese disagree: "${plain(actual)}" against "${plain(expected)}"`
+    );
+  }
+});
+
+// 5. Dead imports in the files tsc cannot see.
 //
 // `tests/tiers/**` and `tests/tier5_adversarial.ts` are in no tsconfig (see
 // tsconfig.test-support.json for why: the shim's `DomElement` is not an
@@ -187,17 +246,18 @@ test('hygiene.4: no test file imports a name it never reads', () => {
   );
 });
 
-// 5. A tab's `url` is only present when the extension holds the "tabs" permission
+// 6. A tab's `url` is only present when the extension holds the "tabs" permission
 // or host permission for that page (developer.chrome.com/docs/extensions/reference/api/tabs).
 //
 // The popup's quick-trigger button gated on `activeTab.url` while manifest.json
 // granted neither "tabs" nor "activeTab" and no x.com host permission, so `url` was
 // undefined on every page: the gate rejected all tabs, including X, and the button
-// could never reach the content script. Nothing saw it -- `node --check` only parses
-// popup.js, and no test drives the popup. The reachability question belongs to the
-// send, whose `chrome.runtime.lastError` says whether a receiver exists at all.
-test('hygiene.5: the popup reads no tab property the manifest cannot grant', () => {
-  const popup = readFileSync(join(REPO_ROOT, 'public', 'popup.js'), 'utf8');
+// could never reach the content script. Nothing saw it -- the popup was a plain
+// script that `node --check` only parsed, and no test drove it. The reachability
+// question belongs to the send, whose `chrome.runtime.lastError` says whether a
+// receiver exists at all.
+test('hygiene.6: the popup reads no tab property the manifest cannot grant', () => {
+  const popup = readFileSync(join(REPO_ROOT, 'src', 'content', 'popup.ts'), 'utf8');
   const manifest = JSON.parse(readFileSync(join(REPO_ROOT, 'manifest.json'), 'utf8')) as {
     permissions?: string[];
   };
@@ -220,7 +280,7 @@ test('hygiene.5: the popup reads no tab property the manifest cannot grant', () 
   assert.deepEqual(
     reads,
     [],
-    `public/popup.js reads ${reads.join(', ')} but manifest.json declares neither "tabs" nor "activeTab", so the value is always undefined. Decide from chrome.runtime.lastError instead.`
+    `src/content/popup.ts reads ${reads.join(', ')} but manifest.json declares neither "tabs" nor "activeTab", so the value is always undefined. Decide from chrome.runtime.lastError instead.`
   );
 });
 

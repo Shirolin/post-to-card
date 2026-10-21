@@ -47,12 +47,12 @@
    The ratio is derived from the outer width so that `border-box` makes it
    true: 640 + 2 * 48 = 736, and 736 / 920 = 0.8 for 4:5.
    ------------------------------------------------------------- */
-/* `--card-width` is the card's fixed width, declared once here so the floors
-   below can be written in terms of it rather than each repeating the number.
-   It is a custom property rather than a preprocessor constant because the value
-   also has to reach a cloned subtree, and custom properties inherit. */
+/* `--card-width` is the card's fixed width. The card injects it, the way it
+   injects every theme colour, so the width has one home — the geometry module
+   that both this stylesheet and the TypeScript read. It is a custom property
+   rather than a preprocessor constant because the value also has to reach a
+   cloned subtree, and custom properties inherit. */
 .ptc-mat {
-  --card-width: 640px;
   box-sizing: border-box;
   display: flex;
   justify-content: center;
@@ -61,7 +61,7 @@
      shrink-to-fit wrapper, and `max-content` does not consult that wrapper's
      available width. */
   width: max-content;
-  min-width: calc(var(--card-width) + 2 * var(--mat-pad, 0px));
+  min-width: calc(var(--card-width, 640px) + 2 * var(--mat-pad, 0px));
   min-height: var(--mat-min-height, auto);
   padding: var(--mat-pad, 0px);
   background: var(--mat-bg, none);
@@ -163,6 +163,12 @@
 
 /* -------------------------------------------------------------
    Aspect Ratio Rules (Downward Fluid Expansion: min-height floor)
+
+   Each floor is the card's own width divided by the ratio, so the shape holds
+   and a card wider than the default would floor accordingly. The width comes
+   from `--card-width`, which the card injects: the same number the geometry
+   module hands the TypeScript, so the floor here and the one the preview
+   quotes cannot drift apart.
    ------------------------------------------------------------- */
 .post-to-card-target[data-ratio="auto"] {
   min-height: unset;
@@ -170,15 +176,14 @@
 }
 
 .post-to-card-target[data-ratio="3:4"] {
-  min-height: 853px;
+  min-height: calc(var(--card-width, 640px) * 4 / 3);
   height: auto;
 }
 
 .post-to-card-target[data-ratio="16:9"] {
-  min-height: 360px;
+  min-height: calc(var(--card-width, 640px) * 9 / 16);
   height: auto;
 }
-
 /* Inner content expansion wrapper: keeps footer pinned to bottom when content is short */
 .post-to-card-body-content {
   flex: 1 0 auto;
@@ -337,6 +342,13 @@
 
    Positioned rather than a flex child, so it sits inside the card's padding
    without being pushed around by the body's gap.
+
+   The sizes here are the card's own, and they are not the sizes the picker's
+   swatch uses: the swatch is a 34px reduction of a 640px sheet, so its dots
+   are smaller and its marks are proportionally placed. The two draw the same
+   *shape* at different scales, which is what a reduction is. What they must
+   agree on is the shape itself -- a seal is a square in both, a perforation is
+   a row of dots in both -- and that is what the `signature.style` names.
    ------------------------------------------------------------- */
 .post-to-card-body-content {
   position: relative;
@@ -796,6 +808,10 @@
 }
 .post-to-card-target[data-ratio="auto"] .media-grid[data-layout="grid"][data-count="2"][data-grid-layout="portrait-columns"] {
   aspect-ratio: 1 / 1;
+  /* The grid's own height ceiling, not the card's width: this one happens to
+     match it because a square grid on a square card is as tall as the card is
+     wide. A grid with another shape would not be, so the figure is stated here
+     rather than derived from the card's width. */
   max-height: 640px;
 }
 .media-grid[data-layout="grid"][data-count="2"] .media-item {
@@ -819,10 +835,14 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }
-/* Top-Hero: First image is wide/landscape/square -> spans 2 columns on top (row 1: 1.4fr), bottom 2 images on row 2 (1fr) */
+/* Top-Hero: First image is wide/landscape/square -> spans 2 columns on top (row 1: 1.4fr), bottom 2 images on row 2 (1fr)
+   The hero row's weight comes from `--grid-top-hero`, which the card injects
+   from the geometry module: the grid planner's arithmetic is derived from the
+   same number, so a change to the weight cannot leave the planner describing
+   a grid the stylesheet no longer draws. */
 .media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, var(--grid-top-hero, 1.4fr)) minmax(0, 1fr);
 }
 .media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] .media-item:first-child {
   grid-column: span 2;
@@ -840,10 +860,11 @@
   aspect-ratio: 16 / 15;
   max-height: 640px;
 }
-
-/* Left-Hero: First image is portrait/square/standard (< 1.2) -> spans 2 rows on left (1.6fr), right 2 images stacked vertically (1fr) */
+/* Left-Hero: First image is portrait/square/standard (< 1.2) -> spans 2 rows on left (1.6fr), right 2 images stacked vertically (1fr)
+   The hero column's weight comes from `--grid-left-hero`, injected from the
+   geometry module for the same reason as the hero row's above. */
 .media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] {
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--grid-left-hero, 1.6fr)) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   aspect-ratio: 4 / 3;
 }

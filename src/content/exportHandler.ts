@@ -8,6 +8,7 @@
 
 import { buildExportFilename } from './engine/filename.ts';
 import { exportCard, type ExportAction, type ExportOutcome } from './engine/export.ts';
+import { threadSession } from './threadSession.ts';
 import type { ThreadData } from '../types/tweet.ts';
 
 /**
@@ -18,13 +19,13 @@ import type { ThreadData } from '../types/tweet.ts';
  * is a seam tests replace -- naming inside it would be bypassed by every test.
  * The thread's selection state is deliberately not consulted: the filename
  * should describe the post, not a checkbox someone toggled for this session.
+ * The post itself is the one the thread is about, which the session names.
  */
 export function createExportHandler(
   threadData: ThreadData
 ): (target: HTMLElement, action: ExportAction) => Promise<ExportOutcome> {
   return (target, action) => {
-    const tweet =
-      threadData.tweets[threadData.targetTweetIndex ?? 0] ?? threadData.tweets[0];
+    const tweet = threadSession(threadData, undefined).targetTweet;
     return exportCard(target, {
       action,
       filename: buildExportFilename({

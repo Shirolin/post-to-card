@@ -92,8 +92,11 @@ export function isAdOrSponsored(article: Element): boolean {
 
 /**
  * Detects whether the current page is a Tweet Status Detail Page (/status/123...).
+ *
+ * Not exported: the page fact belongs to the thread context, and a caller that
+ * read it directly would be holding a second copy of the same answer.
  */
-export function isStatusDetailPage(): boolean {
+function isStatusDetailPage(): boolean {
   if (typeof window === 'undefined' || !window.location) return false;
   return /\/status\/\d+/i.test(window.location.pathname || '');
 }
@@ -105,8 +108,13 @@ export function isStatusDetailPage(): boolean {
  * implementation matched `width: 2px` plus names like `r-11mg6pl`, which X
  * re-minifies on design refreshes. Only X's own anchors and stable fixture
  * classes are consulted now.
+ *
+ * The answer is about the post, not about a direction: a post either carries a
+ * thread marker or it does not, and which side of a pair it sits on says
+ * nothing about that. The check used to take a direction it never read, and
+ * four call sites passed one — a promise the implementation did not keep.
  */
-export function hasNativeThreadConnector(article: Element, _direction: 'down' | 'up' = 'down'): boolean {
+export function hasNativeThreadConnector(article: Element): boolean {
   if (!article) return false;
 
   // 1. X's own thread marker. Its exact semantics are not documented, so this
@@ -196,16 +204,60 @@ export function isSnowflakeOrdered(earlier: string, later: string): boolean {
 }
 
 /**
+ * One post in the timeline, as the thread scan sees it.
+ */
+export interface TimelinePost {
+  article: Element;
+  tweet: TweetData;
+}
+
+/**
+ * The page facts a thread scan depends on.
+ *
+ * They used to be arguments: `isThreadConnectedPair` took an `isDetailPage`
+ * flag that its callers had to remember to compute, and the flag decided
+ * whether DOM order was enough proof. A caller that passed the wrong one got a
+ * different answer with nothing to say so — and the flag came from reading
+ * the page's own URL, a global that a caller could not see.
+ *
+ * Holding them here makes it impossible to call the check without them, and
+ * impossible to disagree with the rest of the scan about them.
+ */
+export interface ThreadContext {
+  /**
+   * Whether the scan runs on a conversation's own page.
+   *
+   * There, the DOM order is the author's own sequencing and the checks above
+   * have already excluded ads, cross-author replies, retweets and ID-order
+   * contradictions — so order alone is proof. On a feed or a profile it says
+   * nothing, and two adjacent posts by the same author stay separate.
+   */
+  readonly isDetailPage: boolean;
+}
+
+/**
+ * The context for the page the scan is running on.
+ */
+export function threadContext(): ThreadContext {
+  return { isDetailPage: isStatusDetailPage() };
+}
+
+/**
  * Checks if two adjacent tweets form a genuine thread connection.
+ *
+ * The pair is given as an earlier post and a later one, rather than as two
+ * articles, two tweets and a flag saying which is which: the direction is
+ * what the check is about, and spelling it as "earlier" and "later" leaves no
+ * room for a caller to pass them the wrong way round.
  */
 export function isThreadConnectedPair(
-  artA: Element,
-  artB: Element,
-  tweetA: TweetData,
-  tweetB: TweetData,
-  isForward: boolean,
-  isDetailPage: boolean
+  context: ThreadContext,
+  earlier: TimelinePost,
+  later: TimelinePost
 ): boolean {
+  const { article: artA, tweet: tweetA } = earlier;
+  const { article: artB, tweet: tweetB } = later;
+
   // 1. Author must be identical
   if (tweetA.author.handle.toLowerCase() !== tweetB.author.handle.toLowerCase()) {
     return false;
@@ -229,17 +281,14 @@ export function isThreadConnectedPair(
   }
 
   // 5. Temporal continuity check
-  if (!isTemporallyConnected(tweetA, tweetB, isForward)) {
+  if (!isTemporallyConnected(tweetA, tweetB, true)) {
     return false;
   }
 
   // 6. Snowflake IDs are documented as roughly time-ordered, so an ID that runs
   //    the wrong way proves the pair cannot be consecutive. Used only to veto.
   if (tweetA.id && tweetB.id) {
-    const ordered = isForward
-      ? isSnowflakeOrdered(tweetA.id, tweetB.id)
-      : isSnowflakeOrdered(tweetB.id, tweetA.id);
-    if (!ordered) return false;
+    if (!isSnowflakeOrdered(tweetA.id, tweetB.id)) return false;
   }
 
   // 7. Positive proof of thread connection REQUIRED:
@@ -253,14 +302,12 @@ export function isThreadConnectedPair(
   // renders a thread's sections as plainly adjacent posts with no marker of their
   // own (docs/detection-audit.md). A payload that names someone else is not a veto:
   // it falls through to the signals below, so no view that merges today stops.
-  const earlier = isForward ? tweetA : tweetB;
-  const later = isForward ? tweetB : tweetA;
-  if (earlier.id && later.id && lookupReplyLink(later.id)?.inReplyToId === earlier.id) {
+  if (tweetA.id && tweetB.id && lookupReplyLink(tweetB.id)?.inReplyToId === tweetA.id) {
     return true;
   }
 
-  const hasConnectorA = hasNativeThreadConnector(artA, isForward ? 'down' : 'up');
-  const hasConnectorB = hasNativeThreadConnector(artB, isForward ? 'up' : 'down');
+  const hasConnectorA = hasNativeThreadConnector(artA);
+  const hasConnectorB = hasNativeThreadConnector(artB);
   const isSelfReply = replyTarget === tweetA.author.handle.toLowerCase();
   const hasShowThread = hasShowThisThread(artA) || hasShowThisThread(artB);
 
@@ -273,7 +320,7 @@ export function isThreadConnectedPair(
   // retweets and ID-order contradictions. That is sufficient proof here; on
   // feeds and profiles the algorithmic order says nothing about threading, so
   // still refuse to merge.
-  if (isDetailPage) {
+  if (context.isDetailPage) {
     return true;
   }
 
@@ -313,12 +360,12 @@ function createTweetReader(): (article: Element) => TweetData | null {
 }
 
 function resolveAncestorChain(
+  context: ThreadContext,
   headArt: Element,
   headTweet: TweetData,
   headIndex: number,
   allArticles: Element[],
-  readTweet: (article: Element) => TweetData | null,
-  isDetailPage: boolean = true
+  readTweet: (article: Element) => TweetData | null
 ): TweetData[] {
   const ancestors: TweetData[] = [];
   const visitedIndices = new Set<number>();
@@ -350,8 +397,8 @@ function resolveAncestorChain(
       const prevArt = allArticles[prevIndex];
       if (!isAdOrSponsored(prevArt)) {
         const hasConnector =
-          hasNativeThreadConnector(currChildArt, 'up') ||
-          hasNativeThreadConnector(prevArt, 'down');
+          hasNativeThreadConnector(currChildArt) ||
+          hasNativeThreadConnector(prevArt);
         if (hasConnector) {
           const prevTweet = readTweet(prevArt);
           if (prevTweet && isTemporallyConnected(prevTweet, currChildTweet, true)) {
@@ -369,7 +416,7 @@ function resolveAncestorChain(
         // On detail pages, we can search backwards across all previous posts in the conversation.
         // On feeds/timelines, to avoid accidentally matching unrelated posts from the same handle earlier in the feed,
         // we restrict Signal C strictly to the immediate predecessor (p === currChildIndex - 1).
-        const minP = isDetailPage ? 0 : currChildIndex - 1;
+        const minP = context.isDetailPage ? 0 : currChildIndex - 1;
         for (let p = currChildIndex - 1; p >= minP; p--) {
           const pArt = allArticles[p];
           if (isAdOrSponsored(pArt)) continue;
@@ -388,7 +435,7 @@ function resolveAncestorChain(
 
     // Signal D: Direct top-level reply defaulting to detail page root post (allArticles[0])
     // Only valid on status detail pages where allArticles[0] is guaranteed to be the conversation root post!
-    if (isDetailPage && matchedParentIndex === -1 && currChildIndex > 0) {
+    if (context.isDetailPage && matchedParentIndex === -1 && currChildIndex > 0) {
       const rootArt = allArticles[0];
       if (!isAdOrSponsored(rootArt) && !visitedIndices.has(0)) {
         const rootTweet = readTweet(rootArt);
@@ -425,7 +472,11 @@ function resolveAncestorChain(
       const prevPArt = allArticles[p];
       const prevPTweet = readTweet(prevPArt);
       if (!prevPTweet) break;
-      if (!isThreadConnectedPair(curPArt, prevPArt, curPTweet, prevPTweet, false, isDetailPage)) {
+      if (!isThreadConnectedPair(
+        context,
+        { article: prevPArt, tweet: prevPTweet },
+        { article: curPArt, tweet: curPTweet }
+      )) {
         break;
       }
       visitedIndices.add(p);
@@ -452,11 +503,14 @@ function resolveAncestorChain(
  * Traverses the DOM timeline starting from the target tweet article to extract
  * all consecutive tweets authored by the same user that form a verified thread.
  * Halts traversal on ads, third-party replies, temporal disconnections, or missing thread markers.
+ *
+ * The scope of the scan is the column the post sits in — the conversation, the
+ * timeline, the main column, or the document. It used to be a parameter, and
+ * the parameter was never passed by anyone: the callers let the scan find its
+ * own scope, and the tests shaped the markup rather than the argument. A
+ * second way to say the same thing is a second thing to keep in step.
  */
-export function extractContinuousThread(
-  targetArticle: Element,
-  rootContainer?: ParentNode | null
-): ThreadData {
+export function extractContinuousThread(targetArticle: Element): ThreadData {
   const readTweet = createTweetReader();
   const targetTweet = readTweet(targetArticle);
   if (!targetTweet) {
@@ -468,15 +522,13 @@ export function extractContinuousThread(
     };
   }
 
-  const isDetailPage = isStatusDetailPage();
+  const context = threadContext();
 
   // Find appropriate root container for finding sibling tweets
-  let container: ParentNode | null = rootContainer || null;
+  let container: ParentNode | null =
+    targetArticle.closest('#conversation-container, #timeline, [data-testid="primaryColumn"], main');
   if (!container) {
-    container = targetArticle.closest('#conversation-container, #timeline, [data-testid="primaryColumn"], main');
-    if (!container) {
-      container = targetArticle.ownerDocument || document;
-    }
+    container = targetArticle.ownerDocument || document;
   }
 
   let allArticles: Element[] = [];
@@ -507,7 +559,11 @@ export function extractContinuousThread(
     const prevTweet = readTweet(prevArt);
     if (!prevTweet) break;
 
-    if (!isThreadConnectedPair(currentArt, prevArt, currentTweet, prevTweet, false, isDetailPage)) {
+    if (!isThreadConnectedPair(
+      context,
+      { article: prevArt, tweet: prevTweet },
+      { article: currentArt, tweet: currentTweet }
+    )) {
       break;
     }
 
@@ -523,7 +579,7 @@ export function extractContinuousThread(
   if (headIndex > 0) {
     const headArt = allArticles[headIndex];
     const headTweet = predecessors.length > 0 ? predecessors[0] : targetTweet;
-    const ancestorChain = resolveAncestorChain(headArt, headTweet, headIndex, allArticles, readTweet, isDetailPage);
+    const ancestorChain = resolveAncestorChain(context, headArt, headTweet, headIndex, allArticles, readTweet);
     if (ancestorChain.length > 0) {
       predecessors.unshift(...ancestorChain);
     }
@@ -538,7 +594,11 @@ export function extractContinuousThread(
     const nextTweet = readTweet(nextArt);
     if (!nextTweet) break;
 
-    if (!isThreadConnectedPair(currentArt, nextArt, currentTweet, nextTweet, true, isDetailPage)) {
+    if (!isThreadConnectedPair(
+      context,
+      { article: currentArt, tweet: currentTweet },
+      { article: nextArt, tweet: nextTweet }
+    )) {
       break;
     }
 

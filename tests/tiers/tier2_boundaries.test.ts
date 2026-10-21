@@ -9,6 +9,7 @@ import { createChromeMock } from '../env/chrome.ts';
 import { renderComponent, rasterizer, exportEngine, cardRenderer } from '../env/render.ts';
 import { createSuite } from '../env/harness.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
+import { isThreadConnectedPair } from '../../src/content/adapter/thread.ts';
 import { classifySocial, getReplyingToHandle, getRetweetedBy } from '../../src/content/adapter/social.ts';
 import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/adapter/urls.ts';
 import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
@@ -27,7 +28,8 @@ import {
 } from '../../src/content/adapter/injection.ts';
 import { handleRadioKeyDown } from '../../src/content/ui/radioGroup.ts';
 import { getTranslation } from '../../src/content/i18n.ts';
-import { threadScope, tweetKey } from '../../src/content/ui/threadScope.ts';
+import { resolveOwnership, ownerOf } from '../../src/content/adapter/ownership.ts';
+import { threadSession } from '../../src/content/threadSession.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 import { NESTED_QUOTE_PREVIEW_HTML } from '../fixtures/nested-quote-preview.ts';
 import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
@@ -1278,7 +1280,7 @@ test('Tier 2.55: cover and the poster ratios keep the fixed grid', () => {
 });
 
 // -------------------------------------------------------------
-// Thread scope: exclusions saved for a thread that is no longer open
+// Thread Session: exclusions saved for a thread that is no longer open
 // -------------------------------------------------------------
 
 /** A thread of `count` posts, ids `t1..tn`, targeting the second one. */
@@ -1305,58 +1307,82 @@ test('Tier 2.52: another thread’s exclusions do not count against this card', 
   // more than one tweet shows, so a stricter verdict leaves a button that is
   // there, focusable and inert.
   const three = thread(3);
-  const scope = threadScope(three, ['other1', 'other2']);
+  const session = threadSession(three, ['other1', 'other2']);
 
-  assert.equal(scope.activeCount, 3);
-  assert.equal(scope.totalCount, 3);
-  assert.equal(scope.canExcludeMore, true);
-  assert.equal(scope.excluded.size, 0);
+  assert.equal(session.rawCount, 3);
+  assert.equal(session.totalCount, 3);
+  assert.equal(session.canExcludeMore, true);
+  assert.equal(session.rows.filter((row) => row.excluded).length, 0);
 });
 
-test('Tier 2.53: building the next set from the scope drops the stale keys', () => {
-  // The cure for stale keys is that callers write from the scoped set, so the
-  // first exclusion after switching threads cleans the storage as a side
+test('Tier 2.53: building the next set from the session drops the stale keys', () => {
+  // The cure for stale keys is that callers write from the session's own set,
+  // so the first exclusion after switching threads cleans the storage as a side
   // effect and no rule about when to clear is needed anywhere.
-  const scope = threadScope(thread(3), ['other1', 'other2', 't1']);
-  assert.deepEqual(Array.from(scope.excluded), ['t1']);
+  const session = threadSession(thread(3), ['other1', 'other2', 't1']);
+  assert.deepEqual(session.rows.filter((row) => row.excluded).map((row) => row.key), ['t1']);
 
-  const next = new Set(scope.excluded);
+  const next = new Set(session.rows.filter((row) => row.excluded).map((row) => row.key));
   next.add('t2');
   assert.deepEqual(Array.from(next).sort(), ['t1', 't2']);
 });
 
 test('Tier 2.54: one tweet left is the one that has to stay', () => {
   const three = thread(3);
-  assert.equal(threadScope(three, []).canExcludeMore, true);
-  assert.equal(threadScope(three, ['t1']).canExcludeMore, true);
-  assert.equal(threadScope(three, ['t1', 't2']).canExcludeMore, false);
-  assert.equal(threadScope(three, ['t1', 't2']).activeCount, 1);
+  assert.equal(threadSession(three, []).canExcludeMore, true);
+  assert.equal(threadSession(three, ['t1']).canExcludeMore, true);
+  assert.equal(threadSession(three, ['t1', 't2']).canExcludeMore, false);
+  assert.equal(threadSession(three, ['t1', 't2']).rawCount, 1);
 });
 
-test('Tier 2.55: the scope reports the raw count and leaves the floor to the surface', () => {
+test('Tier 2.55: the session reports the raw count and floors the showing set', () => {
   // Everything excluded is a state the surfaces have to survive rather than one
-  // the scope hides: the card renders a fallback tweet and the preview summary
-  // floors its count, and those are two different decisions.
-  const scope = threadScope(thread(2), ['t1', 't2']);
-  assert.equal(scope.activeCount, 0);
-  assert.equal(scope.canExcludeMore, false);
+  // the session hides: the card prints the target post and the preview summary
+  // floors its count, and those are two different decisions about two
+  // different surfaces. The session answers both, so it reports the exclusion
+  // as it is and shows a card that is never empty.
+  const session = threadSession(thread(2), ['t1', 't2']);
+  assert.equal(session.rawCount, 0);
+  assert.equal(session.canExcludeMore, false);
+  assert.equal(session.showing.length, 1, 'the card still has to print something');
+  assert.equal(session.showing[0].id, 't2', 'and the target post is what stands in');
 });
 
 test('Tier 2.56: a post without an id is keyed by its position, as every surface must', () => {
   // The controls panel and the card have to name the same tweet. A post that
   // arrived without an id is identified by where it sits, so the derivation is
-  // part of the scope rather than written out at each call site.
+  // part of the session rather than written out at each call site.
   const withoutIds = thread(3);
   withoutIds.tweets[1] = { ...withoutIds.tweets[1], id: '' };
 
-  assert.equal(tweetKey(withoutIds.tweets[0], 0), 't1');
-  assert.equal(tweetKey(withoutIds.tweets[1], 1), '1');
-  assert.equal(tweetKey(undefined, 2), '2', 'an index past the end still names a position');
+  const session = threadSession(withoutIds, ['1']);
+  assert.deepEqual(session.rows.map((row) => row.key), ['t1', '1', 't3']);
+  assert.deepEqual(session.rows.filter((row) => row.excluded).map((row) => row.key), ['1']);
+  assert.equal(session.rawCount, 2);
+});
 
-  // Which means the id-less post is excluded by position, and only by position.
-  const scope = threadScope(withoutIds, ['1']);
-  assert.deepEqual(Array.from(scope.excluded), ['1']);
-  assert.equal(scope.activeCount, 2);
+test('Tier 2.57: the panel and the card read one answer, so they cannot disagree', () => {
+  // The card prints the session's showing set, and the panel offers its
+  // footers for the first post of that same set. Before there was one answer,
+  // each side derived the set itself and named different posts whenever a
+  // target or an exclusion moved it — and the panel would then offer a toggle
+  // for a footer the card was not drawing. That disagreement is not
+  // observable any more, because there is only one derivation left.
+  const three = thread(3);
+  const session = threadSession(three, ['t1']);
+
+  assert.deepEqual(
+    session.showing.map((tweet) => tweet.id),
+    ['t2', 't3'],
+    'the card prints the posts that are not excluded, in thread order'
+  );
+  assert.equal(
+    session.showing[0].id,
+    session.rows.find((row) => !row.excluded)!.tweet.id,
+    'and the panel asks about the first of those'
+  );
+  assert.equal(session.rawCount, 2, 'the panel quotes how many are not excluded');
+  assert.equal(session.totalCount, 3, 'and how many the thread holds');
 });
 
 // -------------------------------------------------------------
@@ -1665,6 +1691,67 @@ test('Tier 2.61: a feed scan attaches at most one trigger per tweet', async () =
       'the media inner group must not have collected one of its own'
     );
   });
+});
+
+test('Tier 2.61b: the thread check carries the page facts, and cannot be called without them', () => {
+  // The check used to take the page's own answer as an argument: a flag saying
+  // whether this was a conversation's page, which its callers had to remember
+  // to compute, and which decided whether DOM order was proof enough. It also
+  // took a direction flag, and the direction the callers passed did nothing —
+  // the implementation never read it.
+  //
+  // The page fact now belongs to the context, so a call that leaves it out is
+  // not a call that compiles. And the direction is gone: a post either carries
+  // a thread marker or it does not, and which side of a pair it sits on says
+  // nothing about that.
+  const container = createDomElement(`
+  <div id="timeline">
+    <article data-testid="tweet" id="tweet-a">
+      <div data-testid="User-Name">
+        <span>Alice</span>
+        <a href="/alice"><span>@alice</span></a>
+        <a href="/alice/status/1001"><time datetime="2026-08-14T10:00:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetText"><span>First post</span></div>
+    </article>
+    <article data-testid="tweet" id="tweet-b">
+      <div data-testid="User-Name">
+        <span>Alice</span>
+        <a href="/alice"><span>@alice</span></a>
+        <a href="/alice/status/1002"><time datetime="2026-08-14T10:02:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetText"><span>Second post</span></div>
+    </article>
+  </div>
+  `);
+  const first = container.querySelector('#tweet-a') as unknown as Element;
+  const second = container.querySelector('#tweet-b') as unknown as Element;
+  const firstTweet = extractTweetData(first)!;
+  const secondTweet = extractTweetData(second)!;
+
+  // On a feed, two same-author posts with nothing to prove they belong
+  // together stay separate.
+  assert.equal(
+    isThreadConnectedPair(
+      { isDetailPage: false },
+      { article: first, tweet: firstTweet },
+      { article: second, tweet: secondTweet }
+    ),
+    false,
+    'a feed offers no proof, so the pair does not merge'
+  );
+
+  // On a conversation's own page the order is the author's own sequencing, so
+  // the same pair merges.
+  assert.equal(
+    isThreadConnectedPair(
+      { isDetailPage: true },
+      { article: first, tweet: firstTweet },
+      { article: second, tweet: secondTweet }
+    ),
+    true,
+    'the same pair merges on the conversation page'
+  );
 });
 
 test('Tier 2.62: hiding the triggers leaves them in the page', async () => {
@@ -1979,11 +2066,12 @@ test('Tier 2.76f: a partial stored object cannot take the defaults with it', asy
   // saved nothing yet that object holds one key. Loading it must leave every
   // field it never mentioned alone.
   //
-  // `sanitizeRadius` answers '12px' for an absent value while the shipped
-  // default is 'theme' -- the one field where the two disagree -- so calling it
-  // unguarded after the merge pinned a fresh profile to 12px for good: the panel
-  // reads that 12px, shows it as the chosen corner, and writes it back into
-  // every later save.
+  // The corner used to be the one field where the merge could not protect a
+  // missing value: its sanitiser answered '12px' while the card shipped with
+  // 'theme', so calling it unguarded pinned a fresh profile to 12px for good --
+  // the panel read that 12px, showed it as the chosen corner, and wrote it back
+  // into every later save. Every option now answers the shipped default for a
+  // value that was never set, so the merge and the options cannot disagree.
   await withInjectionEnv(async ({ chrome }) => {
     await chrome.storage.local.set({ [STORAGE_KEY]: { showActionBarButton: false } });
 
@@ -2331,6 +2419,45 @@ test('Tier 2.85: a text-only nested preview still yields its own level', () => {
   assert.equal(inner!.text, 'inner words, no picture');
   assert.equal(inner!.media, undefined, 'no picture means no media, not a dropped level');
   assert.equal(data?.quotePost?.text, 'outer body', 'the outer level keeps its own words');
+});
+
+test('Tier 2.85b: one answer says who owns what, and the passes read it', () => {
+  // The extractor used to answer "is this element the tweet's own?" with five
+  // separate predicates, and every pass picked its own combination: the quoted
+  // post's body was excluded by one, its pictures by three, its statistics by
+  // two, its timestamp by one. Nothing said those were meant to agree, so
+  // changing one changed one surface and left the others answering about a
+  // different post.
+  //
+  // The ownership module answers the question once, and the answers for the
+  // same element must be the same whoever asks.
+  const article = createDomElement(NESTED_QUOTE_PREVIEW_HTML) as unknown as Element;
+  const ownership = resolveOwnership(article);
+
+  // The structure is resolved once: the quote box, and the quote inside it.
+  assert.ok(ownership.quoteBox, 'the quoted post is found');
+  assert.ok(ownership.nestedQuoteBox, 'and the quote it carries');
+
+  // Every element inside the quoted post belongs to the quoted post.
+  const quotedBody = ownership.quoteBox!.querySelector('div[data-testid="tweetText"]');
+  assert.ok(quotedBody);
+  assert.equal(ownerOf(quotedBody, ownership).post, 'quote');
+
+  // Every element inside the deeper quote belongs to that one, not the outer.
+  const innerBody = ownership.nestedQuoteBox!.querySelector('div[data-testid="tweetText"]');
+  assert.ok(innerBody);
+  assert.equal(ownerOf(innerBody, ownership).post, 'quote');
+
+  // And the tweet's own body belongs to the tweet, whatever it sits beside.
+  const ownBody = article.querySelector('div[data-testid="tweetText"]');
+  assert.ok(ownBody);
+  assert.equal(ownerOf(ownBody, ownership).post, 'tweet');
+
+  // The quote box itself is the quoted post's container, and counts as such.
+  // It used to depend on whether X gave it a testid: the marked shape was
+  // excluded by the marker check, the unmarked one by the resolved-container
+  // check, and the two disagreed about the same element.
+  assert.equal(ownerOf(ownership.quoteBox!, ownership).post, 'quote');
 });
 
 test('Tier 2.86: the nested-preview fixture’s markup is balanced', () => {

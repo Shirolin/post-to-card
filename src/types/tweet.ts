@@ -166,12 +166,44 @@ export interface ExtractionDiagnostics {
    * rotation is visible in logs; a change here is expected and harmless.
    */
   queryId?: string;
+  /**
+   * Why the GraphQL channel was not the answer, when it was asked and did not
+   * answer.
+   *
+   * Recorded on the records that did answer — the DOM ones — because that is
+   * where the answer came from. X swallows a failed request silently, so a
+   * channel that quietly stops working is indistinguishable from one that
+   * never fired. This is the record that tells the two apart: a rise in
+   * `unexpected-shape` means X changed the payload, and a rise in `no-tweets`
+   * means the endpoint stopped answering.
+   */
+  graphqlMiss?: GraphQLMissReason;
   text?: 'testid' | 'none';
   media?: 'testid' | 'none';
   isUnavailable?: boolean;
   /** Which social-context signal classified this entry, if any. */
   social?: 'retweet' | 'reply' | 'pinned' | 'none';
 }
+
+/**
+ * Why the GraphQL channel did not answer a request.
+ *
+ * The five reasons call for five different responses, so they are told apart
+ * rather than collapsed into one "it failed". `no-tweets` is the one that
+ * matters most: it is what a rotated endpoint looks like, and it is silent
+ * everywhere else.
+ */
+export type GraphQLMissReason =
+  /** No payload was ever captured — the channel never saw the request. */
+  | 'no-payload'
+  /** The captured body was not JSON. The capture itself is suspect. */
+  | 'invalid-json'
+  /** The body parsed but is not a shape the parser knows. X changed the payload. */
+  | 'unexpected-shape'
+  /** The payload carried no tweets — the empty response a rotated endpoint gives. */
+  | 'no-tweets'
+  /** The payload carried tweets, but not the post being asked about. */
+  | 'target-absent';
 
 export interface ThreadData {
   author: AuthorInfo;

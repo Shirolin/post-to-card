@@ -62,6 +62,10 @@ function backfillNestedQuote(
  * 3. If GraphQL misses or is unavailable:
  *    - Falls back to DOM timeline assembly via `extractContinuousThread`.
  *    - Tags diagnostics with source: 'dom'.
+ *    - Tags diagnostics with graphqlMiss: the reason the channel did not
+ *      answer, when it was asked. X swallows a failed request silently, so
+ *      without this a channel that has stopped working is indistinguishable
+ *      from one that never fired.
  */
 export function resolveThread(
   target?: ResolutionTarget | null,
@@ -91,61 +95,67 @@ export function resolveThread(
 
   // 1. Authoritative GraphQL channel lookup
   // Only query GraphQL if we have an identified tweetId or target was omitted (status page ambient lookup).
-  if (tweetId || target === undefined) {
-    const fromGraphQL = lookupFromGraphQL(tweetId);
+  const fromGraphQL = tweetId || target === undefined ? lookupFromGraphQL(tweetId) : undefined;
 
-    if (fromGraphQL.thread) {
-      const thread = fromGraphQL.thread;
-      for (const tweet of thread.tweets) {
-        tweet.diagnostics = {
-          ...tweet.diagnostics,
-          source: 'graphql',
-          operationName: fromGraphQL.operationName,
-          queryId: fromGraphQL.queryId,
-        };
-      }
-
-      // Client-side translation only exists in the rendered DOM.
-      // If an article element is present, fold in its translation
-      // without doing expensive full-timeline thread traversal.
-      // A single-article extract is cheap; the traversal below is not.
-      if (articleElement) {
-        try {
-          const domTweet = extractTweetData(articleElement);
-          if (domTweet) {
-            if (domTweet.translatedFrom) {
-              const domWrapper: ThreadData = {
-                author: domTweet.author,
-                tweets: [domTweet],
-                isSingle: true,
-                targetTweetIndex: 0,
-              };
-              applyDomTranslation(thread, domWrapper);
-            }
-            // The payload truncates a quote-of-a-quote at depth 1 while the
-            // DOM renders both levels; adopt the DOM's deeper levels so the
-            // card does not lose the innermost post and its picture.
-            const target =
-              thread.tweets.find((tweet) => tweet.id === domTweet.id) ??
-              thread.tweets[thread.targetTweetIndex ?? 0];
-            if (target) {
-              target.quotePost = backfillNestedQuote(target.quotePost, domTweet.quotePost);
-            }
-          }
-        } catch {
-          // Translation fold failures should never drop the authoritative GraphQL result
-        }
-      }
-
-      return thread;
+  if (fromGraphQL?.thread) {
+    const thread = fromGraphQL.thread;
+    for (const tweet of thread.tweets) {
+      tweet.diagnostics = {
+        ...tweet.diagnostics,
+        source: 'graphql',
+        operationName: fromGraphQL.operationName,
+        queryId: fromGraphQL.queryId,
+      };
     }
+
+    // Client-side translation only exists in the rendered DOM.
+    // If an article element is present, fold in its translation
+    // without doing expensive full-timeline thread traversal.
+    // A single-article extract is cheap; the traversal below is not.
+    if (articleElement) {
+      try {
+        const domTweet = extractTweetData(articleElement);
+        if (domTweet) {
+          if (domTweet.translatedFrom) {
+            const domWrapper: ThreadData = {
+              author: domTweet.author,
+              tweets: [domTweet],
+              isSingle: true,
+              targetTweetIndex: 0,
+            };
+            applyDomTranslation(thread, domWrapper);
+          }
+          // The payload truncates a quote-of-a-quote at depth 1 while the
+          // DOM renders both levels; adopt the DOM's deeper levels so the
+          // card does not lose the innermost post and its picture.
+          const target =
+            thread.tweets.find((tweet) => tweet.id === domTweet.id) ??
+            thread.tweets[thread.targetTweetIndex ?? 0];
+          if (target) {
+            target.quotePost = backfillNestedQuote(target.quotePost, domTweet.quotePost);
+          }
+        }
+      } catch {
+        // Translation fold failures should never drop the authoritative GraphQL result
+      }
+    }
+
+    return thread;
   }
 
   // 2. DOM fallback channel
   if (articleElement) {
     const domThread = extractContinuousThread(articleElement);
     for (const tweet of domThread.tweets) {
-      tweet.diagnostics = { ...tweet.diagnostics, source: 'dom' };
+      tweet.diagnostics = {
+        ...tweet.diagnostics,
+        source: 'dom',
+        // The GraphQL channel was asked and did not answer. Saying why is the
+        // only way to tell a channel that has stopped working from one that
+        // never fired: X swallows a failed request, so an empty response is
+        // silent everywhere else.
+        graphqlMiss: fromGraphQL?.failure?.reason,
+      };
     }
     return domThread;
   }

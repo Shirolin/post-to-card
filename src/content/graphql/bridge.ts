@@ -13,7 +13,12 @@
  */
 
 import type { ThreadData } from '../../types/tweet.ts';
-import { parseTweetDetailResponse, parseReplyLinkage, type ParsedGraphQL } from './parse.ts';
+import {
+  parseTweetDetailResponse,
+  parseReplyLinkage,
+  type GraphQLParseFailure,
+  type ParsedGraphQL,
+} from './parse.ts';
 import { DETAIL_OPERATIONS } from './operations.ts';
 
 export interface ReplyLink {
@@ -120,7 +125,16 @@ export interface GraphQLLookup {
   operationName?: string;
   /** The rotated queryId observed at capture time, for drift monitoring. */
   queryId?: string;
-  parseError?: string;
+  /**
+   * Why the channel did not answer, when it did not.
+   *
+   * Kept rather than dropped because the caller is the only place that can say
+   * "the GraphQL channel was tried and did not answer, and here is why". X
+   * swallows a failed request silently, so an empty response is indistinguishable
+   * from a rotated endpoint unless somebody says so — and the one record of it
+   * is this.
+   */
+  failure?: GraphQLParseFailure;
 }
 
 /**
@@ -130,14 +144,24 @@ export interface GraphQLLookup {
  * the caller can fall back rather than render an empty card. X swallows failed
  * GraphQL calls silently, so treating "no tweets" as success is exactly how a
  * rotated endpoint would go unnoticed.
+ *
+ * The reason each attempt failed is carried out rather than dropped, so a
+ * caller that falls back can report what the channel said on its way out.
  */
 export function lookupFromGraphQL(targetTweetId?: string): GraphQLLookup {
   const id = targetTweetId || currentTweetIdFromUrl();
   const operations = id ? Object.keys(DETAIL_OPERATIONS) : ['TweetDetail'];
 
+  // The first failure is the one worth reporting: the operations are tried in
+  // a fixed order, so the first is the most specific one, and a later attempt
+  // that fails the same way adds nothing.
+  let firstFailure: GraphQLParseFailure | undefined;
+  let sawPayload = false;
+
   for (const operationName of operations) {
     const entry = cache.get(operationName);
     if (!entry) continue;
+    sawPayload = true;
 
     const parsed: ParsedGraphQL = parseTweetDetailResponse(
       entry.body,
@@ -149,9 +173,21 @@ export function lookupFromGraphQL(targetTweetId?: string): GraphQLLookup {
     if (parsed.thread) {
       return { thread: parsed.thread, operationName, queryId: entry.queryId };
     }
+    if (parsed.failure && !firstFailure) {
+      firstFailure = parsed.failure;
+    }
   }
 
-  return { thread: null };
+  // No payload at all is a different answer from a payload that would not
+  // parse: the first means the channel never saw the request, the second
+  // means it saw it and could not use it. A timeline click never asks for a
+  // detail payload, so the first is the common case there and the second is
+  // the one worth noticing.
+  if (!sawPayload) {
+    return { thread: null, failure: { reason: 'no-payload' } };
+  }
+
+  return { thread: null, failure: firstFailure };
 }
 
 /**

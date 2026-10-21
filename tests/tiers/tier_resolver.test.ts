@@ -479,6 +479,82 @@ test('res.12: a GraphQL quote truncated at depth 1 is backfilled from the DOM', 
   );
 });
 
+test('res.13: a DOM answer says why the GraphQL channel was not the answer', () => {
+  // X swallows a failed request silently, so a channel that has stopped
+  // working is indistinguishable from one that never fired — unless somebody
+  // says so. The resolver is the only place that knows both happened, so the
+  // reason the channel missed is recorded on the records that did answer.
+  //
+  // This is what makes a rotated endpoint visible: an endpoint that answers
+  // with nothing but a 200 is the `no-tweets` case, and a rise in it is the
+  // early warning that the query ids moved.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/dom_author"><span>@dom_author</span></a></div>
+      <div data-testid="tweetText"><span>Timeline post only</span></div>
+      <a href="/dom_author/status/88888">timestamp</a>
+    </article>
+  `);
+
+  // A captured payload that parses but carries no tweets.
+  seedGraphQLCache('{"data":{}}', 'TweetDetail', 'q_empty');
+  const empty = resolveThread(article);
+  assert.equal(empty.tweets[0].diagnostics?.source, 'dom');
+  assert.equal(
+    empty.tweets[0].diagnostics?.graphqlMiss,
+    'no-tweets',
+    'an empty payload must be reported as the empty response it is'
+  );
+
+  // A captured payload whose shape this parser does not know — what X
+  // changing the payload looks like from here. The `data` member itself is
+  // not an object, so the parser cannot even tell where the tweets would be.
+  seedGraphQLCache('{"data":"a string where an object belongs"}', 'TweetDetail', 'q_shape');
+  const changed = resolveThread(article);
+  assert.equal(
+    changed.tweets[0].diagnostics?.graphqlMiss,
+    'unexpected-shape',
+    'a shape this build does not know must be told apart from an empty one'
+  );
+
+  // And a payload that carried tweets this build could not read.
+  seedGraphQLCache('{"data":{"threaded_conversation_with_injections_v2":{"instructions":[]}}}', 'TweetDetail', 'q_none');
+  const parsed = resolveThread(article);
+  assert.equal(
+    parsed.tweets[0].diagnostics?.graphqlMiss,
+    'no-tweets',
+    'a payload with no instructions is still an empty payload'
+  );
+});
+
+test('res.14: a DOM answer that never asked GraphQL records no miss', () => {
+  // The channel is only asked when there is an id to ask about, and an id
+  // comes either from the post's own permalink or from the page's URL. A
+  // timeline post on a feed has neither — the feed URL names no post — so the
+  // channel is never asked, and "the channel was not asked" and "the channel
+  // was asked and failed" are different facts, of which only the second is a
+  // warning.
+  mockWindow.location.pathname = '/home';
+  try {
+    const article = createDomElement(`
+      <article data-testid="tweet">
+        <div data-testid="User-Name"><a href="/dom_author"><span>@dom_author</span></a></div>
+        <div data-testid="tweetText"><span>Timeline post only</span></div>
+      </article>
+    `);
+
+    const thread = resolveThread(article);
+    assert.equal(thread.tweets[0].diagnostics?.source, 'dom');
+    assert.equal(
+      thread.tweets[0].diagnostics?.graphqlMiss,
+      undefined,
+      'the channel was never asked, so nothing was missed'
+    );
+  } finally {
+    mockWindow.location.pathname = '/ada_builds/status/1001';
+  }
+});
+
 export function runTierResolver() {
   return run();
 }

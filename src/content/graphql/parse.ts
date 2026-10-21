@@ -663,12 +663,40 @@ function collectTweets(instructions: unknown): TweetData[] {
   return collected.map((entry) => entry.data);
 }
 
+/**
+ * Why a payload did not answer.
+ *
+ * Five different things can go wrong, and they call for different responses:
+ * no payload was ever captured, which means the channel never fired; a body
+ * that is not JSON at all means the capture is broken; a shape that is not the
+ * one this parser knows means X changed the payload; a payload with no tweets
+ * in it is the empty-response case that a rotated endpoint produces; and a
+ * payload that simply does not carry the post being asked about means the
+ * cache holds a different conversation.
+ *
+ * A single string could carry all five, but then a caller could only compare it
+ * against the literal text, and the one caller that had a reason to look —
+ * the resolver, which reports *why* the GraphQL channel was not the answer —
+ * had no way to tell them apart.
+ */
+export type GraphQLParseFailure =
+  /** No payload was ever captured for the request. The channel never fired. */
+  | { reason: 'no-payload' }
+  /** The body was not JSON. The capture itself is suspect. */
+  | { reason: 'invalid-json'; detail?: string }
+  /** The body parsed but is not a shape this parser knows. X changed it. */
+  | { reason: 'unexpected-shape' }
+  /** The payload carried no tweets. The empty-response case. */
+  | { reason: 'no-tweets' }
+  /** The payload parsed and carried tweets, but not the one being asked about. */
+  | { reason: 'target-absent'; targetTweetId: string };
+
 export interface ParsedGraphQL {
   thread: ThreadData | null;
-  tombstones: number;
   operationName: string;
   queryId: string;
-  parseError?: string;
+  /** Why this payload did not answer, when it did not. */
+  failure?: GraphQLParseFailure;
 }
 
 /**
@@ -691,17 +719,23 @@ export function parseTweetDetailResponse(
    */
   knownReplyLinks?: Map<string, ReplyLink>
 ): ParsedGraphQL {
-  const base: ParsedGraphQL = { thread: null, tombstones: 0, operationName, queryId };
+  const base: ParsedGraphQL = { thread: null, operationName, queryId };
 
   let payload: unknown;
   try {
     payload = JSON.parse(body);
   } catch (error) {
-    return { ...base, parseError: error instanceof Error ? error.message : 'invalid JSON' };
+    return {
+      ...base,
+      failure: {
+        reason: 'invalid-json',
+        detail: error instanceof Error ? error.message : undefined,
+      },
+    };
   }
 
   if (!isObject(payload) || !isObject(payload.data)) {
-    return { ...base, parseError: 'unexpected response shape' };
+    return { ...base, failure: { reason: 'unexpected-shape' } };
   }
 
   const data = payload.data;
@@ -730,7 +764,7 @@ export function parseTweetDetailResponse(
 
   const tweets = collectTweets(instructions ?? singleTweet);
   if (tweets.length === 0) {
-    return { ...base, parseError: 'no tweets in response' };
+    return { ...base, failure: { reason: 'no-tweets' } };
   }
 
   // The target tweet is whichever one the user is looking at.
@@ -743,7 +777,7 @@ export function parseTweetDetailResponse(
       // detail view before navigating back to the timeline. Falling back to
       // index 0 would render that other tweet's card, so this is reported as a
       // miss and the caller routes to the DOM channel instead.
-      return { ...base, parseError: `target tweet ${targetTweetId} not in payload` };
+      return { ...base, failure: { reason: 'target-absent', targetTweetId } };
     }
     targetTweetIndex = found;
   }

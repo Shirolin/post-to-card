@@ -31,11 +31,15 @@ import {
 } from '../../src/content/adapter/injection.ts';
 import { isThreadConnectedPair, isTemporallyConnected, getReplyingToHandle } from '../../src/content/adapter/thread.ts';
 import { restoreUnicodeEmojis } from '../../src/content/adapter/emojis.ts';
-import { toggleExcluded, selectCurrentOnly } from '../../src/content/ui/threadScope.ts';
+import { toggleExcluded, selectCurrentOnly } from '../../src/content/threadSession.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
 import { TRANSLATIONS, getTranslation, sanitizeLocale } from '../../src/content/i18n.ts';
-import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, PADDING_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, sanitizePadding, getAspectMinHeight, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout, CANVAS_RATIO_OPTIONS, CANVAS_BACKGROUNDS, CANVAS_BACKGROUND_ORDER, resolveCanvasBackground, sanitizeCanvasRatio, sanitizeCanvasBackground } from '../../src/content/ui/themes.ts';
+import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, PADDING_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, sanitizePadding, sanitizeAspectRatio, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout, CANVAS_RATIO_OPTIONS, CANVAS_BACKGROUNDS, CANVAS_BACKGROUND_ORDER, resolveCanvasBackground, sanitizeCanvasRatio, sanitizeCanvasBackground } from '../../src/content/ui/themes.ts';
+import { ASPECT_RATIO, CANVAS_BACKGROUND, CANVAS_RATIO, IMAGE_FIT, MEDIA_LAYOUT, PADDING, RADIUS } from '../../src/content/ui/options.ts';
+import { aspectMinHeight, CARD_WIDTH, GRID_TRACKS, heroCellRatio, heroRowShare, MEDIA_MOUNT, NARROW_BREAKPOINT, viewportPadding } from '../../src/content/ui/geometry.ts';
+import { POPUP_COPY } from '../../src/content/popupCopy.ts';
+import { sanitizeImageFit } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 import { isAllowedHost, clearImageCache, getImageCacheSize } from '../../src/background/proxy.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../../src/content/adapter/urls.ts';
@@ -1635,6 +1639,135 @@ test('F17.18: every card-root option is named once, by its data attribute', asyn
   }
 });
 
+// -------------------------------------------------------------
+// The card's geometry: one source for the numbers the shape is built on
+// -------------------------------------------------------------
+
+test('F17.19: the card injects its geometry, and the stylesheet reads it', async () => {
+  // The card's width used to be 640 in the stylesheet and 640 in the script, and
+  // the 3:4 floor was 853px in one and `round(640 * 4/3)` in the other. The
+  // stylesheet now reads the numbers the card injects, the way it already
+  // reads every theme colour, so there is one place to change a width.
+  const html = await renderCard();
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+
+  assert.ok(
+    new RegExp(`--card-width:\\s*${CARD_WIDTH}px`).test(html),
+    `the card must inject its own width (${CARD_WIDTH}px)`
+  );
+  assert.ok(
+    !/--card-width:\s*\d/.test(css),
+    'card.css must not declare a width of its own — it consumes the injected one'
+  );
+
+  // The poster floor is computed from that width on both sides.
+  assert.equal(aspectMinHeight('3:4', CARD_WIDTH), 'calc(640px * 4 / 3)');
+  assert.ok(
+    css.includes('min-height: calc(var(--card-width, 640px) * 4 / 3)'),
+    'the stylesheet must floor the 3:4 card from the injected width'
+  );
+});
+
+test('F17.20: the grid planner and the stylesheet derive the hero weights from one place', async () => {
+  // The dangerous copy: the stylesheet drew `1.6fr` columns and the planner
+  // wrote down the numbers *derived* from them — 1.625 and 0.583 — by hand.
+  // Change the stylesheet and the planner still described the old grid, so the
+  // pictures were laid out against a shape the stylesheet no longer drew, and
+  // nothing said so. Both now come from the same weights.
+  const html = await renderCard();
+
+  assert.ok(
+    new RegExp(`--grid-left-hero:\\s*${GRID_TRACKS.leftHero}fr`).test(html),
+    'the card must inject the left-hero column weight'
+  );
+  assert.ok(
+    new RegExp(`--grid-top-hero:\\s*${GRID_TRACKS.topHero}fr`).test(html),
+    'the card must inject the top-hero row weight'
+  );
+
+  // The planner's arithmetic is the reciprocal of the share the weights make,
+  // not a number typed in beside it.
+  const leftShare = GRID_TRACKS.leftHero / (GRID_TRACKS.leftHero + 1);
+  assert.ok(
+    Math.abs(heroCellRatio() - leftShare) < 1e-12,
+    'the hero cell ratio must be the share the column weights make'
+  );
+  assert.ok(
+    Math.abs(heroRowShare() - GRID_TRACKS.topHero / (GRID_TRACKS.topHero + 1)) < 1e-12,
+    'the hero row share must be the share the row weights make'
+  );
+
+  // And the planner's answer must be what those weights imply. The left-hero
+  // shape is a blend of what the hero column wants and what the pair beside it
+  // wants, so the case that isolates the hero is the one where only the hero's
+  // own shape is known: then the plan is that shape divided by the hero cell's
+  // share of the grid, and nothing else.
+  const heroOnly = planMediaGrid(
+    [{ type: 'image', url: 'https://pbs.twimg.com/media/hero.jpg', aspectRatio: 1 },
+     { type: 'image', url: 'https://pbs.twimg.com/media/second.jpg' },
+     { type: 'image', url: 'https://pbs.twimg.com/media/third.jpg' }],
+    AUTO_GRID
+  );
+  assert.equal(heroOnly.layout, 'left-hero');
+  assert.equal(
+    heroOnly.aspectRatio,
+    (1 / heroCellRatio()).toFixed(2),
+    'the planned shape must be the hero shape divided by the share the weights make'
+  );
+
+  // The top-hero shape is the hero row's share of the grid's height, times the
+  // hero's own shape — again derived, not written down. A wide hero is chosen
+  // because that is what the arrangement is for, and because a narrow one
+  // would fall under the shape's own floor.
+  const topHero = planMediaGrid(
+    [{ type: 'image', url: 'https://pbs.twimg.com/media/hero.jpg', aspectRatio: 1.8 },
+     { type: 'image', url: 'https://pbs.twimg.com/media/second.jpg' },
+     { type: 'image', url: 'https://pbs.twimg.com/media/third.jpg' }],
+    AUTO_GRID
+  );
+  assert.equal(topHero.layout, 'top-hero');
+  assert.equal(
+    topHero.aspectRatio,
+    (heroRowShare() * 1.8).toFixed(2),
+    'the planned shape must be the hero row share times the hero shape'
+  );
+});
+
+test('F17.21: the mount a picture is hung on has one number, and it is the injected one', async () => {
+  // The mount was 8px in the card, 8px in the stylesheet's mat rule and 0px in
+  // the grid planner's fallback — two fallbacks that read as a contradiction
+  // until you notice they answer for different cases. The card's own figure
+  // now comes from one place.
+  const plain = await renderCard();
+  assert.ok(
+    new RegExp(`--media-mount:\\s*0px`).test(plain),
+    'a material that mounts nothing says so'
+  );
+
+  // A material that mounts its pictures says the one number.
+  const gallery = await renderCard({ config: { theme: 'gallery' } });
+  assert.ok(
+    new RegExp(`--media-mount:\\s*${MEDIA_MOUNT}`).test(gallery),
+    `the card must inject the mount (${MEDIA_MOUNT})`
+  );
+});
+
+test('F17.22: the panel and the stage read the same narrow boundary', () => {
+  // The stylesheet decides how the panel is laid out and the script decides
+  // how it starts, so the boundary has to be one number. A media query's
+  // condition cannot be read from the script, so this asserts the script's
+  // side and the stylesheet's side agree.
+  assert.equal(NARROW_BREAKPOINT, 900);
+  assert.equal(viewportPadding(NARROW_BREAKPOINT), 12, 'at the boundary the stage trims');
+  assert.equal(viewportPadding(NARROW_BREAKPOINT + 1), 24, 'past it the stage breathes');
+
+  const modalCss = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/modal.css'), 'utf-8');
+  assert.ok(
+    modalCss.includes(`@media (max-width: ${NARROW_BREAKPOINT}px)`),
+    'the stylesheet must break at the same width the script does'
+  );
+});
+
 test('F14.6: the thread layout keeps the connector and the text in their own columns', async () => {
   const html = await renderCard({ data: THREAD });
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
@@ -1692,7 +1825,11 @@ test('F14.7: independent same-author posts are not merged into a thread', () => 
 
   assert.equal(isTemporallyConnected(first, second), false, 'six weeks apart is not a continuation');
   assert.equal(
-    isThreadConnectedPair(august, september, first, second, true, false),
+    isThreadConnectedPair(
+      { isDetailPage: false },
+      { article: august, tweet: first },
+      { article: september, tweet: second }
+    ),
     false,
     'so the same author posting twice must not be read as one thread'
   );
@@ -1733,7 +1870,11 @@ test('F14.8: a post replying to someone else ends the thread', () => {
 
   assert.equal(isTemporallyConnected(first, second), true, 'this pair is otherwise continuous');
   assert.equal(
-    isThreadConnectedPair(main, reply, first, second, true, false),
+    isThreadConnectedPair(
+      { isDetailPage: false },
+      { article: main, tweet: first },
+      { article: reply, tweet: second }
+    ),
     false,
     'a reply aimed at a third party is not the author continuing'
   );
@@ -1884,7 +2025,15 @@ async function withContainerEnv(
   // Effects are deferred, not synchronous: Preact flushes them from a 35ms
   // timer. Asserting before that lands reads a component whose effects have
   // never run.
-  const flushEffects = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 60));
+  //
+  // Two flushes are needed, not one: the mount reads the stored preferences
+  // asynchronously, and the answer lands in a state update that Preact then
+  // flushes on the next timer. Measured on this machine, the stored theme
+  // reaches the card 78-104ms after the mount — over two 35ms timers and the
+  // storage round trip between them. The old 60ms was below even the low end
+  // of that, so the assertion raced the answer and failed at random.
+  const flushEffects = (): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, 150));
 
   try {
     if (!containerModule) {
@@ -2667,6 +2816,42 @@ test('F18.2: the corner picker offers three explicit corners plus follow-theme',
   }
 });
 
+test('F18.2b: an option names its values and its default in one place', () => {
+  // The picker list, the sanitiser and the shipped configuration were three
+  // hand-written copies of the same option, and the corner's three copies
+  // disagreed: the sanitiser answered '12px' for a value that was never set
+  // while the card shipped with 'theme', which is what the `??` in
+  // `normalizeStoredConfig` existed to paper over. One option now says all
+  // three, so there is nothing left to disagree about.
+  const options = [
+    { name: 'padding', option: PADDING, shipped: DEFAULT_CARD_CONFIG.padding, sanitize: sanitizePadding },
+    { name: 'radius', option: RADIUS, shipped: DEFAULT_CARD_CONFIG.borderRadius, sanitize: sanitizeRadius },
+    { name: 'aspect ratio', option: ASPECT_RATIO, shipped: DEFAULT_CARD_CONFIG.aspectRatio, sanitize: sanitizeAspectRatio },
+    { name: 'image fit', option: IMAGE_FIT, shipped: DEFAULT_CARD_CONFIG.imageFit, sanitize: sanitizeImageFit },
+    { name: 'media layout', option: MEDIA_LAYOUT, shipped: DEFAULT_CARD_CONFIG.mediaLayout, sanitize: sanitizeMediaLayout },
+    { name: 'canvas ratio', option: CANVAS_RATIO, shipped: DEFAULT_CARD_CONFIG.canvasRatio, sanitize: sanitizeCanvasRatio },
+    { name: 'canvas background', option: CANVAS_BACKGROUND, shipped: DEFAULT_CARD_CONFIG.canvasBackground, sanitize: sanitizeCanvasBackground },
+  ];
+
+  for (const { name, option, shipped, sanitize } of options) {
+    assert.ok(option.values.includes(option.default), `${name}'s default must be one of its own values`);
+    assert.equal(shipped, option.default, `${name}'s shipped default must be the option's own`);
+
+    // Every value the option offers survives a round trip, and everything else
+    // falls back to the same default the card ships with.
+    for (const value of option.values) {
+      assert.equal(sanitize(value), value, `${name} must admit ${value}`);
+    }
+    for (const bogus of ['', 'nonsense', '__proto__', 'constructor', 42, null, undefined]) {
+      assert.equal(
+        sanitize(bogus as string),
+        option.default,
+        `${name} must answer ${JSON.stringify(bogus)} with its own default`
+      );
+    }
+  }
+});
+
 test('F18.3: an unknown padding value falls back to the default rather than reaching the card', () => {
   // A stored preference can be anything: an older build, a hand-edited value, a
   // profile synced from another machine. It must not reach a CSS length.
@@ -2676,10 +2861,13 @@ test('F18.3: an unknown padding value falls back to the default rather than reac
 });
 
 test('F18.4: an unknown corner value falls back rather than reaching the card', () => {
-  // '12px' rather than the shipped default of 'theme': an unreadable value is
-  // answered with a concrete corner, not by handing the decision to the theme.
+  // The shipped default rather than a concrete corner: a value that cannot be
+  // read is not the user choosing a corner, so it must not pick one either.
+  // Answering '12px' would put a specific roundness on every card whose stored
+  // preference was damaged; answering 'theme' hands the decision back to the
+  // material, which is where the card's own default leaves it too.
   for (const bogus of ['100px', '12', 'round', 'url(x)', '']) {
-    assert.equal(sanitizeRadius(bogus), '12px', `admitted ${bogus}`);
+    assert.equal(sanitizeRadius(bogus), DEFAULT_CARD_CONFIG.borderRadius, `admitted ${bogus}`);
   }
   assert.equal(sanitizeRadius('theme'), 'theme');
 });
@@ -2723,24 +2911,27 @@ test('F18.6: follow-theme defers the corner to the theme, and inner never exceed
 // F19: Downward Expanding Poster Layouts
 // -------------------------------------------------------------
 test('F19.1: the Auto ratio sets no minimum height', () => {
-  assert.equal(getAspectMinHeight('auto'), 'auto');
-  assert.equal(getAspectMinHeight('auto', 1200), 'auto', 'the width is irrelevant to Auto');
+  assert.equal(aspectMinHeight('auto'), 'auto');
+  assert.equal(aspectMinHeight('auto', 1200), 'auto', 'the width is irrelevant to Auto');
 });
 
 test('F19.2: the 3:4 poster ratio floors the card at four thirds of its width', () => {
-  assert.equal(getAspectMinHeight('3:4', 640), '853px');
-  assert.equal(getAspectMinHeight('3:4', 320), '427px');
+  assert.equal(aspectMinHeight('3:4', 640), 'calc(640px * 4 / 3)');
+  assert.equal(aspectMinHeight('3:4', 320), 'calc(320px * 4 / 3)');
 });
 
 test('F19.3: the 16:9 banner ratio floors the card at nine sixteenths of its width', () => {
-  assert.equal(getAspectMinHeight('16:9', 640), '360px');
-  assert.equal(getAspectMinHeight('16:9', 1280), '720px');
+  assert.equal(aspectMinHeight('16:9', 640), 'calc(640px * 9 / 16)');
+  assert.equal(aspectMinHeight('16:9', 1280), 'calc(1280px * 9 / 16)');
 });
 
 test('F19.4: a poster card reaches its floor without being pinned to it', async () => {
   const style = cardRootStyle(await renderCard({ data: THREAD, config: { aspectRatio: '3:4' } }));
 
-  assert.ok(style.includes('min-height:853px'), `the poster floor has to reach the card: ${style}`);
+  assert.ok(
+    style.includes(`min-height:${aspectMinHeight('3:4', CARD_WIDTH)}`),
+    `the poster floor has to reach the card: ${style}`
+  );
   // A min-height alone is what lets long text expand past the floor; a fixed
   // height would clip it. Both the height and the overflow have to stay open.
   assert.ok(/height:\s*auto/.test(style), `the card root must be free to grow: ${style}`);
@@ -3778,9 +3969,10 @@ test('F25.4: an image the proxy cannot fetch becomes the placeholder, not a remo
 
     try {
       const url = 'https://pbs.twimg.com/media/unreachable.jpg';
-      assert.equal(await engine.fetchImageAsBase64(url, true), engine.FALLBACK_PLACEHOLDER_DATA_URL);
-      assert.equal(await engine.fetchImageAsBase64(url, false), url,
-        'and is passed through when no placeholder was asked for');
+      const result = await engine.resolveImageForExport(url);
+      assert.equal(result.ok, false, 'the picture could not be delivered');
+      assert.equal(result.src, engine.FALLBACK_PLACEHOLDER_DATA_URL,
+        'and what is drawn in its place is the placeholder, not the remote URL');
     } finally {
       if (savedChrome !== undefined) scope.chrome = savedChrome;
     }
@@ -3791,8 +3983,13 @@ test('F25.5: an image that is already a data URL is not sent through the proxy',
   const engine = await exportEngine();
   await withContainerEnv(async () => {
     const dataUrl = 'data:image/png;base64,AAAA';
-    assert.equal(await engine.fetchImageAsBase64(dataUrl, true), dataUrl);
-    assert.equal(await engine.fetchImageAsBase64('', true), '', 'and an empty source stays empty');
+    const result = await engine.resolveImageForExport(dataUrl);
+    assert.equal(result.ok, true);
+    assert.equal(result.src, dataUrl);
+
+    const empty = await engine.resolveImageForExport('');
+    assert.equal(empty.ok, true, 'and an empty source stays empty');
+    assert.equal(empty.src, '');
   });
 });
 
@@ -3824,9 +4021,9 @@ test('F25.6: a message the worker never received is asked again; an answer it ga
       };
       scope.chrome = retrying;
 
-      assert.equal(
-        await engine.fetchImageAsBase64(url, true),
-        'data:image/jpeg;base64,RETRIED',
+      assert.deepEqual(
+        await engine.resolveImageForExport(url),
+        { ok: true, src: 'data:image/jpeg;base64,RETRIED' },
         'a dropped message must not cost the picture'
       );
       assert.equal(calls, 2, 'the second ask is what recovered it');
@@ -3842,7 +4039,7 @@ test('F25.6: a message the worker never received is asked again; an answer it ga
       };
       scope.chrome = silent;
 
-      assert.equal(await engine.fetchImageAsBase64(url, true), engine.FALLBACK_PLACEHOLDER_DATA_URL);
+      assert.equal((await engine.resolveImageForExport(url)).src, engine.FALLBACK_PLACEHOLDER_DATA_URL);
       assert.equal(silentCalls, 3, 'a worker that never answers is asked the full number of times');
 
       // The other half of the rule. A worker that answered has already been to
@@ -3857,7 +4054,7 @@ test('F25.6: a message the worker never received is asked again; an answer it ga
       };
       scope.chrome = failing;
 
-      assert.equal(await engine.fetchImageAsBase64(url, true), engine.FALLBACK_PLACEHOLDER_DATA_URL);
+      assert.equal((await engine.resolveImageForExport(url)).src, engine.FALLBACK_PLACEHOLDER_DATA_URL);
       assert.equal(answered, 1, 'an answer is final; only a lost message is retried');
 
       // And the middle case: an answer the proxy itself marked as the network
@@ -3873,8 +4070,11 @@ test('F25.6: a message the worker never received is asked again; an answer it ga
       };
       scope.chrome = transient;
 
-      assert.equal(await engine.fetchImageAsBase64(url, true), 'data:image/jpeg;base64,LATE',
-        'a 503 is worth one more ask');
+      assert.deepEqual(
+        await engine.resolveImageForExport(url),
+        { ok: true, src: 'data:image/jpeg;base64,LATE' },
+        'a 503 is worth one more ask'
+      );
       assert.equal(flaky, 2);
     } finally {
       if (savedChrome !== undefined) scope.chrome = savedChrome;
@@ -3921,6 +4121,47 @@ test('F25.7: an avatar the proxy cannot deliver exports as the silhouette, not a
         'a media picture still gets the neutral square');
       assert.equal(preparation.failedImageCount, 2,
         'the export is degraded either way; the reader is still told what did not load');
+    } finally {
+      if (savedChrome !== undefined) scope.chrome = savedChrome;
+      else delete scope.chrome;
+    }
+  });
+});
+
+// -------------------------------------------------------------
+// F26: Clipboard Copy with Fallback
+// -------------------------------------------------------------
+test('F25.7: the rasterizer is handed a data URL, or nothing it can fetch', async () => {
+  // The rasterizer meets pictures of its own — a background it has to resolve —
+  // and asks for them through a hook. The hook's contract is narrow: a data URL
+  // to draw, or `false` to say "this one is not mine to fetch".
+  //
+  // The rule is the same one the card's own pictures follow: a picture the
+  // proxy could not deliver is drawn as the placeholder, and a blob URL is left
+  // to the rasterizer, which can read one.
+  const engine = await exportEngine();
+  await withContainerEnv(async () => {
+    const scope = globalThis as Record<string, unknown>;
+    const savedChrome = scope.chrome;
+
+    try {
+      const mock = createChromeMock();
+      mock.runtime.sendMessage = async () => ({
+        success: true,
+        dataUrl: 'data:image/jpeg;base64,PROXIED',
+        contentType: 'image/jpeg',
+      });
+      scope.chrome = mock;
+
+      const remote = await engine.resolveImageForExport('https://pbs.twimg.com/media/a.jpg');
+      assert.equal(remote.ok, true);
+      assert.equal(remote.src, 'data:image/jpeg;base64,PROXIED');
+
+      // A blob URL is the rasterizer's own, and the proxy never sees one.
+      const blob = await engine.resolveImageForExport('blob:http://x/abc');
+      assert.equal(blob.ok, true);
+      assert.equal(blob.src, 'blob:http://x/abc');
+      assert.ok(!blob.src.startsWith('data:'), 'so the hook hands it back rather than drawing it');
     } finally {
       if (savedChrome !== undefined) scope.chrome = savedChrome;
       else delete scope.chrome;
@@ -5188,7 +5429,7 @@ test('F28.4: card.css defines top-hero, left-hero, 4:3 quad and transparent cont
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
   assert.ok(cssContent.includes('data-grid-layout="top-hero"'), 'Must define top-hero layout rule');
   assert.ok(cssContent.includes('grid-column: span 2;'), 'Top hero item must span 2 columns');
-  assert.ok(cssContent.includes('minmax(0, 1.4fr) minmax(0, 1fr)'), 'Top hero must allocate 1.4fr to 1fr row height with minmax');
+  assert.ok(cssContent.includes('minmax(0, var(--grid-top-hero, 1.4fr)) minmax(0, 1fr)'), 'Top hero must allocate 1.4fr to 1fr row height with minmax');
   assert.ok(cssContent.includes('data-grid-layout="left-hero"'), 'Must define left-hero layout rule');
   assert.ok(cssContent.includes('data-grid-layout="stacked"'), 'Must define stacked 2-image rule');
   assert.ok(cssContent.includes('data-grid-layout="portrait-columns"'), 'Must define portrait-columns 2-image rule');
@@ -5272,7 +5513,7 @@ test('F28.8: the lone-picture 3:4 floor stays on cover and is gone from 完整�
 
 test('F28.6: 3-image layout uses left-hero for square/portrait (ratio < 1.2) with 1.6fr:1fr columns and dynamic ratio', () => {
   const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  assert.ok(cssContent.includes('minmax(0, 1.6fr) minmax(0, 1fr)'), 'Left hero must allocate 1.6fr to 1fr column width');
+  assert.ok(cssContent.includes('minmax(0, var(--grid-left-hero, 1.6fr)) minmax(0, 1fr)'), 'Left hero must allocate 1.6fr to 1fr column width');
 
   // Square comic (1.0) with square companions: left-hero, and a grid wide
   // enough to eliminate the vertical dead space the CSS default would leave.
@@ -5448,31 +5689,31 @@ test('F30.6: the popup switch paints a focus ring on the control that is visible
 
 
 /**
- * The popup's own copy table, read out of the shipped file.
+ * The popup's own copy table.
  *
- * The popup cannot export anything: it is a plain script loaded by a `<script>`
- * tag, not a build entry. Its user-facing strings are data in that file, so the
- * test reads them from the source rather than restating them — a rewording stays
- * allowed, and the assertion is still about what the popup actually shows.
+ * It lives in `src/content/popupCopy.ts` now, so the test reads the module
+ * rather than the shipped file — the same words the popup shows, without
+ * restating them, so a rewording stays allowed and the assertion is still
+ * about what the popup actually shows.
  */
-const POPUP_SOURCE = fs.readFileSync(path.resolve(__dirname, '../../public/popup.js'), 'utf-8');
-
 function popupCopy(key: string, locale: string): string {
-  const block = POPUP_SOURCE.slice(POPUP_SOURCE.indexOf(`'${locale}':`));
-  const match = new RegExp(`${key}:\\s*'([^']*)'`).exec(block);
-  assert.ok(match, `public/popup.js has no ${locale} copy for ${key}`);
-  return match![1];
+  const copy = POPUP_COPY[locale as keyof typeof POPUP_COPY];
+  assert.ok(copy, `there is no ${locale} copy`);
+  const value = (copy as unknown as Record<string, string>)[key];
+  assert.ok(value !== undefined, `the popup has no ${locale} copy for ${key}`);
+  return value;
 }
 
 /**
  * Loads the real popup against a document holding its markup, then clicks the
  * quick-trigger button with `chrome.tabs.sendMessage` answering `outcome`.
  *
- * The popup is the one shipped file nothing loaded: `node --check` only parses
- * it, and no test drove it, so its three send outcomes could collapse into one
- * branch without failing anything. It goes through the SSR pipeline the way
- * `index.ts` does — with a distinct query per load, since a plain script has no
- * exports and the module cache would otherwise make the second load a no-op.
+ * The popup is a build entry of its own now, and it is the one shipped file
+ * nothing else loaded: `node --check` only parsed it, and no test drove it, so
+ * its three send outcomes could collapse into one branch without failing
+ * anything. It goes through the SSR pipeline the way `index.ts` does — with a
+ * distinct query per load, since the module cache would otherwise make the
+ * second load a no-op.
  *
  * The locale comes from the popup itself (`documentElement.lang`, which it
  * writes from the browser's language) rather than being assumed: the copy table
@@ -5550,7 +5791,7 @@ async function withPopup(
   console.log = () => {};
   try {
     popupLoads++;
-    await loadModule(`/public/popup.js?load=${popupLoads}`);
+    await loadModule(`/src/content/popup.ts?load=${popupLoads}`);
     (options.interact ?? ((d: DomDocument) => d.getElementById('btn-trigger-now')!.click()))(doc);
     await body({
       status: () => doc.getElementById('status-text')!.textContent,

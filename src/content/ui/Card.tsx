@@ -8,9 +8,9 @@ import {
   MAT_SHADOW,
   resolveCanvasBackground,
   resolveRadius,
-  getAspectMinHeight,
   THEMES,
 } from './themes.ts';
+import { aspectMinHeight, CARD_WIDTH, CARD_WIDTH_FALLBACK, GRID_TRACKS, MEDIA_MOUNT } from './geometry.ts';
 import { planMediaGrid, applyMediaGridPlan, recordShape } from './mediaGrid.ts';
 import {
   imageFallbackAttrs,
@@ -18,7 +18,7 @@ import {
   advanceImageFallback,
   DEFAULT_AVATAR_SRC,
 } from './imageFallback.ts';
-import { threadScope, tweetKey } from './threadScope.ts';
+import { threadSession } from '../threadSession.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages } from 'lucide-preact';
 import { CARD_BUILD } from '../build.ts';
@@ -695,19 +695,12 @@ function renderThreadTweet(
 export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.Element {
   const t = getTranslation(sanitizeLocale(config.locale));
   const thread = normalizeThreadData(data);
-  // The same scope the controls panel reads, so the exclude buttons on the card
-  // only appear while a tweet may actually be dropped.
-  const scope = threadScope(thread, config.excludedTweetIds);
-
-  // Filter out manually excluded tweets
-  const activeTweets = thread.tweets.filter(
-    (tweet, idx) => !scope.excluded.has(tweetKey(tweet, idx))
-  );
-
-  // Guarantee at least one tweet is rendered (prefer target tweet or first available)
-  const targetIndex = thread.targetTweetIndex ?? 0;
-  const fallbackTweet = thread.tweets[targetIndex] || thread.tweets[0];
-  const effectiveTweets = activeTweets.length > 0 ? activeTweets : [fallbackTweet];
+  // The one answer to which posts this card is showing, and to whether one
+  // more may be dropped. The controls panel and the preview summary read the
+  // same session, so the exclude buttons on the card only appear while a post
+  // may actually be dropped.
+  const session = threadSession(thread, config.excludedTweetIds);
+  const effectiveTweets = session.showing;
 
   const isThread = effectiveTweets.length > 1;
   const mainTweet = effectiveTweets[0];
@@ -719,7 +712,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
   const radius = resolveRadius(config.borderRadius, config.theme);
   const mediaRadius = radius.media;
   const tokens = THEMES[config.theme].tokens;
-  const minHeightStyle = getAspectMinHeight(config.aspectRatio, 640);
+  const minHeightStyle = aspectMinHeight(config.aspectRatio, CARD_WIDTH);
 
   // Every option is carried by its data attribute alone. Each one used to be
   // emitted twice, as a class here and as an attribute below, and card.css
@@ -772,6 +765,10 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
       class="ptc-mat"
       data-canvas-ratio={canvasRatio}
       style={{
+        // The card's own width, injected here so the mat's floor and the card's
+        // box are built on the same number: the stylesheet reads it, it does
+        // not keep its own. The card inherits it from this element.
+        '--card-width': CARD_WIDTH_FALLBACK,
         '--mat-pad': matActive ? MAT_PADDING : '0px',
         // Omitted rather than set to 'none': an unset custom property and a
         // `none` background paint the same, and leaving it off keeps the
@@ -800,7 +797,9 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
           // Every theme colour, the type pair, the signature geometry and the
           // rhythm come from the token table and are injected here. card.css only
           // consumes them, so there is one place to edit a theme and no second
-          // copy to drift out of sync.
+          // copy to drift out of sync. The mount a picture is hung on and the
+          // grid's hero weights are geometry, and they are injected the same
+          // way: the stylesheet reads them, it does not keep its own numbers.
           '--surface': tokens.surface,
           '--text': tokens.text,
           '--text-sec': tokens.muted,
@@ -827,8 +826,11 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
           // What a cell adds around its picture besides its ring: the passe-partout
           // where the material mounts pictures that way. The grid planner reads it
           // so a line of mounted pictures still comes out one height.
-          '--media-mount': tokens.mediaFrame === 'mat' ? '8px' : '0px',
+          '--media-mount': tokens.mediaFrame === 'mat' ? MEDIA_MOUNT : '0px',
           '--media-radius': mediaRadius,
+          // The hero weights the grid planner's arithmetic is derived from.
+          '--grid-left-hero': `${GRID_TRACKS.leftHero}fr`,
+          '--grid-top-hero': `${GRID_TRACKS.topHero}fr`,
           '--font-display': tokens.fontDisplay,
           '--font-body': tokens.fontBody,
           // The material's letterforms. card.css applies each of these to the
@@ -864,7 +866,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
                 imageFit,
                 mediaLayout,
                 onExcludeTweet,
-                scope.canExcludeMore
+                session.canExcludeMore
               );
             })}
           </div>

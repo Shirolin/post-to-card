@@ -5,8 +5,9 @@ import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIO
 import { getTranslation, sanitizeLocale, type Translations } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
-import { threadScope, tweetKey, toggleExcluded, selectCurrentOnly } from './threadScope.ts';
+import { threadSession, toggleExcluded, selectCurrentOnly } from '../threadSession.ts';
 import { hasRenderableStats } from './Card.tsx';
+import { NARROW_BREAKPOINT } from './geometry.ts';
 import { isLongCard } from '../engine/scale.ts';
 import {
   Languages,
@@ -283,7 +284,7 @@ export function Controls({
    */
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined' || typeof window.innerWidth !== 'number') return true;
-    return window.innerWidth > 900;
+    return window.innerWidth > NARROW_BREAKPOINT;
   });
   const moreId = useId();
   const themeGridId = useId();
@@ -322,31 +323,23 @@ export function Controls({
     return (t[key] as string) || defaultName;
   };
 
-  // The same scope the card renders from, so the counts here and the buttons on
-  // the card cannot disagree about what may still be dropped.
-  const { excluded, activeCount, totalCount, canExcludeMore } = threadScope(
-    threadData,
-    config.excludedTweetIds
-  );
+  // The one answer to which posts this card is showing, which of them are
+  // excluded, and whether one more may be dropped. The card renders from the
+  // same session, so the counts here and the buttons on the card cannot
+  // disagree about what may still be dropped.
+  const session = threadSession(threadData, config.excludedTweetIds);
+  const { rows, rawCount, totalCount, canExcludeMore } = session;
   const totalTweets = totalCount;
 
   /**
    * The post the card actually prints its footer from.
    *
-   * The panel is handed the thread, not the scope, so it derives the same one the
-   * card does rather than reading the first tweet it is given. The two name
-   * different posts whenever a target or an exclusion moves it, and the panel
+   * The session names the posts the card is showing, so the panel asks about
+   * the first of them rather than deriving the same set again. The two named
+   * different posts whenever a target or an exclusion moved it, and the panel
    * would then offer a toggle for a footer the card is not drawing.
    */
-  const activeTweets = (threadData?.tweets || []).filter(
-    (tweet, idx) => !excluded.has(tweetKey(tweet, idx))
-  );
-  const fallbackIndex = threadData?.targetTweetIndex ?? 0;
-  const fallbackTweet = threadData?.tweets[fallbackIndex] || threadData?.tweets[0];
-  // The same effective set the card draws from, so every question asked below
-  // about "this post" is asked about the posts that will actually be printed.
-  const effectiveTweets =
-    activeTweets.length > 0 ? activeTweets : fallbackTweet ? [fallbackTweet] : [];
+  const effectiveTweets = session.showing;
   const mainTweet = effectiveTweets[0];
 
   /**
@@ -429,10 +422,6 @@ export function Controls({
     updateConfig({ excludedTweetIds: [] });
   };
 
-  const targetKey = threadData
-    ? tweetKey(threadData.tweets[threadData.targetTweetIndex ?? 0], threadData.targetTweetIndex ?? 0)
-    : '';
-
   const handleSelectCurrentOnly = () => {
     if (!threadData) return;
     updateConfig({ excludedTweetIds: selectCurrentOnly(threadData) });
@@ -467,14 +456,14 @@ export function Controls({
               <span class="control-label">
                 <ListFilter size={14} strokeWidth={2} />
                 <span>{t.manageTweets}</span>
-                <span class="control-count">{activeCount}/{totalTweets}</span>
+                <span class="control-count">{rawCount}/{totalTweets}</span>
               </span>
               <div class="tweet-manager-actions">
                 <button
                   type="button"
                   class="btn-text-action"
                   onClick={handleSelectAll}
-                  disabled={activeCount === totalTweets}
+                  disabled={rawCount === totalTweets}
                 >
                   {t.selectAll}
                 </button>
@@ -482,17 +471,16 @@ export function Controls({
                   type="button"
                   class="btn-text-action"
                   onClick={handleSelectCurrentOnly}
-                  disabled={!canExcludeMore && !excluded.has(targetKey)}
+                  disabled={!canExcludeMore && !session.targetExcluded}
                 >
                   {t.selectCurrentOnly}
                 </button>
               </div>
             </div>
             <div class="tweet-manager-list" role="group" aria-label={t.manageTweets}>
-              {threadData.tweets.map((tweet, idx) => {
-                const key = tweetKey(tweet, idx);
-                const isExcluded = excluded.has(key);
-                const isTarget = idx === (threadData.targetTweetIndex ?? 0);
+              {rows.map((row, idx) => {
+                const { tweet, key, excluded: isExcluded } = row;
+                const isTarget = key === session.targetKey;
                 // `text` is the canonical field and the primary source. The rich tokens are
                 // read as a fallback because `Card` renders from them, so a tweet that
                 // arrives carrying only tokens would otherwise be labelled "media

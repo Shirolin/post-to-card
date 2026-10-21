@@ -3,10 +3,10 @@
     "src/background/index.ts",
     "src/content/index.ts",
     "src/content/graphql/hook.ts",
+    "src/content/popup.ts",
     "dev/preview.ts",
     "dev/verify-extension.mjs",
-    "dev/vite.harness.config.ts",
-    "public/popup.js"
+    "dev/vite.harness.config.ts"
   ],
   "project": ["src/**/*.{ts,tsx}", "tests/**/*.ts", "dev/**/*.ts"],
   "ignoreExportsUsedInFile": true

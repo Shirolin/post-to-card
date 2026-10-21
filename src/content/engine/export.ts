@@ -177,23 +177,6 @@ export async function resolveImageForExport(url: string): Promise<ImageFetchResu
   }
 }
 
-/**
- * The string-only shape the rest of the engine and its tests already use.
- *
- * `fallbackToPlaceholder: false` keeps the original address on failure, which
- * is what the rasterizer's `fetchFn` needs in order to be told `false` and try
- * the URL itself. The failure is still reported by `resolveImageForExport`
- * where that matters.
- */
-export async function fetchImageAsBase64(
-  url: string,
-  fallbackToPlaceholder: boolean = false
-): Promise<string> {
-  const result = await resolveImageForExport(url);
-  if (result.ok) return result.src;
-  return fallbackToPlaceholder ? FALLBACK_PLACEHOLDER_DATA_URL : url;
-}
-
 export interface CardImagePreparation {
   /** Always safe to call, and safe to call after a partial preparation. */
   restore: () => void;
@@ -324,15 +307,6 @@ export async function prepareCardImages(cardElement: HTMLElement): Promise<CardI
     failures,
     failedImageCount: failures.reduce((sum, failure) => sum + failure.occurrences, 0),
   };
-}
-
-/**
- * The original string-returning shape, kept for callers that only need the
- * restoration handle (the engine's own tests among them).
- */
-export async function replaceCardImagesWithBase64(cardElement: HTMLElement): Promise<() => void> {
-  const preparation = await prepareCardImages(cardElement);
-  return preparation.restore;
 }
 
 /**
@@ -501,8 +475,13 @@ export async function renderCardToBlob(
       },
       filter,
       fetchFn: async (url: string) => {
-        const dataUrl = await fetchImageAsBase64(url, true);
-        return dataUrl.startsWith('data:') ? dataUrl : false;
+        // The same rule the card's own pictures follow: a picture the proxy
+        // could not deliver is drawn as the placeholder rather than left to
+        // fail against the canvas. A blob URL is the rasterizer's to fetch, and
+        // the proxy never sees one.
+        const result = await resolveImageForExport(url);
+        const src = result.ok ? result.src : FALLBACK_PLACEHOLDER_DATA_URL;
+        return src.startsWith('data:') ? src : false;
       },
     });
 

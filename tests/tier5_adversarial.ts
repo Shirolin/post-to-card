@@ -344,10 +344,10 @@ async function runAdversarialSuite() {
     (globalThis as any).chrome = chromeMock;
 
     try {
-      const restore = await (await exportEngine()).replaceCardImagesWithBase64(card as unknown as HTMLElement);
+      const preparation = await (await exportEngine()).prepareCardImages(card as unknown as HTMLElement);
       assert.equal(img.src, 'data:image/jpeg;base64,swapped_clean_data');
 
-      restore();
+      preparation.restore();
       assert.equal(img.src, originalSrc, 'Image src must be restored to original after render');
     } finally {
       (globalThis as any).chrome = originalChrome;
@@ -389,7 +389,7 @@ async function runAdversarialSuite() {
     (globalThis as any).chrome = chromeMock;
 
     try {
-      const restore = await (await exportEngine()).replaceCardImagesWithBase64(card as unknown as HTMLElement);
+      const preparation = await (await exportEngine()).prepareCardImages(card as unknown as HTMLElement);
 
       assert.equal(rawTweet.author.avatarUrl, 'https://pbs.twimg.com/avatar.jpg');
       assert.equal(
@@ -402,7 +402,7 @@ async function runAdversarialSuite() {
         'the live card must be swapped for the duration of the export'
       );
 
-      restore();
+      preparation.restore();
 
       assert.equal(
         img.getAttribute('src'),

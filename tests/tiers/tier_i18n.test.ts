@@ -16,6 +16,7 @@ import {
   formatPreviewSummary,
   type Locale,
 } from '../../src/content/i18n.ts';
+import { CANVAS_BACKGROUND_ORDER } from '../../src/content/ui/themes.ts';
 
 const { test, run } = createSuite();
 
@@ -32,6 +33,25 @@ test('i18n.1: TRANSLATIONS dictionary has 100% key parity between zh-CN and en-U
     const enVal = TRANSLATIONS['en-US'][k as keyof typeof TRANSLATIONS['en-US']];
     assert.ok(typeof zhVal === 'string' && zhVal.length > 0, `zh-CN key ${k} must be non-empty`);
     assert.ok(typeof enVal === 'string' && enVal.length > 0, `en-US key ${k} must be non-empty`);
+  }
+});
+
+test('i18n.1b: every canvas background has a label in every language', () => {
+  // The canvas backgrounds are named by id, and the dictionary's keys follow
+  // that naming. The panel falls back to the table's English name for a key a
+  // dictionary lacks — so a background added to the table but not to the
+  // dictionary would show an English name inside a Chinese panel, quietly.
+  // The ids live in one place now; this is what keeps the names in step.
+  for (const id of CANVAS_BACKGROUND_ORDER) {
+    const key = `canvasBg_${id}`;
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const dictionary = TRANSLATIONS[locale];
+      const label = dictionary[key as keyof typeof dictionary];
+      assert.ok(
+        typeof label === 'string' && label.length > 0,
+        `${locale} must name the "${id}" background (key ${key})`
+      );
+    }
   }
 });
 

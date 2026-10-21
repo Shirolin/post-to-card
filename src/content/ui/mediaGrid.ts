@@ -38,6 +38,7 @@
 
 import type { MediaItem } from '../../types/tweet.ts';
 import type { AspectRatioOption, ImageFitOption, MediaLayoutOption } from '../../types/card.ts';
+import { heroCellRatio, heroRowShare } from './geometry.ts';
 
 /** The arrangements card.css knows how to draw. */
 export type GridLayout =
@@ -174,21 +175,21 @@ function shapeForLayout(count: number, layout: GridLayout, items: MediaItem[]): 
       const r1 = items[1]?.aspectRatio;
       const r2 = items[2]?.aspectRatio;
       const rRight = (r1 !== undefined && r2 !== undefined) ? (r1 + r2) / 2 : (r1 ?? r2 ?? 1.0);
-      // Left cell aspect ratio in 1.6fr:1fr columns is 0.615 * R_grid.
-      // Target R_grid to let r0 fill left column: 1.625 * r0.
+      // The hero cell is `heroCellRatio()` of the grid's own shape, so the grid
+      // shape that lets r0 fill it is r0 divided by that share. The share comes
+      // from the stylesheet's own track weights, so the two cannot disagree.
       // Balanced with right column target (0.77 * R_grid ~ rRight): 1.30 * rRight.
-      const targetFromLeft = 1.625 * r0;
+      const targetFromLeft = r0 / heroCellRatio();
       const targetFromRight = 1.30 * rRight;
       const combined = (r1 !== undefined || r2 !== undefined)
         ? 0.65 * targetFromLeft + 0.35 * targetFromRight
         : targetFromLeft;
       return Number(Math.max(1.15, Math.min(1.65, combined)).toFixed(2));
     }
-    // Top-hero: Row 1 is 1.4fr out of 2.4fr (0.583 H).
-    // Row 1 cell aspect ratio is R_grid / 0.583 = 1.714 * R_grid.
-    // Target R_grid to let r0 fill Row 1: 0.583 * r0.
+    // Top-hero: the hero row is `heroRowShare()` of the grid's height, so the
+    // grid shape that lets r0 fill it is r0 times that share.
     const r0Val = r0 ?? 1.6;
-    const combined = 0.583 * r0Val;
+    const combined = heroRowShare() * r0Val;
     return Number(Math.max(1.00, Math.min(1.40, combined)).toFixed(2));
   }
 
@@ -273,6 +274,13 @@ function linesFor(layout: BandLayout, count: number): number[][] {
  * under a mat frame would come out with unequal heights, the mount being a
  * constant against pictures of different shapes. It is per side because a line
  * pays it once per side and the hero column pays it twice.
+ *
+ * The mount's fallback is 0px while the stylesheet's own mat rule falls back to
+ * 8px, and the two are not in conflict: the stylesheet's rule only runs under a
+ * material that mounts pictures, so 8px is the right default there, while this
+ * is the general case, where most materials mount nothing. The card injects the
+ * property either way, so a fallback only fires when a grid is planned outside
+ * the card.
  */
 const EDGE = '(var(--border-width, 1px) + var(--media-mount, 0px))';
 

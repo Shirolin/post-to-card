@@ -102,7 +102,8 @@ test('gql.7: a retweet reads media from the nested original, not the outer objec
 test('gql.8: a tombstone yields no thread rather than an empty card', () => {
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_TOMBSTONE_JSON, 'TweetDetail', 'q1');
   assert.equal(parsed.thread, null, 'a deleted post must not produce a card');
-  assert.ok(parsed.parseError, 'the reason must be reported so the DOM channel takes over');
+  assert.equal(parsed.failure?.reason, 'no-tweets',
+    'the reason must be reported so the DOM channel takes over');
 });
 
 test('gql.9: paging cursors are not treated as tweets', () => {
@@ -118,9 +119,20 @@ test('gql.10: a visibility-restricted tweet is unwrapped to its real payload', (
 });
 
 test('gql.11: malformed and empty bodies are reported as misses, never as success', () => {
-  for (const body of ['', 'not json', '{}', '{"data":{}}', 'null']) {
+  // Each body fails in its own way, and the reason is told apart so a caller
+  // can tell a broken capture from a payload X has changed the shape of.
+  const cases: Array<[string, string]> = [
+    ['', 'invalid-json'],
+    ['not json', 'invalid-json'],
+    ['null', 'unexpected-shape'],
+    ['{}', 'unexpected-shape'],
+    ['{"data":{}}', 'no-tweets'],
+  ];
+  for (const [body, reason] of cases) {
     const parsed = parseTweetDetailResponse(body, 'TweetDetail', 'q1');
     assert.equal(parsed.thread, null, `body ${JSON.stringify(body)} must not yield a thread`);
+    assert.equal(parsed.failure?.reason, reason,
+      `body ${JSON.stringify(body)} must report why it did not answer`);
   }
 });
 
@@ -150,7 +162,8 @@ test('gql.14: a cached payload that does not contain the target tweet is a miss'
   // the requested id must be reported as a miss so the DOM channel answers.
   const parsed = parseTweetDetailResponse(TWEET_DETAIL_THREAD_JSON, 'TweetDetail', 'q1', '9999');
   assert.equal(parsed.thread, null, 'a payload missing the target tweet must not produce a card');
-  assert.ok(parsed.parseError, 'the miss must be reported so the caller falls back');
+  assert.deepEqual(parsed.failure, { reason: 'target-absent', targetTweetId: '9999' },
+    'the miss must name the post that was missing, so the caller falls back');
 });
 
 test('gql.15: the avatar is read from the newer user shape, not just legacy', () => {
@@ -529,7 +542,7 @@ test('gql.31: a TweetResultByRestId body is read as a one-post thread', () => {
   // and before this branch existed every such payload reported "no tweets in
   // response" and the status page silently lost its GraphQL channel.
   const parsed = parseTweetDetailResponse(TWEET_RESULT_BY_REST_ID_JSON, 'TweetResultByRestId', 'q1');
-  assert.ok(parsed.thread, `expected a thread, got ${parsed.parseError}`);
+  assert.ok(parsed.thread, `expected a thread, got ${parsed.failure?.reason}`);
   assert.equal(parsed.thread!.tweets.length, 1, 'this operation carries exactly the post it was asked for');
   assert.equal(parsed.thread!.isSingle, true);
   assert.equal(parsed.thread!.tweets[0].id, '6001');

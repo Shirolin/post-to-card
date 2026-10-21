@@ -10,6 +10,13 @@ import { QUOTE_LEVELS, unavailableQuote } from '../../types/tweet.ts';
 import { restoreUnicodeEmojis, cleanTweetText, normalizeTweetWhitespace, isPicMediaLink, stripTrailingArticleLink, stripTrailingArticleToken } from './emojis.ts';
 import { upgradeAvatarUrl, upgradePhotoUrl, extractVideoPosterUrl } from './urls.ts';
 import { classifySocial, getRetweetedBy } from './social.ts';
+import {
+  ARTICLE_BODY,
+  ARTICLE_READ_VIEW,
+  resolveOwnership,
+  ownerOf,
+  type TweetOwnership,
+} from './ownership.ts';
 
 export type RichTokenType = 'text' | 'mention' | 'hashtag' | 'cashtag' | 'link' | 'emoji';
 
@@ -46,162 +53,12 @@ function isShowMoreMarker(el: Element): boolean {
   return el.getAttribute('data-testid') === SHOW_MORE_TESTID;
 }
 
-/** The article's reading surface: the nested <article> holding the prose. */
-const ARTICLE_READ_VIEW = '[data-testid="twitterArticleReadView"]';
-
-/**
- * The article's own content region. Media and links inside it belong to the
- * article, not to the tweet that carries it.
- */
-const ARTICLE_BODY = '[data-testid="twitterArticleRichTextView"], [data-testid="longformRichTextComponent"]';
-
-/** True when `el` is, or sits inside, the article's reading surface. */
-function isInsideArticleReadView(el: Element | null | undefined): boolean {
-  if (!el) return false;
-  const closest = (el as Element).closest;
-  return typeof closest === 'function' ? Boolean(closest.call(el, ARTICLE_READ_VIEW)) : false;
-}
-
-/**
- * True when `el` sits inside the article's prose.
- *
- * Deliberately narrower than `isInsideArticleReadView`: the cover image and the
- * title live in the read view but outside the prose, and they are the two parts
- * of the article the card actually keeps.
- */
-function isInsideArticleBody(el: Element | null | undefined): boolean {
-  if (!el) return false;
-  const closest = (el as Element).closest;
-  return typeof closest === 'function' ? Boolean(closest.call(el, ARTICLE_BODY)) : false;
-}
-
 /** The article's reading surface inside a tweet, or null when there is none. */
 function findArticleReadView(article: Element): Element | null {
   if (!article) return null;
   return article.querySelector(ARTICLE_READ_VIEW);
 }
 
-/**
- * Returns true when `el` sits inside an <article> that is itself nested in
- * another <article> (how X sometimes renders a quoted post).
- *
- * A long-form post renders its article as a nested <article> too, but that
- * article is the tweet's own content rather than a quoted post. Counting it here
- * made every element of the article look quoted, and the extractor treats quoted
- * content as not-the-tweet's: stats were dropped and the cover image was
- * filtered out of the media pass. So the walk skips the article's reading
- * surface when deciding what counts as an article boundary.
- */
-function isInsideNestedArticle(el: Element): boolean {
-  let curr: Element | null = el.parentElement;
-  let seenArticle = false;
-  while (curr) {
-    const isReadView = isInsideArticleReadView(curr);
-    if ((curr.tagName || '').toUpperCase() === 'ARTICLE' && !isReadView) {
-      if (seenArticle) return true;
-      seenArticle = true;
-    }
-    curr = curr.parentElement;
-  }
-  return false;
-}
-
-/**
- * Locates the quoted-post container inside a tweet article.
- *
- * `scope` is where the search starts: the tweet's own article at the top level,
- * or the quote box being read when looking for the quote *it* carries. The one
- * box that must never be a candidate is the caller's own — a quoted post that
- * quotes someone renders as two boxes with the same testid, one nested in the
- * other, and the outer one is the very thing being read. `exclude` names it.
- *
- * X has changed the marker for this box more than once, and a missed match is
- * silent: the quote is dropped AND its media leaks into the main tweet. So we
- * fall back through progressively weaker structural signals instead of trusting
- * a single data-testid.
- */
-function findQuoteContainer(article: Element, exclude?: Element | null): Element | null {
-  if (!article) return null;
-
-  const isNotSelf = (candidate: Element) => candidate !== exclude;
-
-  // 1. Canonical marker used by current X. The article's prose can embed a post
-  //    that itself quotes someone, and that quote carries the same testid, so a
-  //    document-order search would adopt a stranger's quote as this tweet's.
-  //    Scoped past the article body for the same reason step 3 is.
-  const byTestId = Array.from(article.querySelectorAll('div[data-testid="quoteTweet"]')).find(
-    (candidate) => !isInsideArticleBody(candidate) && isNotSelf(candidate)
-  );
-  if (byTestId) return byTestId;
-
-  // 1b. Preview marker for a quote inside a quote. `nestedQuotePreview` is the
-  //     only testid X renders for the inner level (measured 2026-10-14; the
-  //     whole page carries zero `quoteTweet`). It is matched explicitly — but
-  //     only when looking for the quote a quote carries (`exclude` is set):
-  //     at the top level the outer box has no testid of its own, and matching
-  //     the inner box there would promote the inner post to level 1.
-  const byPreviewTestId = exclude
-    ? Array.from(article.querySelectorAll('[data-testid="nestedQuotePreview"]')).find(
-      (candidate) => !isInsideArticleBody(candidate) && isNotSelf(candidate)
-    )
-    : undefined;
-  if (byPreviewTestId) return byPreviewTestId;
-
-  // 2. Nested <article> — the quoted post rendered as its own article. The
-  //    article's reading surface is a nested <article> as well, and a bare
-  //    `querySelector('article')` matched it every time, turning a long-form
-  //    post into a fake quote box holding its own article. A quoted post carries
-  //    no read view, so skipping that subtree leaves genuine quotes intact —
-  //    including a quote inside an article, which keeps its own `quoteTweet`.
-  const nestedArticle = Array.from(article.querySelectorAll('article')).find(
-    (candidate) => !isInsideArticleReadView(candidate) && isNotSelf(candidate)
-  );
-  if (nestedArticle) return nestedArticle;
-
-  // 3. Structural fallback: any descendant that owns a second User-Name plus a
-  //    tweetText, while not containing the main post's User-Name. The article's
-  //    prose embeds other tweets, which carry both of those, so it is excluded
-  //    here for the same reason step 2 excludes the read view.
-  const mainUserName = article.querySelector('div[data-testid="User-Name"]');
-  const allUserNames = Array.from(article.querySelectorAll('div[data-testid="User-Name"]'));
-  for (const userName of allUserNames) {
-    if (userName === mainUserName) continue;
-    if (isInsideArticleBody(userName)) continue;
-
-    let node: Element | null = userName.parentElement;
-    while (node && node !== article) {
-      if (node === exclude) break;
-      if (node.querySelector('div[data-testid="tweetText"]')) {
-        if (!mainUserName || !node.contains(mainUserName)) return node;
-        break;
-      }
-      node = node.parentElement;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Checks if a given DOM element is nested inside a Quote Tweet box.
- */
-function isInsideQuoteTweet(el: Element): boolean {
-  if (el.closest('div[data-testid="quoteTweet"], [data-testid="nestedQuotePreview"]')) {
-    return true;
-  }
-
-  if (isInsideNestedArticle(el)) return true;
-
-  // Structural fallback: compare against the resolved quote container of the
-  // nearest article so media filtering stays in sync with quote extraction.
-  const article = el.closest('article');
-  if (article) {
-    const quote = findQuoteContainer(article);
-    if (quote && quote !== el && quote.contains(el)) return true;
-  }
-
-  return false;
-}
 
 /**
  * Extracts author display name from User-Name container,
@@ -546,15 +403,21 @@ function extractVideoDuration(container: Element): string | undefined {
  * Deeply searches an article or container for video elements and extracts
  * the poster frame URL or captures a frame via HTML5 Canvas.
  */
-function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem | null {
+function extractVideoMedia(
+  container: Element,
+  ownership: TweetOwnership,
+  excludeQuoted = false
+): MediaItem | null {
   if (!container) return null;
 
   // A main-tweet scan must not adopt a video that belongs to a nested quote, nor
   // one embedded in the prose of a long-form post's article.
   const firstMatch = <E extends Element>(selector: string): E | undefined =>
-    Array.from(container.querySelectorAll<E>(selector)).find(
-      (el) => !excludeQuoted || (!isInsideQuoteTweet(el) && !isInsideArticleBody(el))
-    );
+    Array.from(container.querySelectorAll<E>(selector)).find((el) => {
+      if (!excludeQuoted) return true;
+      const owner = ownerOf(el, ownership);
+      return owner.post === 'tweet' && !owner.inArticleBody;
+    });
 
   // 1. Locate the video container. Verified against a live GIF post: the
   //    data-testid variants are no longer rendered, so only the bare <video>
@@ -640,7 +503,7 @@ function extractVideoMedia(container: Element, excludeQuoted = false): MediaItem
     const targetSlot = (targetContainer.closest ? targetContainer.closest('div[data-testid="tweetPhoto"]') : null) ||
       (targetContainer.getAttribute?.('data-testid') === 'tweetPhoto' ? targetContainer : null);
     const imgs = Array.from(videoContainer.querySelectorAll('img')).filter(img => {
-      if (isInsideQuoteTweet(img)) return false;
+      if (ownerOf(img, ownership).post === 'quote') return false;
       const photoWrapper = img.closest('div[data-testid="tweetPhoto"]');
       if (photoWrapper && photoWrapper !== targetSlot) return false;
       return true;
@@ -797,13 +660,21 @@ function isVideoOrGifSlot(slot: Element): boolean {
  */
 function collectPhotoAndVideoMedia(
   container: Element,
+  ownership: TweetOwnership,
   acceptPhoto: (img: Element) => boolean,
   excludeQuotedVideo = false
 ): MediaItem[] {
   const items: MediaItem[] = [];
 
-  const isExcluded = (el: Element) =>
-    excludeQuotedVideo && (isInsideQuoteTweet(el) || isInsideArticleReadView(el) || isInsideArticleBody(el));
+  // A slot that belongs to the quoted post, or to the article's reading
+  // surface, is not this tweet's media. The reading surface is excluded whole:
+  // the article's cover is extracted separately as `article.cover`, so leaving
+  // it here would render the same picture twice.
+  const isExcluded = (el: Element) => {
+    if (!excludeQuotedVideo) return false;
+    const owner = ownerOf(el, ownership);
+    return owner.post === 'quote' || owner.inArticle || owner.inArticleBody;
+  };
 
   // 1. Scan primary media slots (tweetPhoto wrappers).
   // A tweet can contain multiple photos, GIFs, or a mix of both.
@@ -813,7 +684,7 @@ function collectPhotoAndVideoMedia(
 
   for (const slot of photoSlots.slice(0, 4)) {
     if (isVideoOrGifSlot(slot)) {
-      const videoItem = extractVideoMedia(slot, excludeQuotedVideo);
+      const videoItem = extractVideoMedia(slot, ownership, excludeQuotedVideo);
       if (videoItem) {
         pushUniqueMediaItem(items, videoItem);
         continue;
@@ -856,7 +727,7 @@ function collectPhotoAndVideoMedia(
 
     for (const slot of standaloneVideoSlots) {
       if (items.length >= 4) break;
-      const videoItem = extractVideoMedia(slot, excludeQuotedVideo);
+      const videoItem = extractVideoMedia(slot, ownership, excludeQuotedVideo);
       if (videoItem) {
         pushUniqueMediaItem(items, videoItem);
       }
@@ -865,7 +736,7 @@ function collectPhotoAndVideoMedia(
 
   // 3. Fallback: whole-container scan for unnested video elements or legacy shapes
   if (items.length < 4) {
-    const videoMedia = extractVideoMedia(container, excludeQuotedVideo);
+    const videoMedia = extractVideoMedia(container, ownership, excludeQuotedVideo);
     if (videoMedia) {
       pushUniqueMediaItem(items, videoMedia);
     }
@@ -883,18 +754,20 @@ function collectPhotoAndVideoMedia(
  * here would render the same picture twice. Its prose is excluded for the
  * stronger reason that its embedded posts are not this tweet's media.
  */
-function extractTweetMedia(article: Element): MediaItem[] | undefined {
-  const isArticleOwned = (el: Element) => isInsideArticleReadView(el);
-
+function extractTweetMedia(article: Element, ownership: TweetOwnership): MediaItem[] | undefined {
   const items = collectPhotoAndVideoMedia(
     article,
-    (img) => !isInsideQuoteTweet(img) && !isArticleOwned(img) && !isMediaPosterLayer(img),
+    ownership,
+    (img) => {
+      const owner = ownerOf(img, ownership);
+      return owner.post === 'tweet' && !owner.inArticle && !owner.inArticleBody && !isMediaPosterLayer(img);
+    },
     true
   );
 
   // External site link card (e.g. "来自 nintendo.com") only when nothing else.
   if (items.length === 0) {
-    const cardMedia = extractLinkCardMedia(article);
+    const cardMedia = extractLinkCardMedia(article, ownership);
     if (cardMedia) items.push(cardMedia);
   }
 
@@ -918,14 +791,23 @@ const NESTED_QUOTE_PREVIEW_MEDIA = '[data-testid="nestedQuotePreviewMedia"]';
  * Twitter/X renders these inside `div[data-testid="card.wrapper"]`, which the
  * photo/video strategies do not recognise, so the media silently disappeared.
  */
-function extractLinkCardMedia(container: Element, excludeQuoted = true): MediaItem | undefined {
+function extractLinkCardMedia(
+  container: Element,
+  ownership: TweetOwnership,
+  excludeQuoted = true
+): MediaItem | undefined {
   const card = container.querySelector('[data-testid="card.wrapper"], [data-testid="card.layoutLarge.media"]');
   if (!card) return undefined;
 
   if (excludeQuoted) {
-    if (isInsideQuoteTweet(card)) return undefined;
+    // Scanned from the tweet itself: a link card in the quoted post is not
+    // this tweet's.
+    if (ownerOf(card, ownership).post === 'quote') return undefined;
   } else {
-    const nestedQuote = findQuoteContainer(container);
+    // Scanned from inside a quoted post: a link card in *its* quoted post is
+    // not this level's. That is the quote nested one level further in, which
+    // the ownership already resolved.
+    const nestedQuote = ownership.nestedQuoteBox;
     if (nestedQuote && nestedQuote !== card && nestedQuote.contains(card)) return undefined;
   }
 
@@ -965,7 +847,7 @@ function extractLinkCardMedia(container: Element, excludeQuoted = true): MediaIt
  * localized ("图像" in a Chinese session), so a marker built on it would break
  * on the first non-English interface; the testids do not.
  */
-function extractArticle(article: Element): ArticleData | undefined {
+function extractArticle(article: Element, ownership: TweetOwnership): ArticleData | undefined {
   const readView = findArticleReadView(article);
   if (!readView) return undefined;
 
@@ -995,7 +877,7 @@ function extractArticle(article: Element): ArticleData | undefined {
 
   // The cover is the read view's own picture, not one from the prose.
   const coverImg = Array.from(readView.querySelectorAll('div[data-testid="tweetPhoto"] img')).find(
-    (img) => !isInsideArticleBody(img)
+    (img) => !ownerOf(img, ownership).inArticleBody
   );
   let cover: MediaItem | undefined;
   if (coverImg) {
@@ -1097,28 +979,24 @@ function statusPermalink(href: string): string | undefined {
  * it carries, when it carries one.
  *
  * The nesting is read by the same finder the top level uses, seeded with the box
- * being read and forbidden from selecting it: that is what makes the levels
- * distinct rather than one box reported twice.
- *
- * `exclude` names the caller's own box (see `findQuoteContainer`); the top
- * level passes nothing and the default applies.
+ * being read: that is what makes the levels distinct rather than one box
+ * reported twice. The ownership of the scope is resolved once here and passed
+ * down, so the level below resolves its own rather than re-walking the markup
+ * for every candidate it reads.
  */
 function extractQuoteTweet(
-  article: Element,
-  exclude: Element | null = null,
+  ownership: TweetOwnership,
   depth: number = 1
 ): QuoteTweetData | undefined {
-  const quoteBox = findQuoteContainer(article, exclude);
+  const quoteBox = ownership.quoteBox;
 
   if (!quoteBox) return undefined;
 
   // The quote nested inside this box, resolved once: every ownership check
   // below asks about the same container, so resolving it per candidate would
   // repeat the identical walk for each `User-Name`, `tweetText`, link, `time`
-  // and image in the box. (`findQuoteContainer` never returns the scope
-  // itself, so resolving with or without the self-exclusion answers the same
-  // here — and the same value guards the recursion below.)
-  const nestedInScope = findQuoteContainer(quoteBox);
+  // and image in the box.
+  const nestedInScope = ownership.nestedQuoteBox;
 
   // Handle deleted or unavailable quote post tombstone. Detected structurally
   // (a permalink with neither identity nor body) rather than by matching the
@@ -1168,10 +1046,12 @@ function extractQuoteTweet(
   // holds only what the quoted post itself attached. The deeper quote is only
   // read while the card would print it.
   const nested = depth < QUOTE_LEVELS && nestedInScope
-    ? extractQuoteTweet(quoteBox, quoteBox, depth + 1)
+    ? extractQuoteTweet(resolveOwnership(quoteBox), depth + 1)
     : undefined;
-  const media = collectPhotoAndVideoMedia(quoteBox, (img) =>
-    !isMediaPosterLayer(img) && !isInsideQuoteOf(img, nestedInScope)
+  const media = collectPhotoAndVideoMedia(
+    quoteBox,
+    ownership,
+    (img) => !isMediaPosterLayer(img) && !isInsideQuoteOf(img, nestedInScope)
   );
 
   // X's preview shape marks a quoted post's own media with its own testid
@@ -1194,7 +1074,7 @@ function extractQuoteTweet(
 
   // Quoted post may itself only carry an external link card.
   if (media.length === 0) {
-    const quoteCardMedia = extractLinkCardMedia(quoteBox, false);
+    const quoteCardMedia = extractLinkCardMedia(quoteBox, ownership, false);
     if (quoteCardMedia) media.push(quoteCardMedia);
   }
 
@@ -1234,14 +1114,15 @@ function parseStatValue(el: Element | null): string | undefined {
 /**
  * Extracts interaction statistics (replies, reposts, likes, bookmarks, views).
  */
-function extractTweetStats(article: Element): TweetStats | undefined {
+function extractTweetStats(article: Element, ownership: TweetOwnership): TweetStats | undefined {
   // The article's prose embeds other posts, and those carry an action bar of
   // their own. Document order puts the embedded one first, so a plain
   // `querySelector` reported a stranger's counts as this tweet's.
   const actionBars = Array.from(article.querySelectorAll('div[role="group"]'));
-  const actionBar = actionBars.find(
-    (bar) => !isInsideQuoteTweet(bar) && !isInsideArticleBody(bar)
-  );
+  const actionBar = actionBars.find((bar) => {
+    const owner = ownerOf(bar, ownership);
+    return owner.post === 'tweet' && !owner.inArticleBody;
+  });
   if (!actionBar) return undefined;
 
   const replies = parseStatValue(actionBar.querySelector('div[data-testid="reply"], button[data-testid="reply"]'));
@@ -1274,13 +1155,11 @@ function extractTweetStats(article: Element): TweetStats | undefined {
  * the testid is absent from it entirely. So the boundary is the resolved quote
  * container, the same one the media and stats passes already draw.
  */
-function findTweetStatusLink(article: Element): Element | null {
-  const quote = findQuoteContainer(article);
+function findTweetStatusLink(article: Element, ownership: TweetOwnership): Element | null {
   const links = article.querySelectorAll('a[href*="/status/"]');
   for (let i = 0; i < links.length; i++) {
     const link = links[i];
-    if (quote && (quote === link || quote.contains(link))) continue;
-    if (link.closest?.('[data-testid="quoteTweet"]')) continue;
+    if (ownerOf(link, ownership).post === 'quote') continue;
     return link;
   }
   return null;
@@ -1290,7 +1169,7 @@ function findTweetStatusLink(article: Element): Element | null {
  * Extracts tweet ID from status link or current URL.
  */
 export function extractTweetId(article: Element): string {
-  const statusLink = findTweetStatusLink(article);
+  const statusLink = findTweetStatusLink(article, resolveOwnership(article));
   if (statusLink) {
     const href = statusLink.getAttribute('href') || '';
     const match = href.match(/\/status\/(\d+)/);
@@ -1309,7 +1188,7 @@ export function extractTweetId(article: Element): string {
  * Extracts canonical permalink URL for the tweet.
  */
 function extractTweetUrl(article: Element): string {
-  const statusLink = findTweetStatusLink(article);
+  const statusLink = findTweetStatusLink(article, resolveOwnership(article));
   if (statusLink) {
     const href = statusLink.getAttribute('href') || '';
     if (href.startsWith('http')) return href;
@@ -1326,9 +1205,9 @@ function extractTweetUrl(article: Element): string {
 /**
  * Extracts ISO 8601 UTC timestamp from <time> tag.
  */
-function extractTimestamp(article: Element): string {
+function extractTimestamp(article: Element, ownership: TweetOwnership): string {
   const timeEls = Array.from(article.querySelectorAll('time'));
-  const validTime = timeEls.find(t => !isInsideQuoteTweet(t));
+  const validTime = timeEls.find(t => ownerOf(t, ownership).post === 'tweet');
   if (validTime) {
     return validTime.getAttribute('datetime') || validTime.textContent?.trim() || '';
   }
@@ -1372,12 +1251,13 @@ function extractTranslationNotice(tweetTextEl: Element | null | undefined): stri
  * marker is considered, not just the first: a tweet's own can sit after a
  * quote's in document order, and stopping at the first would miss it.
  */
-function findTruncationMarker(article: Element): Element | null {
+function findTruncationMarker(article: Element, ownership: TweetOwnership): Element | null {
   const markers = article.querySelectorAll(SHOW_MORE_MARKER);
   for (let i = 0; i < markers.length; i++) {
     const marker = markers[i];
-    if (isInsideQuoteTweet(marker)) continue;
-    if (isInsideArticleReadView(marker)) continue;
+    const owner = ownerOf(marker, ownership);
+    if (owner.post === 'quote') continue;
+    if (owner.inArticle) continue;
     return marker;
   }
   return null;
@@ -1389,13 +1269,20 @@ function findTruncationMarker(article: Element): Element | null {
 export function extractTweetData(article: Element): TweetData | null {
   if (!article) return null;
 
+  // Who owns what in this tweet, resolved once. Every pass below asks the same
+  // question — is this element the tweet's own, the quoted post's, or the
+  // article's — and the answer does not change between one element and the
+  // next, so it is asked once here rather than walked again per candidate.
+  const ownership = resolveOwnership(article);
+
   const id = extractTweetId(article);
   const url = extractTweetUrl(article);
   const author = extractAuthorInfo(article);
 
   const tweetTextEl = article.querySelector('div[data-testid="tweetText"]');
-  const validTextEl = tweetTextEl && !isInsideQuoteTweet(tweetTextEl) ? tweetTextEl : null;
-  const articleData = extractArticle(article);
+  const validTextEl =
+    tweetTextEl && ownerOf(tweetTextEl, ownership).post === 'tweet' ? tweetTextEl : null;
+  const articleData = extractArticle(article, ownership);
 
   // A post carrying an article ends with a link to it that X does not render.
   // Whether that link is an appended tail depends on the article being present,
@@ -1410,15 +1297,15 @@ export function extractTweetData(article: Element): TweetData | null {
     richTokens = stripTrailingArticleToken(richTokens) || [];
   }
 
-  const timestamp = extractTimestamp(article);
-  const stats = extractTweetStats(article);
-  const media = extractTweetMedia(article);
-  const quotePost = extractQuoteTweet(article);
+  const timestamp = extractTimestamp(article, ownership);
+  const stats = extractTweetStats(article, ownership);
+  const media = extractTweetMedia(article, ownership);
+  const quotePost = extractQuoteTweet(ownership);
   const retweetedBy = getRetweetedBy(article);
   const translatedFrom = validTextEl ? extractTranslationNotice(validTextEl) : undefined;
   // X showed a preview with its "Show more" control; the rest of the body is not
   // in the DOM. The card states the cut rather than inventing an ending.
-  const truncated = Boolean(findTruncationMarker(article));
+  const truncated = Boolean(findTruncationMarker(article, ownership));
 
   type CompatibleToken = NonNullable<TweetData['richTokens']>[number];
 

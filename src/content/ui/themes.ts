@@ -1,5 +1,15 @@
 import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig, LegacyThemeId, CanvasRatioOption, CanvasBackgroundId } from '../../types/card.ts';
 import { detectDefaultLocale } from '../i18n.ts';
+import {
+  ASPECT_RATIO,
+  CANVAS_BACKGROUND,
+  CANVAS_RATIO,
+  IMAGE_FIT,
+  MEDIA_LAYOUT,
+  PADDING,
+  RADIUS,
+  optionValue,
+} from './options.ts';
 
 /**
  * A theme is an object a post can live on, not a colour skin.
@@ -971,8 +981,8 @@ export const LEGACY_THEME_ALIASES: Record<LegacyThemeId, ThemeId> = {
   broadsheet: 'receipt',
 };
 
-export const PADDING_OPTIONS: PaddingOption[] = ['16px', '32px', '48px'];
-export const RADIUS_OPTIONS: RadiusOption[] = ['theme', '0px', '12px', '20px'];
+export const PADDING_OPTIONS: PaddingOption[] = [...PADDING.values];
+export const RADIUS_OPTIONS: RadiusOption[] = [...RADIUS.values];
 
 /**
  * Aspect ratios, in the order the segmented control offers them. The values are
@@ -981,14 +991,15 @@ export const RADIUS_OPTIONS: RadiusOption[] = ['theme', '0px', '12px', '20px'];
  * key.
  *
  * These strings are persisted config and compared as literals downstream, not just
- * display text: `getAspectMinHeight` switches on them, mediaGrid checks `=== 'auto'`
- * to decide whether to fit cells to their pictures, and Card emits them as the
- * export target's `data-ratio`. Translating this list would break all three, so
- * localize through the labels map and leave the values alone.
+ * display text: the geometry module switches on them to work out the poster
+ * floor, mediaGrid checks `=== 'auto'` to decide whether to fit cells to their
+ * pictures, and Card emits them as the export target's `data-ratio`.
+ * Translating this list would break all three, so localize through the labels
+ * map and leave the values alone.
  */
-export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = ['auto', '3:4', '16:9'];
-export const IMAGE_FIT_OPTIONS: ImageFitOption[] = ['contain', 'cover'];
-export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
+export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [...ASPECT_RATIO.values];
+export const IMAGE_FIT_OPTIONS: ImageFitOption[] = [...IMAGE_FIT.values];
+export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = [...MEDIA_LAYOUT.values];
 
 /**
  * The exported canvas shape, in picker order. Square first because it is the
@@ -998,7 +1009,7 @@ export const MEDIA_LAYOUT_OPTIONS: MediaLayoutOption[] = ['grid', 'stack'];
  * are read back as literals by `data-canvas-ratio` in card.css, so only `auto`
  * needs a translation and it goes through the control's labels map.
  */
-export const CANVAS_RATIO_OPTIONS: CanvasRatioOption[] = ['auto', '1:1', '4:5', '3:4', '16:9'];
+export const CANVAS_RATIO_OPTIONS: CanvasRatioOption[] = [...CANVAS_RATIO.values];
 
 /**
  * The ring of mat left showing around the card when a canvas is switched on.
@@ -1142,24 +1153,11 @@ export const CANVAS_BACKGROUNDS: Record<CanvasBackgroundId, CanvasBackgroundDefi
  * the quiet gradients in hue order, then the bold ones. The extremes come
  * first so the left of the grid still reads as "no paint, then a sheet, then
  * ink"; the bold set is last because it is the deliberate exception.
+ *
+ * The order is the option's own list of values, so the two cannot disagree
+ * about which paints exist or which comes first.
  */
-export const CANVAS_BACKGROUND_ORDER: CanvasBackgroundId[] = [
-  'none',
-  'theme',
-  'paper',
-  'ink',
-  'moss',
-  'lagoon',
-  'steel',
-  'plum',
-  'ember',
-  'coral',
-  'sunset',
-  'citrus',
-  'neon',
-  'flamingo',
-  'aurora',
-];
+export const CANVAS_BACKGROUND_ORDER: CanvasBackgroundId[] = [...CANVAS_BACKGROUND.values];
 
 /**
  * The CSS `background` the mat is painted with.
@@ -1202,11 +1200,16 @@ export const EXPERIMENTAL_THEMES: ReadonlySet<ThemeId> = new Set<ThemeId>(['brut
 
 export const DEFAULT_CARD_CONFIG: CardConfig = {
   theme: 'minimal',
-  padding: '32px',
-  borderRadius: 'theme',
-  aspectRatio: 'auto',
-  imageFit: 'contain',
-  mediaLayout: 'grid',
+  // The option defaults, read from the options themselves rather than written
+  // out again: a default that lived in two places is a default that could
+  // disagree with itself, and this one already did — the corner's sanitizer
+  // answered `'12px'` for a value that was never set while the card shipped
+  // with `'theme'`.
+  padding: PADDING.default,
+  borderRadius: RADIUS.default,
+  aspectRatio: ASPECT_RATIO.default,
+  imageFit: IMAGE_FIT.default,
+  mediaLayout: MEDIA_LAYOUT.default,
   showQrCode: true,
   showStats: true,
   showTimestamp: true,
@@ -1218,16 +1221,29 @@ export const DEFAULT_CARD_CONFIG: CardConfig = {
   excludedTweetIds: [],
   // Both default to "leave the export alone". A default of anything else would
   // repaint every existing user's PNG the moment they upgrade.
-  canvasRatio: 'auto',
-  canvasBackground: 'none',
+  canvasRatio: CANVAS_RATIO.default,
+  canvasBackground: CANVAS_BACKGROUND.default,
   canvasShadow: false,
 };
 
+/**
+ * The card's minimum shape, or the shipped one when the stored value is not a
+ * shape the card offers.
+ *
+ * This one is load-bearing beyond the usual: the card's own floor is computed
+ * from the ratio, and an unrecognised one would reach that arithmetic as
+ * `undefined`.
+ */
+export function sanitizeAspectRatio(val?: string): AspectRatioOption {
+  return optionValue(ASPECT_RATIO, val);
+}
+
+/**
+ * The card's own breathing room, or the shipped one when the stored value is
+ * not a tier the card offers.
+ */
 export function sanitizePadding(val: string): PaddingOption {
-  if (val === '16px' || val === '32px' || val === '48px') {
-    return val;
-  }
-  return '32px';
+  return optionValue(PADDING, val);
 }
 
 /**
@@ -1249,54 +1265,44 @@ export function sanitizeTheme(val?: string | null): ThemeId {
   return DEFAULT_CARD_CONFIG.theme;
 }
 
+/**
+ * The card's corner, or the shipped one when the stored value is not a corner
+ * the card offers.
+ */
 export function sanitizeRadius(val: string): RadiusOption {
-  if (val === 'theme' || val === '0px' || val === '12px' || val === '20px') {
-    return val;
-  }
-  return '12px';
-}
-
-export function sanitizeImageFit(val?: string): ImageFitOption {
-  if (val === 'contain' || val === 'cover') {
-    return val;
-  }
-  return 'contain';
-}
-
-export function sanitizeMediaLayout(val?: string): MediaLayoutOption {
-  if (val === 'grid' || val === 'stack') {
-    return val;
-  }
-  return 'grid';
+  return optionValue(RADIUS, val);
 }
 
 /**
- * Both of these answer their own default for an absent value, which is what
- * `normalizeStoredConfig` needs: the two ship as `'auto'` and `'none'`, so the
- * sanitizer's fallback and `DEFAULT_CARD_CONFIG` agree and the `??` that
- * `borderRadius` needs would be dead weight here.
+ * How a picture is fitted into its cell, or the shipped way when the stored
+ * value is not one the card offers.
  */
-export function sanitizeCanvasRatio(val?: string): CanvasRatioOption {
-  if (
-    val === 'auto' ||
-    val === '1:1' ||
-    val === '4:5' ||
-    val === '3:4' ||
-    val === '16:9'
-  ) {
-    return val;
-  }
-  return 'auto';
+export function sanitizeImageFit(val?: string): ImageFitOption {
+  return optionValue(IMAGE_FIT, val);
 }
 
+/**
+ * How several pictures are arranged, or the shipped way when the stored value
+ * is not one the card offers.
+ */
+export function sanitizeMediaLayout(val?: string): MediaLayoutOption {
+  return optionValue(MEDIA_LAYOUT, val);
+}
+
+/**
+ * The exported canvas's shape, or the shipped one when the stored value is not
+ * a shape the card offers.
+ */
+export function sanitizeCanvasRatio(val?: string): CanvasRatioOption {
+  return optionValue(CANVAS_RATIO, val);
+}
+
+/**
+ * What the mat is painted with, or the shipped way when the stored value is
+ * not a paint the card offers.
+ */
 export function sanitizeCanvasBackground(val?: string): CanvasBackgroundId {
-  // `Object.hasOwn`, for the same prototype-chain reason `sanitizeTheme` gives:
-  // an id is used to index `CANVAS_BACKGROUNDS`, and `'constructor'` would be
-  // found by `in` and then handed to `resolveCanvasBackground`.
-  if (val && Object.hasOwn(CANVAS_BACKGROUNDS, val)) {
-    return val as CanvasBackgroundId;
-  }
-  return 'none';
+  return optionValue(CANVAS_BACKGROUND, val);
 }
 
 /**
@@ -1316,13 +1322,6 @@ export function resolveRadius(
   if (radius === '0px') return { card: '0px', media: '0px' };
   if (radius === '12px') return { card: '12px', media: '8px' };
   return { card: '20px', media: '14px' };
-}
-
-export function getAspectMinHeight(ratio: AspectRatioOption, width: number = 640): string {
-  if (ratio === 'auto') return 'auto';
-  if (ratio === '3:4') return `${Math.round(width * (4 / 3))}px`;
-  if (ratio === '16:9') return `${Math.round(width * (9 / 16))}px`;
-  return 'auto';
 }
 
 /**
@@ -1406,6 +1405,14 @@ export function themePreview(theme: ThemeId): string {
  * thick; the fixed offsets are the swatch's scale, not a second table. Each
  * case is the shape `card.css` draws for the same `signature.style`, which is
  * the point: the picker advertises the material, not a near-miss of it.
+ *
+ * The two draw the same *shape* at different *scales*, and the sizes are
+ * therefore not meant to match: the card's rule is 40px of a 640px sheet, the
+ * swatch's is 46% of 34px, because three dots drawn at the card's size would
+ * not fit in a thumbnail at all. A swatch is a reduction, and each mark's
+ * proportions are what survive the reduction. What must not happen is the two
+ * disagreeing about the *shape* — a seal is a square at both sizes, a
+ * perforation is a row of dots at both.
  *
  * Returns an array because a mark is often two layers — a rule plus a tick, a
  * line plus a seal — and joining them here would hide that from the caller,

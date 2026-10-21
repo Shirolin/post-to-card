@@ -356,6 +356,10 @@
   min-height: 0;
   display: flex;
   align-items: flex-start;
+  /* The stage's own breathing room, uniform on both axes. The script subtracts
+     the same figure to know how much room the card has, so the two must agree;
+     it reads it from `VIEWPORT_PADDING` in `ui/geometry.ts`, and the narrow
+     layout below trims it to `NARROW_VIEWPORT_PADDING`. */
   padding: 24px;
   overflow: auto;
   /* The mat follows the theme's canvas token (set by App), so a warm paper
@@ -1243,6 +1247,13 @@
 
 /* -------------------------------------------------------------
    Responsive: stack panes on narrow viewports
+
+   The 900px boundary here is the same number as `NARROW_BREAKPOINT` in
+   `ui/geometry.ts`, and the two have to agree: the stylesheet decides how the
+   panel is laid out and the script decides how it starts, so a mismatch would
+   show a collapsed panel on a wide screen or an expanded one on a narrow. A
+   media query's condition cannot be read from the script, so this is the one
+   number the stylesheet has to state for itself.
    ------------------------------------------------------------- */
 @media (max-width: 900px) {
   #post-to-card-backdrop {

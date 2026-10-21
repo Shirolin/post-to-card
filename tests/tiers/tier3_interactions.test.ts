@@ -22,10 +22,10 @@ import {
   PADDING_OPTIONS,
   RADIUS_OPTIONS,
   resolveRadius,
-  getAspectMinHeight,
   DEFAULT_CARD_CONFIG,
 } from '../../src/content/ui/themes.ts';
-import { replaceCardImagesWithBase64 } from '../../src/content/engine/export.ts';
+import { aspectMinHeight, CARD_WIDTH } from '../../src/content/ui/geometry.ts';
+import { prepareCardImages } from '../../src/content/engine/export.ts';
 import { isAllowedHost } from '../../src/background/proxy.ts';
 import { loadUserPreferences, saveUserPreferences } from '../../src/content/prefs.ts';
 
@@ -249,8 +249,8 @@ test('Tier 3.6: the privacy blur lands on the author block only, never on the QR
 // -------------------------------------------------------------
 
 test('Tier 3.7: 3:4 sets a min-height floor and leaves the card free to grow past it', async () => {
-  const floor = getAspectMinHeight('3:4', 640);
-  assert.equal(floor, '853px');
+  const floor = aspectMinHeight('3:4', CARD_WIDTH);
+  assert.equal(floor, 'calc(640px * 4 / 3)');
 
   const html = await renderCard({ config: { aspectRatio: '3:4' }, data: MEGA_THREAD });
   const style = styleAttr(html);
@@ -263,8 +263,8 @@ test('Tier 3.7: 3:4 sets a min-height floor and leaves the card free to grow pas
 });
 
 test('Tier 3.8: 16:9 sets its own floor and keeps the same freedom to expand', async () => {
-  const floor = getAspectMinHeight('16:9', 640);
-  assert.equal(floor, '360px');
+  const floor = aspectMinHeight('16:9', CARD_WIDTH);
+  assert.equal(floor, 'calc(640px * 9 / 16)');
 
   const html = await renderCard({ config: { aspectRatio: '16:9' }, data: MEGA_THREAD });
   const style = styleAttr(html);
@@ -315,12 +315,12 @@ test('Tier 3.9: every image the card paints is one the background proxy is allow
   const originalChrome = (globalThis as Record<string, unknown>).chrome;
   (globalThis as Record<string, unknown>).chrome = chromeMock;
   try {
-    const restore = await replaceCardImagesWithBase64(card as unknown as HTMLElement);
+    const preparation = await prepareCardImages(card as unknown as HTMLElement);
     images.forEach((img, i) => {
       assert.ok(img.src.startsWith('data:image/jpeg;base64,proxied_'), `image ${i} was left un-proxied: ${img.src}`);
     });
 
-    restore();
+    preparation.restore();
     images.forEach((img, i) => assert.equal(img.src, remote[i], `image ${i} was not restored`));
   } finally {
     (globalThis as Record<string, unknown>).chrome = originalChrome;
@@ -357,16 +357,19 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
 
     assert.equal(restored.theme, 'darkroom', 'a retired theme id must map to a live material, not reset');
     assert.equal(restored.padding, '32px', 'an unknown padding must fall back to the default');
-    assert.equal(restored.borderRadius, '12px', 'an unknown radius must fall back to the default');
+    assert.equal(
+      restored.borderRadius,
+      DEFAULT_CARD_CONFIG.borderRadius,
+      'an unknown radius must fall back to the default'
+    );
     assert.equal(restored.aspectRatio, '3:4', 'a valid choice must survive the round trip');
     assert.equal(restored.showStats, false);
     assert.equal(restored.blurAuthor, true);
 
-    // The canvas pair is the newest, and a sanitizer whose fallback differs from
+    // The canvas pair is the newest, and an option whose fallback differs from
     // `DEFAULT_CARD_CONFIG` is the exact shape of the bug that once rewrote a
-    // saved radius on every load: the value would come back not-null, so the
-    // `??` in `normalizeStoredConfig` would keep the wrong one. Asserting both
-    // the fallback and the survival pins that pairing, not just the field.
+    // saved radius on every load. Asserting both the fallback and the survival
+    // pins that pairing, not just the field.
     assert.equal(restored.canvasRatio, DEFAULT_CARD_CONFIG.canvasRatio);
     assert.equal(restored.canvasBackground, DEFAULT_CARD_CONFIG.canvasBackground);
 

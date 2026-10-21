@@ -9,7 +9,8 @@ import { Card } from './Card.tsx';
 import { Controls } from './Controls.tsx';
 import { Modal } from './Modal.tsx';
 import { handleRadioKeyDown } from './radioGroup.ts';
-import { threadScope, toggleExcluded } from './threadScope.ts';
+import { threadSession, toggleExcluded } from '../threadSession.ts';
+import { CARD_WIDTH, viewportPadding } from './geometry.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
 import { DEFAULT_EXPORT_SCALE, ExportRenderError, exportSizeFor } from '../engine/index.ts';
 
@@ -33,20 +34,8 @@ type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 const FIXED_ZOOM_LEVELS = [0.5, 0.75, 1] as const;
 type FixedZoomLevel = (typeof FIXED_ZOOM_LEVELS)[number];
 
-/** The card's own width, mirrored from card.css. */
-const CARD_WIDTH = 640;
-
 function isFixedLevel(level: ZoomLevel): level is FixedZoomLevel {
   return typeof level === 'number';
-}
-
-/**
- * Breathing room the viewport reserves on each side. Mirrors the
- * `.preview-viewport` padding, which is uniform on both axes and trims on the
- * narrow layout where the stage has to give the card every pixel it can get.
- */
-function viewportPadding(width: number): number {
-  return width <= 900 ? 12 : 24;
 }
 
 export interface AppProps {
@@ -547,18 +536,18 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     void handleExport(action);
   };
 
-  // One scope answers both questions this surface asks: what the card shows,
+  // One session answers both questions this surface asks: what the card shows,
   // and whether one more tweet may be dropped. Building the next set from the
   // returned one drops any key left over from a previous thread.
-  const scope = threadScope(threadData, config.excludedTweetIds);
+  const session = threadSession(threadData, config.excludedTweetIds);
 
   const handleExcludeTweet = (tweetId: string) => {
     handleConfigChange({ ...config, excludedTweetIds: toggleExcluded(threadData, config.excludedTweetIds, tweetId) });
   };
 
-  // The card never renders empty — Card substitutes a fallback tweet — so the
-  // summary never says zero.
-  const activeTweetCount = scope.activeCount || 1;
+  // The card never renders empty — the session keeps the target post standing
+  // in — so the summary never says zero.
+  const activeTweetCount = session.rawCount || 1;
 
   /**
    * Which zoom level carries the group's single tab stop.

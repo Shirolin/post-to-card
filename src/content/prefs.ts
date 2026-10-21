@@ -3,23 +3,24 @@
  *
  * Owns the persistence seam for User Preferences (see GLOSSARY.md): the
  * storage key, load/save, and the live-sync subscription. Pure token tables
- * and sanitizers stay in `ui/themes.ts`; this module imports them but the
- * reverse never happens, so the DOM adapter can depend on storage without
- * depending on UI tokens.
+ * stay in `ui/themes.ts` and the card's own options in `ui/options.ts`; this
+ * module imports them but the reverse never happens, so the DOM adapter can
+ * depend on storage without depending on UI tokens.
  */
 
 import type { CardConfig } from '../types/card.ts';
 import { sanitizeLocale } from './i18n.ts';
+import { DEFAULT_CARD_CONFIG, sanitizeTheme } from './ui/themes.ts';
 import {
-  DEFAULT_CARD_CONFIG,
-  sanitizeCanvasBackground,
-  sanitizeCanvasRatio,
-  sanitizeImageFit,
-  sanitizeMediaLayout,
-  sanitizePadding,
-  sanitizeRadius,
-  sanitizeTheme,
-} from './ui/themes.ts';
+  ASPECT_RATIO,
+  CANVAS_BACKGROUND,
+  CANVAS_RATIO,
+  IMAGE_FIT,
+  MEDIA_LAYOUT,
+  PADDING,
+  RADIUS,
+  optionValue,
+} from './ui/options.ts';
 
 export const STORAGE_KEY = 'post_to_card_user_prefs';
 
@@ -44,18 +45,18 @@ function normalizeStoredConfig(saved: Record<string, any> | null | undefined): C
     ...DEFAULT_CARD_CONFIG,
     ...saved,
     theme: sanitizeTheme(saved.theme),
-    padding: sanitizePadding(saved.padding),
-    // `??` is load-bearing here, and only here: `sanitizeRadius` answers '12px'
-    // for an absent value while the shipped default is 'theme', so borderRadius
-    // is the one field the merge above cannot protect. Without it, a fresh
-    // profile whose first write came from the popup's toggle — the only writer
-    // that stores a partial object — pins every card to 12px, and the panel then
-    // carries that 12px into each later save.
-    borderRadius: sanitizeRadius(saved.borderRadius ?? DEFAULT_CARD_CONFIG.borderRadius),
-    imageFit: sanitizeImageFit(saved.imageFit),
-    mediaLayout: sanitizeMediaLayout(saved.mediaLayout),
-    canvasRatio: sanitizeCanvasRatio(saved.canvasRatio),
-    canvasBackground: sanitizeCanvasBackground(saved.canvasBackground),
+    // The card's own options, each of which answers the shipped default for a
+    // value that was never set and for one that is not a value the card
+    // offers. A missing value and an invalid one are the same case, so the
+    // merge above cannot protect them and does not have to: every option says
+    // what it is when it is not saying something else.
+    padding: optionValue(PADDING, saved.padding),
+    borderRadius: optionValue(RADIUS, saved.borderRadius),
+    aspectRatio: optionValue(ASPECT_RATIO, saved.aspectRatio),
+    imageFit: optionValue(IMAGE_FIT, saved.imageFit),
+    mediaLayout: optionValue(MEDIA_LAYOUT, saved.mediaLayout),
+    canvasRatio: optionValue(CANVAS_RATIO, saved.canvasRatio),
+    canvasBackground: optionValue(CANVAS_BACKGROUND, saved.canvasBackground),
     // Default-off, so anything but a literal `true` is off. The spread above
     // would take `"false"` -- a string from a hand-edited store -- as truthy.
     canvasShadow: saved.canvasShadow === true,
