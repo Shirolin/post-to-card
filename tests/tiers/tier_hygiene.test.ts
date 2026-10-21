@@ -16,6 +16,10 @@
  *   hygiene.4  the popup's markup shipped the Chinese strings inline while the
  *              script rewrote them from a table, and nothing kept the two in
  *              step — so the user read a sentence and watched it change
+ *   hygiene.5  a refactor left an import behind in a test file, and no
+ *              compiler sees those files
+ *   hygiene.6  the popup's quick-trigger read a tab property the manifest
+ *              cannot grant, so the button could never reach the content script
  *
  * This is deliberately not a linter. It covers the shapes that actually recurred
  * and stays dependency-free, so it runs in the existing `npm test` gate. Note what
@@ -223,7 +227,7 @@ function importedBindings(src: string): string[] {
   return names;
 }
 
-test('hygiene.4: no test file imports a name it never reads', () => {
+test('hygiene.5: no test file imports a name it never reads', () => {
   const violations: string[] = [];
 
   for (const root of ['tests']) {
