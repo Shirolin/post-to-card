@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { h, type ComponentType } from 'preact';
 import { render } from 'preact-render-to-string';
 
+import { readFileSync } from 'node:fs';
 import type { TweetData, ThreadData } from '../../src/types/tweet.ts';
 import type { CardConfig } from '../../src/types/card.ts';
 import type { RasterizerCall } from './modern-screenshot-stub.ts';
@@ -135,4 +136,120 @@ export interface RasterizerStub {
  */
 export async function rasterizer(): Promise<RasterizerStub> {
   return (await loadModule('/tests/env/modern-screenshot-stub.ts')) as unknown as RasterizerStub;
+}
+
+/**
+ * A stylesheet read as rules, so a test can ask which rule answers a question.
+ *
+ * Offline there is no CSS engine, so the behavioural answer ("what applies to
+ * this element") cannot be computed here. What *can* be done is the part that
+ * matters: read the file the way the engine reads it — comments removed, rules
+ * cut into selector and declarations, and the `@media` conditions they sit under
+ * carried on the rule — instead of searching its raw text. A substring search
+ * over the source finds a declaration in a comment, in an unrelated rule, or in
+ * the explanation of the bug the test guards against, and reports it as the rule
+ * under test.
+ *
+ * Not a CSS parser: `@supports` / `@layer` / `@import` are skipped, nesting is
+ * read one level of at-rule deep (which is all either stylesheet uses), and
+ * `var()` is taken as written — `base.css` composes the sheet, so there are no
+ * cross-file properties to resolve. It answers "does this selector carry this
+ * declaration, and under what condition", which is what these tests ask.
+ */
+export interface CssRule {
+  /** The selector list, whitespace collapsed: `.a, .b` reads `.a, .b`. */
+  selector: string;
+  /** The selector list split on commas, each part trimmed. */
+  selectors: string[];
+  /** Declarations as written, `prop: value` without the trailing semicolon. */
+  declarations: string[];
+  /**
+   * The at-rule conditions guarding this rule, outermost first: a rule inside
+   * `@media (max-width: 900px)` carries `['(max-width: 900px)']`, and a rule
+   * outside every at-rule carries `[]`.
+   */
+  media: string[];
+  /** Whether a declaration whose property is `property` contains `text`. */
+  declares: (property: string, text: string) => boolean;
+}
+
+/** Index of the `}` that closes the block opened at `open`, or -1. */
+function matchingBrace(src: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/** The rules in `src`, with `media` as the conditions they inherit. */
+function readRules(src: string, media: string[], rules: CssRule[]): void {
+  let i = 0;
+  while (i < src.length) {
+    const open = src.indexOf('{', i);
+    if (open < 0) break;
+    const header = src.slice(i, open).replace(/^[\s,]+|[\s,]+$/g, '').replace(/\s+/g, ' ');
+    const close = matchingBrace(src, open);
+    if (close < 0) break;
+    const body = src.slice(open + 1, close);
+
+    // An at-rule wraps rules rather than declaring anything. `@media` conditions
+    // are carried down, because a rule inside one is only a rule when its
+    // condition holds; the others are skipped whole, headers and all.
+    const at = header.match(/^@(media|supports|layer|container)\b\s*(.*)$/i);
+    if (at) {
+      if (at[1].toLowerCase() === 'media') {
+        readRules(body, [...media, ...splitConditions(at[2])], rules);
+      }
+      i = close + 1;
+      continue;
+    }
+
+    const selector = header;
+    const declarations = body
+      .split(';')
+      .map((d) => d.trim().replace(/\s+/g, ' '))
+      .filter(Boolean);
+    const selectors = selector.split(',').map((s) => s.trim()).filter(Boolean);
+    rules.push({
+      selector,
+      selectors,
+      declarations,
+      media,
+      declares: (property, text) =>
+        declarations.some((d) => {
+          const colon = d.indexOf(':');
+          if (colon < 0 || d.slice(0, colon).trim() !== property) return false;
+          return d.slice(colon + 1).includes(text);
+        }),
+    });
+    i = close + 1;
+  }
+}
+
+/**
+ * `(max-width: 900px)` is one condition; a list joined by `,` is several, and a
+ * rule under any of them applies when that one does.
+ */
+function splitConditions(condition: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < condition.length; i++) {
+    if (condition[i] === '(') depth++;
+    else if (condition[i] === ')') depth--;
+    else if (condition[i] === ',' && depth === 0) {
+      parts.push(condition.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(condition.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+export function cssSheet(file: string): CssRule[] {
+  const rules: CssRule[] = [];
+  readRules(readFileSync(file, 'utf-8').replace(/\/\*[\s\S]*?\*\//g, ''), [], rules);
+  return rules;
 }

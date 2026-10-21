@@ -45,7 +45,7 @@ import { isAllowedHost, clearImageCache, getImageCacheSize } from '../../src/bac
 import { upgradeAvatarUrl, upgradePhotoUrl } from '../../src/content/adapter/urls.ts';
 import { sanitizeQrUrl, generateQrCodeData, CardQrCode } from '../../src/content/ui/qrcode.ts';
 
-import { renderComponent, loadModule, rasterizer, exportEngine, cardRenderer } from '../env/render.ts';
+import { renderComponent, loadModule, rasterizer, exportEngine, cardRenderer, cssSheet, type CssRule } from '../env/render.ts';
 
 import type { TweetData, ThreadData, MediaItem } from '../../src/types/tweet.ts';
 import type { CardConfig, ThemeId } from '../../src/types/card.ts';
@@ -1382,42 +1382,64 @@ test('F13.8: the nested quote panel steps down in surface, indent and type', () 
   // the CSS redefined `--quote-bg` on the nested element, which is a custom
   // property reading itself — a cycle, invalid at computed-value time — so the
   // panel fell back to a near-transparent wash, and neither indent nor type
-  // separated the two. All three steps are asserted on the rule itself.
-  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  const at = css.indexOf('.quote-card[data-quote-depth="2"] {');
-  assert.ok(at > 0, 'the nested panel must carry its own rule');
-  const block = css.slice(at, css.indexOf('}', at)).replace(/\/\*[\s\S]*?\*\//g, '');
+  // separated the two. All three steps are asserted on the rules that carry
+  // them, read as declarations rather than as text.
+  const sheet = cssSheet(path.resolve(__dirname, '../../src/content/styles/card.css'));
+  const panel = '.quote-card[data-quote-depth="2"]';
+  const rules = (selector: string): CssRule[] =>
+    sheet.filter((r) => r.selectors.includes(selector));
+  const body = rules(panel);
+  assert.ok(body.length > 0, 'the nested panel must carry its own rule');
 
   // A cycle in a custom property is not a fallback: the declaration is dropped
   // and the element silently renders without the background. So the mix must be
   // written as a value the element owns, never as `--quote-bg` redefined here.
   assert.ok(
-    !/--quote-bg\s*:/.test(block),
+    !body.some((r) => r.declarations.some((d) => /^--quote-bg\s*:/.test(d))),
     'the nested panel must not redefine --quote-bg: a property that reads itself is invalid at computed-value time'
   );
-  assert.ok(/background\s*:\s*color-mix\(/.test(block), 'the nested panel owns its background');
-  assert.ok(block.includes('var(--surface)'), 'mixed toward the sheet, so every material recedes the same way');
-  assert.ok(!block.includes('var(--quote-border)\n') || block.includes('border-color'), 'the rule states its own border step');
+  assert.ok(
+    body.some((r) => r.declares('background', 'color-mix(')),
+    'the nested panel owns its background'
+  );
+  assert.ok(
+    body.some((r) => r.declares('background', 'var(--surface)')),
+    'mixed toward the sheet, so every material recedes the same way'
+  );
+  // The border steps toward the sheet by the same 55%, rather than keeping the
+  // outer panel's rule: an unstepped border printed the same line twice and the
+  // two panels read as one.
+  assert.ok(
+    body.some((r) => r.declares('border-color', 'color-mix(')),
+    'the nested panel states its own border step'
+  );
 
   // Each step has to be a real step, or the two panels still read as one.
-  const px = (name: string): number => {
-    const m = block.match(new RegExp(`${name}\\s*:\\s*(\\d+(?:\\.\\d+)?)px`));
+  const px = (property: string): number => {
+    // The shorthand first (`padding: 9px 11px 10px`), then the longhand, which
+    // wins where both are stated.
+    const seen = body.flatMap((r) => r.declarations).reverse();
+    const declaration =
+      seen.find((d) => d.startsWith(`${property}-left:`)) ??
+      seen.find((d) => d.startsWith(`${property}:`));
+    const m = declaration?.match(/:\s*(?:[\d.]+px\s+)?(-?[\d.]+)px/);
     return m ? Number(m[1]) : 0;
   };
   assert.ok(px('margin-inline-start') >= 8, `the nested panel is indented (${px('margin-inline-start')}px)`);
-  assert.ok(px('padding-left') < 14, 'and its padding steps down with it');
-  // The step is a calc against the material's own quote size, so it holds on
-  // every material rather than only where the two happen to differ by 1px.
-  // The inner `(`…`)` of the var() default means the expression cannot be read
-  // with a bracket-free character class, so the test allows one nesting level.
-  const nameRule = css.slice(css.indexOf('.quote-card[data-quote-depth="2"] .quote-name'));
-  assert.ok(
-    /font-size\s*:\s*calc\(.+\)/.test(nameRule.slice(0, nameRule.indexOf('}'))) &&
-      /calc\(.+\s-\s[\d.]+px\)/.test(nameRule.slice(0, nameRule.indexOf('}'))),
-    'the nested byline is set a step smaller'
-  );
-  const avatarBlock = css.slice(css.indexOf('.quote-card[data-quote-depth="2"] .quote-avatar'));
-  assert.ok(/width\s*:\s*16px/.test(avatarBlock.slice(0, avatarBlock.indexOf('}'))), 'and its avatar shrinks with it');
+  assert.ok(px('padding') > 0, 'and it states a padding of its own, so the indent is not cancelled by the outer rule');
+  assert.ok(px('padding') < 14, `and its padding steps down with it (${px('padding')}px)`);
+
+  // The step of type is a calc against the material's own quote size, so it
+  // holds on every material rather than only where the two happen to differ by
+  // 1px. Read off the declaration, not off a bracket pattern in the file.
+  const nameRule = rules(`${panel} .quote-name`)[0];
+  assert.ok(nameRule, 'the nested byline has its own rule');
+  assert.ok(nameRule.declares('font-size', 'calc('), 'the nested byline is set a step smaller');
+  assert.ok(nameRule.declares('font-size', 'var(--type-quote-size'), 'against the material\'s quote size');
+
+  const avatarRule = rules(`${panel} .quote-avatar`)[0];
+  assert.ok(avatarRule, 'the nested avatar has its own rule');
+  assert.equal(avatarRule.declares('width', '16px'), true, 'and its avatar shrinks with it');
 });
 
 test('F13.9: both quote levels reach the card, each carrying its own depth', async () => {
@@ -1768,11 +1790,36 @@ test('F17.22: the panel and the stage read the same narrow boundary', () => {
   assert.equal(viewportPadding(NARROW_BREAKPOINT), 12, 'at the boundary the stage trims');
   assert.equal(viewportPadding(NARROW_BREAKPOINT + 1), 24, 'past it the stage breathes');
 
-  const modalCss = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/modal.css'), 'utf-8');
-  assert.ok(
-    modalCss.includes(`@media (max-width: ${NARROW_BREAKPOINT}px)`),
-    'the stylesheet must break at the same width the script does'
+  // The stylesheet's side, read as the conditions its rules sit under rather
+  // than as a string: the panel's narrow layout has to be guarded by exactly
+  // the script's boundary, and not by a condition that merely mentions it.
+  // `@media not (max-width: 900px)` and `@media (max-width: 900px) and (…)`
+  // both contain the substring and both put the panel on the wrong side.
+  const sheet = cssSheet(path.resolve(__dirname, '../../src/content/styles/modal.css'));
+  const narrow = sheet.filter((r) => r.selectors.includes('.controls-panel') && r.media.length > 0);
+  assert.ok(narrow.length > 0, 'the panel must have a rule under a condition');
+
+  const boundary = narrow.map((r) => r.media.join(' and ')).filter((c) => /max-width/.test(c));
+  assert.deepEqual(
+    boundary,
+    [`(max-width: ${NARROW_BREAKPOINT}px)`],
+    `the panel breaks only at the script's own boundary, got ${JSON.stringify(boundary)}`
   );
+
+  // And the boundary is a real pair: nothing may sit between 900 and 901, or a
+  // window one pixel wide of either rule falls through both.
+  const width = (media: string): number | undefined => {
+    const m = media.match(/\(min-width:\s*(\d+)px\)|\(max-width:\s*(\d+)px\)/);
+    return m ? Number(m[1] ?? m[2]) : undefined;
+  };
+  const narrowMax = width(`(max-width: ${NARROW_BREAKPOINT}px)`)!;
+  const wideMin = sheet
+    .flatMap((r) => r.media.join(' and '))
+    .map(width)
+    .filter((w): w is number => w !== undefined)
+    .find((w) => w > narrowMax);
+  assert.ok(wideMin !== undefined, 'the wide layout must start somewhere above the narrow one');
+  assert.equal(wideMin, narrowMax + 1, `a window at ${narrowMax + 0.5}px would match neither rule`);
 });
 
 test('F14.6: the thread layout keeps the connector and the text in their own columns', async () => {
@@ -5365,11 +5412,66 @@ test('F27.4: mediaLayout configuration supports grid and stack with safe sanitiz
   assert.equal(sanitizeMediaLayout(undefined), 'grid');
 });
 
-test('F27.5: CSS defines media-layout-stack for 100% full-display of all multi images', () => {
-  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  assert.ok(cssContent.includes('.media-layout-stack'), 'CSS must include .media-layout-stack');
-  assert.ok(cssContent.includes('aspect-ratio: unset'), 'Stack layout must unset aspect-ratio constraint');
-  assert.ok(cssContent.includes('max-height: unset'), 'Stack layout must unset max-height constraint for full display');
+test('F27.5: stack mode gives every picture its full height, in rules that exist', async () => {
+  // The three selectors the card can arrive at stack with: the planner's
+  // `data-layout`, the class from `media-layout-*`, and the target's own
+  // attribute. Each has to answer, because the card writes more than one of them
+  // and a rule that names only one leaves the other two on the grid's shape.
+  const sheet = cssSheet(path.resolve(__dirname, '../../src/content/styles/card.css'));
+  const grid = '.post-to-card-target .media-grid[data-layout="stack"]';
+  const cell = `${grid} .media-item`;
+
+  // A rule for each selector actually exists -- read as selectors, not as
+  // substrings, so a mention in prose is not an answer.
+  for (const selector of [grid, '.post-to-card-target .media-grid.media-layout-stack', cell]) {
+    assert.ok(
+      sheet.some((r) => r.selectors.includes(selector)),
+      `stack mode needs a rule for ${selector}`
+    );
+  }
+
+  // And the card names stack the way those rules expect, in which order? The
+  // markup is the half that says which selectors ever fire.
+  const html = await renderCard({ config: { mediaLayout: 'stack' } });
+  assert.match(html, /class="[^"]*\bmedia-grid\b[^"]*\bmedia-layout-stack\b/, 'the card marks its grid for the stack rules');
+  assert.match(html, /class="[^"]*\bmedia-item\b[^"]*\bmedia-layout-stack\b/, 'and every cell with it');
+
+  // The grid drops the shape the grid mode gives it. Without these the stack is
+  // clipped to a 2- or 3-picture aspect ratio however tall its pictures are.
+  // The stack rule is the one that wins the cascade for the last of these: the
+  // grid-mode rules state a cap, and a stack that leaves the cap standing is
+  // still a capped grid. So the stack's own answer has to be the one on top,
+  // which is what reading the sheet in order and taking the last match means.
+  const stack = sheet.find((r) => r.selectors.includes(grid))!;
+  assert.ok(stack.declares('flex-direction', 'column'), 'the stack is a column, one picture below the next');
+  assert.equal(stack.declares('aspect-ratio', 'unset'), true, 'the stack takes its height from its pictures');
+  const capFor = (): string | undefined => {
+    // Every rule that could apply to the stack grid, in cascade order: the
+    // selector the stack rule uses, and the plain grid-mode rules it outranks.
+    const applying = sheet.filter((r) =>
+      r.selectors.some((s) => s === grid || /^\.media-grid\[data-layout="grid"\]/.test(s))
+    );
+    const last = applying.reverse().find((r) => r.declarations.some((d) => d.startsWith('max-height:')));
+    return last?.declarations.find((d) => d.startsWith('max-height:'));
+  };
+  assert.equal(
+    capFor(),
+    'max-height: unset',
+    `no grid-mode cap may win over the stack; the applied cap is "${capFor()}"`
+  );
+
+  // And each cell is unconstrained in turn: the per-count rules state
+  // `height: 100%` on `.media-item`, which inside a column would stack to
+  // nothing. `object-fit: contain` is how 完整展示 reaches the cell in this mode.
+  const item = sheet.filter((r) => r.selectors.includes(cell));
+  assert.ok(
+    item.some((r) => r.declares('max-height', 'unset') && r.declares('aspect-ratio', 'unset')),
+    'each stacked cell drops the grid\'s cap and shape'
+  );
+  assert.ok(
+    item.some((r) => r.declares('object-fit', 'contain')),
+    'stack mode shows the whole picture rather than cropping it'
+  );
 });
 
 test('F27.6: the grid layout rules never pick a media object-fit, so the fit toggle reaches every layout', () => {
@@ -5434,16 +5536,71 @@ test('F28.3: Card renders data-grid-layout="stacked" for 2 wide images and "port
   assert.equal(planMediaGrid([photo(1.6), photo(0.46)], AUTO_GRID).layout, 'columns');
 });
 
-test('F28.4: card.css defines top-hero, left-hero, 4:3 quad and transparent contain styles', () => {
-  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  assert.ok(cssContent.includes('data-grid-layout="top-hero"'), 'Must define top-hero layout rule');
-  assert.ok(cssContent.includes('grid-column: span 2;'), 'Top hero item must span 2 columns');
-  assert.ok(cssContent.includes('minmax(0, var(--grid-top-hero, 1.4fr)) minmax(0, 1fr)'), 'Top hero must allocate 1.4fr to 1fr row height with minmax');
-  assert.ok(cssContent.includes('data-grid-layout="left-hero"'), 'Must define left-hero layout rule');
-  assert.ok(cssContent.includes('data-grid-layout="stacked"'), 'Must define stacked 2-image rule');
-  assert.ok(cssContent.includes('data-grid-layout="portrait-columns"'), 'Must define portrait-columns 2-image rule');
-  assert.ok(cssContent.includes('aspect-ratio: 4 / 3;'), 'Must define 4:3 aspect-ratio for grid');
-  assert.ok(cssContent.includes('gap: 4px;'), 'Must define 4px compact gap');
+test('F28.4: card.css arranges top-hero, left-hero and the 2-picture layouts the planner names', () => {
+  const sheet = cssSheet(path.resolve(__dirname, '../../src/content/styles/card.css'));
+  /** The declarations of the first rule whose selector list contains `selector`. */
+  const rule = (selector: string): CssRule => {
+    const found = sheet.find((r) => r.selectors.includes(selector));
+    assert.ok(found, `card.css needs a rule for ${selector}`);
+    return found;
+  };
+  const grid = (count: number, layout: string): string =>
+    `${'.media-grid[data-layout="grid"]'}[data-count="${count}"][data-grid-layout="${layout}"]`;
+
+  // The hero weights are not restated here. They live in `geometry.ts` and reach
+  // the sheet as `--grid-top-hero` / `--grid-left-hero`, which `Card.tsx` injects
+  // from `GRID_TRACKS`; a test asserting `1.4fr` in the file would pin the
+  // fallback, not the weight, and would pass after the planner's arithmetic had
+  // stopped matching. What the sheet must do is consume the property.
+  const topHero = rule(grid(3, 'top-hero'));
+  assert.ok(
+    topHero.declares('grid-template-rows', 'var(--grid-top-hero') &&
+      topHero.declares('grid-template-rows', '1fr)'),
+    'the hero row weighs against the row under it, and takes its weight from the property'
+  );
+  assert.equal(
+    topHero.declares('grid-template-columns', '1fr) minmax(0, 1fr)'),
+    true,
+    'two equal columns: the hero spans both, the other two share them'
+  );
+
+  // Top hero: the first picture takes the width, the other two sit under it.
+  const topFirst = rule(`${grid(3, 'top-hero')} .media-item:first-child`);
+  assert.equal(topFirst.declares('grid-column', 'span 2'), true, 'the wide hero spans both columns');
+  assert.equal(topFirst.declares('grid-row', '1'), true, 'on the first row');
+  assert.equal(rule(`${grid(3, 'top-hero')} .media-item:nth-child(2)`).declares('grid-column', '1'), true, 'the pair below starts in column 1');
+  assert.equal(rule(`${grid(3, 'top-hero')} .media-item:nth-child(3)`).declares('grid-column', '2'), true, 'and continues in column 2');
+
+  // Left hero: the tall picture takes a column and both rows.
+  const leftHero = rule(grid(3, 'left-hero'));
+  assert.ok(
+    leftHero.declares('grid-template-columns', 'var(--grid-left-hero') &&
+      leftHero.declares('grid-template-columns', 'minmax(0, 1fr)'),
+    'the hero column weighs against the pair beside it, from the property'
+  );
+  const leftFirst = rule(`${grid(3, 'left-hero')} .media-item:first-child`);
+  assert.equal(leftFirst.declares('grid-row', 'span 2'), true, 'the tall hero spans both rows');
+  assert.equal(leftFirst.declares('grid-column', '1'), true, 'in the first column');
+  assert.equal(rule(`${grid(3, 'left-hero')} .media-item:nth-child(2)`).declares('grid-row', '1'), true, 'the pair beside it stacks from the top');
+
+  // The two-picture arrangements the planner names, and the share of the grid
+  // each takes: wide pictures stack, tall ones stand side by side.
+  const stacked = rule(grid(2, 'stacked'));
+  assert.deepEqual(stacked.declarations.filter((d) => /^(grid-template-)?columns?:/.test(d)), ['grid-template-columns: minmax(0, 1fr)']);
+  assert.deepEqual(stacked.declarations.filter((d) => /^(grid-template-)?rows?:/.test(d)), ['grid-template-rows: minmax(0, 1fr) minmax(0, 1fr)']);
+  const portrait = rule(grid(2, 'portrait-columns'));
+  assert.equal(portrait.declares('grid-template-columns', 'minmax(0, 1fr) minmax(0, 1fr)'), true, 'a tall pair stands side by side');
+
+  // The three-picture default is 4:3, which is where the planner starts before
+  // a hero layout takes over.
+  assert.equal(rule('.media-grid[data-layout="grid"][data-count="3"]').declares('aspect-ratio', '4 / 3'), true, 'default 3-up is 4:3');
+
+  // The gutter is the material's, so a test of the grid's gutter belongs to the
+  // grid's own rule rather than to whichever rule happens to say `gap: 4px`.
+  assert.ok(
+    rule('.media-grid').declares('gap', 'var(--media-gap'),
+    'the grid gutter comes from the material, not a fixed step'
+  );
 });
 
 test('F28.5: Dual portrait images calculate dynamic combined aspect-ratio (r0 + r1) in Auto mode', () => {
@@ -5593,19 +5750,44 @@ test('F29.3: the card renders a corner video badge, and nothing that dims the po
   }
 });
 
-test('F29.4: card.css styles an opaque pill with no glass and no scrim, and no progress line', () => {
-  const cssContent = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
-  assert.ok(cssContent.includes('.media-item.media-video-item'), 'Must style media-video-item');
-  assert.ok(cssContent.includes('.video-indicator-badge'), 'Must style video-indicator-badge');
-  assert.ok(cssContent.includes('.video-badge-pill'), 'Must style video-badge-pill');
-  assert.ok(!cssContent.includes('.video-scrim-overlay'), 'Must NOT style a bottom scrim');
-  assert.ok(!cssContent.includes('.video-progress-track'), 'Must NOT style the video progress bar');
-  // Scoped to the badge rule: the thread exclude button may stay frosted because
-  // it is UI-only and marked data-html2canvas-ignore, so it never reaches the
-  // export. Only the badge sits on exported pixels.
-  const pillRule = cssContent.slice(cssContent.indexOf('.media-video-item .video-badge-pill {'));
-  const pillBlock = pillRule.slice(0, pillRule.indexOf('}'));
-  assert.ok(!pillBlock.includes('backdrop-filter'), 'Must NOT blur the badge: the themes ban glass surfaces');
+test('F29.4: the video card carries an opaque pill and no scrim or progress line', async () => {
+  // The markup says what the card puts on the poster; the sheet says what the
+  // pill is. Both halves are read off the card that would be exported rather
+  // than off the source, so the badge cannot be "styled" by a selector the card
+  // never writes and cannot be dropped by a selector that goes away.
+  const html = await renderCard({ data: VIDEO_TWEET });
+  assert.match(html, /class="[^"]*\bmedia-video-item\b[^"]*"/, 'the video cell is the one the stylesheet frames');
+
+  const badge = html.match(/<[^>]*class="[^"]*\bvideo-indicator-badge\b[^"]*"[^>]*>/);
+  assert.ok(badge, 'the play badge is drawn on the poster');
+  assert.ok(/video-badge-pill/.test(html), 'and its pill is the element the sheet styles');
+
+  const sheet = cssSheet(path.resolve(__dirname, '../../src/content/styles/card.css'));
+
+  // The two surfaces the badge used to need, and must not come back: a bottom
+  // gradient to sit against, and a progress line that claimed a duration the
+  // card does not know. Neither is styled, and neither is rendered.
+  for (const retired of ['.video-scrim-overlay', '.video-progress-track']) {
+    assert.ok(
+      !sheet.some((r) => r.selectors.some((s) => s.includes(retired))),
+      `${retired} must not be styled: the badge is opaque and the card knows no playback position`
+    );
+    assert.ok(!html.includes(retired.slice(1)), `${retired} must not be rendered either`);
+  }
+
+  const pill = sheet.find((r) => r.selectors.includes('.media-video-item .video-badge-pill'));
+  assert.ok(pill, 'the pill has a rule of its own');
+  // Glass is the thing the materials ban, and only the pill sits on exported
+  // pixels; the thread's exclude button may stay frosted because it is marked
+  // `data-html2canvas-ignore` and never reaches the raster.
+  assert.equal(pill.declares('backdrop-filter', ''), false, 'the pill is flat: no blur on exported pixels');
+  // Opaque, not a wash: the poster changes from post to post, so a translucent
+  // badge would print differently on each one and vanish on a bright frame.
+  const background = pill.declarations.find((d) => d.startsWith('background:'));
+  assert.ok(background, 'the pill states its own fill');
+  const alpha = background.match(/rgba?\([^)]*,\s*([\d.]+)\)/) ?? background.match(/\/\s*([\d.]+)\s*\)/);
+  assert.ok(alpha, `the pill's fill must state an alpha this test can read, got "${background}"`);
+  assert.ok(Number(alpha[1]) >= 0.8, `the pill is opaque on the poster, got alpha ${alpha[1]}`);
 });
 
 test('F29.5: i18n provides localized videoLabel for zh-CN and en-US', () => {
