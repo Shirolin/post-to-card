@@ -44,7 +44,40 @@ function copyManifestPlugin(): Plugin {
 export default defineConfig(({ mode }) => {
   const isBackground = mode === 'background';
   const isHook = mode === 'hook';
+  const isPopup = mode === 'popup';
   const hasPublicDir = existsSync(resolve(__dirname, 'public'));
+
+  // The extension popup. A build entry of its own, so it can import the
+  // modules that own the storage key, the locale and the copy rather than
+  // carrying a second spelling of each — the popup used to be a plain script
+  // in `public/`, which is why it had to.
+  //
+  // The page's markup still comes from `public/`, so the popup's own files are
+  // copied by the content build and the script is written here.
+  if (isPopup) {
+    return {
+      publicDir: false,
+      build: {
+        outDir: 'dist',
+        emptyOutDir: false,
+        target: 'esnext',
+        minify: true,
+        lib: {
+          entry: resolve(__dirname, 'src/content/popup.ts'),
+          name: 'PostToCardPopup',
+          formats: ['iife'],
+          fileName: () => 'popup.js',
+        },
+        rollupOptions: {
+          output: {
+            entryFileNames: 'popup.js',
+            extend: true,
+            inlineDynamicImports: true,
+          },
+        },
+      },
+    };
+  }
 
   // GraphQL interceptor. Runs in the MAIN world so it can observe the page's
   // own fetch/XHR calls, which are invisible from the isolated content script.

@@ -50,10 +50,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Runs the two tsconfig programs, `node --check public/popup.js` (tsconfig's
-      # `include` does not cover `public/`, so nothing else parses the popup), the
-      # knip lint, and the three Vite bundles.
-      - name: Build (typecheck + lint + three Vite bundles)
+      # Runs the two tsconfig programs, `node --check dev/verify-extension.mjs`
+      # (tsconfig's `include` does not cover `dev/`, so nothing else parses it),
+      # the knip lint, and the four Vite bundles.
+      - name: Build (typecheck + lint + four Vite bundles)
         run: pnpm run build
 
       - name: Test (tiers 1-4, i18n, graphql, resolver, hygiene)
