@@ -28,6 +28,8 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 5. **Clean Multi-Entry Vite Build Pipeline**:
    - `background.js` 输出为标准 ESM 脚本。
    - `content.js` 输出为完全自包含的 IIFE 脚本（无顶层 import/export）。
+   - `popup.js` 输出为 IIFE 脚本：popup 自己是一个构建入口，因此它能 import
+     存储键、locale 与自己的文案模块，而不是各抄一份。
    - 严控依赖：仅 `preact`, `modern-screenshot`, `qrcode-generator`, `lucide-preact`，零外部服务，100% 离线运行。
 
 ---
@@ -115,7 +117,7 @@ d:/Project/post-to-card/
 ├── manifest.json                  # Manifest V3 模板/配置
 ├── package.json                   # 核心依赖 (preact, lucide-preact, modern-screenshot, qrcode-generator)
 ├── tsconfig.json                  # TypeScript 配置
-├── vite.config.ts                 # 三模式/多入口 Vite 构建管道
+├── vite.config.ts                 # 四模式/多入口 Vite 构建管道
 ├── dev/                           # 仅开发用：可视化 UI harness
 ├── docs/                          # 检测整改清单、X DOM 实测快照、GraphQL 调研
 ├── src/
@@ -123,9 +125,9 @@ d:/Project/post-to-card/
 │   ├── background/                # Service Worker：twimg 跨域抓取与 Base64 缓存
 │   └── content/                   # Content Script：adapter/ 走 DOM 通道，graphql/ 走结构化通道，
 │                                  #   ui/ 是 Preact 卡片与弹窗，styles/ 是其 Shadow DOM 内的 CSS，
-│                                  #   engine/ 负责截图与导出
+│                                  #   engine/ 负责截图与导出，popup.ts 是扩展弹窗这个构建入口
 ├── tests/                         # runner + fixtures/（真实 DOM 夹具）+ tiers/（分层验收）
-└── dist/                          # 构建产物 (manifest.json, background.js, graphql-hook.js, content.js)
+└── dist/                          # 构建产物 (manifest.json, background.js, graphql-hook.js, content.js, popup.js)
 ```
 
 目录逐个文件列在这里只会过期（清单写的是当时的布局，不是现在的），所以这里只点职责，具体文件看仓库。
@@ -167,3 +169,18 @@ X 定期轮换 GraphQL 的 queryId（`TweetDetail` 至少有 5 个历史值，`S
 
 `TweetData.diagnostics` 记录每条记录用了哪条通道、哪个 operation、是否走了降级。
 `source` 降为 `dom` 的比例突然升高，即为 X 改版的早期信号。
+
+但 `dom` 升高本身不足以报警：时间线上的帖子本来就没有 detail payload，GraphQL 通道
+合法地不回答。因此**未命中原因**另有记录 —— `diagnostics.graphqlMiss`：
+
+| 值 | 含义 | 是不是异常 |
+|---|---|---|
+| `no-payload` | 没有捕获到任何 payload | 否 —— 时间线上的常态 |
+| `invalid-json` | 捕获到的 body 不是 JSON | 是 —— 捕获环节坏了 |
+| `unexpected-shape` | body 是 JSON 但不是解析器认识的结构 | 是 —— X 改了 payload 形状 |
+| `no-tweets` | payload 解析成功但零推文 | **是，且最重要** —— 轮换后的端点长这样 |
+| `target-absent` | payload 里有推文但没有要的那条 | 否 —— 缓存里是另一次会话 |
+
+`no-tweets` 之所以最重要：X 把失败的请求静默吞掉，社区实测 72 个单元全部 "succeeded"
+却零结果。**这条 reason 上涨，就是接口轮换已经发生的证据** —— 而在此之前，
+`parseError` 只是一个没人读的字符串，轮换无法被发现。

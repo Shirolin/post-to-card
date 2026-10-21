@@ -21,6 +21,10 @@ A continuous, chronological chain of consecutive tweets authored by the same use
 ### Thread Session
 The active, in-memory editing lifecycle of a specific thread inside the card preview modal. Governs which tweets within the thread are currently included or excluded from the card rendering. The lifecycle is transient; the exclusions are not — they are saved in User Preferences (below), so a tweet excluded once stays excluded in any later card that contains it.
 
+One session answers every surface's question about the thread: which posts the Card is showing, which one the thread is about, how many are excluded, and whether one more may be dropped. The Card, the controls panel, the preview summary and the export handler all read that one answer, so they cannot disagree about which posts those are.
+
+Two facts are reported side by side, because they are about two different surfaces: the *showing* set is never empty — a Card with nothing on it is not a Card, so the thread's target post stands in when everything is excluded — while the *raw count* still reports the exclusion as it is, which is what the panel quotes. The target post is the one that was opened; it is not the first post that happens to be showing, and the exclusions do not move it.
+
 ### Thread Resolution
 The multi-channel intake pipeline that produces structured `ThreadData` from a target post. Prioritizes intercepted GraphQL conversation trees and client-side translations, falling back to chronological DOM timeline extraction corroborated by snowflake ordering, visual connectors, and GraphQL reply linkage.
 
@@ -28,6 +32,8 @@ The multi-channel intake pipeline that produces structured `ThreadData` from a t
 The persistent styling and layout configuration (visual theme, padding tier, corner, aspect ratio, Canvas shape and background, image fit, media layout, interface and card language, display toggles, and the thread exclusions of a Thread Session) stored in extension storage and reused across all card generations.
 
 Interface and card language is one setting with two scopes, deliberately. It localizes the modal's own chrome and the extension popup, and it also formats the dates printed inside the card, because a card is shared with people who read the poster's language rather than the reader's. It does **not** reach the card's prose or a translated-from notice: those are reproduced verbatim from the source page, since they are the author's words and X's own attribution rather than card UI.
+
+A stored preference that names nothing the card can show is treated exactly like one that was never stored: both fall back to the option's shipped default. A value that cannot be read is not a choice, and the card does not make one on the user's behalf — the corner goes back to the material's own rather than to a fixed roundness.
 
 ### Media Item
 A rich media asset attached to a tweet (image, video poster, animated GIF) with normalized dimensions, high-resolution URLs, and layout hints.

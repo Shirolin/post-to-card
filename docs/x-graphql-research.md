@@ -4,6 +4,13 @@
 > `queryId` 仅作诊断记录——正是本文 §0 的第 1 条，理由也照抄在那里。
 > `docs/x-query-ids-*.json` 是**采样快照**（文件名自带日期），只作证据链：queryId 会轮换，
 > 禁止当常量用，要现成的值请对接本文 §1.1 的每日真值源。
+>
+> **§6.5 的诊断埋点已落地，但比本文建议的更细。** 本文建议的 `parseError?: string` 是一根
+> 字符串，四种失败原因挤在里面、调用方只能比字面量；实现改成了可区分的判别
+> （`GraphQLParseFailure`），并由 `resolver.ts` 记进 `diagnostics.graphqlMiss`，
+> 字段与含义见 `PROJECT.md` 的 Data Channels。§6.4「不要让 GraphQL 静默失败」这条
+> 因此现在真的成立：轮换后的端点（零推文）会以 `no-tweets` 报出来，而不是无声无息。
+> 本文 §6.5 其余字段（`featureCount`、`bundleOrPayloadBytes`、`degradedAt`）仍未实现。
 
 > 调研日期：**2026-10-02**
 > 目标：评估「拦截 X 自己的 GraphQL 响应」替代纯 DOM 解析的可行性，重点是 queryId 轮换风险。

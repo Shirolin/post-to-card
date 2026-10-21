@@ -19,14 +19,20 @@ bundle。`npm test` 只跑 tier1-4 与 i18n / graphql / resolver / article / hyg
 
 只有这里写着的两处坑：
 
-- `public/popup.js` 与 `dev/verify-extension.mjs` 在 tsc 的 `include` 之外，改它们时只有 build 里的
-  `node --check` 会拦语法错。
+- `dev/verify-extension.mjs` 在 tsc 的 `include` 之外，改它时只有 build 里的 `node --check` 会拦语法错。
+  （`public/popup.js` 已不是这样：popup 现在是 `src/content/popup.ts` 这个构建入口，tsc 管得到它。）
 - `tests/tiers/` 基本不在 tsconfig 里（shim 的 `DomElement` 不是 `Element`，跨边界要到处加 cast）；
   唯一的例外是 `tsconfig.test-support.json` 里列着的那三个从不跨边界的文件。改共享类型（`TweetData`
   等）的字段时，grep 一遍测试里的名字，别只信 tsc。
 
 装扩展进真实浏览器用 `node dev/verify-extension.mjs --url https://x.com/`（零依赖，headed；
 headless 会被 x.com 403）。
+
+**验提取器**用 `node dev/verify-extractor.mjs`：本地服务器承载 `tests/fixtures/` 里那些
+真实采集的推文标记，`dist/content.js` 这个**已构建的 bundle** 在真 Chrome 里对它们跑一遍，
+然后点开卡片看正文。`verify-extension.mjs` 证明扩展装得上、内容脚本起来了，但它证明不了
+提取器 —— 未登录的 x.com 整页 0 个 `data-testid`，没有推文标记可读（脚本自己写了这条）。
+这个脚本补上那一段，且不碰 x.com。
 
 ## X DOM observations
 
