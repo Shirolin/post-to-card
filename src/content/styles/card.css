@@ -164,11 +164,17 @@
 /* -------------------------------------------------------------
    Aspect Ratio Rules (Downward Fluid Expansion: min-height floor)
 
-   Each floor is the card's own width divided by the ratio, so the shape holds
-   and a card wider than the default would floor accordingly. The width comes
-   from `--card-width`, which the card injects: the same number the geometry
-   module hands the TypeScript, so the floor here and the one the preview
-   quotes cannot drift apart.
+   Each floor is the card's own width divided by the ratio, rounded to whole
+   pixels -- the same figure the geometry module gives the inline style, so the
+   two cannot disagree about a third of a pixel. The width comes from
+   `--card-width`, which the card injects.
+
+   The card's inline style is what actually paints the floor; these rules are
+   the fallback for a card rendered without the card component, where there is
+   no inline style to carry the figure. `round()` is Baseline 2024 (Chrome 125,
+   Firefox 118, Safari 17.2); a browser that does not know it drops the
+   declaration and the card simply has no floor, which is the same state a
+   card with no poster ratio is in.
    ------------------------------------------------------------- */
 .post-to-card-target[data-ratio="auto"] {
   min-height: unset;
@@ -176,12 +182,12 @@
 }
 
 .post-to-card-target[data-ratio="3:4"] {
-  min-height: calc(var(--card-width, 640px) * 4 / 3);
+  min-height: round(calc(var(--card-width, 640px) * 4 / 3), 1px);
   height: auto;
 }
 
 .post-to-card-target[data-ratio="16:9"] {
-  min-height: calc(var(--card-width, 640px) * 9 / 16);
+  min-height: round(calc(var(--card-width, 640px) * 9 / 16), 1px);
   height: auto;
 }
 /* Inner content expansion wrapper: keeps footer pinned to bottom when content is short */

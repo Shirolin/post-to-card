@@ -61,9 +61,13 @@ const POSTER_RATIOS: Record<Exclude<AspectRatioOption, 'auto'>, { height: number
  * a long post is never cut off to fit the shape. `auto` has no floor, which is
  * what the stylesheet's own `min-height: unset` says.
  *
- * The value is a `calc()` over the card's width rather than a rounded number,
- * so it is the same expression the stylesheet computes and the two cannot
- * disagree about a third of a pixel.
+ * The figure is rounded to whole pixels, because that is what the card
+ * shipped with: a floor of 853.333px is a third of a pixel taller than the
+ * 853px it replaced, and a card is a picture — its height is read back out of
+ * the raster, where a third of a pixel is a third of a pixel. The stylesheet
+ * computes the same floor from the same width, with `round()`, for the case
+ * where a card is rendered without the card component and there is no inline
+ * style to carry the figure.
  */
 export function aspectMinHeight(ratio: AspectRatioOption, width: number = CARD_WIDTH): string {
   if (ratio === 'auto') return 'auto';
@@ -73,7 +77,7 @@ export function aspectMinHeight(ratio: AspectRatioOption, width: number = CARD_W
   // value that slipped past the sanitiser from putting a broken length on the
   // card.
   if (!shape) return aspectMinHeight('auto', width);
-  return `calc(${width}px * ${shape.height} / ${shape.width})`;
+  return `${Math.round((width * shape.height) / shape.width)}px`;
 }
 
 /**

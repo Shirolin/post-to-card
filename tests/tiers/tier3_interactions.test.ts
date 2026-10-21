@@ -250,7 +250,7 @@ test('Tier 3.6: the privacy blur lands on the author block only, never on the QR
 
 test('Tier 3.7: 3:4 sets a min-height floor and leaves the card free to grow past it', async () => {
   const floor = aspectMinHeight('3:4', CARD_WIDTH);
-  assert.equal(floor, 'calc(640px * 4 / 3)');
+  assert.equal(floor, '853px');
 
   const html = await renderCard({ config: { aspectRatio: '3:4' }, data: MEGA_THREAD });
   const style = styleAttr(html);
@@ -264,7 +264,7 @@ test('Tier 3.7: 3:4 sets a min-height floor and leaves the card free to grow pas
 
 test('Tier 3.8: 16:9 sets its own floor and keeps the same freedom to expand', async () => {
   const floor = aspectMinHeight('16:9', CARD_WIDTH);
-  assert.equal(floor, 'calc(640px * 9 / 16)');
+  assert.equal(floor, '360px');
 
   const html = await renderCard({ config: { aspectRatio: '16:9' }, data: MEGA_THREAD });
   const style = styleAttr(html);

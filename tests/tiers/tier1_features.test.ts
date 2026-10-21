@@ -1660,11 +1660,18 @@ test('F17.19: the card injects its geometry, and the stylesheet reads it', async
     'card.css must not declare a width of its own — it consumes the injected one'
   );
 
-  // The poster floor is computed from that width on both sides.
-  assert.equal(aspectMinHeight('3:4', CARD_WIDTH), 'calc(640px * 4 / 3)');
+  // The poster floor is computed from that width on both sides, and both round
+  // to whole pixels: the stylesheet's `round()` and the module's `Math.round`
+  // answer the same figure, so the fallback and the inline style cannot
+  // disagree about a third of a pixel.
+  assert.equal(aspectMinHeight('3:4', CARD_WIDTH), '853px');
   assert.ok(
-    css.includes('min-height: calc(var(--card-width, 640px) * 4 / 3)'),
-    'the stylesheet must floor the 3:4 card from the injected width'
+    css.includes('min-height: round(calc(var(--card-width, 640px) * 4 / 3), 1px)'),
+    'the stylesheet must floor the 3:4 card from the injected width, rounded to whole pixels'
+  );
+  assert.ok(
+    css.includes('min-height: round(calc(var(--card-width, 640px) * 9 / 16), 1px)'),
+    'and the 16:9 card the same way'
   );
 });
 
@@ -2916,13 +2923,15 @@ test('F19.1: the Auto ratio sets no minimum height', () => {
 });
 
 test('F19.2: the 3:4 poster ratio floors the card at four thirds of its width', () => {
-  assert.equal(aspectMinHeight('3:4', 640), 'calc(640px * 4 / 3)');
-  assert.equal(aspectMinHeight('3:4', 320), 'calc(320px * 4 / 3)');
+  // Whole pixels, because a card is a picture: its height is read back out of
+  // the raster, where a third of a pixel is a third of a pixel.
+  assert.equal(aspectMinHeight('3:4', 640), '853px');
+  assert.equal(aspectMinHeight('3:4', 320), '427px');
 });
 
 test('F19.3: the 16:9 banner ratio floors the card at nine sixteenths of its width', () => {
-  assert.equal(aspectMinHeight('16:9', 640), 'calc(640px * 9 / 16)');
-  assert.equal(aspectMinHeight('16:9', 1280), 'calc(1280px * 9 / 16)');
+  assert.equal(aspectMinHeight('16:9', 640), '360px');
+  assert.equal(aspectMinHeight('16:9', 1280), '720px');
 });
 
 test('F19.4: a poster card reaches its floor without being pinned to it', async () => {
