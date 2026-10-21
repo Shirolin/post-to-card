@@ -180,9 +180,29 @@ console.log(`bundle    ${join(DIST, 'content.js')}`);
 console.log(`server    http://127.0.0.1:${sitePort}/`);
 console.log(`debug     127.0.0.1:${debugPort} (probed free)\n`);
 
+// Headed when there is a display to draw on, headless when there is not.
+//
+// Unlike `verify-extension.mjs`, this one does not need a window: the page it
+// opens is a local server, not x.com, and x.com is the only thing that
+// refuses a headless browser. A CI runner has no display, so headless is the
+// only way it can run at all.
+//
+// `PTC_HEADED` says which, for the cases the platform cannot tell: `0` forces
+// headless, `1` forces a window.
+const headedByFlag = process.env.PTC_HEADED;
+const headed =
+  headedByFlag === undefined
+    ? process.platform === 'win32' || process.platform === 'darwin' || !!process.env.DISPLAY
+    : headedByFlag === '1';
+
 const proc = spawn(chrome, [
   `--remote-debugging-port=${debugPort}`,
   `--user-data-dir=${profile}`,
+  ...(headed ? [] : ['--headless=new']),
+  // The sandbox needs privileges a CI container does not grant, and the
+  // browser is only reading a local file.
+  '--no-sandbox',
+  '--disable-dev-shm-usage',
   '--no-first-run',
   '--no-default-browser-check',
   'about:blank',

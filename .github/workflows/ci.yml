@@ -63,3 +63,17 @@ jobs:
       # and style-injection checks that only make sense against real output.
       - name: Tier 5 adversarial audit (needs the fresh bundle)
         run: pnpm run test:tier5
+
+      # Runs the built content bundle in a real browser, against the tweet
+      # markup the repository collected from a logged-in timeline, and checks
+      # that the card it opens carries the post's own words. The tiers above
+      # read that markup through a DOM shim with no layout engine, so a rule
+      # that only holds once the browser has laid the page out is not covered
+      # by any of them. It never touches x.com, so headless is enough.
+      - name: Chrome (for the extractor check)
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Extractor in a real browser (needs the fresh bundle)
+        run: pnpm run verify:extractor
