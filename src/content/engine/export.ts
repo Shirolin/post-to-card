@@ -525,9 +525,7 @@ function mountAndRender(
   options: RenderOptions,
   geometryOnly: boolean
 ): { measured: Promise<CardRender> } {
-  /** Settles the object with its report, at most once. */
   let resolveObject: ((render: CardRender) => void) | null = null;
-  /** Settles the object as a failure, at most once. */
   let rejectObject: ((err: unknown) => void) | null = null;
   const resolved = (render: CardRender): void => {
     const done = resolveObject;
@@ -541,7 +539,6 @@ function mountAndRender(
     rejectObject = null;
     done?.(err);
   };
-  /** The last report this render produced, for the object the run settles with. */
   let lastReport: RenderReport = {
     requestedScale: 0,
     appliedScale: 0,
@@ -976,7 +973,7 @@ function pictureOf(render: Promise<CardRender>): ClipboardWriteHandle['picture']
         (failure: unknown) => ({ blob: null, failure })
       )
   );
-  settled.catch(() => {});
+  ignoreRejection(settled);
   return settled;
 }
 
@@ -1012,9 +1009,7 @@ export async function exportBlobWithFallback(
     if (!canUseImageClipboard()) {
       throw new ClipboardUnsupportedError('Clipboard API is not supported in this environment.');
     }
-    await navigator.clipboard.write([
-      new ClipboardItem({ 'image/png': blob }),
-    ]);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     return { success: true, method: 'clipboard', filename };
   } catch (clipboardErr) {
     console.warn(
