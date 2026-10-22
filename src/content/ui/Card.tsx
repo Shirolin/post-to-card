@@ -166,9 +166,22 @@ function renderRichTokens(
   );
 }
 
-/** Advances a failed picture to the next URL in its chain. */
+/**
+ * Advances a failed picture to the next URL in its chain.
+ *
+ * The placeholder that covers a picture's cell while it loads pulses, so it has
+ * to know when waiting is over: a chain that ran out is a picture that is not
+ * coming, and a block that goes on breathing would claim otherwise. The chain
+ * carries its own ending (it is the attribute that disappears), so "exhausted"
+ * is read off the element after the walk, not reconstructed here.
+ */
 function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
-  advanceImageFallback(event.currentTarget);
+  const img = event.currentTarget;
+  advanceImageFallback(img);
+  if (img.getAttribute('data-fallback') === null && img.naturalWidth === 0) {
+    const cell = img.closest ? (img.closest('.media-box') as HTMLElement | null) : null;
+    if (cell) cell.classList.add('is-picture-missing');
+  }
 }
 
 /** Narrowest shape (width / height) a lone cover picture is shown at: 3:4. */
@@ -210,6 +223,13 @@ function renderMediaGrid(
   // shape it reported, re-plan, and write the plan back. The plan takes the
   // picture's own shape; only the lone-cover floor above can overrule it.
   const settleGrid = (imgEl: HTMLImageElement, index: number) => {
+    // The photograph has painted, so the cell's placeholder has done its job.
+    // The mark goes on the cell, never on the picture: the picture is what the
+    // exporter rasterizes, and its opacity may not depend on what the preview
+    // happens to have loaded. The placeholder is excluded from the export, so
+    // the mark only ever reaches a node that is not drawn there.
+    const cell = imgEl.closest ? (imgEl.closest('.media-box') as HTMLElement | null) : null;
+    if (cell) cell.classList.add('is-picture-loaded');
     if (!imgEl.naturalWidth || !imgEl.naturalHeight) return;
     const ratio = Number((imgEl.naturalWidth / imgEl.naturalHeight).toFixed(3));
     const settled = recordShape(items, index, ratio);
@@ -279,6 +299,33 @@ function renderMediaGrid(
                 onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) => settleGrid(e.currentTarget, idx)}
                 onError={handleImageError}
               />
+              {/* The cell's tone while the photograph is in flight. X serves
+                  pictures from a host whose latency nobody here controls, and
+                  until one decodes the cell is a transparent hole inside a
+                  finished frame: the card reads as done and broken at once. A
+                  recessed block in the material's own ink states "a picture goes
+                  here", and covers the cell until the picture has painted --
+                  then it fades out over it, so the photograph dissolves in
+                  rather than replacing a hole. Above the picture so that the
+                  dissolve is the placeholder going, not the picture arriving
+                  late; below the play badge, which is the one thing that may sit
+                  on a poster that is not there yet.
+
+                  Two nodes, not one: the pulse is an animation on `opacity`, and
+                  an element cannot fade out of a property it is also being
+                  animated on -- removing the animation and writing `opacity: 0`
+                  in the same style change cuts instead of dissolving. The outer
+                  node owns the fade, the inner one owns the breathing.
+                  Deliberately kept out of the export: the engine waits for every
+                  picture to decode, and a stand-in for a picture must never end
+                  up in the file. */}
+              <span
+                class="media-placeholder"
+                aria-hidden="true"
+                data-html2canvas-ignore="true"
+              >
+                <span class="media-placeholder-pulse" />
+              </span>
               {/* Play badge sits on the poster without a scrim: the pill is
                   opaque, so a gradient would only dim the image. */}
               {isVideo && showPlayButton && (
@@ -652,7 +699,7 @@ function renderThreadTweet(
   // so it is not offered a button here at all.
   const tweetId = tweet.id;
   return (
-    <div class="thread-item">
+    <div class="thread-item" data-tweet-id={tweetId}>
       {/* On-card quick exclude button */}
       {canExclude && onExcludeTweet && tweetId && (
         <button

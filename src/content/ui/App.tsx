@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import type { ThreadData } from '../../types/tweet.ts';
 import type { CardConfig } from '../../types/card.ts';
 import { DEFAULT_CARD_CONFIG, THEMES } from './themes.ts';
@@ -36,6 +36,24 @@ type FixedZoomLevel = (typeof FIXED_ZOOM_LEVELS)[number];
 
 function isFixedLevel(level: ZoomLevel): level is FixedZoomLevel {
   return typeof level === 'number';
+}
+
+/**
+ * How long a post takes to travel to its new place when the tweet set changes.
+ *
+ * The same order as the dialog's own entrance: long enough to read as a move
+ * rather than a cut, short enough that the pointer is still where the user left
+ * it.
+ */
+const THREAD_FLIP_MS = 220;
+
+/**
+ * The exclusions as a comparable value: the same set is the same string, in any
+ * order. Used to tell "the card now holds different posts" from "some other
+ * option changed", which is the only question the flip animation asks.
+ */
+function exclusionKey(ids: string[] | undefined): string {
+  return [...(ids ?? [])].sort().join('|');
 }
 
 export interface AppProps {
@@ -93,6 +111,22 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   const [cardWidth, setCardWidth] = useState<number>(0);
   const [availableWidth, setAvailableWidth] = useState<number>(0);
   const [availableHeight, setAvailableHeight] = useState<number>(0);
+  /**
+   * Whether the card has been measured at least once.
+   *
+   * Before that there is no `fit` to draw: the width is unknown and the height is
+   * zero, so both fallbacks resolve to 1:1 and the first paint shows the card at
+   * its full 640px -- on a phone, hanging off both edges of the stage -- only to
+   * jump to the fitted scale a frame later. The stage holds the card back until
+   * the measurement answers, then fades it in while the dialog is still opening,
+   * so the card arrives at the size it will keep. See `.preview-scale` in
+   * modal.css.
+   *
+   * A one-way flag: a later theme, ratio or thread change moves the card's
+   * geometry too, but that is an edit the user made and the card must stay
+   * visible through it. Only the first arrival is hidden.
+   */
+  const [isCardMeasured, setIsCardMeasured] = useState<boolean>(false);
 
   /**
    * The width the exported picture actually has. `CARD_WIDTH` is only the
@@ -239,6 +273,11 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
       if (naturalWidth > 0) {
         setCardWidth((prev) => (Math.abs(prev - naturalWidth) > 1 ? naturalWidth : prev));
       }
+
+      // Both axes are measured, so `fit` has a real answer for the first time.
+      // The card is allowed on screen from here; the zoom written by this render
+      // is the one it keeps, which is the whole point of holding it back.
+      if (naturalHeight > 0 && naturalWidth > 0) setIsCardMeasured(true);
     };
 
     measure();
@@ -361,11 +400,153 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     };
   }, []);
 
+  /**
+   * Where each post sat before the tweet set changed, in the card's own pixels.
+   *
+   * The card is a column of posts, so removing one makes every post below it
+   * jump up by the removed height in a single frame -- the one edit in this
+   * panel whose result is a *different layout* rather than a different value.
+   * A FLIP animation turns that jump into a move: measure the old position here,
+   * before the render that moves them, and replay it from there afterwards.
+   *
+   * `offsetTop`, not `getBoundingClientRect`: the stage zooms the card, and a
+   * rect arrives multiplied by that zoom (and carrying any transform on an
+   * ancestor). Layout pixels are what a `translateY` written back onto the item
+   * has to be expressed in, and transforms do not change them, so the same
+   * number is correct on both sides of the measurement.
+   */
+  const threadFlipRef = useRef<Map<string, number> | null>(null);
+
+  const snapshotThreadItems = (): Map<string, number> => {
+    const snapshot = new Map<string, number>();
+    const card = cardRef.current;
+    if (!card) return snapshot;
+    card.querySelectorAll<HTMLElement>('[data-tweet-id]').forEach((item) => {
+      const id = item.dataset.tweetId;
+      if (id) snapshot.set(id, item.offsetTop);
+    });
+    return snapshot;
+  };
+
   const handleConfigChange = (newConfig: CardConfig) => {
+    // Only a change to *which* posts are in the card moves the ones that stay.
+    // Compared by set rather than by array, because the same exclusions in a
+    // different order are the same card and must not animate.
+    if (exclusionKey(newConfig.excludedTweetIds) !== exclusionKey(config.excludedTweetIds)) {
+      threadFlipRef.current = snapshotThreadItems();
+    }
     setConfig(newConfig);
     setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
     saveUserPreferences(newConfig).catch(() => {});
   };
+
+  /**
+   * Plays back the snapshot above, once, for the render that moved the posts.
+   *
+   * A layout effect so the first frame the browser paints is already the
+   * displaced one: a passive effect would let it paint the new positions once
+   * and then jump back, which is the jump this exists to remove. Mount passes
+   * through with nothing to play.
+   *
+   * The moving posts are offset by the distance they were displaced and eased
+   * back to zero. A post that just joined the card has no old position to come
+   * from, so it fades in where the layout already put it.
+   */
+  const exclusionKeyValue = exclusionKey(config.excludedTweetIds);
+  useLayoutEffect(() => {
+    const before = threadFlipRef.current;
+    threadFlipRef.current = null;
+    const card = cardRef.current;
+    if (!before || !card) return;
+
+    // Decided before anything is written: whether the list has to be clipped
+    // for the duration. A post that moves starts lower than its new slot, and
+    // the card has already shrunk around it -- unclipped, the displaced post is
+    // painted over the stage below the sheet. Clipping at the list's own edge
+    // is what turns that into the post sliding in from the card's bottom.
+    const moves: Array<{ item: HTMLElement; shift: number | null }> = [];
+    card.querySelectorAll<HTMLElement>('[data-tweet-id]').forEach((item) => {
+      const id = item.dataset.tweetId;
+      if (!id) return;
+      const from = before.get(id);
+      if (from === undefined) {
+        moves.push({ item, shift: null });
+        return;
+      }
+      const shift = from - item.offsetTop;
+      if (Math.abs(shift) >= 1) moves.push({ item, shift });
+    });
+    if (moves.length === 0) return;
+
+    const list = card.querySelector('.thread-list') as HTMLElement | null;
+    if (list) list.style.overflow = 'hidden';
+
+    moves.forEach(({ item, shift }) => {
+      item.style.transition = 'none';
+      if (shift === null) {
+        // A post that just joined the card has no old place to come from, so it
+        // fades in where the layout already put it.
+        item.style.opacity = '0';
+      } else {
+        item.style.transform = `translateY(${shift}px)`;
+      }
+      // Forces the displaced style to be the one the transition starts from;
+      // without the read the two writes collapse and nothing animates.
+      void item.offsetTop;
+      item.style.transition =
+        shift === null
+          ? `opacity ${THREAD_FLIP_MS}ms ease-out`
+          : `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`;
+      item.style.transform = '';
+      item.style.opacity = '';
+    });
+
+    if (list) {
+      // One frame past the longest move, so the clip is released after every
+      // post has arrived rather than mid-flight.
+      setTimeout(() => {
+        list.style.overflow = '';
+      }, THREAD_FLIP_MS + 60);
+    }
+  }, [exclusionKeyValue]);
+
+  /**
+   * The card's own last fitted geometry: the height it had, and the zoom `fit`
+   * answered with for it.
+   *
+   * `fit` is a function of the card's height, so any change to that height --
+   * a post leaving, a picture reporting its real shape, a material with a
+   * different rhythm -- also changes the whole picture's scale. That second
+   * jump lands on top of whatever moved inside the card, which is what made a
+   * reordered thread read as "everything jumps".
+   *
+   * Replaying it with a `transform` rather than by animating `zoom` keeps the
+   * cost on the compositor: `zoom` is a layout property, and interpolating it
+   * would re-wrap the card's text on every frame.
+   */
+  const lastFitRef = useRef<{ height: number; zoom: number } | null>(null);
+  const scaleRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const element = scaleRef.current;
+    const last = lastFitRef.current;
+    lastFitRef.current = { height: cardHeight, zoom };
+    // Nothing to replay on the first measurement (the card is still hidden), and
+    // nothing to replay when the card's height did not move -- which is what
+    // tells a zoom the *user* picked from a zoom `fit` re-derived.
+    if (!element || !last || last.height <= 0 || Math.abs(last.height - cardHeight) < 1) return;
+    const ratio = last.zoom / zoom;
+    if (!Number.isFinite(ratio) || Math.abs(ratio - 1) < 0.005) return;
+    // Top centre: the stage centres the card horizontally and starts it at the
+    // top, so that is the point the picture appears to scale around.
+    element.style.transformOrigin = '50% 0';
+    element.style.transition = 'none';
+    element.style.transform = `scale(${ratio})`;
+    // Same reason as the item flip: the displaced size has to be the style the
+    // transition starts from.
+    void element.offsetWidth;
+    element.style.transition = `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`;
+    element.style.transform = '';
+  }, [cardHeight, zoom]);
 
   const getExportTarget = (): HTMLElement | null => {
     // Look inside Shadow DOM or document
@@ -658,7 +839,8 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
           style={{ '--ptc-preview-canvas': THEMES[config.theme].tokens.canvas }}
         >
           <div
-            class="preview-scale"
+            class={`preview-scale${isCardMeasured ? ' is-measured' : ''}`}
+            ref={scaleRef}
             style={{ zoom: `${zoom}` }}
             data-html2canvas-ignore="true"
           >

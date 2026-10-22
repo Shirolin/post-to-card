@@ -725,6 +725,61 @@
   border-radius: var(--media-radius, 0px);
 }
 
+/* The cell before its photograph has decoded.
+
+   Two nodes, because two animations meet here. The outer one owns the exit: it
+   covers the cell and fades once the picture has painted (`is-picture-loaded`,
+   written when the image loads), so the photograph is revealed by the block
+   leaving rather than by pixels landing in an empty box. The inner one owns the
+   wait: it breathes slowly and shallowly, because a cell can hold this tone for
+   seconds on a slow connection and a block that sits perfectly still reads as
+   part of the card rather than as something on its way.
+
+   They are separate elements for a reason: an element cannot fade out of
+   `opacity` while a CSS animation is also driving `opacity` -- removing the
+   animation and writing the new value in one style change makes the property
+   jump instead of transition, and the dissolve is the whole point.
+
+   The pulse is the one thing here that claims progress, so it stops the moment
+   that claim would be a lie: on arrival (`is-picture-loaded`) and on a picture
+   whose whole fallback chain failed (`is-picture-missing`). The recess ink is
+   the one the quote panel already uses, because an empty picture slot and a
+   quoted post are the same thing on this sheet: a piece of the card below the
+   surface. `prefers-reduced-motion` flattens the pulse with every other
+   animation in the dialog. */
+.media-placeholder {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.24s ease-out;
+}
+
+.media-placeholder-pulse {
+  position: absolute;
+  inset: 0;
+  background: var(--quote-bg);
+  animation: ptc-picture-wait 1.6s ease-in-out infinite;
+}
+
+.media-box.is-picture-loaded > .media-placeholder {
+  opacity: 0;
+}
+
+.media-box.is-picture-loaded .media-placeholder-pulse,
+.media-box.is-picture-missing .media-placeholder-pulse {
+  animation: none;
+}
+
+@keyframes ptc-picture-wait {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 /* A passe-partout: the picture sits inside a thick mount in the material's own
    mat colour, the way a print is hung behind glass. Declared after the fit
    rules and one class deeper, because those reset `background` and would

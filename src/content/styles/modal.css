@@ -429,6 +429,19 @@
   justify-content: center;
   flex-shrink: 0;
   margin: 0 auto;
+  /* Hidden until the first measurement, for the reason `isCardMeasured` states:
+     the first paint has no stage width and no card height, so `fit` resolves to
+     1:1 and the card is drawn at its full 640px before snapping down to the
+     fitted scale. `opacity` rather than `display` or `visibility` because the
+     measurement reads the card's own box: it has to be laid out, simply not
+     seen. The fade is matched to the dialog's own entrance, so the card arrives
+     while the panel is still settling instead of after it. */
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+
+.preview-scale.is-measured {
+  opacity: 1;
 }
 
 /* Right Controls Panel */
