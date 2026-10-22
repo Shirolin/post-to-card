@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Post to Card · motion probe</title>
+    <!--
+      The page `dev/verify-motion.mjs` drives: the real `App`/`Card`, mounted
+      outside the modal's shadow root (`.ptc-scope` supplies the tokens), with a
+      scripted gesture and per-frame sampling.
+
+      Two modes, selected by `?mode=`:
+
+        flip     remove one post from a three-post card and record where every
+                 post and the card's own scale went, frame by frame.
+        picture  one picture that never arrives (the cell's waiting state), then
+                 a real one (the dissolve), plus a cell whose chain fails (the
+                 pulse stopping).
+
+      The numbers are left in `window.__motionProbe` for the script to assert;
+      the log on screen is for a human reading the page directly. Neither the
+      harness page nor a screenshot can show any of this: motion only exists in a
+      browser that runs the render loop (see docs/loading-states.md).
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: #171716;
+      }
+      #out {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 99;
+        max-width: 100vw;
+        max-height: 100vh;
+        overflow: auto;
+        margin: 0;
+        padding: 6px 8px;
+        background: rgba(0, 0, 0, 0.86);
+        color: #9fe6a0;
+        font: 11px/1.4 ui-monospace, monospace;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <pre id="out">starting…</pre>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      const mode = params.get('mode') || 'flip';
+      const out = document.getElementById('out');
+      const log = [];
+      const say = (line) => {
+        log.push(line);
+        out.textContent = log.join('\n');
+      };
+      window.__motionProbe = null;
+      window.addEventListener('error', (e) => say('ERROR: ' + (e.message || e.error)));
+      window.addEventListener('unhandledrejection', (e) => say('REJECT: ' + e.reason));
+
+      const frames = (ms) =>
+        new Promise((resolve) => {
+          const start = performance.now();
+          const tick = () => {
+            if (performance.now() - start < ms) requestAnimationFrame(tick);
+            else resolve();
+          };
+          requestAnimationFrame(tick);
+        });
+
+      const paint = (hue) =>
+        'data:image/svg+xml;utf8,' +
+        encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect width="100%" height="100%" fill="hsl(${hue},60%,55%)"/></svg>`
+        );
+
+      try {
+        const { render, h } = await import('preact');
+        const modalCss = (await import('../src/content/styles/modal.css?inline')).default;
+        const cardCss = (await import('../src/content/styles/card.css?inline')).default;
+        const { App } = await import('../src/content/ui/App.tsx');
+        const { Card } = await import('../src/content/ui/Card.tsx');
+        const { DEFAULT_CARD_CONFIG } = await import('../src/content/ui/themes.ts');
+
+        const style = document.createElement('style');
+        style.textContent = [modalCss, cardCss].join('\n\n');
+        document.head.appendChild(style);
+
+        const config = { ...DEFAULT_CARD_CONFIG, showQrCode: false };
+        const author = { name: 'Ada Nakamura', handle: '@ada_builds', avatarUrl: paint(280) };
+        const post = (n, media) => ({
+          id: `t${n}`,
+          url: `https://x.com/ada_builds/status/${n}`,
+          author,
+          timestamp: '2026-09-14T10:05:00.000Z',
+          text: `Post ${n}. The card is a column of posts, so removing one moves every post below it. That is the distance this probe measures, in the card's own pixels.`,
+          stats: { replies: '12', reposts: '34', likes: '56', views: '78' },
+          media: media ?? [{ type: 'image', url: paint(n * 90), aspectRatio: 1.6 }],
+        });
+
+        if (mode === 'flip') {
+          const scope = document.createElement('div');
+          scope.className = 'ptc-scope';
+          document.body.appendChild(scope);
+          const threadData = {
+            author,
+            isSingle: false,
+            targetTweetIndex: 0,
+            tweets: [post(1), post(2), post(3)],
+          };
+          render(h(App, { threadData, onClose: () => {}, initialConfig: config }), scope);
+
+          const short = (m) =>
+            m === 'none' ? '-' : m.replace('matrix(', '').replace(')', '').trim();
+          const snap = () => {
+            const scale = scope.querySelector('.preview-scale');
+            const card = scope.querySelector('#post-to-card-export-target');
+            const list = scope.querySelector('.thread-list');
+            return {
+              zoom: scale ? Number(Number(scale.style.zoom).toFixed(4)) : null,
+              scaleTransform: scale ? short(getComputedStyle(scale).transform) : null,
+              scaleTransition: scale ? scale.style.transition || '' : '',
+              scaleOrigin: scale ? scale.style.transformOrigin || '' : '',
+              height: card ? card.offsetHeight : null,
+              listOverflow: list ? list.style.overflow || '' : '',
+              posts: Array.from(scope.querySelectorAll('[data-tweet-id]')).map((item) => ({
+                id: item.dataset.tweetId,
+                top: Math.round(item.offsetTop),
+                transform: short(getComputedStyle(item).transform),
+              })),
+            };
+          };
+
+          // Let the first measurement settle, then take the "before" reading.
+          await frames(300);
+          const before = snap();
+          say(`before  ${JSON.stringify(before)}`);
+
+          const exclude = scope.querySelectorAll('.thread-exclude-btn')[1];
+          if (!exclude) throw new Error('no exclude button on the second post');
+          exclude.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+          // Preact commits a click-triggered state change at the end of the
+          // dispatch; the layout effects have run by the second microtask, and
+          // the frame that follows is the first one a FLIP can start on.
+          await Promise.resolve();
+          await Promise.resolve();
+          const atCommit = snap();
+          say(`commit  ${JSON.stringify(atCommit)}`);
+
+          const samples = [];
+          const sampleFor = async (ms) => {
+            const start = performance.now();
+            while (performance.now() - start < ms) {
+              await new Promise((resolve) => requestAnimationFrame(resolve));
+              samples.push(snap());
+            }
+          };
+          await sampleFor(700);
+          const settled = snap();
+          say(`settled ${JSON.stringify(settled)}`);
+
+          window.__motionProbe = { mode, before, atCommit, samples, settled };
+        } else {
+          // A picture that never arrives, and one that fails outright.
+          const slow = params.get('slow') || 'http://10.255.255.1/never.jpg';
+          const missing = params.get('missing') || 'http://10.255.255.1/missing.jpg';
+          const root = document.createElement('div');
+          document.body.appendChild(root);
+          render(
+            h(
+              'div',
+              { style: 'display:flex;flex-direction:column;gap:24px;padding:24px' },
+              [
+                h(Card, {
+                  data: { author, isSingle: true, tweets: [post('slow', [{ type: 'image', url: slow, aspectRatio: 1.6 }])] },
+                  config,
+                }),
+                h(Card, {
+                  data: { author, isSingle: true, tweets: [post('missing', [{ type: 'image', url: missing, aspectRatio: 1.6 }])] },
+                  config,
+                }),
+              ]
+            ),
+            root
+          );
+
+          const cells = Array.from(root.querySelectorAll('.media-box'));
+          const pulseOf = (cell) => cell.querySelector('.media-placeholder-pulse');
+          const outerOf = (cell) => cell.querySelector('.media-placeholder');
+          const opacity = (el) => (el ? Number(getComputedStyle(el).opacity) : null);
+
+          const waiting = [];
+          const failing = [];
+          const start = performance.now();
+          while (performance.now() - start < 1600) {
+            await new Promise((resolve) => setTimeout(resolve, 40));
+            waiting.push(opacity(pulseOf(cells[0])));
+            // Only read once the chain has run out: a failing picture is allowed
+            // to breathe while it is still trying.
+            if (cells[1].className.includes('is-picture-missing')) {
+              failing.push(opacity(pulseOf(cells[1])));
+            }
+          }
+          const failureClass = cells[1].className;
+          say(`waiting ${JSON.stringify(waiting.slice(0, 12))} …`);
+          say(`failure cell ${failureClass}`);
+
+          // The waiting picture finally arrives.
+          root.querySelectorAll('.media-picture')[0].src = paint(200);
+          const fade = [];
+          const afterLoad = performance.now();
+          while (performance.now() - afterLoad < 500) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            fade.push(opacity(outerOf(cells[0])));
+          }
+          say(`fade ${JSON.stringify(fade)}`);
+          say(`loaded cell ${cells[0].className}`);
+
+          window.__motionProbe = {
+            mode,
+            waiting,
+            failing,
+            fade,
+            failureClass,
+            loadedClass: cells[0].className,
+          };
+        }
+      } catch (err) {
+        say('THREW: ' + (err && err.stack ? err.stack : err));
+        window.__motionProbe = { mode, error: String((err && err.stack) || err) };
+      }
+    </script>
+  </body>
+</html>

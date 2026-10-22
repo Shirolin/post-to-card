@@ -138,25 +138,26 @@
 
 ## 探针
 
-这类问题的探针就是一个循环：每帧读几个值，只在变化时记录，前后各跑一次。
+`node dev/verify-motion.mjs` 就是这条探针：它起 vite 与 Chrome，把真实的 `App`/`Card` 挂进
+`dev/probe-motion.html`，做一次手势、逐帧采样，然后**断言**（帖子与卡片各层是否真的在飞、
+占位块是否在呼吸、失败后是否停下、淡出是否有中间帧）。改这两个动效的一侧时跑它，别靠截图。
 
 读什么：`.preview-scale` 的 `style.zoom` 与 `getComputedStyle().transform`、
-`.thread-item` 的 `offsetTop` 与计算后的 `transform`、`#post-to-card-export-target` 的
-`offsetHeight`、占位块的 `opacity`。
+`[data-tweet-id]` 的 `offsetTop` 与计算后的 `transform`、`#post-to-card-export-target` 的
+`offsetHeight`、占位块内外两层的 `opacity`。
 
 四个会让探针说谎的坑，都是这轮踩到的：
 
 1. **浏览器面板的页面不跑渲染帧。** 不只是嵌 iframe：直接打开的页面里 `requestAnimationFrame`
    也不推进、CSS 过渡停在起点值、`ResizeObserver` 的回调不投递——量出来像是「样式没生效」和
-   「比例没重算」。时间相关的东西必须在真浏览器里量：用仓库既有的零依赖 CDP 驱动
-   （`dev/verify-extractor.mjs` 那套）起一个 headed Chrome，页面才会真的画。
+   「比例没重算」。所以探针必须用真浏览器跑（`verify-motion.mjs` 用仓库既有的零依赖 CDP 驱动）。
 2. **这台机器开着「减少动态效果」。** 在它下面每个时长都被 `modal.css` 末尾那条全局规则压成
    0.01ms，于是脉冲是直线、FLIP 一帧结束、淡出是硬切。CDP 里先
    `Emulation.setEmulatedMedia({ features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] })`
-   再导航；否则量到的是降级行为。
+   再导航；否则量到的是降级行为（脚本把这条也当成一条断言）。
 3. **harness 的照片是内联 SVG。** 解码是瞬间的，占位块在任何截图里都已经淡出。要审「还没到」
-   的样子，得让图片真的不回来，或者慢得回来：指向一个黑洞地址（`http://10.255.255.1/x.jpg`）
-   比指向 404 更合适——404 会走完失败链，占位块正确地停下脉动，正好看不到等待态。
+   的样子，得让图片真的不回来，或者慢得回来：指向一个不回答的地址（脚本自己起了一个）比指向
+   404 更合适——404 会走完失败链，占位块正确地停下脉动，正好看不到等待态。
 4. **`?modal=1` 是 light DOM**（`.ptc-scope`），探针选择器不能只在 `post-to-card-container`
    的 shadow root 里找。
 

@@ -35,6 +35,12 @@ headless 会被 x.com 403）。
 提取器 —— 未登录的 x.com 整页 0 个 `data-testid`，没有推文标记可读（脚本自己写了这条）。
 这个脚本补上那一段，且不碰 x.com。
 
+**验预览的动效**用 `node dev/verify-motion.mjs`：它起 vite 与 Chrome，把真实的 `App`/`Card`
+挂进 `dev/probe-motion.html`，做一次手势并逐帧断言（排除推文时的两层 FLIP、占位块的脉动/淡出/
+失败停表）。浏览器面板里的页面**不跑渲染帧**（`rAF` 不推进、过渡停在起点、`ResizeObserver`
+不投递），截图和 tiers 都看不到这些，所以动 `App.tsx` 的 fit/FLIP 或 `Card.tsx` 的图片路径时
+要跑它。它不在 `npm test` 里：判据是时序，忙的机器会假红。
+
 ## 架构决定
 
 `docs/architecture-review-2026-10-21.md` 记着 2026-10 那次深挖的结论：哪些方向**已经被查证过、

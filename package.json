@@ -16,7 +16,8 @@
     "test": "node tests/runner.ts",
     "test:tier5": "node tests/tier5_adversarial.ts",
     "verify:extension": "node dev/verify-extension.mjs --url https://x.com/",
-    "verify:extractor": "node dev/verify-extractor.mjs"
+    "verify:extractor": "node dev/verify-extractor.mjs",
+    "verify:motion": "node dev/verify-motion.mjs"
   },
   "dependencies": {
     "lucide-preact": "^1.48.0",
