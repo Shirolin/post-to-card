@@ -52,6 +52,10 @@ pnpm exec vite --config dev/vite.harness.config.ts
 - **新增依赖前先说。** 运行时依赖被刻意压到四个（`preact`、`modern-screenshot`、
   `qrcode-generator`、`lucide-preact`），把「纯本地、零外部服务」当成硬约束。
 - **本地临时文件**放 `.tmp/`（已在 `.gitignore` 里），不要落在仓库根目录。
+- **改了架构就重导架构图。** README 里的 `docs/images/architecture.png` 是人工导出的
+  静态图，不是构建产物：管线、入口或 world 划分变了，要重新生成并替换这张图，
+  同时在 README 的说明里更新它依据的提交号。`hygiene.8` 只保证 README 引用的图片存在，
+  保证不了它和代码一致。
 
 ## 提交与 Pull Request
 

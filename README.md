@@ -96,11 +96,21 @@ pnpm exec vite --config dev/vite.harness.config.ts
 想改点什么，先看 [CONTRIBUTING.md](CONTRIBUTING.md)；它指路的 `AGENTS.md`、`GLOSSARY.md`
 与 `docs/` 才是规则本身的出处。
 
+## 架构
+
+![项目架构：四个构建入口、两个 JS 世界、一次导出](docs/images/architecture.png)
+
+`graphql-hook.js` 在 MAIN world 拦截 X 自己的 fetch / XHR，`content.js` 在 ISOLATED world
+只收 `postMessage` 投递的响应体；`resolveThread` 先查 GraphQL 缓存，未命中才拼 DOM 连续线程。
+
+图由人工在架构变动后重新导出（依据提交 `c799b26`），不是自动生成的构建产物；它只固定了四个入口、两个 world 与一次导出的主链路，排版以图片形式定格，没有 HTML 版的缩放与跳转。
+
 ## 文档地图
 
 | 文件 | 它回答什么 |
 |---|---|
 | [PROJECT.md](PROJECT.md) | 需求、功能清单与里程碑 |
+| [docs/images/architecture.png](docs/images/architecture.png) | 项目架构图（四个入口、两个 JS world、导出链路） |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 怎么跑、怎么改、怎么提 PR |
 | [CHANGELOG.md](CHANGELOG.md) | 每个版本变了什么 |
 | [PRIVACY.md](PRIVACY.md) | 扩展会碰到哪些数据、去了哪里 |

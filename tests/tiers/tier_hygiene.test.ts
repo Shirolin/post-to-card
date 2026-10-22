@@ -28,7 +28,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSuite } from '../env/harness.ts';
@@ -312,6 +312,20 @@ test('hygiene.7: the licence is one version in every place that states it', () =
   const readme = readFileSync(join(REPO_ROOT, 'README.md'), 'utf8');
   assert.match(readme, /GPL-3\.0-or-later/, 'the README says which licence, by SPDX id');
   assert.match(readme, /\[LICENSE\]\(LICENSE\)/, 'and links to the full text');
+});
+
+test('hygiene.8: every image the README shows is in the repository', () => {
+  // The README is what a visitor reads first, including on the forge's front
+  // page, where a broken image is the first thing they see. The architecture
+  // picture is exported by hand (see CONTRIBUTING), so nothing else would catch
+  // a rename, a move, or a `git add -A` that left it out of the commit.
+  const readme = readFileSync(join(REPO_ROOT, 'README.md'), 'utf8');
+  const targets = [...readme.matchAll(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1]);
+  assert.ok(targets.length > 0, 'the README shows no image; hygiene.8 would then guard nothing');
+  for (const target of targets) {
+    assert.ok(!/^https?:/i.test(target), `README embeds a remote image (${target}); it must live in the repository`);
+    assert.ok(existsSync(join(REPO_ROOT, target)), `README shows ${target}, which is not in the repository`);
+  }
 });
 
 export function runTierHygiene() {
