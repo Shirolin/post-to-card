@@ -15,7 +15,8 @@ Single-context. See `docs/agents/domain.md`.
 
 顺序 build → test → tier5，不能倒：tier5 审的是刚 build 出来的产物，T5.3.8 会拒绝比 `src/` 旧的
 bundle。`npm test` 只跑 tier1-4 与 i18n / graphql / resolver / article / hygiene，tier5 是单独一步。
-`.github/workflows/ci.yml` 跑同一条链。
+`.github/workflows/ci.yml` 跑同一条链（CI 用 pnpm 10 + Node 24，`pnpm-lock.yaml` 是唯一锁文件；
+README 与 CONTRIBUTING 因此也只写 pnpm）。
 
 只有这里写着的两处坑：
 

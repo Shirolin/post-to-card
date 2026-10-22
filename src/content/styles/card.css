@@ -1581,6 +1581,18 @@
   user-select: none;
 }
 
+/* The credit's link. It exists for the preview only -- the rasterizer draws text,
+   not addresses -- so it carries no underline and no colour of its own: the mark
+   looks exactly as it did before, and the footer's ink rule still decides its
+   contrast. */
+.card-credit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
 /* The build stamp. Quieter than the mark beside it by size and weight alone,
    which is the same decision the watermark's own ink is made on: a step down,
    never a fade. It is the one place the card names the build that drew it, so

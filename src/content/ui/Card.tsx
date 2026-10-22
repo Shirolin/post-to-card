@@ -890,8 +890,23 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
               {config.showWatermark && (
                 <div class="card-watermark" title="Post-to-Card">
                   <Sparkles size={13} strokeWidth={2} aria-hidden="true" />
-                  <span>Post to Card</span>
-                  <span class="card-build">{CARD_BUILD}</span>
+                  {/* The name links to the licence's source. GPL-3.0 asks for the
+                      corresponding source to be offered to whoever receives a
+                      covered work, and a PNG that leaves the machine is one: the
+                      credit line is the one place on the card that can carry it
+                      without inventing UI. The rasterizer does not draw URLs, so
+                      the link is for the preview, and the build stamp names the
+                      version the picture came from. */}
+                  <a
+                    class="card-credit"
+                    href="https://github.com/Shirolin/post-to-card"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Source code — GPL-3.0"
+                  >
+                    <span>Post to Card</span>
+                    <span class="card-build">{CARD_BUILD}</span>
+                  </a>
                 </div>
               )}
               {config.showQrCode && mainTweet.url && (

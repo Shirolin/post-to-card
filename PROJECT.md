@@ -58,6 +58,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F19 | Downward Expanding Poster Layouts | Auto 及 3:4 / 16:9 画幅弹性下限 min-height，长文本平滑向下延展绝不截断 | M4 | ORIGINAL_REQUEST §R2 |
 | F20 | Offline QR Code Generator | 纯本地 qrcode-generator 生成推文链接矢量 SVG 二维码 | M4 | ORIGINAL_REQUEST §R2 |
 | F21 | Interactive Controls & Toggles | 8 个开关按作用范围分组（卡片页脚 / 隐私 / 导出 / 呈现细节），帖子缺 url·互动数据·时间戳时对应页脚开关不渲染；输出画布常显并紧跟视觉主题；折叠区只放界面语言 / 版式与样式 / 导出设置 / 呈现细节这类设一次就不再动的项 | M4 | ORIGINAL_REQUEST §R2 |
+| F30 | Open-source publication | 以 GPL-3.0-or-later 发布：`LICENSE` 带填好的版权与许可声明，README / package.json / 贡献指南口径一致；卡片署名链接到源码（GPL §6）；`CONTRIBUTING.md` / `SECURITY.md` / `PRIVACY.md` / `CHANGELOG.md` 各自只写自己的事；`hygiene.7` 守许可声明的一致性 | M7 | 项目要求 |
 | F22 | Author Privacy Blurring | 对作者昵称、Handle、头像启用 filter: blur(...) 隐私保护 | M4 | ORIGINAL_REQUEST §R2 |
 | F23 | Modal UX & Scroll Lock | 弹窗居中、Esc 快捷键、蒙层关闭、背景无抖动滚动锁 | M4 | ORIGINAL_REQUEST §R2 |
 | F24 | Modern-Screenshot Retina Export | 调用 modern-screenshot 生成 3x（单条）/ 2x（超显示上限）高分辨率 PNG | M5 | ORIGINAL_REQUEST §R3 |
@@ -83,6 +84,7 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | M4 | Shadow DOM & Preact Card Modal | `<post-to-card-container>`, Preact 视图、12 材质主题（11 常驻 + 1 实验性）、内边距圆角、防截断画幅、离线二维码与控制开关 | M1 | DONE |
 | M5 | Export Engine & End-to-End Integration | modern-screenshot 视口渲染、Base64 桥接、剪贴板复制及降级下载、通过 100% E2E 测试 | M2, M3, M4, M-TEST | DONE |
 | M6 | Adversarial Hardening & Forensic Victory Audit | Tier 5 盲区对抗性压力测试、代码审查与 Forensic Auditor 最终门禁审计 | M5 | DONE |
+| M7 | Open-source Release Hygiene | GPL-3.0-or-later 许可声明、贡献 / 安全 / 隐私 / 变更记录四份文档、README 文档地图、许可一致性门禁 | M6 | DONE |
 
 ---
 

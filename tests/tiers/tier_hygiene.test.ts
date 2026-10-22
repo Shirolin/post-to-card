@@ -288,6 +288,32 @@ test('hygiene.6: the popup reads no tab property the manifest cannot grant', () 
   );
 });
 
+test('hygiene.7: the licence is one version in every place that states it', () => {
+  // Four files say what this project is licensed under, and they are read by
+  // four different audiences: the full text (a lawyer), the README (a visitor),
+  // package.json (tooling) and the manifest summary (the store). What this guards
+  // is that they agree and that none is left as a template: a placeholder in the
+  // "how to apply" appendix is the failure that looks finished and is not.
+  const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+    license?: string;
+  };
+  assert.equal(pkg.license, 'GPL-3.0-or-later', 'package.json names the licence the LICENSE holds');
+
+  const licence = readFileSync(join(REPO_ROOT, 'LICENSE'), 'utf8');
+  assert.match(licence, /GNU GENERAL PUBLIC LICENSE/, 'LICENSE is the GPL, not a pointer to one');
+  assert.match(licence, /Version 3, 29 June 2007/);
+  // A placeholder left in the "how to apply" appendix means nobody finished
+  // applying it: the notice is what GPL §5 says must reach every recipient.
+  for (const placeholder of ['<year>', '<name of author>', '<one line to give']) {
+    assert.ok(!licence.includes(placeholder), `LICENSE still carries the template text ${placeholder}`);
+  }
+  assert.match(licence, /Copyright \(C\) 2026 +Shiro(lin)?/, 'and names a holder');
+
+  const readme = readFileSync(join(REPO_ROOT, 'README.md'), 'utf8');
+  assert.match(readme, /GPL-3\.0-or-later/, 'the README says which licence, by SPDX id');
+  assert.match(readme, /\[LICENSE\]\(LICENSE\)/, 'and links to the full text');
+});
+
 export function runTierHygiene() {
   return run();
 }
