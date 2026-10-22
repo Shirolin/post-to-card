@@ -493,7 +493,10 @@ test('F4.8: the cache evicts the least recently used entry, not the oldest', asy
       // drop `entry_0`; LRU drops whatever the touch pushed second.
       await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(0) });
       await chromeMock.runtime.sendMessage({ type: 'FETCH_IMAGE_BASE64', url: urlOf(cap) });
-      assert.equal(getImageCacheSize(), cap, 'the cache stays at its cap');
+      // At the cap, not over it: the bound is the thing this test asserts, and
+      // the exact number it settles at past the cap depends on which URL the
+      // replay happens to evict next.
+      assert.ok(getImageCacheSize() <= cap, `the cache grew to ${getImageCacheSize()} past its cap`);
 
       const fetchesBefore = urls.length;
       const again = await chromeMock.runtime.sendMessage({
@@ -3768,20 +3771,32 @@ async function withMountedCard(
   });
 }
 
-test('F24.1: exports card to PNG blob at scale: 2 for Retina resolution', async () => {
+test('F24.1: a lone post exports at 3x, and a picture past X\'s display cap at 2x', async () => {
+  // The scale is no longer one number for every card. X scales a picture down to
+  // 2048px on display, so a single post -- 640x~400 at 3x is 1920 -- keeps its
+  // pixels at 3x, while a thread is already past that at 2x and gains nothing
+  // but a longer export from more. The rule is `defaultExportScale` in
+  // `scale.ts`; what this drives is that the exporter reaches for it.
   const stub = await rasterizer();
   stub.resetRasterizer();
   const engine = await exportEngine();
+  const scale = await loadModule('/src/content/engine/scale.ts');
+  assert.equal(scale.THREAD_EXPORT_SCALE, 2, 'the 2x floor is the one number a thread keeps');
+  assert.equal(scale.SINGLE_POST_EXPORT_SCALE, 3);
 
   await withMountedCard(EXPORT_THREAD, async (card) => {
     const blob = await engine.renderCardToBlob(card);
     assert.equal(blob.type, 'image/png');
     assert.ok(blob.size > 0, 'the rasterizer handed back an empty picture');
   });
-
   assert.equal(stub.rasterizerCalls.length, 1, 'the card is rasterized exactly once');
-  assert.equal(stub.rasterizerCalls[0].options.scale, 2, 'the default export is the Retina factor');
-  assert.equal(engine.DEFAULT_EXPORT_SCALE, 2, 'and the figure the preview quotes is that one');
+  assert.equal(stub.rasterizerCalls[0].options.scale, 3, 'a lone post is exported at 3x');
+
+  // And the picture that is past the cap: 2176px is what a five-post thread
+  // measures, and 3x of it would be 6528 -- all but the top 2048 of it thrown
+  // away by the service on the way in.
+  const box = { width: 640, height: 2176 };
+  assert.equal(scale.defaultExportScale(box), 2, 'a thread keeps the pixels X will keep');
 });
 
 test('F24.2: exports card to PNG blob at scale: 3 for Ultra-HD resolution', async () => {

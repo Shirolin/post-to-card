@@ -8,14 +8,112 @@ export interface CachedImage {
   contentType: string;
 }
 
-const MAX_CACHE_ITEMS = 200;
+/**
+ * The cache as the export path uses it, behind three functions.
+ *
+ * The limits below are worth a property -- the worker is the only thing holding
+ * these strings, and a count is not a bound for the content -- and a test cannot
+ * fill a real 64MB budget without making the suite cost that much. So the store
+ * is read through these, and `setImageCacheBudget` moves the ceiling for the
+ * duration of a test. Production never calls the setter.
+ */
+let cacheBudgetChars = 64 * 1024 * 1024;
 const imageCache = new Map<string, CachedImage>();
+let cachedChars = 0;
+
+/** Moves the byte ceiling. For tests; production uses the shipped 64MB. */
+export function setImageCacheBudget(chars: number): void {
+  cacheBudgetChars = chars;
+  forgetOldest(cacheBudgetChars);
+}
+
+/** The base64 characters held, which is the number the budget is about. */
+export function getImageCacheChars(): number {
+  return cachedChars;
+}
+
+/**
+ * Drops oldest-first until the cache is inside `budget` characters and, when
+ * `maxItems` is given, holds no more than that many entries.
+ *
+ * The two ceilings are separate arguments rather than one call with a `budget`
+ * of 0: a character budget is what is being respected, and 0 is a real budget
+ * that empties the cache. Making room for the count bound once used 0 as the
+ * budget and drained every entry on the way to a single insertion.
+ */
+function forgetOldest(
+  budget = Number.POSITIVE_INFINITY,
+  maxItems = Number.POSITIVE_INFINITY
+): void {
+  // A hit re-inserts its entry at the end, so the map's order is least-recently
+  // used first.
+  while ((cachedChars > budget || imageCache.size > maxItems) && imageCache.size > 0) {
+    const oldestKey = imageCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    const evicted = imageCache.get(oldestKey);
+    imageCache.delete(oldestKey);
+    cachedChars -= evicted ? evicted.dataUrl.length : 0;
+  }
+}
+
+/** Remembers one picture, unless remembering it is what would make it a problem. */
+function remember(url: string, entry: CachedImage): void {
+  // A picture bigger than the whole budget is handed to the caller that asked
+  // for it and not remembered at all: the next export of that card is cheaper
+  // than evicting everything the smaller pictures were being kept for.
+  if (entry.dataUrl.length > cacheBudgetChars) return;
+
+  // A hit re-inserts the entry it was asked for; a miss takes a new place. Only
+  // a miss has to make room, and the order of these two lines is that
+  // difference: making room first turned every hit at a full cache into a new
+  // entry and emptied the cache one eviction at a time.
+  const previous = imageCache.get(url);
+  const isHit = previous !== undefined;
+  if (previous) {
+    imageCache.delete(url);
+    cachedChars -= previous.dataUrl.length;
+  }
+  if (!isHit && imageCache.size >= MAX_CACHE_ITEMS) forgetOldest(undefined, MAX_CACHE_ITEMS - 1);
+
+  imageCache.set(url, entry);
+  cachedChars += entry.dataUrl.length;
+  forgetOldest(cacheBudgetChars);
+}
+
+/**
+ * The count bound on the in-memory cache.
+ *
+ * There are two limits and they answer different questions. This one stops a
+ * feed of small avatars from growing a map with no upper end; the byte budget
+ * (see `setImageCacheBudget`) is what actually bounds the worker, because a
+ * count is the wrong unit for this content -- one `name=orig` photo is a few
+ * megabytes once it is base64, so 200 of them is hundreds of megabytes for a
+ * cache that usually holds avatars and a handful of pictures.
+ *
+ * Base64 is what has to be held, so bytes are counted after encoding: that is
+ * the string the worker keeps and posts back over the message channel.
+ */
+const MAX_CACHE_ITEMS = 200;
+
+/** The proxy's timeout, and the hard ceiling that keeps an export from hanging. */
+const PROXY_TIMEOUT_MS = 15000;
+/**
+ * How long an export will wait on one picture, across every retry it makes.
+ *
+ * The timeout above is per request; a worker that answers with a stream that
+ * never ends, or that is asked three times, would otherwise hold the canvas for
+ * a minute with the panel on "Copying...". Past this the picture is drawn as the
+ * placeholder and the export finishes -- a grey square the user can see and
+ * retry beats a button that never comes back.
+ */
+export const IMAGE_PROXY_BUDGET_MS = 25000;
 
 /**
  * Clears the in-memory image proxy cache.
  */
 export function clearImageCache(): void {
   imageCache.clear();
+  cachedChars = 0;
 }
 
 /**
@@ -69,7 +167,7 @@ export function uint8ArrayToBase64(bytes: Uint8Array): string {
  */
 export async function handleFetchImageBase64(
   url: string,
-  timeoutMs = 15000
+  timeoutMs = PROXY_TIMEOUT_MS
 ): Promise<ExtensionResponse> {
   if (!url || typeof url !== 'string') {
     return {
@@ -144,20 +242,14 @@ export async function handleFetchImageBase64(
       contentType = 'image/svg+xml';
     }
 
+    // The bytes are read under the same deadline as the request: `fetch`
+    // settles when the headers arrive, so a body that keeps trickling would
+    // otherwise be read past the timeout with nothing left to abort it.
     const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    const base64 = uint8ArrayToBase64(bytes);
+    const base64 = uint8ArrayToBase64(new Uint8Array(arrayBuffer));
     const dataUrl = `data:${contentType};base64,${base64}`;
 
-    const entry: CachedImage = { dataUrl, contentType };
-    imageCache.set(url, entry);
-
-    if (imageCache.size > MAX_CACHE_ITEMS) {
-      const oldestKey = imageCache.keys().next().value;
-      if (oldestKey !== undefined) {
-        imageCache.delete(oldestKey);
-      }
-    }
+    remember(url, { dataUrl, contentType });
 
     return {
       success: true,

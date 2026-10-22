@@ -9,21 +9,16 @@
 
 import { domToBlob } from 'modern-screenshot';
 import type { ExtensionResponse } from '../../types/messages.ts';
+import { IMAGE_PROXY_BUDGET_MS } from '../../background/proxy.ts';
 import { DEFAULT_AVATAR_SRC } from '../ui/imageFallback.ts';
-import { fitScaleToCanvas, type ScaleFit } from './scale.ts';
+import {
+  defaultExportScale,
+  fitScaleToCanvas,
+  type ScaleFit,
+} from './scale.ts';
 
 export const FALLBACK_PLACEHOLDER_DATA_URL =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%23333333"/></svg>';
-
-/**
- * The retina factor an export uses unless a caller passes its own.
- *
- * Named because the preview quotes the resulting pixel size to the user. The
- * number used to be written out in three places, and a readout quoting a
- * different figure than the exporter actually applied would be worse than having
- * no readout at all.
- */
-export const DEFAULT_EXPORT_SCALE = 2;
 
 /** One `<img>` URL the proxy could not turn into a data URL. */
 export interface ImageLoadFailure {
@@ -60,6 +55,10 @@ export interface RenderOptions {
    * export.
    */
   report?: (report: RenderReport) => void;
+  /** `preferHighResolution` from the user's preferences, possibly still loading. */
+  preferHighResolution?: boolean | Promise<boolean>;
+  /** Measure only: no rasterizing, and `CardRender.blob` is null. */
+  geometryOnly?: boolean;
 }
 
 /**
@@ -102,6 +101,31 @@ const IMAGE_FETCH_BACKOFF_MS = 200;
 /** Waits before re-asking the worker. */
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Gives one picture whatever is left of the card's fetch budget, and no more.
+ *
+ * A picture that runs out of budget is drawn as the placeholder, like one the
+ * proxy refused: the export finishes with a grey square the user can see and
+ * retry, instead of a copy that never returns.
+ */
+async function withinBudget(
+  fetch: Promise<ImageFetchResult>,
+  startedAt: number
+): Promise<ImageFetchResult> {
+  const remaining = IMAGE_PROXY_BUDGET_MS - (Date.now() - startedAt);
+  if (remaining <= 0) return { ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL };
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const expired = new Promise<ImageFetchResult>((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, src: FALLBACK_PLACEHOLDER_DATA_URL }), remaining);
+  });
+  try {
+    return await Promise.race([fetch, expired]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
 }
 
 /**
@@ -238,12 +262,15 @@ export async function prepareCardImages(cardElement: HTMLElement): Promise<CardI
 
   // One round trip per distinct URL, not per image. A thread card repeats the
   // same avatar on every post, so the same address was being asked for once per
-  // post; the in-flight promise is shared instead.
+  // post; the in-flight promise is shared instead -- and the whole card shares
+  // one deadline, so a worker that never answers costs the export a placeholder
+  // rather than a button that never comes back.
+  const startedAt = Date.now();
   const byUrl = new Map<string, Promise<ImageFetchResult>>();
-  const resolveSrc = (src: string): Promise<ImageFetchResult> => {
+  const resolveSrc = async (src: string): Promise<ImageFetchResult> => {
     let inflight = byUrl.get(src);
     if (!inflight) {
-      inflight = resolveImageForExport(src);
+      inflight = withinBudget(resolveImageForExport(src), startedAt);
       byUrl.set(src, inflight);
     }
     return inflight;
@@ -396,119 +423,291 @@ export async function renderCardToBlob(
   cardElement: HTMLElement,
   options: RenderOptions = {}
 ): Promise<Blob> {
-  // Prepared before the `try` that owns the restoration, and restored in the
-  // same `finally` as the copy's disposal: mounting the copy can throw (a
+  const render = beginCardRender(cardElement, options);
+  // Nothing may be left unhandled when the caller stops caring; the render still
+  // runs to its end, which is what tears the copy down and restores the card.
+  ignoreRejection(render);
+  const blob = await (await render).blob;
+  // A measurement was asked for, not a picture.
+  if (!blob) {
+    throw new ExportRenderError('rasterizer', 'The render was measured but never rasterized.');
+  }
+  return blob;
+}
+
+/**
+ * What an export looks like the instant it is asked for.
+ *
+ * `blob` joins the object only when the picture exists -- it is the promise the
+ * clipboard holds -- so the object itself resolves with the measurement. Both
+ * settle the same tick, and the render is already under way by then: the
+ * clipboard was claimed at the click, not here. That is why this splits in two.
+ */
+export interface CardRender extends RenderReport {
+  /** The picture. Rejects only when the export failed; never when it degraded. */
+  blob: Promise<Blob | null> | null;
+}
+
+/**
+ * Prepares and starts a render, resolving once the card has been measured.
+ *
+ * Rendering is dominated by fetching and encoding the pictures, so everything
+ * the canvas will need runs ahead: the rasterization has started when this
+ * returns. With `geometryOnly` the DOM is rewritten and restored but no canvas
+ * is built, which is what makes a size readout cheap enough to ask for on every
+ * resize; those renders settle with `blob` null, as does one that gave up early.
+ */
+export async function beginCardRender(
+  cardElement: HTMLElement,
+  options: RenderOptions = {}
+): Promise<CardRender> {
+  const geometryOnly = options.geometryOnly === true;
+
+  // Prepared before the rasterizing `try`: mounting the copy can throw (a
   // detached card, a hostile document), and that used to leave the live card
   // holding data URLs until the next export.
-  const preparation = await prepareCardImages(cardElement);
-  let dispose: (() => void) | null = null;
-
+  let preparation: CardImagePreparation;
   try {
-    const mounted = mountUnzoomedCopy(cardElement);
-    const copy = mounted.copy;
-    dispose = mounted.dispose;
+    preparation = await prepareCardImages(cardElement);
+  } catch (err) {
+    throw new ExportRenderError('rasterizer', describeError(err), err);
+  }
+  // The restoration lives inside the render, not in a `finally` around it: a
+  // caller that hands the picture to the clipboard and returns would otherwise
+  // put the remote sources back on the live card before the rasterizer drew it.
+  const render = mountAndRender(cardElement, preparation, options, geometryOnly);
+  return render.measured;
+}
 
-    await Promise.all(
-      Array.from(copy.querySelectorAll('img')).map((img) =>
-        typeof img.decode === 'function' ? img.decode().catch(() => {}) : undefined
-      )
+function describeError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** The scale an export passes to the rasterizer, decided from one measurement. */
+async function scaleFor(
+  copy: HTMLElement,
+  options: RenderOptions
+): Promise<{ requested: number; fit: ScaleFit }> {
+  const requestedScale =
+    options.scale ??
+    defaultExportScale(
+      { width: copy.offsetWidth, height: copy.offsetHeight },
+      { preferHighResolution: await preferHighResolutionOf(options.preferHighResolution) }
     );
+  return { requested: requestedScale, fit: measureAndFit(copy, requestedScale) };
+}
 
-    const requestedScale = options.scale ?? DEFAULT_EXPORT_SCALE;
-    const fit = measureAndFit(copy, requestedScale);
-    const scale = fit.applied;
-    const backgroundColor = options.backgroundColor !== undefined ? options.backgroundColor : null;
+/**
+ * The preference, whether it arrived as a value or as a read in progress.
+ *
+ * A read that fails is a user who never turned the setting on, which is the
+ * safe reading: the default keeps a lone post at the sharp scale and a thread at
+ * the one X shows whole.
+ */
+async function preferHighResolutionOf(prefer: RenderOptions['preferHighResolution']): Promise<boolean> {
+  try {
+    return (await prefer) === true;
+  } catch {
+    return false;
+  }
+}
 
-    // A card over the edge limit cannot be rasterized at any scale, and the
-    // browser's own failure for it is a zero-byte blob. Refusing here says why,
-    // and stops the UI from retrying a click that can never succeed.
-    if (fit.impossible) {
-      throw new ExportRenderError(
-        'too-tall',
-        'The card is taller than the largest canvas, so it cannot be exported at any scale.'
+/**
+ * The measurement, and the rasterization that starts the moment it is known.
+ *
+ * The object resolves with the picture already attached, so the clipboard can be
+ * handed one promise instead of waiting seconds for a thread. A render that
+ * fails resolves with the failure on that promise rather than rejecting twice.
+ */
+function mountAndRender(
+  cardElement: HTMLElement,
+  preparation: CardImagePreparation,
+  options: RenderOptions,
+  geometryOnly: boolean
+): { measured: Promise<CardRender> } {
+  /** Settles the object with its report, at most once. */
+  let resolveObject: ((render: CardRender) => void) | null = null;
+  /** Settles the object as a failure, at most once. */
+  let rejectObject: ((err: unknown) => void) | null = null;
+  const resolved = (render: CardRender): void => {
+    const done = resolveObject;
+    resolveObject = null;
+    rejectObject = null;
+    done?.(render);
+  };
+  const rejected = (err: unknown): void => {
+    const done = rejectObject;
+    resolveObject = null;
+    rejectObject = null;
+    done?.(err);
+  };
+  /** The last report this render produced, for the object the run settles with. */
+  let lastReport: RenderReport = {
+    requestedScale: 0,
+    appliedScale: 0,
+    scaleReduced: false,
+    cardWidth: 0,
+    cardHeight: 0,
+    imageFailures: [],
+    failedImageCount: 0,
+  };
+  const measured = new Promise<CardRender>((resolve, reject) => {
+    resolveObject = resolve;
+    rejectObject = reject;
+  });
+
+  const run = (async (): Promise<Blob | null> => {
+    let mounted: { copy: HTMLElement; dispose: () => void } | null = null;
+    try {
+      mounted = mountUnzoomedCopy(cardElement);
+      const copy = mounted.copy;
+
+      await Promise.all(
+        Array.from(copy.querySelectorAll('img')).map((img) =>
+          typeof img.decode === 'function' ? img.decode().catch(() => {}) : undefined
+        )
       );
-    }
 
-    if (options.report) {
-      try {
-        options.report({
-          requestedScale,
-          appliedScale: scale,
-          scaleReduced: fit.reduced,
-          cardWidth: copy.offsetWidth,
-          cardHeight: copy.offsetHeight,
-          imageFailures: preparation.failures,
-          failedImageCount: preparation.failedImageCount,
-        });
-      } catch {
-        // Reporting is a courtesy; it may not break the export.
+      const { requested: scaleRequested, fit } = await scaleFor(copy, options);
+      const scale = fit.applied;
+      const backgroundColor = options.backgroundColor !== undefined ? options.backgroundColor : null;
+
+      // A card over the edge limit cannot be rasterized at any scale, and the
+      // browser's own failure for it is a zero-byte blob. Refusing here says why,
+      // and stops the UI from retrying a click that can never succeed.
+      if (fit.impossible) {
+        throw new ExportRenderError(
+          'too-tall',
+          'The card is taller than the largest canvas, so it cannot be exported at any scale.'
+        );
       }
-    }
 
-    const filter = (node: Node): boolean => {
-      if (node instanceof HTMLElement) {
-        // `data-html2canvas-ignore` is the attribute the card actually emits
-        // (the html2canvas convention). `data-export-ignore` is kept as an
-        // alias so either spelling works.
-        if (
-          node.getAttribute('data-html2canvas-ignore') === 'true' ||
-          node.getAttribute('data-export-ignore') === 'true' ||
-          node.dataset?.exportIgnore === 'true'
-        ) {
-          return false;
+      const report: RenderReport = {
+        requestedScale: scaleRequested,
+        appliedScale: scale,
+        scaleReduced: fit.reduced,
+        cardWidth: copy.offsetWidth,
+        cardHeight: copy.offsetHeight,
+        imageFailures: preparation.failures,
+        failedImageCount: preparation.failedImageCount,
+      };
+      lastReport = report;
+      if (options.report) {
+        try {
+          options.report(report);
+        } catch {
+          // Reporting is a courtesy; it may not break the export.
         }
       }
-      if (options.filter) {
-        return options.filter(node);
+
+      if (geometryOnly) {
+        resolved({ ...report, blob: null });
+        return null;
       }
-      return true;
-    };
 
-    const blob = await domToBlob(copy, {
-      scale,
-      type: 'image/png',
-      backgroundColor,
-      features: {
-        copyScrollbar: false,
-        removeAbnormalAttributes: true,
-        removeControlCharacter: true,
-      },
-      filter,
-      fetchFn: async (url: string) => {
-        // The same rule the card's own pictures follow: a picture the proxy
-        // could not deliver is drawn as the placeholder rather than left to
-        // fail against the canvas. A blob URL is the rasterizer's to fetch, and
-        // the proxy never sees one.
-        const result = await resolveImageForExport(url);
-        const src = result.ok ? result.src : FALLBACK_PLACEHOLDER_DATA_URL;
-        return src.startsWith('data:') ? src : false;
-      },
-    });
+      const filter = (node: Node): boolean => {
+        if (node instanceof HTMLElement) {
+          // `data-html2canvas-ignore` is the attribute the card actually emits
+          // (the html2canvas convention). `data-export-ignore` is kept as an
+          // alias so either spelling works.
+          if (
+            node.getAttribute('data-html2canvas-ignore') === 'true' ||
+            node.getAttribute('data-export-ignore') === 'true' ||
+            node.dataset?.exportIgnore === 'true'
+          ) {
+            return false;
+          }
+        }
+        if (options.filter) {
+          return options.filter(node);
+        }
+        return true;
+      };
 
-    if (!blob) {
-      throw new ExportRenderError('rasterizer', 'Screenshot engine produced an empty blob.');
-    }
-
-    // An unallocatable canvas comes back as a Blob that is truthy but holds no
-    // picture, so the check above lets it through. `size === 0` is not the
-    // test: that is only what `toDataURL`'s `data:,` fallback decodes to at
-    // scale 1. At every other scale `domToBlob` runs the blob through
-    // `changePngDpi`, which rebuilds it from a 54-byte header written over an
-    // empty source -- 54 bytes, `image/png`, and no PNG signature. Asking
-    // whether the bytes are a PNG covers both shapes, and does not guess from
-    // the length.
-    if (!(await looksLikePng(blob))) {
-      throw new ExportRenderError(
-        'empty-blob',
-        'Screenshot engine produced an empty image; the card is probably too tall for a canvas.'
+      return await verifyRenderedBlob(
+        await domToBlob(copy, {
+          scale,
+          type: 'image/png',
+          backgroundColor,
+          features: {
+            copyScrollbar: false,
+            removeAbnormalAttributes: true,
+            removeControlCharacter: true,
+          },
+          filter,
+          fetchFn: async (url: string) => {
+            // The same rule the card's own pictures follow: a picture the proxy
+            // could not deliver is drawn as the placeholder rather than left to
+            // fail against the canvas. A blob URL is the rasterizer's to fetch,
+            // and the proxy never sees one.
+            const result = await resolveImageForExport(url);
+            const src = result.ok ? result.src : FALLBACK_PLACEHOLDER_DATA_URL;
+            return src.startsWith('data:') ? src : false;
+          },
+        })
       );
+    } catch (err) {
+      // Everything else -- the decode pass, a too-tall card, the rasterizer --
+      // settles `measured` here, so a caller awaiting the measurement hears
+      // about it instead of waiting for a promise nobody will resolve.
+      rejected(err);
+      throw err;
+    } finally {
+      // The copy leaves first: the rasterizer has one last look at it, and a
+      // dispose that threw must not be the reason the live card keeps its data
+      // URLs. The copy's own wrapper is `position: fixed` and off-screen, so a
+      // copy that outlives this call cannot shift anything the user sees.
+      try {
+        mounted?.dispose();
+      } finally {
+        preparation.restore();
+      }
     }
+  })();
 
-    return blob;
-  } finally {
-    dispose?.();
-    preparation.restore();
+  // The picture joins the object as soon as it exists, so the clipboard holds one
+  // promise whatever the render's timing. A failure rejects that promise -- once,
+  // to the one caller that awaits it -- while the object itself resolves, so a
+  // caller that only wanted the size hears nothing about a picture it never asked
+  // for.
+  const published = new Promise<Blob | null>((resolve, reject) => {
+    run.then(
+      (picture) => {
+        resolved({ ...lastReport, blob: published });
+        resolve(picture);
+      },
+      (err) => {
+        resolve(null);
+        rejected(err);
+        reject(err);
+      }
+    );
+  });
+  ignoreRejection(published);
+
+  return { measured };
+}
+
+/**
+ * Rejects when the rasterizer handed back something without a picture in it.
+ *
+ * An unallocatable canvas comes back as a Blob that is truthy but holds no
+ * picture: empty at scale 1, and at every other scale `domToBlob` runs the blob
+ * through `changePngDpi`, which rebuilds it from a 54-byte header written over
+ * an empty source -- 54 bytes, `image/png`, and no PNG signature. Asking whether
+ * the bytes are a PNG covers both shapes, and does not guess from the length.
+ */
+async function verifyRenderedBlob(blob: Blob | null): Promise<Blob> {
+  if (!blob) {
+    throw new ExportRenderError('rasterizer', 'Screenshot engine produced an empty blob.');
   }
+  if (!(await looksLikePng(blob))) {
+    throw new ExportRenderError(
+      'empty-blob',
+      'Screenshot engine produced an empty image; the card is probably too tall for a canvas.'
+    );
+  }
+  return blob;
 }
 
 export type ExportRenderErrorCode = 'empty-blob' | 'rasterizer' | 'too-tall';
@@ -523,10 +722,14 @@ export class ExportRenderError extends Error {
   // Node's strip-only TypeScript loader does not support those.
   readonly code: ExportRenderErrorCode;
 
-  constructor(code: ExportRenderErrorCode, message: string) {
+  /** The failure behind this one, when it wrapped another. */
+  readonly cause?: unknown;
+
+  constructor(code: ExportRenderErrorCode, message: string, cause?: unknown) {
     super(message);
     this.name = 'ExportRenderError';
     this.code = code;
+    this.cause = cause;
   }
 }
 
@@ -563,6 +766,8 @@ export type ClipboardFailureReason =
   | 'unsupported'
   | 'permission'
   | 'unfocused-or-gesture'
+  /** The card never produced a picture; the download is the file that failed. */
+  | 'artwork'
   | 'other';
 
 export interface ClipboardFailure {
@@ -665,23 +870,119 @@ export function downloadBlobAsPng(blob: Blob, filename: string = 'post-to-card.p
 }
 
 /**
- * Copies a PNG Blob to the system clipboard via navigator.clipboard.write.
+ * Whether this environment can put an image on the clipboard at all.
+ *
+ * Checked before a render rather than after it: a browser without the API would
+ * otherwise make the user wait for a picture it is only going to download.
  */
-export async function copyBlobToClipboard(blob: Blob): Promise<void> {
-  if (
-    typeof navigator === 'undefined' ||
-    !navigator.clipboard ||
-    typeof navigator.clipboard.write !== 'function'
-  ) {
+export function canUseImageClipboard(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    Boolean(navigator.clipboard) &&
+    typeof navigator.clipboard.write === 'function' &&
+    typeof ClipboardItem !== 'undefined'
+  );
+}
+
+/**
+ * A picture on its way to a clipboard: whatever came of the render, and the
+ * write that took it (or did not).
+ *
+ * The failure travels as data rather than only as a rejection. A rejection is
+ * consumed the moment it is awaited, so a caller that asks for the refusal first
+ * would open an already-settled promise -- and the reason the picture never
+ * existed would reach the panel as the browser's complaint instead of the
+ * card's. `failure` holds it, typed, whatever the order the two settle in.
+ */
+export interface ClipboardWriteHandle {
+  /** Settles when the clipboard has the picture, or rejects with the refusal. */
+  written: Promise<void>;
+  picture: Promise<
+    | { blob: Blob; failure: null }
+    | { blob: null; failure: unknown }
+  >;
+}
+
+/**
+ * Starts the clipboard write now, with a picture that does not exist yet.
+ *
+ * This is the whole reason an export is split in two. Chromium grants
+ * `clipboard.write` on transient activation, and the activation is gone long
+ * before a thread has finished rasterizing -- which is why long exports used to
+ * end in a download. Calling this synchronously from the click spends the
+ * activation on the call itself; the promise is filled in behind it, which is
+ * what a promise-valued `ClipboardItem` is for.
+ *
+ * The item carries exactly one representation, because Chromium and Firefox
+ * both ignore or reject a write holding more than one. `image/png` as the key is
+ * not a guess: the keys must be stated before the data exists, and this engine
+ * only ever produces PNG.
+ *
+ * Throws `ClipboardUnsupportedError` in this tick, before any item is built, so
+ * a caller can decide to render for a download instead of for nothing.
+ */
+export function beginClipboardWrite(render: Promise<CardRender>): ClipboardWriteHandle {
+  if (!canUseImageClipboard()) {
     throw new ClipboardUnsupportedError('Clipboard API is not supported in this environment.');
   }
 
-  if (typeof ClipboardItem === 'undefined') {
-    throw new ClipboardUnsupportedError('ClipboardItem is not supported in this environment.');
-  }
+  const picture = pictureOf(render);
+  const item = new ClipboardItem({ 'image/png': conformForClipboard(picture) });
+  const written = navigator.clipboard.write([item]);
+  // A caller waits on both, but neither may go unobserved while it waits: an
+  // unobserved rejection is the warning this path exists to keep out of the
+  // console.
+  ignoreRejection(written);
+  return { written, picture };
+}
 
-  const item = new ClipboardItem({ 'image/png': blob });
-  await navigator.clipboard.write([item]);
+/**
+ * The picture, with a render's failure kept as a value.
+ *
+ * A rejected `ClipboardItem` field is the one way a copy can fail with nothing
+ * to catch: the item is built at the click, the rejection may happen while the
+ * clipboard is still holding it, and the caller only awaits `write()`. Conforming
+ * to the promise arrives at a refusal, which falls back to a download like every
+ * other one.
+ */
+function conformForClipboard(
+  picture: ClipboardWriteHandle['picture']
+): Promise<Blob> {
+  // The picture's own failure is kept on `failure`, so the promise the clipboard
+  // reads is a fresh rejection that only this closure hands out. Marking it
+  // observed here is what keeps a card that never rendered from printing
+  // "Unhandled promise rejection" while the panel reports it in words.
+  const content = picture.then((settled) => {
+    if (!settled.blob) throw settled.failure;
+    return settled.blob;
+  });
+  ignoreRejection(content);
+  return content;
+}
+
+/**
+ * The render's picture as a value, never a rejection.
+ *
+ * The render's own failure is what the panel has to print -- "the screenshot
+ * engine produced an empty image", not "the clipboard refused" -- so it travels
+ * on `failure` rather than being consumed as a rejection the moment it is
+ * awaited.
+ */
+function pictureOf(render: Promise<CardRender>): ClipboardWriteHandle['picture'] {
+  const settled = render.then(
+    (started) =>
+      (started.blob ?? Promise.reject(new Error('no picture was rendered'))).then(
+        (blob) => ({ blob, failure: null }),
+        (failure: unknown) => ({ blob: null, failure })
+      )
+  );
+  settled.catch(() => {});
+  return settled;
+}
+
+/** Marks a promise as observed, for one whose failure is handled elsewhere. */
+export function ignoreRejection(promise: Promise<unknown>): void {
+  promise.catch(() => {});
 }
 
 /**
@@ -701,18 +1002,19 @@ export async function exportBlobWithFallback(
   const filename = customFilename || `post-to-card-${Date.now()}.png`;
 
   if (action === 'download') {
-    try {
-      downloadBlobAsPng(blob, filename);
-      return { success: true, method: 'download', filename };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      return { success: false, method: 'download', filename, error: errorMsg };
-    }
+    return deliverDownload(blob, filename, null);
   }
 
   // Attempt clipboard write first
   try {
-    await copyBlobToClipboard(blob);
+    // A direct copy, not `beginClipboardWrite`: this function is handed bytes
+    // that already exist, so there is nothing to claim the clipboard ahead of.
+    if (!canUseImageClipboard()) {
+      throw new ClipboardUnsupportedError('Clipboard API is not supported in this environment.');
+    }
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob }),
+    ]);
     return { success: true, method: 'clipboard', filename };
   } catch (clipboardErr) {
     console.warn(
@@ -721,36 +1023,40 @@ export async function exportBlobWithFallback(
     );
     // The reason travels with the result, but it does not change the verdict:
     // the blob left the page, which is what `success` has always meant here.
-    const failure = classifyClipboardFailure(clipboardErr);
-    try {
-      downloadBlobAsPng(blob, filename);
-      return {
-        success: true,
-        method: 'download',
-        filename,
-        clipboardFailure: failure.reason,
-        clipboardError: failure.message,
-      };
-    } catch (downloadErr) {
-      const errorMsg = downloadErr instanceof Error ? downloadErr.message : String(downloadErr);
-      return {
-        success: false,
-        method: 'download',
-        filename,
-        error: errorMsg,
-        clipboardFailure: failure.reason,
-        clipboardError: failure.message,
-      };
-    }
+    return deliverDownload(blob, filename, classifyClipboardFailure(clipboardErr));
+  }
+}
+
+/** Puts the blob in the downloads folder, carrying whatever refused it first. */
+function deliverDownload(
+  blob: Blob,
+  filename: string,
+  refusal: ClipboardFailure | null
+): ExportResult {
+  const carried = refusal
+    ? { clipboardFailure: refusal.reason, clipboardError: refusal.message }
+    : {};
+  try {
+    downloadBlobAsPng(blob, filename);
+    return { success: true, method: 'download', filename, ...carried };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, method: 'download', filename, error: errorMsg, ...carried };
   }
 }
 
 export interface ExportCardOptions {
   /** Where the card should go. Defaults to the clipboard. */
   action?: ExportAction;
-  /** Retina factor. The card is laid out at a fixed 640px, so this is the only
-   *  thing that decides the exported pixel size. */
+  /** Retina factor. Left unset, the card decides (see `defaultExportScale`). */
   scale?: number;
+  /**
+   * `preferHighResolution` from the user's preferences, possibly still loading.
+   *
+   * A promise, because the caller reads it from storage and storage answers in
+   * a later task -- which is longer than the click that has to start the export.
+   */
+  preferHighResolution?: boolean | Promise<boolean>;
   /** Overrides the generated name. */
   filename?: string;
   /** Passed through to the rasterizer for the rare case that needs it. */
@@ -772,20 +1078,70 @@ export async function exportCard(
   cardElement: HTMLElement,
   options: ExportCardOptions = {}
 ): Promise<ExportOutcome> {
-  const { action = 'copy', scale = DEFAULT_EXPORT_SCALE, filename, render } = options;
+  const { action = 'copy', scale, preferHighResolution, filename, render } = options;
+  const name = filename || `post-to-card-${Date.now()}.png`;
 
   let report: RenderReport | null = null;
-  const blob = await renderCardToBlob(cardElement, {
-    scale,
+  const renderOptions: RenderOptions = {
+    ...(scale === undefined ? {} : { scale }),
+    // Read where the picture is made, not here: see `RenderOptions.preferHighResolution`.
+    ...(preferHighResolution === undefined ? {} : { preferHighResolution }),
     ...render,
     // After the spread, so a caller-supplied `render` cannot silently drop the
     // reporting this function is responsible for.
     report: (next) => {
       report = next;
     },
-  });
-  const result = await exportBlobWithFallback(blob, action, filename);
+  };
 
+  // Claim the clipboard inside this tick, before the seconds of rendering. A
+  // browser without the API still asks for a copy and still gets one, through
+  // the fallback below, which renders first and then says `unsupported`.
+  let clip: ClipboardWriteHandle | null = null;
+  if (action === 'copy' && canUseImageClipboard()) {
+    const render = beginCardRender(cardElement, renderOptions);
+    ignoreRejection(render);
+    clip = beginClipboardWrite(render);
+  }
+
+  if (!clip) {
+    const blob = await renderCardToBlob(cardElement, renderOptions);
+    const result = await exportBlobWithFallback(blob, action, filename);
+    return mergeReport(result, report);
+  }
+
+  // The two wait together, not one after the other: a clipboard that refuses
+  // says so immediately, while the picture it refused is still seconds of
+  // rendering away for a thread. A download cannot start without the bytes, but
+  // waiting for the verdict before waiting for the bytes only made the panel sit
+  // on "Copying..." in silence.
+  const [refusal, picture] = await Promise.all([verdictOf(clip.written), clip.picture]);
+
+  if (!picture.blob) {
+    // A failed render is a defect, not a clipboard's opinion of one: this is the
+    // one thing `exportCard` throws for. The render's own error is carried on
+    // `failure`, so the panel prints the reason rather than the refusal it
+    // happened to cause.
+    throw picture.failure;
+  }
+
+  if (!refusal) {
+    return mergeReport({ success: true, method: 'clipboard', filename: name }, report);
+  }
+
+  console.warn('[Post-to-Card] Clipboard write failed; falling back to a download:', refusal);
+  return mergeReport(deliverDownload(picture.blob, name, classifyClipboardFailure(refusal)), report);
+}
+
+/** `null` when the clipboard took the picture; the refusal otherwise. */
+function verdictOf(written: Promise<void>): Promise<unknown> {
+  return written.then(
+    () => null,
+    (err: unknown) => err
+  );
+}
+
+function mergeReport(result: ExportResult, report: RenderReport | null): ExportOutcome {
   if (!report) return result;
   const captured: RenderReport = report;
   return {

@@ -38,6 +38,9 @@ export interface Translations {
   canvasRatioAuto: string;
   canvasBackground: string;
   canvasShadow: string;
+
+  // The export's own settings, which change the file and not the card
+  exportSettings: string;
   canvasBg_none: string;
   canvasBg_theme: string;
   canvasBg_paper: string;
@@ -128,6 +131,10 @@ export interface Translations {
   clipboardFallbackActivation: string;
   imagesUnavailableCount: string;
   exportScaleReduced: string;
+  /** Said instead of "Copied" when the card itself failed, so the fallback can be retried. */
+  clipboardFallbackArtwork: string;
+  preferHighResolution: string;
+  preferHighResolutionHint: string;
   statusSeparator: string;
   retryExport: string;
   /**
@@ -185,6 +192,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     canvasRatioAuto: '自适应',
     canvasBackground: '背景',
     canvasShadow: '卡片投影',
+
+    exportSettings: '导出设置',
     canvasBg_none: '无背景',
     canvasBg_theme: '跟随主题',
     canvasBg_paper: '纸白',
@@ -260,12 +269,15 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     exportEmpty: '截图引擎返回了空图片，请重试',
     exportTooTall: '卡片高度超过画布上限，请减少推文或改用纵向平铺后重试',
     targetNotFound: '未找到卡片渲染节点。',
-    clipboardFallbackNotice: '剪贴板写入失败，已自动下载 PNG',
-    clipboardFallbackUnsupported: '此浏览器不支持写入图片剪贴板，已自动下载 PNG',
-    clipboardFallbackPermission: '剪贴板权限被拒绝，已自动下载 PNG',
-    clipboardFallbackActivation: '窗口未聚焦或操作间隔过长，剪贴板写入被拒，已自动下载 PNG',
+    clipboardFallbackNotice: '剪贴板写入失败，PNG 已保存到下载文件夹',
+    clipboardFallbackUnsupported: '此浏览器不支持写入图片剪贴板，PNG 已保存到下载文件夹',
+    clipboardFallbackPermission: '剪贴板权限被拒绝，PNG 已保存到下载文件夹',
+    clipboardFallbackActivation: '窗口未聚焦或操作间隔过长，剪贴板写入被拒，PNG 已保存到下载文件夹',
+    clipboardFallbackArtwork: '卡片没能渲染出来，PNG 已保存到下载文件夹',
     imagesUnavailableCount: '{count} 张配图未能加载',
     exportScaleReduced: '已按画布上限降至 {scale}×',
+    preferHighResolution: '输出最高清晰度',
+    preferHighResolutionHint: '单条推文按 3× 导出；很高的长串默认 2×（保留 3× 也只是被 X 缩回去）。文件更大，适合发到不压缩的渠道',
     statusSeparator: '；',
     retryExport: '重试',
     longCardWarning: '这张图很高，缩到信息流宽度后文字会很小；长串建议拆成几张',
@@ -315,6 +327,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     canvasRatioAuto: 'Auto',
     canvasBackground: 'Background',
     canvasShadow: 'Card shadow',
+
+    exportSettings: 'Export',
     canvasBg_none: 'None',
     canvasBg_theme: 'Theme',
     canvasBg_paper: 'Paper',
@@ -396,12 +410,16 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     exportTooTall:
       'The card is taller than the largest canvas; remove some posts or switch the media layout and try again',
     targetNotFound: 'Export target not found.',
-    clipboardFallbackNotice: 'Clipboard write failed; the PNG was downloaded instead',
-    clipboardFallbackUnsupported: 'This browser cannot put images on the clipboard; the PNG was downloaded instead',
-    clipboardFallbackPermission: 'Clipboard permission was denied; the PNG was downloaded instead',
-    clipboardFallbackActivation: 'The window lost focus or the action took too long, so the clipboard refused; the PNG was downloaded instead',
+    clipboardFallbackNotice: 'Clipboard write failed; the PNG was saved to your downloads',
+    clipboardFallbackUnsupported: 'This browser cannot put images on the clipboard; the PNG was saved to your downloads',
+    clipboardFallbackPermission: 'Clipboard permission was denied; the PNG was saved to your downloads',
+    clipboardFallbackActivation: 'The window lost focus or the action took too long, so the clipboard refused; the PNG was saved to your downloads',
+    clipboardFallbackArtwork: 'The card could not be rendered; the PNG was saved to your downloads',
     imagesUnavailableCount: '{count} image(s) could not be loaded',
     exportScaleReduced: 'reduced to {scale}× by the canvas limit',
+    preferHighResolution: 'Highest resolution',
+    preferHighResolutionHint:
+      'Exports a single post at 3×; a long thread stays at 2×, where more is scaled back down by X. A bigger file, for channels that do not recompress',
     statusSeparator: '; ',
     retryExport: 'Retry',
     longCardWarning: 'This picture is very tall; a feed will shrink its text. Consider splitting a long thread',

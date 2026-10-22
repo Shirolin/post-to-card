@@ -111,4 +111,9 @@ export interface CardConfig {
    * own box, so the shadow would be clipped by the export's border box.
    */
   canvasShadow?: boolean;
+  /**
+   * "Prefer the sharpest picture": export at `SHARP_EXPORT_SCALE` even when the
+   * picture would pass X's own display cap, for a channel that does not.
+   */
+  preferHighResolution?: boolean;
 }

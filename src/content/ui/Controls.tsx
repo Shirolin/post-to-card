@@ -827,6 +827,26 @@ export function Controls({
                 ))}
               </div>
             </div>
+
+            {/* Beside the other things about the file rather than inside them:
+                it changes nothing on the card, only how many pixels the export
+                is made of. Off by default because it is a size trade, and the
+                size is already quoted above the export button. */}
+            <div class="control-section">
+              <span class="control-label">
+                <span>{t.exportSettings}</span>
+              </span>
+              <div class="toggles-list">
+                <Toggle
+                  label={t.preferHighResolution}
+                  checked={config.preferHighResolution === true}
+                  title={t.preferHighResolutionHint}
+                  onToggle={() =>
+                    updateConfig({ preferHighResolution: config.preferHighResolution !== true })
+                  }
+                />
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -871,7 +891,10 @@ export function Controls({
             )
               .replace('{w}', String(exportSize.width))
               .replace('{h}', String(exportSize.height))
-              .replace('{scale}', String(exportSize.scale ?? ''))}
+              // Two decimals, and without trailing zeros: the canvas limit makes
+              // fractional scales, and `2 ×` beside `1.63 ×` is what the two
+              // figures actually are.
+              .replace('{scale}', String(Number((exportSize.scale ?? 0).toFixed(2))))}
           </span>
         )}
         {/* Beside the size, not inside it: the size is a fact and this is advice

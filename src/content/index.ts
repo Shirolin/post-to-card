@@ -8,6 +8,21 @@ import { initTwitterInjection, resolveThread } from './adapter/index.ts';
 import { openCardModal } from './container/element.ts';
 import { createExportHandler } from './exportHandler.ts';
 import { initGraphQLBridge } from './graphql/bridge.ts';
+import { loadUserPreferences } from './prefs.ts';
+
+/**
+ * `preferHighResolution`, as a promise the export can await without blocking.
+ *
+ * Read once when the card opens rather than per click: the export button's click
+ * has to claim the clipboard in the same tick, and a storage round trip does not
+ * fit inside a gesture. A read that fails is a user who has not turned the
+ * setting on.
+ */
+function readpreferHighResolution(): Promise<boolean> {
+  const preferences = loadUserPreferences().then((saved) => saved.preferHighResolution === true);
+  preferences.catch(() => {});
+  return preferences.catch(() => false);
+}
 
 function initContentScript(): void {
   try {
@@ -19,7 +34,10 @@ function initContentScript(): void {
     const controller = initTwitterInjection((article: Element) => {
       const threadData = resolveThread(article);
 
-      openCardModal(threadData, createExportHandler(threadData));
+      openCardModal(
+        threadData,
+        createExportHandler(threadData, { preferHighResolution: readpreferHighResolution() })
+      );
     });
 
     // Supplementary scans for dynamic SPA feed hydration

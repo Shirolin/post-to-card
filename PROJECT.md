@@ -19,12 +19,12 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
      - Auto 及 3:4 / 16:9 画幅（弹性下限法则 `min-height` + `height: auto`，向下平滑延展，绝不截断长文本）。
      - 外层画布（mat）：输出画幅 1:1 / 4:5 / 3:4 / 16:9 与画布背景（跟随主题 / 纯色 / 渐变）各自独立，两者默认关闭；卡片是挂在 mat 上的图层，mat 才是导出目标（`#post-to-card-export-target` 已随之移到 mat 上）。
      - 离线矢量 SVG 二维码生成 (`qrcode-generator`)。
-     - 7 个独立开关，按作用范围分组而非按控件类型堆叠：卡片页脚（原文二维码、互动数据、发布时间，帖子缺对应数据时该开关不出现）、隐私（作者隐私脱敏）、呈现细节（视频播放角标、署名与版本、推文卡片按钮，后两项在折叠区）。「推文卡片按钮」控制的是推文操作栏的注入，不进卡片，见 F30。
+     - 8 个独立开关，按作用范围分组而非按控件类型堆叠：卡片页脚（原文二维码、互动数据、发布时间，帖子缺对应数据时该开关不出现）、隐私（作者隐私脱敏）、导出（输出最高清晰度，在折叠区）、呈现细节（视频播放角标、署名与版本、推文卡片按钮，后两项在折叠区）。「推文卡片按钮」控制的是推文操作栏的注入，不进卡片，见 F30。
      - 背景无抖动滚动锁、Esc 快捷键及点击蒙层关闭。
 4. **Export Engine (Content Script - Canvas Layer)**:
-   - 调用 `modern-screenshot` 进行 Retina 级 (scale: 2 或 3) 离线渲染。
+   - 调用 `modern-screenshot` 进行 Retina 级离线渲染：单条推文 3×，超出 X 显示上限（2048px）的图按 2×，画布上限再往下压。规则只有 `scale.ts` 的 `defaultExportScale` 一处。
    - 渲染前将所有图片替换为 Background 代理返回的 Base64 Data URL。
-   - 优先调用 `navigator.clipboard.write` 复制 PNG 位图至剪贴板；若失去激活或权限被拒，无缝自动降级为触发本地高分 PNG 下载。
+   - 优先调用 `navigator.clipboard.write` 复制 PNG 位图至剪贴板：写入在点击当刻发起，`ClipboardItem` 持有一个尚未渲染完的图画 Promise，因此长文串不会因瞬时激活过期而被迫下载。若浏览器拒绝写入或权限被拒，无缝自动降级为触发本地高分 PNG 下载。
 5. **Clean Multi-Entry Vite Build Pipeline**:
    - `background.js` 输出为标准 ESM 脚本。
    - `content.js` 输出为完全自包含的 IIFE 脚本（无顶层 import/export）。
@@ -57,10 +57,10 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 | F18 | Padding & Border Radius Options | 3 档内边距 (16/32/48px) 与 4 档圆角（跟随主题 / 0/12/20px） | M4 | ORIGINAL_REQUEST §R2 |
 | F19 | Downward Expanding Poster Layouts | Auto 及 3:4 / 16:9 画幅弹性下限 min-height，长文本平滑向下延展绝不截断 | M4 | ORIGINAL_REQUEST §R2 |
 | F20 | Offline QR Code Generator | 纯本地 qrcode-generator 生成推文链接矢量 SVG 二维码 | M4 | ORIGINAL_REQUEST §R2 |
-| F21 | Interactive Controls & Toggles | 7 个开关按作用范围分组（卡片页脚 / 隐私 / 呈现细节），帖子缺 url·互动数据·时间戳时对应页脚开关不渲染；输出画布常显并紧跟视觉主题；折叠区只放界面语言 / 版式与样式 / 呈现细节这类设一次就不再动的项 | M4 | ORIGINAL_REQUEST §R2 |
+| F21 | Interactive Controls & Toggles | 8 个开关按作用范围分组（卡片页脚 / 隐私 / 导出 / 呈现细节），帖子缺 url·互动数据·时间戳时对应页脚开关不渲染；输出画布常显并紧跟视觉主题；折叠区只放界面语言 / 版式与样式 / 导出设置 / 呈现细节这类设一次就不再动的项 | M4 | ORIGINAL_REQUEST §R2 |
 | F22 | Author Privacy Blurring | 对作者昵称、Handle、头像启用 filter: blur(...) 隐私保护 | M4 | ORIGINAL_REQUEST §R2 |
 | F23 | Modal UX & Scroll Lock | 弹窗居中、Esc 快捷键、蒙层关闭、背景无抖动滚动锁 | M4 | ORIGINAL_REQUEST §R2 |
-| F24 | Modern-Screenshot Retina Export | 调用 modern-screenshot 生成 2x/3x 高分辨率 PNG | M5 | ORIGINAL_REQUEST §R3 |
+| F24 | Modern-Screenshot Retina Export | 调用 modern-screenshot 生成 3x（单条）/ 2x（超显示上限）高分辨率 PNG | M5 | ORIGINAL_REQUEST §R3 |
 | F25 | Canvas CORS Taint Prevention | 导出前置换 Base64 Data URL，彻底阻绝 SecurityError | M5 | ORIGINAL_REQUEST §R3 |
 | F26 | Clipboard Copy with Fallback | 复制图片至剪贴板，异常时自动平滑降级为本地 PNG 下载 | M5 | ORIGINAL_REQUEST §R3 |
 | F27 | E2E Testing Suite (Tiers 1-4 + 5 个专项 tier) | 4 层验收测试套件（功能/边界/交互/真实用例）加 i18n、GraphQL、resolver、article、hygiene 五个专项 tier，全面覆盖全部特性与真实用例 | M-TEST | Acceptance Criteria |

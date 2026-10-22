@@ -60,6 +60,9 @@ function normalizeStoredConfig(saved: Record<string, any> | null | undefined): C
     // Default-off, so anything but a literal `true` is off. The spread above
     // would take `"false"` -- a string from a hand-edited store -- as truthy.
     canvasShadow: saved.canvasShadow === true,
+    // Same rule: a preference nobody turned on is off, including when the
+    // store holds the string "false".
+    preferHighResolution: saved.preferHighResolution === true,
     showActionBarButton: saved.showActionBarButton !== false,
     showPlayButton: saved.showPlayButton !== false,
     locale: sanitizeLocale(saved.locale),

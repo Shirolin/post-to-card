@@ -48,9 +48,31 @@ export function isLongCard(readout: Pick<ExportSizeReadout, 'width' | 'height'>)
   return readout.height > readout.width * LONG_CARD_RATIO;
 }
 
+/**
+ * The scale a single post is exported at when the picture stays inside X's
+ * display cap, and the cap itself.
+ *
+ * X scales a picture down to 2048px on its longest side when it shows it. A
+ * 640px card at 3x is 1920 and stays under that; at 4x it is past it and X
+ * throws the extra pixels away. So 3 is the most a single post can use, and the
+ * edge is the line a taller card measures against.
+ */
+export const SINGLE_POST_EXPORT_SCALE = 3;
+export const X_DISPLAY_MAX_EDGE = 2048;
+
 export interface MeasuredBox {
   width: number;
   height: number;
+}
+
+/** False for the frame before the card has been laid out, and for nonsense. */
+function isUsableBox(box: Pick<MeasuredBox, 'width' | 'height'>): boolean {
+  return (
+    Number.isFinite(box.width) &&
+    Number.isFinite(box.height) &&
+    box.width > 0 &&
+    box.height > 0
+  );
 }
 
 export interface ScaleFit {
@@ -91,11 +113,11 @@ export function fitScaleToCanvas(
   requested: number,
   maxEdge: number = MAX_CANVAS_EDGE
 ): ScaleFit {
-  const width = measured.width;
-  const height = measured.height;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (!isUsableBox(measured)) {
     return { requested, applied: requested, reduced: false, impossible: false };
   }
+  const width = measured.width;
+  const height = measured.height;
   if (!Number.isFinite(maxEdge) || maxEdge <= 0) {
     return { requested, applied: requested, reduced: false, impossible: false };
   }
@@ -113,6 +135,41 @@ export function fitScaleToCanvas(
   const applied = Math.max(1, Math.floor(fitted * 100) / 100);
   return { requested, applied, reduced: applied < requested, impossible };
 }
+
+/**
+ * The scale this card is exported at when nobody passes one -- the exporter's
+ * own default, so the file and the readout cannot disagree.
+ *
+ * `SINGLE_POST_EXPORT_SCALE` unless the picture, doubled, would pass the edge X
+ * shows. A single post is 1920 tall at 3x and keeps its pixels; a thread is past
+ * 2048 even at 2x, so 3x would only cost the user a longer export for a picture
+ * the service scales back down on the way in.
+ *
+ * The 2x floor is held even when the preference is off. It is deliberately the
+ * one number this rule shares with the export that shipped before it: a thread
+ * should not change size because the rule around it got better.
+ *
+ * The canvas limit is not also applied here. `fitScaleToCanvas` does that in
+ * both callers, and doing it twice is how the two figures drifted apart once
+ * already.
+ *
+ * `preferHighResolution` is the user's preference, not a quality claim: it gives a
+ * picture past the display ceiling more pixels rather than fewer, which is what
+ * you want when the file is going somewhere X is not.
+ */
+export function defaultExportScale(
+  box: Pick<MeasuredBox, 'width' | 'height'>,
+  options: { preferHighResolution?: boolean } = {}
+): number {
+  if (!isUsableBox(box)) return SINGLE_POST_EXPORT_SCALE;
+  if (options.preferHighResolution) return SINGLE_POST_EXPORT_SCALE;
+  return Math.max(box.width, box.height) * SINGLE_POST_EXPORT_SCALE > X_DISPLAY_MAX_EDGE
+    ? THREAD_EXPORT_SCALE
+    : SINGLE_POST_EXPORT_SCALE;
+}
+
+/** What a picture past X's display cap is exported at, and what shipped before. */
+export const THREAD_EXPORT_SCALE = 2;
 
 /** What the panel quotes beside the export buttons. */
 export interface ExportSizeReadout {
@@ -155,4 +212,20 @@ export function exportSizeFor(
     reduced: fit.reduced,
     impossible: fit.impossible,
   };
+}
+
+/**
+ * The whole readout, from the card's own size and nothing else.
+ *
+ * This is the panel's figure and the exporter's scale in one call, so a preview
+ * cannot quote a size, or a scale, the file will not have. It applies the three
+ * rules in the order an export does: X's display cap, then the user's
+ * preference, then the canvas edge.
+ */
+export function exportSizeReadout(
+  box: MeasuredBox,
+  options: { requestedScale?: number; preferHighResolution?: boolean } = {}
+): ExportSizeReadout | null {
+  const requested = options.requestedScale ?? defaultExportScale(box, options);
+  return exportSizeFor(box.width, box.height, requested);
 }

@@ -12,7 +12,7 @@ import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadSession, toggleExcluded } from '../threadSession.ts';
 import { CARD_WIDTH, viewportPadding } from './geometry.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
-import { DEFAULT_EXPORT_SCALE, ExportRenderError, exportSizeFor } from '../engine/index.ts';
+import { ExportRenderError, exportSizeReadout, ignoreRejection, beginCardRender } from '../engine/index.ts';
 
 import { getTranslation, sanitizeLocale, formatPreviewSummary } from '../i18n.ts';
 
@@ -134,16 +134,21 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   /**
    * The exported PNG's pixel size, or null until the mat has been measured.
    *
-   * The export captures an unzoomed copy of the mat at its own width -- 640px
-   * unless a canvas adds its ring -- and rasterizes it at the engine's default
-   * scale, so this is the figure that lands on the clipboard. It has nothing to
-   * do with the preview's zoom: a long thread on a phone can look tiny here and
-   * still export at full width.
+   * The export captures an unzoomed copy of the mat and rasterizes it at the
+   * scale the engine picks for it -- 3x for a lone post, 2x for a picture past
+   * X's own display cap -- so this is the figure that lands on the clipboard. It
+   * has nothing to do with the preview's zoom: a long thread on a phone can look
+   * tiny here and still export at full width.
+   *
+   * Read through the exporter's own rule (`exportSizeReadout`), not recomputed
+   * here: while the scale was a constant this was `exportWidth * 2`, and a second
+   * copy of the rule is exactly how a readout ends up naming a size the file never
+   * has.
    */
-  // The same arithmetic the exporter runs, so the figure here is the figure in
-  // the file: both call `fitScaleToCanvas` with the measured width, and the
-  // pure function is what keeps them from drifting apart again.
-  const exportSize = exportSizeFor(exportWidth, cardHeight, DEFAULT_EXPORT_SCALE);
+  const exportSize = exportSizeReadout(
+    { width: exportWidth, height: cardHeight },
+    { preferHighResolution: config.preferHighResolution === true }
+  );
 
   const t = getTranslation(sanitizeLocale(config.locale));
 
@@ -242,7 +247,12 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     observer.observe(viewport);
     if (cardRef.current) observer.observe(cardRef.current);
     return () => observer.disconnect();
-  }, []);
+    // Re-run when the card is a different one. A toggle changes the height of the
+    // box the observer is watching, and it fires for that; opening another tweet
+    // replaces the element, and an observer left on the old node would never see
+    // the new one's height -- the readout would then quote the previous card.
+    // This is the effect's only dependency, and it is a value, not a mount flag.
+  }, [threadData]);
 
   /**
    * Keeps the selected zoom on a level the stage can actually show.
@@ -410,6 +420,8 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
         return t.clipboardFallbackPermission;
       case 'unfocused-or-gesture':
         return t.clipboardFallbackActivation;
+      case 'artwork':
+        return t.clipboardFallbackArtwork;
       default:
         return t.clipboardFallbackNotice;
     }
@@ -465,6 +477,17 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     setIsErrorStatus(false);
     setIsWarningStatus(false);
     setRetry(null);
+
+    // Every image the export will need, fetched before the gesture's tick ends.
+    // The pictures are what a thread waits seconds for, and the proxy keeps what
+    // it fetches; an export started here finds them warm instead of spending the
+    // same round trips while the clipboard is already holding a promise. The
+    // measurement it returns is dropped: this is a prefetch, and the click that
+    // follows decides everything itself.
+    if (action === 'copy') {
+      const warm = beginCardRender(target, { geometryOnly: true });
+      ignoreRejection(warm);
+    }
 
     try {
       // The message follows the outcome, not the button that was pressed. A

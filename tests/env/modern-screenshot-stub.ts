@@ -63,12 +63,21 @@ export function resetRasterizer(): void {
 export async function domToBlob(target: unknown, options: Record<string, any> = {}): Promise<Blob> {
   rasterizerCalls.push({ target, options });
 
+  // Before the failure injection, which is what a real rasterizer does: its
+  // first statement is the guard that hands the DOM back. A stub that failed
+  // first made "the export threw" and "the rasterizer was reached" different
+  // observations, so a test had to ask the call log which one had happened.
+  if (!options.scale) return new Blob([], { type: options.type || 'image/png' });
+
   if (failure) {
     const message = failure;
     failure = null;
     throw new Error(message);
   }
 
+  // Read only by a rasterizing call: a measurement that arrives between the
+  // injection and the export must not spend it, and the engine's own readout
+  // does exactly that on every mounted card.
   const size = nextSize ?? 8;
   const shape = nextBlob;
   nextSize = null;

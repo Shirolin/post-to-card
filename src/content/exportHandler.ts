@@ -12,6 +12,19 @@ import { threadSession } from './threadSession.ts';
 import type { ThreadData } from '../types/tweet.ts';
 
 /**
+ * What the entry point knows that the handler is handed once.
+ *
+ * `preferHighResolution` is a promise rather than a value because the click that starts
+ * the export is also the click that has to claim the clipboard: awaiting storage
+ * first would spend the user's activation on a round trip and lose it. The
+ * setting only picks the scale, which is decided seconds later anyway.
+ */
+export interface ExportHandlerOptions {
+  /** `preferHighResolution`, still being read from storage. */
+  preferHighResolution?: Promise<boolean>;
+}
+
+/**
  * Binds an export handler to the thread it will export.
  *
  * The name is built here rather than in the panel because this is the layer
@@ -22,12 +35,14 @@ import type { ThreadData } from '../types/tweet.ts';
  * The post itself is the one the thread is about, which the session names.
  */
 export function createExportHandler(
-  threadData: ThreadData
+  threadData: ThreadData,
+  options: ExportHandlerOptions = {}
 ): (target: HTMLElement, action: ExportAction) => Promise<ExportOutcome> {
   return (target, action) => {
     const tweet = threadSession(threadData, undefined).targetTweet;
     return exportCard(target, {
       action,
+      preferHighResolution: options.preferHighResolution,
       filename: buildExportFilename({
         handle: tweet?.author?.handle ?? threadData.author.handle,
         text: tweet?.text,

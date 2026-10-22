@@ -1224,6 +1224,7 @@ export const DEFAULT_CARD_CONFIG: CardConfig = {
   canvasRatio: CANVAS_RATIO.default,
   canvasBackground: CANVAS_BACKGROUND.default,
   canvasShadow: false,
+  preferHighResolution: false,
 };
 
 /**
