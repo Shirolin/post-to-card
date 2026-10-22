@@ -101,6 +101,11 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
 - `div[data-testid="nestedQuotePreview"]` —— **2026-10-14 新增**：本轮样本中嵌套引用的容器标记
 - `a[data-testid="nestedQuotePreviewMedia"]` —— **2026-10-14 新增**：本轮样本中嵌套引用自己的
   媒体，不在 `tweetPhoto` 里，所以照片扫描通道看不到它
+- `div[data-testid="article-cover-image"]` —— **2026-10-22 新增**：**列表视图**里长文帖的预览卡
+  只有这一个文章 testid（`twitterArticleReadView` / `twitter-article-title` 在列表视图上是 0 个，
+  它们只在状态页出现）。标题与摘录没有 testid，靠「封面 → 紧随其后的文字盒 → 第一个子元素是标题」
+  定位；卡片里的徽标文案与封面 `alt` 都是本地化的，不作判据。
+  见 `docs/observed-dom-2026-10-22-article-preview.md`，锁在 `tier_article` 的 `art.12`–`art.14`。
 - `div[data-testid="socialContext"]` —— 承载「转发/置顶/回复」**容器**，容器名稳定、内部文字不稳定
   - **2026-10-10 实测修正**：详情页会话区里这个容器**不存在**（35 条推文 0 个），
     也没有「Replying to / 回复」文案，所以那里 `getReplyingToHandle` 只能返回 null。
@@ -153,6 +158,13 @@ feature flag 自适应等一整套新机制——对本项目是重大架构变�
   同日按此修复：`collectTweets` 读 `entry.items`、`parseTweet` 接受 `item.itemContent`；
   夹具 `tests/fixtures/graphql.ts` 原先是 wrapper 上有 `content` 的形状（故 tier 全绿），已改成真实形状。
   见 `.scratch/live-verification-relay/issues/01-graphql-module-items-dropped.md`
+- **载荷里的 `article` 不一定能读成文章** —— **2026-10-22 实测推断**：同一条长文帖，时间线 DOM 里
+  `article[data-testid="tweet"] a[href*="t.co"]` 与 `a[href*="/i/article/"]` 都是 0 个（预览卡取代了
+  尾链），而失败的卡片正文却带着 `x.com/i/article/…`——正文只可能来自载荷，且那份载荷的
+  `article` 没通过 `parseArticle`（要么缺失，要么是不带 `title` 的存根；登录态怎么排布**未采到**）。
+  `resolver.ts` 的 `backfillArticle` 因此按「载荷缺什么、DOM 补什么」接管文章与尾链剥离；
+  锁在 `tier_resolver` 的 `res.15`。见 `docs/observed-dom-2026-10-22-article-preview.md`
+  §同日发现的第二个原因
 - **snowflake ID 大小关系** —— X 官方文档背书的时序。但官方措辞是 "roughly time-ordered"，
   故**只能用作否决条件**（排除不可能的前一条），不能用作肯定条件
 

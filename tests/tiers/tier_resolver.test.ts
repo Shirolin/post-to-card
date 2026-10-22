@@ -15,7 +15,8 @@ import { createSuite } from '../env/harness.ts';
 import { resolveThread } from '../../src/content/adapter/resolver.ts';
 import { initGraphQLBridge } from '../../src/content/graphql/bridge.ts';
 import { lookupReplyLink } from '../../src/content/graphql/bridge.ts';
-import { TWEET_DETAIL_THREAD_JSON, TWEET_DETAIL_SHALLOW_QUOTE_JSON, HOME_TIMELINE_SELF_THREAD_JSON, HOME_TIMELINE_UNLINKED_PAIR_JSON } from '../fixtures/graphql.ts';
+import { TWEET_DETAIL_THREAD_JSON, TWEET_DETAIL_SHALLOW_QUOTE_JSON, HOME_TIMELINE_SELF_THREAD_JSON, HOME_TIMELINE_UNLINKED_PAIR_JSON, TWEET_DETAIL_ARTICLE_JSON } from '../fixtures/graphql.ts';
+import { ARTICLE_TWEET_HTML } from '../fixtures/article-tweet.ts';
 import { NESTED_QUOTE_PREVIEW_HTML } from '../fixtures/nested-quote-preview.ts';
 import { FEED_SELF_THREAD_HTML } from '../fixtures/thread.ts';
 
@@ -553,6 +554,29 @@ test('res.14: a DOM answer that never asked GraphQL records no miss', () => {
   } finally {
     mockWindow.location.pathname = '/ada_builds/status/1001';
   }
+});
+
+test('res.15: an article the detail payload omits is backfilled from the DOM', () => {
+  // `TweetDetail` answers with the post's body but not its article, and it is
+  // tried before `TweetResultByRestId`. The payload then won the merge, so the
+  // card lost the cover and title and kept the `/i/article/` tail: the parser
+  // only drops that link when the payload carried the article itself.
+  const payload = JSON.parse(TWEET_DETAIL_ARTICLE_JSON);
+  const result =
+    payload.data.threaded_conversation_with_injections_v2.instructions[0]
+      .entries[0].content.itemContent.tweet_results.result;
+  delete result.article;
+  seedGraphQLCache(JSON.stringify(payload), 'TweetDetail', 'q_no_article');
+
+  const thread = resolveThread(createDomElement(ARTICLE_TWEET_HTML));
+  const target = thread.tweets[thread.targetTweetIndex ?? 0];
+
+  assert.equal(target.diagnostics?.source, 'graphql', 'the payload still answered');
+  assert.equal(target.article?.title, 'Anime Harry Potter', 'the article comes from the DOM');
+  const tokenText = (target.richTokens || []).map((token) => token.value).join('');
+  assert.doesNotMatch(tokenText, /i\/article/, 'the payload\'s tail is dropped from the tokens');
+  assert.doesNotMatch(target.text, /t\.co/, 'and from the text fallback');
+  assert.match(target.text, /promised write up/, 'the author\'s own body survives');
 });
 
 export function runTierResolver() {

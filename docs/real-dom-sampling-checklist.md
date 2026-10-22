@@ -3,7 +3,8 @@
 > **状态：第 2、7 条已由 `docs/observed-dom-2026-10-10-authenticated.md` 回答，第 3 条由
 > `docs/observed-dom-2026-10-02-authenticated.md`（外层）与 `docs/observed-dom-2026-10-14-nested-quote.md`
 > （嵌套）回答——10-10 那篇把引用推文列在「未采到」里，所以别指望从它读结论；
-> 第 5 条 2026-10-21 部分回答（见该行）；其余仍未采到；「为什么」一列写的是采集当日的判据，
+> 第 5 条 2026-10-21 部分回答（见该行），**长文帖的列表视图形态由 `docs/observed-dom-2026-10-22-article-preview.md`
+> 回答**（见下表 3c），其余仍未采到；「为什么」一列写的是采集当日的判据，
 > 不是现行事实。**
 > 已经采到的场景在 `docs/observed-dom-*.md`（每篇开头有状态行），先看那里，再决定还差哪几条。
 
@@ -20,6 +21,7 @@
 | 2 | **纯图片（1~4 张）** | 基线，确认照片提取没被改坏 | 你截图里那个是混合，需另找一个纯图的 |
 | 3 | **引用推文** | 验证 `findQuoteContainer` 4 级 fallback + 媒体不串味 | ✅（红框「查看引用」那条） |
 | 3b | **嵌套引用（引用里的引用）** | 两级引用的容器形态**不同**：外层是 `role=link` 无 testid，内层是 `nestedQuotePreview`，媒体是 `nestedQuotePreviewMedia` 而非 `tweetPhoto` | ✅（2026-10-14，`observed-dom-2026-10-14-nested-quote.md`） |
+| 3c | **长文帖（列表视图的预览卡）** | 列表视图与状态页的文章标记**互不相交**：预览卡没有阅读视图，只有 `article-cover-image` | **已答（2026-10-22）**：结构与判据见 `docs/observed-dom-2026-10-22-article-preview.md`；仍缺 `outerHTML` |
 | 4 | **纯视频** | 确认修复合并后仍只返回 1 项 | 需另找 |
 | 5 | **推文串（≥3 条同作者）** | 验证 thread 边界判定 | **部分回答（2026-10-21）**：状态页 `/simonw/status/<id>` 的会话区有 5 条同作者链（载荷 `in_reply_to_status_id_str` 逐条相接），点根帖后卡片 `.thread-item = 5`，合并正确；`isThreadConnectedPair` 七条里没有一条误否真实配对，唯一的缺条出在载荷解析（见 `docs/observed-dom-2026-10-21-authenticated.md` §6）。**仍缺**：个人页/时间线上 ≥3 连发的样本（4 个账号 + 2 条搜索共 130+ 条，按载荷配对最长只有 2 连），以及这条 5 链的 `article` outerHTML 未采 |
 

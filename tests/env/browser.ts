@@ -163,6 +163,16 @@ class DomNode {
     return null;
   }
 
+  get nextElementSibling(): DomElement | null {
+    if (!this.parentNode) return null;
+    const siblings = this.parentNode.childNodes;
+    const index = siblings.indexOf(this);
+    for (let i = index + 1; i < siblings.length; i++) {
+      if (siblings[i] instanceof DomElement) return siblings[i] as DomElement;
+    }
+    return null;
+  }
+
   get textContent(): string {
     if (this.nodeType === DomNode.TEXT_NODE) {
       return this.nodeValue || '';

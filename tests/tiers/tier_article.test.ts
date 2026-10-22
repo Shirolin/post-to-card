@@ -21,9 +21,13 @@
  *   art.9  a tweet merely sharing someone else's article keeps the link
  *   art.10 a body that is only its own article link ends up empty in both fields
  *   art.11 the DOM lead is the article's first paragraph, not the whole prose
+ *   art.12 a list view's preview card is read even without a reading surface
+ *   art.13 the preview path drops the appended article link too
+ *   art.14 a quoted post's preview card is not this tweet's article
  *
- * Shapes come from a logged-in session on 2026-10-09; see
- * `docs/observed-dom-2026-10-09.md`.
+ * Shapes come from a logged-in session on 2026-10-09 (reading surface) and
+ * 2026-10-22 (list-view preview card); see `docs/observed-dom-2026-10-09.md`
+ * and `docs/observed-dom-2026-10-22-article-preview.md`.
  */
 
 import assert from 'node:assert/strict';
@@ -32,6 +36,7 @@ import { createSuite } from '../env/harness.ts';
 import { extractTweetData } from '../../src/content/adapter/extractor.ts';
 import { parseTweetDetailResponse } from '../../src/content/graphql/parse.ts';
 import { ARTICLE_TWEET_HTML } from '../fixtures/article-tweet.ts';
+import { ARTICLE_PREVIEW_TWEET_HTML } from '../fixtures/article-preview-tweet.ts';
 import { TWEET_DETAIL_ARTICLE_JSON } from '../fixtures/graphql.ts';
 import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
 
@@ -216,6 +221,64 @@ test('art.11: the DOM lead is the article\'s first paragraph, not the whole pros
     'the post embedded in the prose is not part of the lead');
   assert.doesNotMatch(tweet?.article?.openingLine || '', /Ref2Video/,
     'the rest of the article is not part of the lead');
+});
+
+test('art.12: a list view\'s preview card answers without a reading surface', () => {
+  // The home and profile timelines render an article as a preview card with no
+  // `twitterArticleReadView` and no `twitter-article-title`. Reading only the
+  // read view found nothing, so a real timeline post lost its article block.
+  const tweet = extractTweetData(createDomElement(ARTICLE_PREVIEW_TWEET_HTML));
+  assert.equal(tweet?.article?.title, '你的游戏，怎么才能被Steam算法看见');
+  assert.match(tweet?.article?.cover?.originalUrl || '', /HJ2xyzABC/, 'the preview cover is kept');
+  assert.match(tweet?.article?.cover?.url || '', /name=orig/, 'the cover is served at full size');
+  assert.equal(tweet?.article?.openingLine, undefined,
+    'the clamped excerpt is not the article\'s opening line');
+  // The cover is the article's, so it must not also arrive as tweet media and
+  // render a second time.
+  assert.equal(tweet?.media, undefined, 'the preview cover does not double as tweet media');
+});
+
+test('art.13: the preview path drops the appended article link from both fields', () => {
+  const tweet = extractTweetData(createDomElement(ARTICLE_PREVIEW_TWEET_HTML));
+  assert.ok(tweet?.article, 'the post carries an article');
+  assert.doesNotMatch(tweet?.text || '', /i\/article/, 'the plain text must not carry the link');
+  const tokenText = (tweet?.richTokens || []).map((token) => token.value).join('');
+  assert.doesNotMatch(tokenText, /i\/article/, 'the token list must not carry the link either');
+  assert.match(tweet?.text || '', /Steam的算法机制/, 'the author\'s own body survives');
+});
+
+test('art.14: a quoted post\'s preview card is not this tweet\'s article', () => {
+  // A quote can carry an article of its own, and its preview card sits inside
+  // the same outer article. Adopting it would give the outer post a cover and
+  // title it never had, exactly as the prose's embedded posts once did.
+  const html = `
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <div><span>Author</span></div>
+        <div><a href="/author"><span>@author</span></a></div>
+      </div>
+      <div data-testid="tweetText" lang="en"><span>look at this</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name">
+          <div><span>Other</span></div>
+          <div><a href="/other"><span>@other</span></a></div>
+        </div>
+        <div data-testid="tweetText" lang="en"><span>my article</span></div>
+        <div>
+          <div data-testid="article-cover-image">
+            <div><div><img alt="Article" src="https://pbs.twimg.com/media/HJ2quote?format=jpg&name=small" /></div></div>
+          </div>
+          <div>
+            <div><div>Quoted title</div></div>
+            <div><span>quoted excerpt</span></div>
+          </div>
+        </div>
+      </div>
+      <div role="group"><div data-testid="like"><span>1</span></div></div>
+    </article>`;
+  const tweet = extractTweetData(createDomElement(html));
+  assert.equal(tweet?.article, undefined, 'the quoted article is not this tweet\'s');
+  assert.equal(tweet?.quotePost?.text, 'my article', 'the quote itself still extracts');
 });
 
 export function runTierArticle() {

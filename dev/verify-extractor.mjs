@@ -46,6 +46,7 @@ const FIXTURES = [
   ['nested quote', 'tests/fixtures/nested-quote-preview.ts', 'NESTED_QUOTE_PREVIEW_HTML'],
   ['quote', 'tests/fixtures/quote-tweet.ts', 'QUOTE_TWEET_HTML'],
   ['article', 'tests/fixtures/article-tweet.ts', 'ARTICLE_TWEET_HTML'],
+  ['article preview', 'tests/fixtures/article-preview-tweet.ts', 'ARTICLE_PREVIEW_TWEET_HTML'],
 ];
 
 /** Pulls one fixture's HTML out of its TypeScript module. */

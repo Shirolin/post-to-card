@@ -7,6 +7,7 @@
  */
 
 import type { ThreadData, TweetData, QuoteTweetData } from '../../types/tweet.ts';
+import { stripTrailingArticleToken } from './emojis.ts';
 import { extractContinuousThread, TWEET_ARTICLE_SELECTOR } from './thread.ts';
 import { extractTweetData, extractTweetId } from './extractor.ts';
 import { lookupFromGraphQL, applyDomTranslation, initGraphQLBridge } from '../graphql/bridge.ts';
@@ -48,6 +49,41 @@ function backfillNestedQuote(
     timestamp: graphqlQuote.timestamp || domQuote.timestamp,
     quotePost: nested ?? graphqlQuote.quotePost ?? domQuote.quotePost,
   };
+}
+
+/**
+ * Fills in an article the payload left absent, from the copy X rendered.
+ *
+ * A detail payload can answer with the post's body but no usable article —
+ * missing, or a stub `parseArticle` cannot name — while the DOM still renders
+ * the article: the reading surface on a status page, the preview card in a
+ * list view. The payload wins the merge, so without this the card loses the
+ * cover and title AND keeps the `/i/article/` tail, because the parser only
+ * drops that link when the payload itself yielded an article. Detail payloads
+ * are tried in a fixed order, so whichever one answers first can be the one
+ * without it.
+ *
+ * The payload's own article shape on a logged-in session was not captured
+ * (2026-10-22); this backfill does not depend on knowing it.
+ *
+ * Same rule as `backfillNestedQuote`: GraphQL stays authoritative wherever it
+ * answered; only what it left absent is taken from the DOM.
+ */
+function backfillArticle(target: TweetData, domTweet: TweetData): void {
+  if (target.article || !domTweet.article) return;
+
+  target.article = domTweet.article;
+
+  // The body still ends with the article's `t.co` link, so drop the same tail
+  // the parser would have dropped had the payload carried the article. The
+  // token list is what the card prints; the text is its fallback when the list
+  // is empty, and the payload spells the tail as its `t.co` URL there.
+  const before = target.richTokens || [];
+  const after = stripTrailingArticleToken(before);
+  if (after && after.length !== before.length) {
+    target.text = target.text.replace(/\s*https:\/\/t\.co\/\w+\s*$/, '').trimEnd();
+  }
+  target.richTokens = after && after.length > 0 ? after : undefined;
 }
 
 /**
@@ -133,6 +169,7 @@ export function resolveThread(
             thread.tweets[thread.targetTweetIndex ?? 0];
           if (target) {
             target.quotePost = backfillNestedQuote(target.quotePost, domTweet.quotePost);
+            backfillArticle(target, domTweet);
           }
         }
       } catch {

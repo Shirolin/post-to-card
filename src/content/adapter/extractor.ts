@@ -836,12 +836,75 @@ function extractLinkCardMedia(
 }
 
 /**
+ * A picture element as the article's cover, or undefined.
+ *
+ * The cover arrives in two shapes — the read view's `tweetPhoto` and the
+ * preview card's own picture — but what makes it usable is the same rule, so
+ * it is stated once here.
+ */
+function coverFromImage(img: Element | null): MediaItem | undefined {
+  if (!img) return undefined;
+  const src = img.getAttribute('src') || '';
+  if (!src || src.includes('profile_images') || src.includes('/emoji/')) return undefined;
+
+  const imgEl = img as unknown as { naturalWidth?: number; naturalHeight?: number };
+  const w = imgEl.naturalWidth || Number.parseFloat(img.getAttribute('width') || '0') || 0;
+  const h = imgEl.naturalHeight || Number.parseFloat(img.getAttribute('height') || '0') || 0;
+
+  return {
+    type: 'image',
+    url: upgradePhotoUrl(src),
+    originalUrl: src,
+    alt: img.getAttribute('alt') || undefined,
+    aspectRatio: (w > 0 && h > 0) ? Number((w / h).toFixed(3)) : undefined,
+  };
+}
+
+const ARTICLE_PREVIEW_COVER = '[data-testid="article-cover-image"]';
+
+/**
+ * The article preview card a list view renders, or undefined.
+ *
+ * A status page renders the article's reading surface inline; a list view
+ * (profile, home) renders a preview card instead — a cover, then the title and
+ * X's excerpt — and that card carries neither `twitterArticleReadView` nor
+ * `twitter-article-title`. Reading only the read view found no article there:
+ * the card lost its title and cover, and kept the `/i/article/` tail X appends
+ * to the post's body.
+ *
+ * The cover wrapper is the card's only article marker; the title and excerpt
+ * follow the cover in that order inside one box. Measured 2026-10-22 (see
+ * `docs/observed-dom-2026-10-22-article-preview.md`). Nothing here reads the
+ * badge's wording ("文章" / "Article"), which is localized.
+ *
+ * `openingLine` is deliberately not filled: X's excerpt is clamped to a few
+ * lines with an ellipsis, not the article's opening line, and the post's own
+ * body is the lead whenever it says anything.
+ */
+function extractArticlePreview(article: Element, ownership: TweetOwnership): ArticleData | undefined {
+  const coverBox = Array.from(article.querySelectorAll(ARTICLE_PREVIEW_COVER)).find(
+    (el) => ownerOf(el, ownership).post === 'tweet'
+  );
+  if (!coverBox) return undefined;
+
+  const textBox = coverBox.nextElementSibling;
+  const title = (textBox?.children?.[0]?.textContent || '').trim();
+
+  // A preview with no title says nothing about the article; the card would
+  // gain a cover it cannot name.
+  if (!title) return undefined;
+
+  return { title, cover: coverFromImage(coverBox.querySelector('img')) };
+}
+
+/**
  * Extracts the attached article of a long-form post, or undefined.
  *
  * The reading view is the anchor: a tweet either has one or does not, and the
  * title lives under its own testid. The cover is deliberately taken from the
  * read view's own `tweetPhoto` rather than from the prose, because the prose
  * embeds other posts whose pictures would otherwise be adopted as the cover.
+ * List views have no read view; there the preview card answers instead.
  *
  * Nothing here reads interface wording. X's `alt` text on the cover is
  * localized ("图像" in a Chinese session), so a marker built on it would break
@@ -849,7 +912,7 @@ function extractLinkCardMedia(
  */
 function extractArticle(article: Element, ownership: TweetOwnership): ArticleData | undefined {
   const readView = findArticleReadView(article);
-  if (!readView) return undefined;
+  if (!readView) return extractArticlePreview(article, ownership);
 
   const titleEl = readView.querySelector('[data-testid="twitter-article-title"]');
   const title = (titleEl?.textContent || '').trim();
@@ -879,24 +942,8 @@ function extractArticle(article: Element, ownership: TweetOwnership): ArticleDat
   const coverImg = Array.from(readView.querySelectorAll('div[data-testid="tweetPhoto"] img')).find(
     (img) => !ownerOf(img, ownership).inArticleBody
   );
-  let cover: MediaItem | undefined;
-  if (coverImg) {
-    const src = coverImg.getAttribute('src') || '';
-    if (src && !src.includes('profile_images') && !src.includes('/emoji/')) {
-      const imgEl = coverImg as unknown as { naturalWidth?: number; naturalHeight?: number };
-      const w = imgEl.naturalWidth || Number.parseFloat(coverImg.getAttribute('width') || '0') || 0;
-      const h = imgEl.naturalHeight || Number.parseFloat(coverImg.getAttribute('height') || '0') || 0;
-      cover = {
-        type: 'image',
-        url: upgradePhotoUrl(src),
-        originalUrl: src,
-        alt: coverImg.getAttribute('alt') || undefined,
-        aspectRatio: (w > 0 && h > 0) ? Number((w / h).toFixed(3)) : undefined,
-      };
-    }
-  }
 
-  return { title, cover, openingLine: openingLine || undefined };
+  return { title, cover: coverFromImage(coverImg || null), openingLine: openingLine || undefined };
 }
 
 /**

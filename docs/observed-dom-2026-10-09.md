@@ -94,6 +94,12 @@ result.article.article_results.result = {
 DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一个 media id**，
 两条通道对同一张图的说法一致——这是判据可信的硬证据。
 
+> **2026-10-22 补记**：列表视图的预览卡（见
+> `docs/observed-dom-2026-10-22-article-preview.md`）之外，还有一处载荷侧的缺口：失败的卡片正文带着
+> `/i/article/` 尾链，而时间线 DOM 里没有这条链接，说明正文来自载荷、而那份载荷的 `article` 没能
+> 读成文章（缺失或存根，登录态未采到）。卡片现在由 `resolver.ts` 的 `backfillArticle` 从 DOM 兜底，
+> `res.15` 锁住。
+
 ## 尚未覆盖
 
 - **时间线/搜索结果**：采集时 `bridge.ts` 只监听 `TweetDetail` 与 `TweetResultByRestId`，
@@ -101,6 +107,8 @@ DOM 的封面 `HUIxgCnWEAEUKgI` 与 GraphQL 的 `original_img_url` 是**同一�
   本次修的是 DOM 通道，因此时间线路径**应该**已经可用，但**未在真实时间线上验过**。
   （拦截名单此后已扩到列表类 operation，见 `src/content/graphql/operations.ts`；本快照只记
   采集当日的事实。）
+  **2026-10-22 更正**：列表视图不是同一个形态——它渲染预览卡，没有阅读视图，所以上面这句
+  「应该已经可用」是错的。见 `docs/observed-dom-2026-10-22-article-preview.md`。
 - 文章正文里嵌入的视频（`amplify_video_thumb`）在卡片上的呈现：本次判定为文章内容而排除，
   若将来要展示需要单独设计。
 
