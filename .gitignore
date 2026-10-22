@@ -7,6 +7,8 @@ dist/
 dist-harness/
 build/
 *.tsbuildinfo
+# Vite's own cache directory, when it is not inside node_modules
+.vite/
 
 # Subagent teamwork & internal logs
 .agents/
@@ -30,6 +32,12 @@ build/
 /scratch-*
 /zz_*
 /tests/zz_*
+
+# Local scratch that agents are told to keep in the repo: probe scripts,
+# screenshots and intermediate output from a run. Never part of a build.
+/.tmp/
+/probes/
+/*-runs/
 
 # Logs
 logs
@@ -73,5 +81,9 @@ coverage/
 # Temporary and cache
 .cache/
 .temp/
-.tmp/
 *.tmp
+
+# Package managers: the repo installs with pnpm. A lockfile from another one is
+# a second source of truth for the dependency graph, not a thing to commit.
+yarn.lock
+package-lock.json
