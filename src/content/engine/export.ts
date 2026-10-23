@@ -10,7 +10,7 @@
 import { domToBlob } from 'modern-screenshot';
 import type { ExtensionResponse } from '../../types/messages.ts';
 import { IMAGE_PROXY_BUDGET_MS } from '../../background/proxy.ts';
-import { DEFAULT_AVATAR_SRC } from '../ui/imageFallback.ts';
+import { DEFAULT_AVATAR_SRC, EXPORT_SWAP_ATTR } from '../ui/imageFallback.ts';
 import {
   defaultExportScale,
   fitScaleToCanvas,
@@ -257,6 +257,9 @@ export async function prepareCardImages(cardElement: HTMLElement): Promise<CardI
       } catch {
         // Nothing to restore on a node that can no longer take a src.
       }
+      // Cleared after the src is back, so the card's own handlers see the
+      // picture as its own again from the moment the restore lands.
+      item.img.removeAttribute(EXPORT_SWAP_ATTR);
     }
   };
 
@@ -295,6 +298,10 @@ export async function prepareCardImages(cardElement: HTMLElement): Promise<CardI
       const item = pending[next++];
       const result = await resolveSrc(item.src);
       if (!result.ok) failedUrls.add(item.src);
+      // Marked before the write: the load this triggers is the stand-in
+      // decoding, not the picture arriving, and the card must not take it for
+      // an arrival (see `EXPORT_SWAP_ATTR`).
+      item.img.setAttribute(EXPORT_SWAP_ATTR, 'true');
       item.img.src = result.ok ? result.src : failedImageSrc(item.img);
     }
   };

@@ -168,10 +168,10 @@ await vite.listen();
 const debugPort = await freePort();
 const profile = mkdtempSync(join(tmpdir(), 'ptc-motion-'));
 const headedByFlag = process.env.PTC_HEADED;
-const headed =
-  headedByFlag === undefined
-    ? process.platform === 'win32' || process.platform === 'darwin' || !!process.env.DISPLAY
-    : headedByFlag === '1';
+// Headless by default: this is a check, and a window that another window covers
+// is a window Chrome may stop drawing -- which turns "the animation did not run"
+// into a flaky verdict. `PTC_HEADED=1` opens it, for watching the motion happen.
+const headed = headedByFlag === '1';
 
 console.log(`chrome    ${chrome}${headed ? '' : ' (headless)'}`);
 console.log(`page      http://127.0.0.1:${vitePort}/probe-motion.html`);
@@ -206,6 +206,9 @@ try {
     const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
     const tab = await cdp.attach(targetId);
     await cdp.send('Page.enable', {}, tab);
+    // A tab the browser considers hidden does not get frames, and this probe is
+    // made of frames.
+    await cdp.send('Page.bringToFront', {}, tab);
     // This machine reports "reduce animations" at the OS level, and the dialog's
     // global rule flattens every duration to 0.01ms under it -- correct
     // behaviour, useless for measuring motion. The preference is faked instead.
@@ -226,20 +229,23 @@ try {
       tab,
       'matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduce" : "no-preference"'
     );
+    const pageLog = probe ? '' : await cdp.eval(tab, 'document.querySelector("#out")?.textContent || ""');
     await cdp.send('Target.closeTarget', { targetId });
-    if (!probe) throw new Error('the probe never finished; a page error is in the log');
+    if (!probe) throw new Error(`the probe never finished. Last page log:\n${pageLog}`);
     if (probe.error) throw new Error(probe.error);
     return { probe, reduced };
   };
 
-  console.log('post reorder (three posts, one removed)');
+  console.log('post reorder: three posts, one removed, down to one, then back');
   {
     const { probe, reduced } = await runMode('mode=flip');
     check('the machine really is running the animations', reduced === 'no-preference', reduced);
-    check('three posts to start with', probe.before.posts.length === 3, String(probe.before.posts.length));
-    check('two posts after excluding one', probe.atCommit.posts.length === 2, String(probe.atCommit.posts.length));
 
-    const displaced = probe.atCommit.posts
+    const a = probe.a;
+    check('three posts to start with', a.before.posts.length === 3, String(a.before.posts.length));
+    check('two posts after excluding one', a.atCommit.posts.length === 2, String(a.atCommit.posts.length));
+
+    const displaced = a.atCommit.posts
       .map((p) => ({ ...p, shift: matrix(p.transform).ty }))
       .filter((p) => p.shift > 1);
     check(
@@ -247,37 +253,86 @@ try {
       displaced.length === 1,
       displaced.map((p) => `${p.id} +${Math.round(p.shift)}px`).join(', ')
     );
-    check('the list is clipped while posts travel', probe.atCommit.listOverflow === 'hidden', probe.atCommit.listOverflow);
+    check(
+      'a post that stays keeps its own DOM, not a neighbour’s',
+      a.before.posts.find((p) => p.id === 't3')?.tag ===
+        a.settled.posts.find((p) => p.id === 't3')?.tag,
+      `t3 ${a.before.posts.find((p) => p.id === 't3')?.tag} → ${a.settled.posts.find((p) => p.id === 't3')?.tag}`
+    );
+    check('the list is clipped while posts travel', a.atCommit.listOverflow === 'hidden', a.atCommit.listOverflow);
 
     const startShift = displaced[0]?.shift ?? 0;
-    const midPost = probe.samples.some((s) => {
+    const midPost = a.samples.some((s) => {
       const shift = Math.max(...s.posts.map((p) => matrix(p.transform).ty));
       return shift > 0.5 && shift < startShift * 0.9;
     });
     check('the displaced post is seen in flight', midPost, `${Math.round(startShift)}px start`);
 
-    const startScale = probe.atCommit.scaleTransform;
-    const midScale = probe.samples
+    const midScale = a.samples
       .map((s) => matrix(s.scaleTransform).a)
-      .filter((a) => a > 0.05 && a < 0.995);
-    check('the card re-fits as an animation, not a jump', midScale.length > 0,
-      startScale === '-' ? 'scale only after the re-fit' : midScale.slice(0, 4).join(' → '));
+      .filter((v) => v > 0.05 && v < 0.995);
+    check('the card re-fits as an animation, not a jump', midScale.length > 0, midScale.slice(0, 4).join(' → '));
     check(
       'the scale is replayed from the card top centre',
-      probe.samples.some((s) => s.scaleOrigin.startsWith('50%')) || probe.atCommit.scaleOrigin.startsWith('50%'),
-      probe.atCommit.scaleOrigin || probe.samples.find((s) => s.scaleOrigin)?.scaleOrigin || ''
+      [...a.samples, a.atCommit].some((s) => s.scaleOrigin.startsWith('50%')),
+      a.atCommit.scaleOrigin || a.samples.find((s) => s.scaleOrigin)?.scaleOrigin || ''
     );
 
     check(
       'everything lands exactly where the layout put it',
-      probe.settled.posts.every((p) => p.transform === '-') && probe.settled.scaleTransform === '-',
-      probe.settled.posts.map((p) => p.transform).join(', ')
+      a.settled.posts.every((p) => p.transform === '-') && a.settled.scaleTransform === '-',
+      a.settled.posts.map((p) => p.transform).join(', ')
     );
-    check('the clip is released afterwards', probe.settled.listOverflow === '', `"${probe.settled.listOverflow}"`);
+    check('the clip is released afterwards', a.settled.listOverflow === '', `"${a.settled.listOverflow}"`);
     check(
       'the card re-fitted to its new height',
-      probe.settled.zoom > probe.before.zoom,
-      `${probe.before.zoom} → ${probe.settled.zoom}`
+      a.settled.zoom > a.before.zoom,
+      `${a.before.zoom} → ${a.settled.zoom}`
+    );
+    check(
+      'and is shorter by the post it lost',
+      a.settled.height < a.before.height,
+      `${a.before.height} → ${a.settled.height}`
+    );
+
+    // 2 → 1: the card becomes one post, which is a different tree. There is
+    // nothing inside it to move, and the card itself must still re-fit.
+    const b = probe.b;
+    check('a one-post card draws no posts to move', b.settled.posts.length === 0, String(b.settled.posts.length));
+    check('and it is the single-post layout', b.settled.single === true, String(b.settled.single));
+    check(
+      'nothing inside it is displaced or faded',
+      b.settled.singleStyle?.transform === '' && b.settled.singleStyle?.opacity === '',
+      JSON.stringify(b.settled.singleStyle)
+    );
+    check(
+      'but the card itself still re-fits',
+      b.settled.height < b.before.height && b.settled.zoom !== b.before.zoom,
+      `${b.before.zoom} → ${b.settled.zoom}`
+    );
+
+    // 1 → 2: only the post that came back is new. Decided by which posts were
+    // on the card, not by which ones were measured -- the old card measured none.
+    const c = probe.c;
+    const stayed = c.atCommit.posts.find((p) => p.id === 't1');
+    // Which post comes back is the panel's business; what matters is that the
+    // one that was already on the card is not treated as new, and the other is.
+    const fading = c.atCommit.posts.filter((p) => Number(p.opacity) <= 0.05);
+    check('the restored post comes back', c.atCommit.posts.length === 2, String(c.atCommit.posts.length));
+    check(
+      'the post that was already on the card does not fade',
+      Number(stayed?.opacity) >= 0.95,
+      String(stayed?.opacity)
+    );
+    check(
+      'only the post that returned fades in',
+      fading.length === 1 && fading[0].id !== 't1',
+      c.atCommit.posts.map((p) => `${p.id}:${p.opacity}`).join(', ')
+    );
+    check(
+      'and both end fully opaque',
+      c.settled.posts.every((p) => Number(p.opacity) >= 0.99),
+      c.settled.posts.map((p) => p.opacity).join(', ')
     );
   }
 
@@ -303,6 +358,17 @@ try {
       mid.slice(0, 4).join(' → '));
     check('the placeholder ends hidden', fade.at(-1) === 0, String(fade.at(-1)));
     check('and the cell knows its picture arrived', probe.loadedClass.includes('is-picture-loaded'), probe.loadedClass);
+
+    check(
+      "the exporter's stand-in is not taken for the picture",
+      probe.exportSwap.loadedByExport === false,
+      probe.exportSwap.class
+    );
+    check(
+      'and the cell is still waiting once the sources are put back',
+      probe.exportSwap.stillWaiting === true,
+      probe.exportSwap.class
+    );
   }
 } catch (err) {
   console.error(`\nverification threw: ${err && err.message ? err.message : err}`);

@@ -17,6 +17,7 @@ import {
   avatarFallbackAttrs,
   advanceImageFallback,
   DEFAULT_AVATAR_SRC,
+  EXPORT_SWAP_ATTR,
 } from './imageFallback.ts';
 import { threadSession } from '../threadSession.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
@@ -174,9 +175,14 @@ function renderRichTokens(
  * coming, and a block that goes on breathing would claim otherwise. The chain
  * carries its own ending (it is the attribute that disappears), so "exhausted"
  * is read off the element after the walk, not reconstructed here.
+ *
+ * An error the exporter caused is skipped: it rewrites the card's sources while
+ * it prepares a render, and a failure there says nothing about the picture the
+ * preview is showing.
  */
 function handleImageError(event: JSX.TargetedEvent<HTMLImageElement>) {
   const img = event.currentTarget;
+  if (img.hasAttribute(EXPORT_SWAP_ATTR)) return;
   advanceImageFallback(img);
   if (img.getAttribute('data-fallback') === null && img.naturalWidth === 0) {
     const cell = img.closest ? (img.closest('.media-box') as HTMLElement | null) : null;
@@ -223,11 +229,15 @@ function renderMediaGrid(
   // shape it reported, re-plan, and write the plan back. The plan takes the
   // picture's own shape; only the lone-cover floor above can overrule it.
   const settleGrid = (imgEl: HTMLImageElement, index: number) => {
+    // A load the exporter caused is not the picture arriving: it swapped the
+    // src for a data URL to keep the canvas origin-clean, and will put the real
+    // one back. Recording its shape (the grey stand-in is 1:1) or calling the
+    // cell loaded would outlive the export.
+    if (imgEl.hasAttribute(EXPORT_SWAP_ATTR)) return;
     // The photograph has painted, so the cell's placeholder has done its job.
-    // The mark goes on the cell, never on the picture: the picture is what the
-    // exporter rasterizes, and its opacity may not depend on what the preview
-    // happens to have loaded. The placeholder is excluded from the export, so
-    // the mark only ever reaches a node that is not drawn there.
+    // The mark goes on the cell rather than on the picture because the
+    // placeholder is the cell's child; the picture itself never carries preview
+    // state, since it is the node the exporter draws.
     const cell = imgEl.closest ? (imgEl.closest('.media-box') as HTMLElement | null) : null;
     if (cell) cell.classList.add('is-picture-loaded');
     if (!imgEl.naturalWidth || !imgEl.naturalHeight) return;
@@ -905,15 +915,23 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
           <div class="thread-list">
             {effectiveTweets.map((tweet, index) => {
               const isLast = index === effectiveTweets.length - 1;
-              return renderThreadTweet(
-                tweet,
-                isLast,
-                config,
-                t,
-                imageFit,
-                mediaLayout,
-                onExcludeTweet,
-                session.canExcludeMore
+              // Keyed by the post, not by its slot: unkeyed children let Preact
+              // reuse one post's DOM for whichever post lands there next, and
+              // the marks written on that DOM (a cell's picture arrived, a
+              // failed chain) then belong to a picture it no longer holds.
+              return (
+                <Fragment key={tweet.id ?? `position-${index}`}>
+                  {renderThreadTweet(
+                    tweet,
+                    isLast,
+                    config,
+                    t,
+                    imageFit,
+                    mediaLayout,
+                    onExcludeTweet,
+                    session.canExcludeMore
+                  )}
+                </Fragment>
               );
             })}
           </div>

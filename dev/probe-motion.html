@@ -116,6 +116,7 @@
             const scale = scope.querySelector('.preview-scale');
             const card = scope.querySelector('#post-to-card-export-target');
             const list = scope.querySelector('.thread-list');
+            const single = scope.querySelector('.single-tweet-block');
             return {
               zoom: scale ? Number(Number(scale.style.zoom).toFixed(4)) : null,
               scaleTransform: scale ? short(getComputedStyle(scale).transform) : null,
@@ -123,46 +124,80 @@
               scaleOrigin: scale ? scale.style.transformOrigin || '' : '',
               height: card ? card.offsetHeight : null,
               listOverflow: list ? list.style.overflow || '' : '',
+              single: Boolean(single),
+              singleStyle: single
+                ? { transform: single.style.transform || '', opacity: single.style.opacity || '' }
+                : null,
               posts: Array.from(scope.querySelectorAll('[data-tweet-id]')).map((item) => ({
                 id: item.dataset.tweetId,
+                // Written once, below, so a post that keeps its own DOM across a
+                // reorder can be told apart from one drawn into a neighbour's.
+                tag: item.dataset.probeTag || '',
                 top: Math.round(item.offsetTop),
                 transform: short(getComputedStyle(item).transform),
+                opacity: Number(getComputedStyle(item).opacity).toFixed(2),
               })),
             };
           };
 
           // Let the first measurement settle, then take the "before" reading.
           await frames(300);
-          const before = snap();
-          say(`before  ${JSON.stringify(before)}`);
+          // Names each post's DOM node, so a later snapshot can say whether the
+          // post kept its own node or was drawn into a neighbour's.
+          scope.querySelectorAll('[data-tweet-id]').forEach((item) => {
+            item.dataset.probeTag = `node-${item.dataset.tweetId}`;
+          });
 
-          const exclude = scope.querySelectorAll('.thread-exclude-btn')[1];
-          if (!exclude) throw new Error('no exclude button on the second post');
-          exclude.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-          // Preact commits a click-triggered state change at the end of the
-          // dispatch; the layout effects have run by the second microtask, and
-          // the frame that follows is the first one a FLIP can start on.
-          await Promise.resolve();
-          await Promise.resolve();
-          const atCommit = snap();
-          say(`commit  ${JSON.stringify(atCommit)}`);
-
-          const samples = [];
-          const sampleFor = async (ms) => {
+          /**
+           * One gesture, sampled the way a FLIP has to be: the state the click
+           * lands in (a couple of microtasks after the dispatch, before any
+           * frame), then every frame until it settles.
+           */
+          const gesture = async (trigger, ms = 700) => {
+            const before = snap();
+            trigger();
+            await Promise.resolve();
+            await Promise.resolve();
+            const atCommit = snap();
+            const samples = [];
             const start = performance.now();
             while (performance.now() - start < ms) {
               await new Promise((resolve) => requestAnimationFrame(resolve));
               samples.push(snap());
             }
+            return { before, atCommit, samples, settled: snap() };
           };
-          await sampleFor(700);
-          const settled = snap();
-          say(`settled ${JSON.stringify(settled)}`);
+          const click = (element) => {
+            if (!element) throw new Error('nothing to click');
+            element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          };
 
-          window.__motionProbe = { mode, before, atCommit, samples, settled };
+          const report = (label, g) => {
+            say(`${label} before  ${JSON.stringify(g.before)}`);
+            say(`${label} commit  ${JSON.stringify(g.atCommit)}`);
+            say(`${label} settled ${JSON.stringify(g.settled)}`);
+          };
+
+          // 3 → 2: the posts below move, and the card re-fits.
+          const a = await gesture(() => click(scope.querySelectorAll('.thread-exclude-btn')[1]));
+          report('a', a);
+
+          // 2 → 1: the card becomes a single post, which draws no measured
+          // items. Nothing inside it can move; only the card may re-fit.
+          const b = await gesture(() => click(scope.querySelectorAll('.thread-exclude-btn')[1]));
+          report('b', b);
+
+          // 1 → 2: the post coming back is new; the post that stayed is not.
+          // The last excluded one, i.e. the one this card's own button removed.
+          const c = await gesture(() =>
+            click(Array.from(scope.querySelectorAll('.tweet-manager-item.is-excluded')).at(-1))
+          );
+          report('c', c);
+
+          window.__motionProbe = { mode, a, b, c };
         } else {
-          // A picture that never arrives, and one that fails outright.
+          // A picture that never arrives, one that fails outright, and one whose
+          // cell is put through the exporter's real source swap.
           const slow = params.get('slow') || 'http://10.255.255.1/never.jpg';
           const missing = params.get('missing') || 'http://10.255.255.1/missing.jpg';
           const root = document.createElement('div');
@@ -178,6 +213,10 @@
                 }),
                 h(Card, {
                   data: { author, isSingle: true, tweets: [post('missing', [{ type: 'image', url: missing, aspectRatio: 1.6 }])] },
+                  config,
+                }),
+                h(Card, {
+                  data: { author, isSingle: true, tweets: [post('swap', [{ type: 'image', url: slow + '?swap', aspectRatio: 1.6 }])] },
                   config,
                 }),
               ]
@@ -217,6 +256,23 @@
           say(`fade ${JSON.stringify(fade)}`);
           say(`loaded cell ${cells[0].className}`);
 
+          // What a render preparation does to a cell that is still waiting: it
+          // swaps the source for a stand-in, then puts the original back. The
+          // stand-in loads, and must not be mistaken for the picture arriving.
+          // Run against the real preparation, not a re-enactment of it: with no
+          // extension messaging in this page, its proxy call fails at once, which
+          // is exactly the path that substitutes the grey placeholder.
+          const { prepareCardImages } = await import('../src/content/engine/export.ts');
+          const swapCell = cells[2];
+          const swapCard = root.querySelectorAll('.ptc-mat')[2];
+          const preparation = await prepareCardImages(swapCard);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const loadedByExport = swapCell.className.includes('is-picture-loaded');
+          preparation.restore();
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const stillWaiting = !swapCell.className.includes('is-picture-loaded');
+          say(`export swap: loaded=${loadedByExport} stillWaiting=${stillWaiting} class=${swapCell.className}`);
+
           window.__motionProbe = {
             mode,
             waiting,
@@ -224,6 +280,11 @@
             fade,
             failureClass,
             loadedClass: cells[0].className,
+            exportSwap: {
+              loadedByExport,
+              stillWaiting,
+              class: swapCell.className,
+            },
           };
         }
       } catch (err) {

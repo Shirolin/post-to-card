@@ -36,10 +36,10 @@ headless 会被 x.com 403）。
 这个脚本补上那一段，且不碰 x.com。
 
 **验预览的动效**用 `node dev/verify-motion.mjs`：它起 vite 与 Chrome，把真实的 `App`/`Card`
-挂进 `dev/probe-motion.html`，做一次手势并逐帧断言（排除推文时的两层 FLIP、占位块的脉动/淡出/
-失败停表）。浏览器面板里的页面**不跑渲染帧**（`rAF` 不推进、过渡停在起点、`ResizeObserver`
-不投递），截图和 tiers 都看不到这些，所以动 `App.tsx` 的 fit/FLIP 或 `Card.tsx` 的图片路径时
-要跑它。它不在 `npm test` 里：判据是时序，忙的机器会假红。
+挂进 `dev/probe-motion.html`，做三次手势并逐帧断言（排除推文的两层 FLIP 与 1↔2 边界、占位块的
+脉动/淡出/失败停表、导出换源不会被当成图片到达）。浏览器面板里的页面**不跑渲染帧**（`rAF`
+不推进、过渡停在起点、`ResizeObserver` 不投递），截图和 tiers 都看不到这些，所以动 `App.tsx`
+的 fit/FLIP 或 `Card.tsx` 的图片路径时要跑它。它不在 `npm test` 里：判据是时序，忙的机器会假红。
 
 ## 架构决定
 

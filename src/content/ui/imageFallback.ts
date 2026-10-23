@@ -31,6 +31,24 @@ import { getPhotoFallbackChain } from '../adapter/urls.ts';
 const FALLBACK_ATTR = 'data-fallback';
 
 /**
+ * Marks an `<img>` whose `src` is the exporter's temporary stand-in rather than
+ * the picture the card is showing.
+ *
+ * The export has to rewrite the live card's sources to data URLs before it
+ * clones the card (canvas origin rules), and it puts the originals back in a
+ * `finally`. Between those two moments the swap looks exactly like a picture
+ * arriving: the grey placeholder the exporter substitutes for a failed picture
+ * is a data URL that loads, so its `load` handler fires. Anything the card
+ * infers from a load -- "this cell has its picture", "the picture is 1:1, re-plan
+ * the grid" -- would then be inferred from the stand-in and never undone.
+ *
+ * Defined here rather than in the export engine because both sides need the
+ * name and this module is already the one that owns the attributes card images
+ * carry. The engine imports it; the UI never imports the engine.
+ */
+export const EXPORT_SWAP_ATTR = 'data-export-swap';
+
+/**
  * The silhouette the card shows for an author whose picture is not available.
  *
  * It is the terminal of the avatar fallback chain and also what an author with

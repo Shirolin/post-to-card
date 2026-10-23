@@ -52,8 +52,32 @@ const THREAD_FLIP_MS = 220;
  * order. Used to tell "the card now holds different posts" from "some other
  * option changed", which is the only question the flip animation asks.
  */
-function exclusionKey(ids: string[] | undefined): string {
+function exclusionSignature(ids: string[] | undefined): string {
   return [...(ids ?? [])].sort().join('|');
+}
+
+/**
+ * Writes a start value, lets the browser keep it, then transitions to the end
+ * value.
+ *
+ * The style read in the middle is the whole trick: without it the two writes
+ * collapse before the next style pass, there is no "from" to interpolate, and
+ * the property simply lands where it was going. Every FLIP here needs the same
+ * three beats, so they live in one place.
+ */
+function playFrom(
+  element: HTMLElement,
+  start: Partial<CSSStyleDeclaration>,
+  end: Partial<CSSStyleDeclaration>,
+  transition: string
+): void {
+  element.style.transition = 'none';
+  Object.assign(element.style, start);
+  // Forces a style recalculation, which is what makes `start` the value the
+  // transition below begins from.
+  void element.offsetWidth;
+  element.style.transition = transition;
+  Object.assign(element.style, end);
 }
 
 export interface AppProps {
@@ -401,13 +425,18 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   }, []);
 
   /**
-   * Where each post sat before the tweet set changed, in the card's own pixels.
+   * What the card looked like before the tweet set changed.
    *
-   * The card is a column of posts, so removing one makes every post below it
-   * jump up by the removed height in a single frame -- the one edit in this
-   * panel whose result is a *different layout* rather than a different value.
-   * A FLIP animation turns that jump into a move: measure the old position here,
-   * before the render that moves them, and replay it from there afterwards.
+   * `positions` is where each post sat, in the card's own pixels: the card is a
+   * column, so removing one makes every post below it jump up by the removed
+   * height in a single frame -- the one edit in this panel whose result is a
+   * *different layout* rather than a different value. Measuring before the render
+   * and replaying afterwards turns that jump into a move.
+   *
+   * `showing` is which posts were on the card, and it is a separate answer on
+   * purpose: "was this post here before" cannot be read off the measurement,
+   * because a one-post card renders no measured items at all. Restoring a post
+   * would then treat the post that was already on screen as new and fade it in.
    *
    * `offsetTop`, not `getBoundingClientRect`: the stage zooms the card, and a
    * rect arrives multiplied by that zoom (and carrying any transform on an
@@ -415,7 +444,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * has to be expressed in, and transforms do not change them, so the same
    * number is correct on both sides of the measurement.
    */
-  const threadFlipRef = useRef<Map<string, number> | null>(null);
+  const threadFlipRef = useRef<{ positions: Map<string, number>; showing: Set<string> } | null>(null);
 
   const snapshotThreadItems = (): Map<string, number> => {
     const snapshot = new Map<string, number>();
@@ -432,8 +461,15 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     // Only a change to *which* posts are in the card moves the ones that stay.
     // Compared by set rather than by array, because the same exclusions in a
     // different order are the same card and must not animate.
-    if (exclusionKey(newConfig.excludedTweetIds) !== exclusionKey(config.excludedTweetIds)) {
-      threadFlipRef.current = snapshotThreadItems();
+    if (exclusionSignature(newConfig.excludedTweetIds) !== exclusionSignature(config.excludedTweetIds)) {
+      threadFlipRef.current = {
+        positions: snapshotThreadItems(),
+        showing: new Set(
+          threadSession(threadData, config.excludedTweetIds)
+            .showing.map((tweet) => tweet.id)
+            .filter((id): id is string => Boolean(id))
+        ),
+      };
     }
     setConfig(newConfig);
     setInjectedButtonVisibility(newConfig.showActionBarButton !== false);
@@ -448,11 +484,14 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * and then jump back, which is the jump this exists to remove. Mount passes
    * through with nothing to play.
    *
-   * The moving posts are offset by the distance they were displaced and eased
-   * back to zero. A post that just joined the card has no old position to come
-   * from, so it fades in where the layout already put it.
+   * A post that was already on the card is offset by the distance it was
+   * displaced and eased back to zero; a post that just joined has no old place to
+   * come from, so it fades in where the layout already put it. A post that was
+   * already there but has no measured position is left alone -- that is the
+   * single-post layout, which draws no posts to measure and changes shape rather
+   * than moving anything.
    */
-  const exclusionKeyValue = exclusionKey(config.excludedTweetIds);
+  const exclusionSignatureValue = exclusionSignature(config.excludedTweetIds);
   useLayoutEffect(() => {
     const before = threadFlipRef.current;
     threadFlipRef.current = null;
@@ -468,11 +507,12 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     card.querySelectorAll<HTMLElement>('[data-tweet-id]').forEach((item) => {
       const id = item.dataset.tweetId;
       if (!id) return;
-      const from = before.get(id);
-      if (from === undefined) {
+      if (!before.showing.has(id)) {
         moves.push({ item, shift: null });
         return;
       }
+      const from = before.positions.get(id);
+      if (from === undefined) return;
       const shift = from - item.offsetTop;
       if (Math.abs(shift) >= 1) moves.push({ item, shift });
     });
@@ -482,23 +522,16 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     if (list) list.style.overflow = 'hidden';
 
     moves.forEach(({ item, shift }) => {
-      item.style.transition = 'none';
       if (shift === null) {
-        // A post that just joined the card has no old place to come from, so it
-        // fades in where the layout already put it.
-        item.style.opacity = '0';
-      } else {
-        item.style.transform = `translateY(${shift}px)`;
+        playFrom(item, { opacity: '0' }, { opacity: '' }, `opacity ${THREAD_FLIP_MS}ms ease-out`);
+        return;
       }
-      // Forces the displaced style to be the one the transition starts from;
-      // without the read the two writes collapse and nothing animates.
-      void item.offsetTop;
-      item.style.transition =
-        shift === null
-          ? `opacity ${THREAD_FLIP_MS}ms ease-out`
-          : `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`;
-      item.style.transform = '';
-      item.style.opacity = '';
+      playFrom(
+        item,
+        { transform: `translateY(${shift}px)` },
+        { transform: '' },
+        `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`
+      );
     });
 
     if (list) {
@@ -508,7 +541,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
         list.style.overflow = '';
       }, THREAD_FLIP_MS + 60);
     }
-  }, [exclusionKeyValue]);
+  }, [exclusionSignatureValue]);
 
   /**
    * The card's own last fitted geometry: the height it had, and the zoom `fit`
@@ -539,13 +572,12 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     // Top centre: the stage centres the card horizontally and starts it at the
     // top, so that is the point the picture appears to scale around.
     element.style.transformOrigin = '50% 0';
-    element.style.transition = 'none';
-    element.style.transform = `scale(${ratio})`;
-    // Same reason as the item flip: the displaced size has to be the style the
-    // transition starts from.
-    void element.offsetWidth;
-    element.style.transition = `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`;
-    element.style.transform = '';
+    playFrom(
+      element,
+      { transform: `scale(${ratio})` },
+      { transform: '' },
+      `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`
+    );
   }, [cardHeight, zoom]);
 
   const getExportTarget = (): HTMLElement | null => {
