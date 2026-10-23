@@ -20,7 +20,8 @@ README 与 CONTRIBUTING 因此也只写 pnpm）。
 
 只有这里写着的两处坑：
 
-- `dev/verify-extension.mjs` 在 tsc 的 `include` 之外，改它时只有 build 里的 `node --check` 会拦语法错。
+- `dev/*.mjs` 都在 tsc 的 `include` 之外：`verify-extension.mjs` 与 `verify-motion.mjs` 由 `npm run typecheck`
+  末尾的 `node --check` 拦语法错，`verify-extractor.mjs` 没有这一步。
   （`public/popup.js` 已不是这样：popup 现在是 `src/content/popup.ts` 这个构建入口，tsc 管得到它。）
 - `tests/tiers/` 基本不在 tsconfig 里（shim 的 `DomElement` 不是 `Element`，跨边界要到处加 cast）；
   唯一的例外是 `tsconfig.test-support.json` 里列着的那三个从不跨边界的文件。改共享类型（`TweetData`

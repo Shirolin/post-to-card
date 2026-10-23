@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-support.json && node --check dev/verify-extension.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-support.json && node --check dev/verify-extension.mjs && node --check dev/verify-motion.mjs",
     "lint": "knip",
     "build:background": "vite build --mode background",
     "build:hook": "vite build --mode hook",
