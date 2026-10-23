@@ -19,7 +19,16 @@ export default defineConfig({
   // this machine, which leaves `127.0.0.1:5199` refusing connections while the
   // printed URL works -- so anything that probes the port by address (readiness
   // checks, tooling) fails on a server that is in fact up.
-  server: { host: '127.0.0.1', port: 5199, strictPort: true },
+  //
+  // `.tmp/` is ignored for the same reason `tests/env/render.ts` ignores it: it
+  // is where probes and Chrome profiles are written, and a watcher that follows
+  // a profile hits `EBUSY` on the browser's locked `Cookies` file.
+  server: {
+    host: '127.0.0.1',
+    port: 5199,
+    strictPort: true,
+    watch: { ignored: ['**/.tmp/**', '**/dist/**'] },
+  },
   build: { outDir: resolve(root, 'dist-harness'), emptyOutDir: true },
   define: { __CARD_BUILD__: JSON.stringify(cardBuild()) },
 });

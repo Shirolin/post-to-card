@@ -50,9 +50,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Runs the two tsconfig programs, `node --check dev/verify-extension.mjs`
-      # (tsconfig's `include` does not cover `dev/`, so nothing else parses it),
-      # the knip lint, and the four Vite bundles.
+      # Runs the two tsconfig programs and a `node --check` on each dev script
+      # tsc cannot see, then the knip lint and the four Vite bundles. Which
+      # scripts those are is `package.json`'s `typecheck` line, not this file's.
       - name: Build (typecheck + lint + four Vite bundles)
         run: pnpm run build
 

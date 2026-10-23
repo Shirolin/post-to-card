@@ -20,6 +20,12 @@ import type { RasterizerCall } from './modern-screenshot-stub.ts';
  *
  * The dev server is kept for the run and never closed. Both entry points end in
  * `process.exit`, so an abandoned watcher cannot keep the suite alive.
+ *
+ * It watches the repository, and the repository holds things that are being
+ * written while it watches. A probe under `.tmp/` that drops a Chrome profile
+ * there (a `Cookies` file held open by the browser) takes the whole suite down
+ * with `EBUSY` on the watcher -- a failure that says nothing about the code
+ * under test. `dist/` is build output nobody reads through the dev server.
  */
 let server: Promise<ViteDevServer> | null = null;
 
@@ -28,7 +34,10 @@ function serverFor(): Promise<ViteDevServer> {
     server = createServer({
       configFile: false,
       logLevel: 'silent',
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: { ignored: ['**/.tmp/**', '**/dist/**'] },
+      },
       appType: 'custom',
       resolve: {
         alias: {
