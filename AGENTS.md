@@ -18,43 +18,35 @@ bundle。`npm test` 只跑 tier1-4 与 i18n / graphql / resolver / article / hyg
 `.github/workflows/ci.yml` 跑同一条链（CI 用 pnpm 10 + Node 24，`pnpm-lock.yaml` 是唯一锁文件；
 README 与 CONTRIBUTING 因此也只写 pnpm）。
 
-只有这里写着的两处坑：
+两处坑：
 
-- `dev/*.mjs` 都在 tsc 的 `include` 之外：`verify-extension.mjs` 与 `verify-motion.mjs` 由 `npm run typecheck`
-  末尾的 `node --check` 拦语法错，`verify-extractor.mjs` 没有这一步。
-  （`public/popup.js` 已不是这样：popup 现在是 `src/content/popup.ts` 这个构建入口，tsc 管得到它。）
+- `dev/*.mjs` 在 tsc 之外，语法错只有 `npm run typecheck` 里的 `node --check` 会拦（它列着哪些）。
 - `tests/tiers/` 基本不在 tsconfig 里（shim 的 `DomElement` 不是 `Element`，跨边界要到处加 cast）；
   唯一的例外是 `tsconfig.test-support.json` 里列着的那三个从不跨边界的文件。改共享类型（`TweetData`
   等）的字段时，grep 一遍测试里的名字，别只信 tsc。
 
-装扩展进真实浏览器用 `node dev/verify-extension.mjs --url https://x.com/`（零依赖，headed；
-headless 会被 x.com 403）。
+三个真浏览器脚本，按问题选：
 
-**验提取器**用 `node dev/verify-extractor.mjs`：本地服务器承载 `tests/fixtures/` 里那些
-真实采集的推文标记，`dist/content.js` 这个**已构建的 bundle** 在真 Chrome 里对它们跑一遍，
-然后点开卡片看正文。`verify-extension.mjs` 证明扩展装得上、内容脚本起来了，但它证明不了
-提取器 —— 未登录的 x.com 整页 0 个 `data-testid`，没有推文标记可读（脚本自己写了这条）。
-这个脚本补上那一段，且不碰 x.com。
+- **扩展装得上吗**：`node dev/verify-extension.mjs --url https://x.com/`（headed；headless 会被
+  x.com 403）。它证明不了提取器——未登录时整页 0 个 `data-testid`。
+- **提取器读得对吗**：`node dev/verify-extractor.mjs`。本地服务器承载 `tests/fixtures/` 里真实
+  采集的推文标记，让已构建的 `dist/content.js` 对它们跑一遍再点开卡片看正文。不碰 x.com。
+- **按帧才成立的行为对吗**（动效、过渡、滚动、`ResizeObserver` 回调）：`node dev/verify-motion.mjs`。
+  浏览器面板里的页面**不跑渲染帧**——`rAF` 不推进、过渡停在起点、`ResizeObserver` 不投递——所以
+  这类行为只有真浏览器能验，截图与 tiers 都看不到。它不在 `npm test` 里：判据是时序。
 
-**验预览的动效**用 `node dev/verify-motion.mjs`：它起 vite 与 Chrome，把真实的 `App`/`Card`
-挂进 `dev/probe-motion.html`，做三次手势并逐帧断言（排除推文的两层 FLIP 与 1↔2 边界、占位块的
-脉动/淡出/失败停表、导出换源不会被当成图片到达）。**任何按帧或按时间才成立的行为**——动效、过渡、
-滚动、`ResizeObserver` 回调——都要在真浏览器里验，因为浏览器面板里的页面**不跑渲染帧**（`rAF`
-不推进、过渡停在起点、`ResizeObserver` 不投递），截图和 tiers 都看不到这些。它还不在 `npm test`
-里：判据是时序，忙的机器会假红。
-
-改这个工具的断言时，**先让被修的东西坏掉跑一次**：断言的完成判据是"去掉守卫/修复就会红"，而不是
-"现在全绿"。
+改动效探针的断言时，**先让被修的东西坏掉跑一次**：断言的完成判据是"拿掉修复就会红"。
 
 ## 架构决定
 
-`docs/architecture-review-2026-10-21.md` 记着 2026-10 那次深挖的结论：哪些方向**已经被查证过、
-不要再试**，以及每处有理由的行为变更的理由。做架构改动前先看它 —— 它记的是「为什么不是别的」，
-代码只说「是什么」。
+`docs/architecture-review-2026-10-21.md` 记着哪些方向**已经被查证过、不要再试**，以及每处有理由
+的行为变更的理由。做架构改动前先看它——它记的是「为什么不是别的」，代码只说「是什么」。
 
-预览的**加载态**（首帧 `fit`、图片占位、主题首帧、列表重排）与「要不要引动画库」同理，在
-`docs/loading-states.md`：它给出了决定规则、每条做与不做的理由、以及验这类问题的探针写法。
-动 `App.tsx` 的 `fit` 测量、`Card.tsx` 的图片路径，或者想给预览加动效之前，先读它。
+## 预览
+
+`docs/loading-states.md`：加载态（首帧 `fit`、图片占位、主题首帧、列表重排）与「要不要引动画库」
+的决定规则、每条做与不做的理由、探针怎么用。动 `App.tsx` 的 `fit` 测量、`Card.tsx` 的图片路径，
+或者要动效之前读它。
 
 ## X DOM observations
 
