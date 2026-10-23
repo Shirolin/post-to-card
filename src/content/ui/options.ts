@@ -43,12 +43,13 @@ export interface CardOption<T extends string> {
 /**
  * The card's own breathing room.
  *
- * Three tiers, and the middle one is what the card ships with: it is the
- * balance between a dense paper and a poster with air around it.
+ * Three tiers, and the tightest one ships: it leaves the most of the fixed
+ * 640px width to the card's own content, and both larger steps are one click
+ * away in the panel.
  */
 export const PADDING: CardOption<PaddingOption> = {
   values: ['16px', '32px', '48px'],
-  default: '32px',
+  default: '16px',
 };
 
 /**

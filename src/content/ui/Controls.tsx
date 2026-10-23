@@ -272,19 +272,21 @@ export function Controls({
   const [showMore, setShowMore] = useState<boolean>(false);
   const [showAllThemes, setShowAllThemes] = useState<boolean>(false);
   /**
-   * Starts collapsed on the string renderer (no window to measure) and on the
-   * string renderer only. A real viewport starts expanded.
+   * Whether the controls sheet starts folded.
    *
-   * The bottom sheet used to start collapsed on every screen at most 900px wide,
-   * which meant the first thing a phone showed was a "展开菜单" handle and nothing
-   * else: the whole panel, controls included, was behind one more tap. The sheet
-   * still collapses, and still takes a share of the height rather than all of it,
-   * so the collapse is available rather than imposed. Wide screens were already
-   * expanded and stay that way.
+   * Narrow screens start collapsed, wide screens (and the string renderer, which
+   * has no window to measure) keep the old behaviour of an expanded panel. The
+   * boundary is `NARROW_BREAKPOINT`, the same number the stylesheet's media query
+   * uses, so a 900px window gets the sheet its CSS draws for it.
+   *
+   * What it costs: a phone opens on the card and a "展开菜单" handle, so reaching a
+   * control is one tap. What it buys: the preview -- the thing this feature
+   * exists to produce -- gets the screen instead of three screens of controls.
+   * The export bar is outside the folded region, so copying stays one tap.
    */
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined' || typeof window.innerWidth !== 'number') return true;
-    return window.innerWidth > NARROW_BREAKPOINT;
+    return window.innerWidth <= NARROW_BREAKPOINT;
   });
   const moreId = useId();
   const themeGridId = useId();

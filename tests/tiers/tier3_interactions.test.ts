@@ -356,7 +356,7 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
     const restored = await loadUserPreferences();
 
     assert.equal(restored.theme, 'darkroom', 'a retired theme id must map to a live material, not reset');
-    assert.equal(restored.padding, '32px', 'an unknown padding must fall back to the default');
+    assert.equal(restored.padding, DEFAULT_CARD_CONFIG.padding, 'an unknown padding must fall back to the default');
     assert.equal(
       restored.borderRadius,
       DEFAULT_CARD_CONFIG.borderRadius,

@@ -2859,11 +2859,12 @@ test('F17.15: the masthead tick is the accent, but its hairline stays neutral in
 // -------------------------------------------------------------
 test('F18.1: the padding picker offers three sizes and the sanitiser admits exactly those', () => {
   assert.deepEqual(PADDING_OPTIONS, ['16px', '32px', '48px']);
+  assert.equal(PADDING.default, '16px', 'the card ships at the tightest tier');
   for (const option of PADDING_OPTIONS) {
     assert.equal(sanitizePadding(option), option, `${option} is offered but the sanitiser rejects it`);
   }
-  assert.equal(sanitizePadding('17px'), '32px');
-  assert.equal(sanitizePadding(''), '32px');
+  assert.equal(sanitizePadding('17px'), PADDING.default);
+  assert.equal(sanitizePadding(''), PADDING.default);
 });
 
 test('F18.2: the corner picker offers three explicit corners plus follow-theme', () => {
@@ -3504,6 +3505,28 @@ test('F21.6: Controls renders narrow-screen collapse toggle handle with proper a
   assert.ok(html.includes('collapse-grab-bar'), 'must render grab bar affordance');
   assert.ok(html.includes('aria-expanded="false"'), 'must declare collapsed state initially');
   assert.ok(html.includes('controls-panel is-collapsed'), 'must have collapsed panel class initially');
+});
+
+test('F21.7: the sheet opens folded on a narrow window and open on a wide one', async () => {
+  // F21.6 covers the string renderer, which has no window to measure. The two
+  // real viewports are what this default is about, and the boundary belongs to
+  // the stylesheet: its media query is `max-width: 900px`, so 900 is narrow.
+  const scope = globalThis as unknown as { window?: { innerWidth: number } };
+  const saved = scope.window;
+  try {
+    scope.window = { innerWidth: 900 };
+    const narrow = await renderControls();
+    assert.ok(narrow.includes('controls-panel is-collapsed'), 'a phone opens on the preview, not on the controls');
+    assert.ok(narrow.includes('aria-expanded="false"'), 'and the handle says the sheet is closed');
+
+    scope.window = { innerWidth: 901 };
+    const wide = await renderControls();
+    assert.ok(!wide.includes('is-collapsed'), 'a wide screen opens expanded');
+    assert.ok(wide.includes('aria-expanded="true"'), 'and the handle says the sheet is open');
+  } finally {
+    if (saved === undefined) delete scope.window;
+    else scope.window = saved;
+  }
 });
 
 // -------------------------------------------------------------
