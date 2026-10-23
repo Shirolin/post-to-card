@@ -3509,17 +3509,18 @@ test('F21.6: Controls renders narrow-screen collapse toggle handle with proper a
 
 test('F21.7: the sheet opens folded on a narrow window and open on a wide one', async () => {
   // F21.6 covers the string renderer, which has no window to measure. The two
-  // real viewports are what this default is about, and the boundary belongs to
-  // the stylesheet: its media query is `max-width: 900px`, so 900 is narrow.
+  // real viewports are what this default is about. The boundary is the shared
+  // constant, not a number typed here: `geometry` is what the stylesheet's media
+  // query is kept honest against elsewhere in this file.
   const scope = globalThis as unknown as { window?: { innerWidth: number } };
   const saved = scope.window;
   try {
-    scope.window = { innerWidth: 900 };
+    scope.window = { innerWidth: NARROW_BREAKPOINT };
     const narrow = await renderControls();
     assert.ok(narrow.includes('controls-panel is-collapsed'), 'a phone opens on the preview, not on the controls');
     assert.ok(narrow.includes('aria-expanded="false"'), 'and the handle says the sheet is closed');
 
-    scope.window = { innerWidth: 901 };
+    scope.window = { innerWidth: NARROW_BREAKPOINT + 1 };
     const wide = await renderControls();
     assert.ok(!wide.includes('is-collapsed'), 'a wide screen opens expanded');
     assert.ok(wide.includes('aria-expanded="true"'), 'and the handle says the sheet is open');

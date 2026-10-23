@@ -9,9 +9,9 @@
  * this script.
  *
  * It serves `dev/probe-motion.html` through the harness's own Vite config (the
- * page mounts the real `App`/`Card`), drives one gesture per mode, samples every
- * frame, and asserts on the numbers rather than on a screenshot. `docs/
- * loading-states.md` explains what each animation is for.
+ * page mounts the real `App`/`Card`), drives three gestures and a picture
+ * session, samples every frame, and asserts on the numbers rather than on a
+ * screenshot. `docs/loading-states.md` explains what each animation is for.
  *
  * Not in `npm test`: these are timings, and a loaded machine or a browser that
  * ignores the emulated preference would report a false failure. It is a review
@@ -19,8 +19,9 @@
  *
  *   node dev/verify-motion.mjs
  *
- * Headed when there is a display (watch it happen), headless otherwise.
- * `PTC_HEADED=1` / `PTC_HEADED=0` overrides.
+ * Headless by default -- a window another window covers is a window Chrome may
+ * stop drawing, which turns "the animation did not run" into a false failure.
+ * `PTC_HEADED=1` opens one, for watching the motion happen.
  */
 
 import { spawn } from 'node:child_process';
@@ -148,12 +149,15 @@ if (!chrome) {
 // documentary address.
 const picPort = await freePort();
 const picServer = createHttpServer((req, res) => {
-  if (req.url === '/missing.jpg') {
+  // `startsWith`, not equality: the probe appends a query string to the same
+  // path to force a second request, and a 404 that becomes a stall would make
+  // the "a real failure still marks the cell" check pass for the wrong reason.
+  if (req.url && req.url.startsWith('/missing')) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('no');
     return;
   }
-  // /stall.jpg: deliberately never answers, so the cell stays in its wait state.
+  // Anything else: deliberately never answers, so the cell stays in its wait state.
 });
 await new Promise((resolve) => picServer.listen(picPort, '127.0.0.1', resolve));
 
@@ -302,13 +306,18 @@ try {
     check('and it is the single-post layout', b.settled.single === true, String(b.settled.single));
     check(
       'nothing inside it is displaced or faded',
-      b.settled.singleStyle?.transform === '' && b.settled.singleStyle?.opacity === '',
-      JSON.stringify(b.settled.singleStyle)
+      [b.atCommit.singleStyle, b.settled.singleStyle].every(
+        (s) => s && s.transform === '-' && s.opacity === '1.00'
+      ),
+      JSON.stringify([b.atCommit.singleStyle, b.settled.singleStyle])
     );
+    const bMid = b.samples
+      .map((s) => matrix(s.scaleTransform).a)
+      .filter((v) => v > 0.05 && v < 0.995);
     check(
-      'but the card itself still re-fits',
-      b.settled.height < b.before.height && b.settled.zoom !== b.before.zoom,
-      `${b.before.zoom} → ${b.settled.zoom}`
+      'but the card itself still re-fits, as an animation',
+      bMid.length > 0 && b.settled.zoom !== b.before.zoom,
+      `${b.before.zoom} → ${b.settled.zoom} via ${bMid.slice(0, 3).join(' → ')}`
     );
 
     // 1 → 2: only the post that came back is new. Decided by which posts were
@@ -359,15 +368,35 @@ try {
     check('the placeholder ends hidden', fade.at(-1) === 0, String(fade.at(-1)));
     check('and the cell knows its picture arrived', probe.loadedClass.includes('is-picture-loaded'), probe.loadedClass);
 
+    const swap = probe.exportSwap;
     check(
-      "the exporter's stand-in is not taken for the picture",
-      probe.exportSwap.loadedByExport === false,
-      probe.exportSwap.class
+      'the export really swapped the source',
+      swap.duringSwap.isDataUrl && swap.duringSwap.marked,
+      JSON.stringify(swap.duringSwap)
     );
     check(
-      'and the cell is still waiting once the sources are put back',
-      probe.exportSwap.stillWaiting === true,
-      probe.exportSwap.class
+      "and the card did not take the stand-in for the picture",
+      swap.duringSwap.loaded === false,
+      swap.class
+    );
+    check(
+      'nor remembered as the picture’s shape',
+      Number.parseFloat(swap.ratioAfterRealLoad) > 1.4,
+      `a real 1.6 picture left the box at "${swap.ratioAfterRealLoad}"`
+    );
+    check('the mark is gone once the sources are put back', swap.afterSwap.marked === false);
+    check('the original source is back', swap.afterSwap.srcRestored === true);
+    check('and the cell is still waiting', swap.afterSwap.loaded === false, swap.class);
+
+    check(
+      'an error the exporter caused does not stop the pulse',
+      probe.exportError.missingWhileMarked === false,
+      `is-picture-missing while marked: ${probe.exportError.missingWhileMarked}`
+    );
+    check(
+      'while a real failure still does',
+      probe.exportError.missingAfter === true,
+      `is-picture-missing after: ${probe.exportError.missingAfter}`
     );
   }
 } catch (err) {

@@ -126,7 +126,10 @@
               listOverflow: list ? list.style.overflow || '' : '',
               single: Boolean(single),
               singleStyle: single
-                ? { transform: single.style.transform || '', opacity: single.style.opacity || '' }
+                ? {
+                    transform: short(getComputedStyle(single).transform),
+                    opacity: Number(getComputedStyle(single).opacity).toFixed(2),
+                  }
                 : null,
               posts: Array.from(scope.querySelectorAll('[data-tweet-id]')).map((item) => ({
                 id: item.dataset.tweetId,
@@ -151,9 +154,9 @@
           /**
            * One gesture, sampled the way a FLIP has to be: the state the click
            * lands in (a couple of microtasks after the dispatch, before any
-           * frame), then every frame until it settles.
+           * frame), then every frame for long enough to watch it settle.
            */
-          const gesture = async (trigger, ms = 700) => {
+          const gesture = async (trigger) => {
             const before = snap();
             trigger();
             await Promise.resolve();
@@ -161,7 +164,7 @@
             const atCommit = snap();
             const samples = [];
             const start = performance.now();
-            while (performance.now() - start < ms) {
+            while (performance.now() - start < 700) {
               await new Promise((resolve) => requestAnimationFrame(resolve));
               samples.push(snap());
             }
@@ -196,8 +199,10 @@
 
           window.__motionProbe = { mode, a, b, c };
         } else {
-          // A picture that never arrives, one that fails outright, and one whose
-          // cell is put through the exporter's real source swap.
+          // Four cells: one whose picture never arrives, one that fails, one put
+          // through the exporter's real source swap, and one used to drive the
+          // card's error handler while the exporter's mark is on it.
+          const { EXPORT_SWAP_ATTR } = await import('../src/content/ui/imageFallback.ts');
           const slow = params.get('slow') || 'http://10.255.255.1/never.jpg';
           const missing = params.get('missing') || 'http://10.255.255.1/missing.jpg';
           const root = document.createElement('div');
@@ -216,7 +221,24 @@
                   config,
                 }),
                 h(Card, {
-                  data: { author, isSingle: true, tweets: [post('swap', [{ type: 'image', url: slow + '?swap', aspectRatio: 1.6 }])] },
+                  // Two pictures, one shape known and one not: the plan has to
+                  // give the unknown one the height of its line, so its box is
+                  // not 1:1 -- which is the only way an unguarded stand-in load
+                  // (100x100) could visibly re-plan the grid.
+                  data: {
+                    author,
+                    isSingle: true,
+                    tweets: [
+                      post('swap', [
+                        { type: 'image', url: paint(300), aspectRatio: 1.6 },
+                        { type: 'image', url: slow + '?swap' },
+                      ]),
+                    ],
+                  },
+                  config,
+                }),
+                h(Card, {
+                  data: { author, isSingle: true, tweets: [post('error', [{ type: 'image', url: slow + '?error', aspectRatio: 1.6 }])] },
                   config,
                 }),
               ]
@@ -224,7 +246,13 @@
             root
           );
 
-          const cells = Array.from(root.querySelectorAll('.media-box'));
+          const cards = Array.from(root.querySelectorAll('.ptc-mat'));
+          // The cell each check is about. The swap card holds two pictures and
+          // the one that stalls is the second of them.
+          const slowCell = cards[0].querySelector('.media-box');
+          const missingCell = cards[1].querySelector('.media-box');
+          const swapCell = cards[2].querySelectorAll('.media-box')[1];
+          const errorCell = cards[3].querySelector('.media-box');
           const pulseOf = (cell) => cell.querySelector('.media-placeholder-pulse');
           const outerOf = (cell) => cell.querySelector('.media-placeholder');
           const opacity = (el) => (el ? Number(getComputedStyle(el).opacity) : null);
@@ -234,14 +262,14 @@
           const start = performance.now();
           while (performance.now() - start < 1600) {
             await new Promise((resolve) => setTimeout(resolve, 40));
-            waiting.push(opacity(pulseOf(cells[0])));
+            waiting.push(opacity(pulseOf(slowCell)));
             // Only read once the chain has run out: a failing picture is allowed
             // to breathe while it is still trying.
-            if (cells[1].className.includes('is-picture-missing')) {
-              failing.push(opacity(pulseOf(cells[1])));
+            if (missingCell.className.includes('is-picture-missing')) {
+              failing.push(opacity(pulseOf(missingCell)));
             }
           }
-          const failureClass = cells[1].className;
+          const failureClass = missingCell.className;
           say(`waiting ${JSON.stringify(waiting.slice(0, 12))} …`);
           say(`failure cell ${failureClass}`);
 
@@ -251,10 +279,10 @@
           const afterLoad = performance.now();
           while (performance.now() - afterLoad < 500) {
             await new Promise((resolve) => setTimeout(resolve, 20));
-            fade.push(opacity(outerOf(cells[0])));
+            fade.push(opacity(outerOf(slowCell)));
           }
           say(`fade ${JSON.stringify(fade)}`);
-          say(`loaded cell ${cells[0].className}`);
+          say(`loaded cell ${slowCell.className}`);
 
           // What a render preparation does to a cell that is still waiting: it
           // swaps the source for a stand-in, then puts the original back. The
@@ -263,15 +291,50 @@
           // extension messaging in this page, its proxy call fails at once, which
           // is exactly the path that substitutes the grey placeholder.
           const { prepareCardImages } = await import('../src/content/engine/export.ts');
-          const swapCell = cells[2];
-          const swapCard = root.querySelectorAll('.ptc-mat')[2];
+          const swapCard = cards[2];
+          const swapImg = swapCell.querySelector('.media-picture');
+          const ratioBefore = swapCell.style.aspectRatio || '';
+          const srcBefore = swapImg.getAttribute('src');
           const preparation = await prepareCardImages(swapCard);
           await new Promise((resolve) => setTimeout(resolve, 200));
-          const loadedByExport = swapCell.className.includes('is-picture-loaded');
+          const duringSwap = {
+            // Proves the swap happened at all, so the checks below are about the
+            // guard rather than about a preparation that did nothing.
+            isDataUrl: (swapImg.getAttribute('src') || '').startsWith('data:'),
+            marked: swapImg.hasAttribute(EXPORT_SWAP_ATTR),
+            loaded: swapCell.className.includes('is-picture-loaded'),
+            ratio: swapCell.style.aspectRatio || '',
+          };
           preparation.restore();
           await new Promise((resolve) => setTimeout(resolve, 200));
-          const stillWaiting = !swapCell.className.includes('is-picture-loaded');
-          say(`export swap: loaded=${loadedByExport} stillWaiting=${stillWaiting} class=${swapCell.className}`);
+          const afterSwap = {
+            marked: swapImg.hasAttribute(EXPORT_SWAP_ATTR),
+            srcRestored: swapImg.getAttribute('src') === srcBefore,
+            loaded: swapCell.className.includes('is-picture-loaded'),
+            ratio: swapCell.style.aspectRatio || '',
+          };
+          say(`export swap: during=${JSON.stringify(duringSwap)} after=${JSON.stringify(afterSwap)}`);
+
+          // And the shape it would have recorded must not stick: let a real
+          // 1.6 picture arrive afterwards. If the stand-in's 1:1 had been taken,
+          // `recordShape` would now skip this one and the box would stay square.
+          swapImg.src = paint(300);
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          const ratioAfterRealLoad = swapCell.style.aspectRatio || '';
+          say(`ratio after a real 1.6 picture: ${ratioAfterRealLoad}`);
+
+          // The same guard on the error path: an error the exporter caused says
+          // nothing about the picture, so it must not stop the pulse.
+          const errorImg = errorCell.querySelector('.media-picture');
+          errorImg.setAttribute(EXPORT_SWAP_ATTR, 'true');
+          errorImg.src = missing + '?during-export';
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const missingWhileMarked = errorCell.className.includes('is-picture-missing');
+          errorImg.removeAttribute(EXPORT_SWAP_ATTR);
+          errorImg.src = missing + '?after-export';
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const missingAfter = errorCell.className.includes('is-picture-missing');
+          say(`export error: whileMarked=${missingWhileMarked} after=${missingAfter}`);
 
           window.__motionProbe = {
             mode,
@@ -279,12 +342,15 @@
             failing,
             fade,
             failureClass,
-            loadedClass: cells[0].className,
+            loadedClass: slowCell.className,
             exportSwap: {
-              loadedByExport,
-              stillWaiting,
+              ratioBefore,
+              duringSwap,
+              afterSwap,
+              ratioAfterRealLoad,
               class: swapCell.className,
             },
+            exportError: { missingWhileMarked, missingAfter, class: errorCell.className },
           };
         }
       } catch (err) {

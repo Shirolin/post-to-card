@@ -258,7 +258,12 @@ export async function prepareCardImages(cardElement: HTMLElement): Promise<CardI
         // Nothing to restore on a node that can no longer take a src.
       }
       // Cleared after the src is back, so the card's own handlers see the
-      // picture as its own again from the moment the restore lands.
+      // picture as its own again from the moment the restore lands. That order
+      // is safe because every stand-in load has already been dispatched: the
+      // caller only gets this disposer once `prepareCardImages` has awaited each
+      // swapped image's `decode()`. The one path where it is not guaranteed is a
+      // preparation that threw mid-swap -- and there the card is being torn down
+      // anyway.
       item.img.removeAttribute(EXPORT_SWAP_ATTR);
     }
   };

@@ -444,7 +444,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * has to be expressed in, and transforms do not change them, so the same
    * number is correct on both sides of the measurement.
    */
-  const threadFlipRef = useRef<{ positions: Map<string, number>; showing: Set<string> } | null>(null);
+  const threadChangeRef = useRef<{ positions: Map<string, number>; showing: Set<string> } | null>(null);
 
   const snapshotThreadItems = (): Map<string, number> => {
     const snapshot = new Map<string, number>();
@@ -462,7 +462,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     // Compared by set rather than by array, because the same exclusions in a
     // different order are the same card and must not animate.
     if (exclusionSignature(newConfig.excludedTweetIds) !== exclusionSignature(config.excludedTweetIds)) {
-      threadFlipRef.current = {
+      threadChangeRef.current = {
         positions: snapshotThreadItems(),
         showing: new Set(
           threadSession(threadData, config.excludedTweetIds)
@@ -493,8 +493,8 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    */
   const exclusionSignatureValue = exclusionSignature(config.excludedTweetIds);
   useLayoutEffect(() => {
-    const before = threadFlipRef.current;
-    threadFlipRef.current = null;
+    const before = threadChangeRef.current;
+    threadChangeRef.current = null;
     const card = cardRef.current;
     if (!before || !card) return;
 

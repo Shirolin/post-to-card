@@ -274,10 +274,11 @@ export function Controls({
   /**
    * Whether the controls sheet starts folded.
    *
-   * Narrow screens start collapsed, wide screens (and the string renderer, which
-   * has no window to measure) keep the old behaviour of an expanded panel. The
-   * boundary is `NARROW_BREAKPOINT`, the same number the stylesheet's media query
-   * uses, so a 900px window gets the sheet its CSS draws for it.
+   * Narrow screens start collapsed; wide screens start expanded. The string
+   * renderer has no window to measure, and starts collapsed -- it always has,
+   * and `F21.6` pins it. The boundary is `NARROW_BREAKPOINT`, the same number
+   * the stylesheet's media query uses, so a 900px window gets the sheet its CSS
+   * draws for it.
    *
    * What it costs: a phone opens on the card and a "展开菜单" handle, so reaching a
    * control is one tap. What it buys: the preview -- the thing this feature

@@ -42,9 +42,9 @@ const FALLBACK_ATTR = 'data-fallback';
  * infers from a load -- "this cell has its picture", "the picture is 1:1, re-plan
  * the grid" -- would then be inferred from the stand-in and never undone.
  *
- * Defined here rather than in the export engine because both sides need the
- * name and this module is already the one that owns the attributes card images
- * carry. The engine imports it; the UI never imports the engine.
+ * Defined here rather than beside the exporter that sets it: `export.ts`
+ * already imports this module (for the avatar silhouette), so the name travels
+ * the edge that exists instead of making `Card` depend on the engine.
  */
 export const EXPORT_SWAP_ATTR = 'data-export-swap';
 
