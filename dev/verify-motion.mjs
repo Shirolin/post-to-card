@@ -430,13 +430,35 @@ try {
     // The sweep's colour has to be a step off the recess it lies on, in one
     // direction, on every material. Mixing toward `--surface` could not promise
     // that: it is the darker of the two on the dark materials and equal to the
-    // recess on glass. The resolved gradient is reported so a regression shows
-    // the colour rather than just a number.
-    const sheen = probe.sheenReport?.find((s) => s.backgroundImage.includes('oklch')) || probe.sheenReport?.[0];
+    // recess on glass. Read from the painted pixel rather than the colour
+    // string, so the check survives any syntax that paints the same thing.
+    const luminance = ([r, g, b]) => {
+      const f = (c) => {
+        const v = c / 255;
+        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const sheen = (probe.sheenReport || []).map((s) => {
+      const recess = luminance(s.recess);
+      const lifted = s.lifted ? luminance(s.lifted) : recess;
+      return {
+        theme: s.theme,
+        lift: lifted > recess,
+        ratio: (Math.max(recess, lifted) + 0.05) / (Math.min(recess, lifted) + 0.05),
+      };
+    });
+    // Not merely brighter: a lift and nothing more. The white-mix fallback also
+    // brightens, but on a dark recess it is a splash (2.7:1), which is the same
+    // failure in the other direction -- the highlight stops reading as the
+    // material lit. The band holds both ends.
+    const flat = sheen.filter((s) => !s.lift || s.ratio < 1.03 || s.ratio > 1.6);
     check(
-      'the sweep lifts the recess instead of painting the sheet over it',
-      Boolean(sheen?.backgroundImage.includes('oklch')),
-      sheen?.backgroundImage || 'no computed gradient'
+      'the sweep lifts every material’s recess by a step, not a splash',
+      sheen.length === 12 && flat.length === 0,
+      flat.length
+        ? flat.map((s) => `${s.theme || '?'} ${s.ratio.toFixed(2)}`).join(', ')
+        : `${sheen.length} materials, ${Math.min(...sheen.map((s) => s.ratio)).toFixed(2)}–${Math.max(...sheen.map((s) => s.ratio)).toFixed(2)}:1`
     );
 
     const waiting = probe.waiting.filter((v) => typeof v === 'string' && v);

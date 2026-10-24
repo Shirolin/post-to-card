@@ -18,7 +18,8 @@
                  changing, rather than one layout and one re-fit.
         picture  one picture that never arrives (the cell's waiting state), then
                  a real one (the dissolve), plus a cell whose chain fails (the
-                 sweep stopping).
+                 sweep stopping), and one waiting cell per material so the
+                 sweep's colour can be read on every theme.
 
       The numbers are left in `window.__motionProbe` for the script to assert;
       the log on screen is for a human reading the page directly. Neither the
@@ -84,7 +85,7 @@
         const cardCss = (await import('../src/content/styles/card.css?inline')).default;
         const { App } = await import('../src/content/ui/App.tsx');
         const { Card } = await import('../src/content/ui/Card.tsx');
-        const { DEFAULT_CARD_CONFIG } = await import('../src/content/ui/themes.ts');
+        const { DEFAULT_CARD_CONFIG, THEME_ORDER } = await import('../src/content/ui/themes.ts');
 
         const style = document.createElement('style');
         style.textContent = [modalCss, cardCss].join('\n\n');
@@ -357,21 +358,6 @@
           const errorCell = cards[3].querySelector('.media-box');
           const previewFailCell = cards[4].querySelector('.media-box');
 
-          // What the sweep's midpoint actually paints, per material: the sheet
-          // is the card's own surface, so a sweep that mixes toward it changes
-          // direction between materials. Reported rather than asserted here --
-          // the rule lives in tier1's contrast check, which can see the tokens.
-          const sheenReport = cards.map((card, i) => {
-            const layer = card.querySelector('.media-placeholder');
-            const bg = layer ? getComputedStyle(layer, '::after').backgroundImage : '';
-            return {
-              index: i,
-              theme: card.querySelector('.post-to-card-target')?.dataset.theme || '',
-              surface: getComputedStyle(card).getPropertyValue('--surface').trim(),
-              quoteBg: getComputedStyle(card).getPropertyValue('--quote-bg').trim(),
-              backgroundImage: bg,
-            };
-          });
           const sheenOf = (cell) => {
             const layer = cell.querySelector('.media-placeholder');
             return layer ? getComputedStyle(layer, '::after').transform : null;
@@ -469,6 +455,63 @@
           await new Promise((resolve) => setTimeout(resolve, 200));
           const missingAfter = errorCell.className.includes('is-picture-missing');
           say(`export error: whileMarked=${missingWhileMarked} after=${missingAfter}`);
+
+          // The sweep's colour rule is per material, so it has to be read on
+          // every material. One card per theme, each with a picture that never
+          // answers so the cell stays in its waiting state; the gradient is
+          // painted here, over the recess, because that composite -- not the
+          // colour string -- is what the reader sees. Reported rather than
+          // asserted here: the rule lives in the script.
+          const sheenRoot = document.createElement('div');
+          document.body.appendChild(sheenRoot);
+          render(
+            h(
+              'div',
+              { style: 'display:flex;flex-wrap:wrap;gap:12px' },
+              THEME_ORDER.map((theme) =>
+                h(Card, {
+                  data: {
+                    author,
+                    isSingle: true,
+                    tweets: [post(`sheen-${theme}`, [{ type: 'image', url: slow, aspectRatio: 1.6 }])],
+                  },
+                  config: { ...config, theme },
+                })
+              )
+            ),
+            sheenRoot
+          );
+          await frames(150);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 1;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          /** The pixel a colour paints when it lies on the recess. */
+          const paintOver = (base, top) => {
+            ctx.clearRect(0, 0, 1, 1);
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, 1, 1);
+            ctx.fillStyle = top;
+            ctx.fillRect(0, 0, 1, 1);
+            return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+          };
+          const sheenReport = Array.from(sheenRoot.querySelectorAll('.ptc-mat')).map((card) => {
+            const target = card.querySelector('.post-to-card-target');
+            const layer = card.querySelector('.media-placeholder');
+            const backgroundImage = layer ? getComputedStyle(layer, '::after').backgroundImage : '';
+            // The middle stop of the sweep: the only part that crosses the cell.
+            // Taken as the span between the 25% and 50% stops, so a stop that is
+            // itself a function with commas (`color-mix(…)`) still comes out whole.
+            const stop = /\d+%\s*,\s*([\s\S]*?)\s+50%/.exec(backgroundImage);
+            // The card injects its tokens on the target, not on the mount.
+            const recess = target ? getComputedStyle(target).getPropertyValue('--quote-bg').trim() : '';
+            return {
+              theme: target?.dataset.theme || '',
+              backgroundImage,
+              recess: paintOver(recess, recess),
+              lifted: stop ? paintOver(recess, stop[1]) : null,
+            };
+          });
 
           window.__motionProbe = {
             mode,

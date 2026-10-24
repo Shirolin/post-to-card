@@ -2662,29 +2662,30 @@ test('F17.11: a filled quote panel is actually visible, and its text still reads
   }
 });
 
-test('F17.14: the waiting sweep lifts every material’s recess, in one direction', () => {
+test('F17.23: the waiting sweep lifts every material’s recess, in one direction', () => {
   // The sweep used to be `color-mix(in srgb, var(--surface) 85%, transparent)`
   // over the recess. That is only a highlight where the sheet happens to be
   // lighter than the recess: on midnight, darkroom and terminal it darkened the
   // block, on glass the two are the same colour and the sweep was invisible, and
-  // on brutalist it went the wrong way on a pale sheet. Measured across the
-  // twelve themes it produced 1.00–1.20:1 with no consistent direction.
+  // on brutalist it went the wrong way on a pale sheet.
   //
-  // The rule is now a fixed perceptual step (`oklch(from var(--quote-bg)
-  // calc(l + 0.1) c h)`), so this check models exactly that: +0.10 OKLCH
-  // lightness, then the gamut clamp the browser applies, and asserts the result
-  // is (a) brighter than the recess and (b) far enough to read as a highlight.
+  // The rule is now a fixed perceptual step off the recess itself, declared
+  // last so it is the one that wins; the plain mix before it is only there for
+  // a browser without relative colour. The ratio below models that step, but
+  // the model clips the gamut per channel where the browser reduces chroma --
+  // it is a direction check, and dev/verify-motion.mjs reads what a browser
+  // actually paints on all twelve materials.
   const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
   const sheenRule = css.slice(css.indexOf('.media-placeholder::after'));
-  const sheen = sheenRule.slice(0, sheenRule.indexOf('}'));
-  assert.match(
-    sheen,
-    /oklch\(from var\(--quote-bg\) calc\(l \+ 0\.1\) c h\)/,
-    'the sweep must lift the recess by a fixed perceptual step'
+  const sheen = sheenRule.slice(0, sheenRule.indexOf('}')).replace(/\/\*[\s\S]*?\*\//g, '');
+  const declarations = [...sheen.matchAll(/background\s*:\s*([^;]+);/g)].map((m) =>
+    m[1].replace(/\s+/g, ' ').trim()
   );
-  assert.ok(
-    !/var\(--surface\)/.test(sheen.replace(/\/\*[\s\S]*?\*\//g, '')),
-    'the sweep must not paint the sheet over the recess again'
+  const effective = declarations.at(-1) ?? '';
+  assert.match(
+    effective,
+    /oklch\(from var\(--quote-bg\) calc\(l \+ 0\.1\) c h\)/,
+    'the declaration that wins must lift the recess by a fixed perceptual step'
   );
 
   const srgb = (channel: number): number => {
@@ -2736,9 +2737,10 @@ test('F17.14: the waiting sweep lifts every material’s recess, in one directio
     const recess = channels(THEMES[id].tokens.quoteBackground);
     const [L, a, b] = toOklab(recess);
     // The step is clamped by the gamut: a recess within 0.1 of white cannot be
-    // lifted a full step, and no colour is. That is a limit of the material, not
-    // of the rule, so those themes are held to "brighter and visible at all"
-    // rather than to the same ratio as the ones with headroom.
+    // lifted a full step, and no colour is. That covers the six near-white
+    // materials (minimal, glass, riso, gallery, receipt, brutalist) -- it is a
+    // limit of the material, not of the rule, so those are held to "brighter
+    // and visible at all" rather than to the ratio the others get.
     const clamped = L + 0.1 > 1;
     const sheenColour = fromOklab(Math.min(1, L + 0.1), a, b);
     assert.ok(
@@ -2747,7 +2749,7 @@ test('F17.14: the waiting sweep lifts every material’s recess, in one directio
     );
     const ratio = contrast(sheenColour, recess);
     assert.ok(
-      ratio >= (clamped ? 1.04 : 1.1),
+      ratio >= (clamped ? 1.02 : 1.12),
       `${id} sweep only ${ratio.toFixed(2)}:1 off the recess — too faint to read as one`
     );
   }
