@@ -158,6 +158,14 @@ const picServer = createHttpServer((req, res) => {
     res.end('no');
     return;
   }
+  // A picture whose small variant is gone while the full one never answers: the
+  // stand-in's own failure path, which is not the picture failing. Keyed on the
+  // query, because that is the only thing `getPhotoPreviewUrl` changes.
+  if (req.url && req.url.includes('name=small')) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('no');
+    return;
+  }
   // Anything else: deliberately never answers, so the cell stays in its wait state.
 });
 await new Promise((resolve) => picServer.listen(picPort, '127.0.0.1', resolve));
@@ -358,9 +366,6 @@ try {
       `${probe.before.height} → ${probe.settled.height}`
     );
 
-    // The cause, read directly: a transition on a layout property inside the
-    // card keeps the measured height moving for its whole duration, and the
-    // ResizeObserver reports each frame of it.
     // The proof that the removed transitions are gone: these two were what they
     // drove, and both moved frame by frame under the old sheet. `margin-top` is
     // the grid's, `itemMaxHeight` is the picture's cap; either one transitioning
@@ -394,16 +399,31 @@ try {
       `${zooms.size} distinct zooms: ${[...zooms].join(', ')}`
     );
 
+    // A ratio the user picked is a command, not a consequence: the card is the
+    // new shape on the next frame, with no scale replay. `docs/loading-states.md`
+    // draws the line at "the button says the card is 100% now"; the ratio
+    // control says the same thing about the shape.
     const mid = probe.samples
       .map((s) => matrix(s.scaleTransform).a)
       .filter((v) => v > 0.05 && v < 0.995);
-    check('the card still re-fits as one animation', mid.length > 0, mid.slice(0, 4).join(' → '));
+    check('the picked shape is applied, not animated into', mid.length === 0, mid.slice(0, 4).join(' → ') || 'no intermediate scales');
+    check(
+      'and the card is at its own scale on the commit frame',
+      matrix(probe.atCommit.scaleTransform).a === 1 || probe.atCommit.scaleTransform === '-',
+      probe.atCommit.scaleTransform
+    );
   }
 
   console.log('\npictures: waiting, arriving, failing');
   {
+    // `preview` carries a hostname Chrome resolves to loopback and that the
+    // product's own rule accepts as an X picture (`*.localhost` is loopback by
+    // spec; the label is what `isTwimgPhoto` looks for), so the stand-in is
+    // derived and then 404s while the picture itself never answers. A plain
+    // `127.0.0.1` address would derive no stand-in at all, and the real
+    // `pbs.twimg.com` would be upgraded to HTTPS before it ever reached us.
     const { probe, reduced } = await runMode(
-      `mode=picture&slow=${encodeURIComponent(`http://127.0.0.1:${picPort}/stall.jpg`)}&missing=${encodeURIComponent(`http://127.0.0.1:${picPort}/missing.jpg`)}`
+      `mode=picture&slow=${encodeURIComponent(`http://127.0.0.1:${picPort}/stall.jpg`)}&missing=${encodeURIComponent(`http://127.0.0.1:${picPort}/missing.jpg`)}&preview=${encodeURIComponent(`http://pbs.twimg.com.localhost:${picPort}/media/full.jpg`)}`
     );
     check('the machine really is running the animations', reduced === 'no-preference', reduced);
 
@@ -418,6 +438,25 @@ try {
       'a failed cell marks the picture as not coming',
       probe.missingIcon === 1,
       String(probe.missingIcon)
+    );
+
+    // The stand-in is the picture's second request. When only it fails, the
+    // picture is still coming: the sweep has to stop (nothing left to announce)
+    // while the cell keeps waiting rather than claiming a failure.
+    check(
+      'a small variant that fails stops the sweep',
+      probe.previewFailed.length > 0 && new Set(probe.previewFailed).size === 1,
+      `${probe.previewFailed.length} readings, ${new Set(probe.previewFailed).size} distinct`
+    );
+    check(
+      'without calling the picture failed',
+      !probe.previewFailClass.includes('is-picture-missing'),
+      probe.previewFailClass
+    );
+    check(
+      'and without showing the missing mark',
+      probe.previewFailIcon === 0,
+      String(probe.previewFailIcon)
     );
 
     const fade = probe.fade.filter((v) => typeof v === 'number');

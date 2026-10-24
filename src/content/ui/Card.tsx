@@ -362,9 +362,18 @@ function renderMediaGrid(
                     onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) =>
                       e.currentTarget.parentElement?.classList.add('is-preview-ready')
                     }
+                    // A small variant that fails is not a picture that failed:
+                    // the full picture is still on its way, so the cell keeps
+                    // waiting. Only the sweep stops, because nothing is left to
+                    // announce -- it would otherwise keep promising an arrival
+                    // that is no longer going to happen (`is-picture-missing`
+                    // stays the cell's answer for the picture itself).
+                    onError={(e: JSX.TargetedEvent<HTMLImageElement>) =>
+                      e.currentTarget.parentElement?.classList.add('is-preview-failed')
+                    }
                   />
                 )}
-                <ImageOff class="media-placeholder-icon media-placeholder-icon-missing" aria-hidden="true" />
+                <ImageOff class="media-placeholder-icon" aria-hidden="true" />
               </span>
               {/* Play badge sits on the poster without a scrim: the pill is
                   opaque, so a gradient would only dim the image. */}

@@ -31,6 +31,22 @@ export function upgradePhotoUrl(url: string): string {
 }
 
 /**
+ * Whether a parsed URL is one of X's own pictures, which are the only ones that
+ * take a `name=` variant: tweet media (`/media/`) and external link-card
+ * previews (`/card_img/`).
+ *
+ * One predicate rather than the same two conditions at each call site: this file
+ * is the only place that decides what an X picture address is, and two copies of
+ * that judgement drift the moment one of them learns a new path.
+ */
+function isTwimgPhoto(parsed: URL): boolean {
+  return (
+    parsed.hostname.includes('twimg.com') &&
+    (parsed.pathname.includes('/media/') || parsed.pathname.includes('/card_img/'))
+  );
+}
+
+/**
  * Returns progressively lower-resolution variants of a photo URL, best first.
  * The export path uses this to fall back when the original is unavailable.
  */
@@ -44,10 +60,7 @@ export function getPhotoUrlCandidates(url: string): string[] {
 
   try {
     const parsed = new URL(url);
-    if (
-      parsed.hostname.includes('twimg.com') &&
-      (parsed.pathname.includes('/media/') || parsed.pathname.includes('/card_img/'))
-    ) {
+    if (isTwimgPhoto(parsed)) {
       const build = (name: string): string => {
         const next = new URL(parsed.toString());
         // JPEG source is what original quality is fetched in. WebP is recompressed
@@ -72,11 +85,11 @@ export function getPhotoUrlCandidates(url: string): string[] {
  * The address of a picture's small variant, for the blurred stand-in the card
  * shows while the full picture is in flight.
  *
- * Same host and path scope as `getPhotoUrlCandidates`: X serves `name=small`
- * (~680px) from every `/media/` and `/card_img/` asset, which is a fraction of
- * the `orig` the card mounts and arrives much sooner. The format is left as the
- * source named it -- the browser decodes it either way, and asking for `jpg` here
- * would only make this a second copy of the candidate rule.
+ * Same host and path scope as `getPhotoUrlCandidates` (`isTwimgPhoto`): a
+ * `name=small` variant is a fraction of the `orig` the card mounts and arrives
+ * much sooner. The format is left as the source named it -- the browser decodes
+ * it either way, and asking for `jpg` here would only make this a second copy of
+ * the candidate rule.
  *
  * Returns null for anything that is not an X photo (data URLs, local harness
  * pictures, legacy colon suffixes), so the caller falls back to the tone block
@@ -89,10 +102,7 @@ export function getPhotoPreviewUrl(url: string): string | null {
     // The legacy colon suffix names the variant in the path, not in `name=`;
     // adding a query parameter there would ask X for a URL it does not serve.
     if (/:[\w-]+$/.test(parsed.pathname)) return null;
-    if (
-      parsed.hostname.includes('twimg.com') &&
-      (parsed.pathname.includes('/media/') || parsed.pathname.includes('/card_img/'))
-    ) {
+    if (isTwimgPhoto(parsed)) {
       const next = new URL(parsed.toString());
       next.searchParams.set('name', 'small');
       return next.toString();

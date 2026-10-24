@@ -471,6 +471,15 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   };
 
   const handleConfigChange = (newConfig: CardConfig) => {
+    // A shape the user picked is a command, not a consequence: the ratio control
+    // says "this card is 16:9 now", so the picture must be that shape on the next
+    // frame rather than animate into it. The same applies to the canvas shape,
+    // which changes the mat the card is measured against. Everything else that
+    // moves the height -- a post leaving, a picture reporting its shape -- is a
+    // consequence and is replayed (see `lastFitRef`).
+    if (newConfig.aspectRatio !== config.aspectRatio || newConfig.canvasRatio !== config.canvasRatio) {
+      skipFitReplayRef.current = true;
+    }
     // Only a change to *which* posts are in the card moves the ones that stay.
     // Compared by set rather than by array, because the same exclusions in a
     // different order are the same card and must not animate.
@@ -588,14 +597,19 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    */
   const lastFitRef = useRef<{ height: number; zoom: number } | null>(null);
   const scaleRef = useRef<HTMLDivElement | null>(null);
+  const skipFitReplayRef = useRef<boolean>(false);
   useLayoutEffect(() => {
     const element = scaleRef.current;
     const last = lastFitRef.current;
     lastFitRef.current = { height: cardHeight, zoom };
+    // Consumed whether or not there is anything to replay: the flag belongs to
+    // one render, and a stale one would suppress an unrelated later refit.
+    const userPickedShape = skipFitReplayRef.current;
+    skipFitReplayRef.current = false;
     // Nothing to replay on the first measurement (the card is still hidden), and
     // nothing to replay when the card's height did not move -- which is what
     // tells a zoom the *user* picked from a zoom `fit` re-derived.
-    if (!element || !last || last.height <= 0 || Math.abs(last.height - cardHeight) < 1) return;
+    if (userPickedShape || !element || !last || last.height <= 0 || Math.abs(last.height - cardHeight) < 1) return;
     const ratio = last.zoom / zoom;
     if (!Number.isFinite(ratio) || Math.abs(ratio - 1) < 0.005) return;
     // Top centre: the stage centres the card horizontally and starts it at the

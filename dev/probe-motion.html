@@ -291,6 +291,9 @@
           const { EXPORT_SWAP_ATTR } = await import('../src/content/ui/imageFallback.ts');
           const slow = params.get('slow') || 'http://10.255.255.1/never.jpg';
           const missing = params.get('missing') || 'http://10.255.255.1/missing.jpg';
+          // A picture whose stand-in is derivable and 404s while the picture
+          // itself stalls: `previewFail` below is the card that uses it.
+          const previewFail = params.get('preview') || 'http://pbs.twimg.com/media/full.jpg';
           const root = document.createElement('div');
           document.body.appendChild(root);
           render(
@@ -327,6 +330,19 @@
                   data: { author, isSingle: true, tweets: [post('error', [{ type: 'image', url: slow + '?error', aspectRatio: 1.6 }])] },
                   config,
                 }),
+                h(Card, {
+                  // An X-shaped address whose `name=small` variant 404s while the
+                  // full picture is still in flight: the only way to reach the
+                  // stand-in's own failure path, since every other fixture here
+                  // derives no variant at all. The 404 is on `/media/`, which is
+                  // what makes `getPhotoPreviewUrl` produce a preview URL.
+                  data: {
+                    author,
+                    isSingle: true,
+                    tweets: [post('previewFail', [{ type: 'image', url: previewFail, aspectRatio: 1.6 }])],
+                  },
+                  config,
+                }),
               ]
             ),
             root
@@ -339,6 +355,7 @@
           const missingCell = cards[1].querySelector('.media-box');
           const swapCell = cards[2].querySelectorAll('.media-box')[1];
           const errorCell = cards[3].querySelector('.media-box');
+          const previewFailCell = cards[4].querySelector('.media-box');
           const sheenOf = (cell) => {
             const layer = cell.querySelector('.media-placeholder');
             return layer ? getComputedStyle(layer, '::after').transform : null;
@@ -348,6 +365,10 @@
 
           const waiting = [];
           const failing = [];
+          // Read after the 404 has landed, and only while the picture itself is
+          // still on its way: the sweep has to stop without the cell deciding
+          // the picture failed.
+          const previewFailed = [];
           const start = performance.now();
           while (performance.now() - start < 1600) {
             await new Promise((resolve) => setTimeout(resolve, 40));
@@ -356,6 +377,10 @@
             // to sweep while it is still trying.
             if (missingCell.className.includes('is-picture-missing')) {
               failing.push(sheenOf(missingCell));
+            }
+            const layer = previewFailCell.querySelector('.media-placeholder');
+            if (layer?.classList.contains('is-preview-failed')) {
+              previewFailed.push(sheenOf(previewFailCell));
             }
           }
           const failureClass = missingCell.className;
@@ -433,6 +458,9 @@
             mode,
             waiting,
             failing,
+            previewFailed,
+            previewFailClass: previewFailCell.className,
+            previewFailIcon: opacity(outerOf(previewFailCell)?.querySelector('.media-placeholder-icon')),
             fade,
             failureClass,
             missingIcon,

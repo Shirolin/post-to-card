@@ -840,7 +840,11 @@
   opacity: 0;
 }
 
+/* A small variant that failed stops the sweep without pretending the picture
+   failed: the cell keeps its tone and its place in the wait, and the sweep has
+   nothing left to announce. */
 .media-placeholder.is-preview-ready::after,
+.media-placeholder.is-preview-failed::after,
 .media-box.is-picture-loaded .media-placeholder::after,
 .media-box.is-picture-missing .media-placeholder::after {
   animation: none;
@@ -1520,7 +1524,16 @@
   cursor: pointer;
   opacity: 0;
   transform: scale(0.9);
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  /* The hover rule repaints the chip red, so the colours transition too. This
+     node is `data-html2canvas-ignore` and absolutely positioned, so it is
+     outside the measured, rasterised card and rule 3 does not reach it; the gate
+     still asks for named properties rather than `all`. */
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
   z-index: 10;
   padding: 0;
 }
