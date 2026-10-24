@@ -126,7 +126,7 @@ export interface ThemeTokens {
    *
    * It also has to *separate* from the sheet. The floor the repo holds a drawn
    * edge to is 1.4:1 (`F17.11`), and this token is what draws the footer rule,
-   * so it is held to it too — `F17.14c` enforces it. That is why it is not
+   * so it is held to it too — `F17.14b` enforces it. That is why it is not
    * simply `mediaBorder`: the mount ink is tuned to sit quietly around a photo
    * (1.32–1.38:1 on the four modern sheets) and is too faint to read as a line.
    */

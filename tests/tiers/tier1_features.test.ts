@@ -13,6 +13,7 @@ import { renderToStaticMarkup } from 'preact-render-to-string';
 import { DomAnchorElement, DomDocument, DomElement, DomImageElement, DomShadowRoot, createDomElement, DomMutationObserver } from '../env/browser.ts';
 import { createChromeMock, type SendOutcome } from '../env/chrome.ts';
 import { withClipboard, type ClipboardFailureMode } from '../env/clipboard.ts';
+import { channels, contrast, fromOklab, luminance, toOklab } from '../env/color.ts';
 import { createSuite } from '../env/harness.ts';
 import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
 import { THREAD_HTML } from '../fixtures/thread.ts';
@@ -1597,7 +1598,7 @@ test('F14.5: a post that stands alone resolves as a single, unnumbered card', as
   assert.equal(thread.tweets[0].threadTotal, undefined);
 });
 
-test('F17.19: the type scale is a material token, not a block of CSS per material', async () => {
+test('F17.24: the type scale is a material token, not a block of CSS per material', async () => {
   // Type was the last part of a material still written by hand, one block per
   // theme. Adding a material meant remembering three rule blocks and a missed
   // one silently inherited another's letterforms. The values live in the token
@@ -1644,7 +1645,7 @@ test('F17.19: the type scale is a material token, not a block of CSS per materia
   }
 });
 
-test('F17.20: the inner corner comes from the resolved radius, not a second table', async () => {
+test('F17.25: the inner corner comes from the resolved radius, not a second table', async () => {
   // card.css used to carry its own copy of the radius table: a per-option rule
   // setting the media and quote corners by hand. It had no `theme` row, so the
   // default option left multi-image media at 0px while a single image of the
@@ -1711,7 +1712,7 @@ test('F17.18: every card-root option is named once, by its data attribute', asyn
 // The card's geometry: one source for the numbers the shape is built on
 // -------------------------------------------------------------
 
-test('F17.19: the card injects its geometry, and the stylesheet reads it', async () => {
+test('F17.26: the card injects its geometry, and the stylesheet reads it', async () => {
   // The card's width used to be 640 in the stylesheet and 640 in the script, and
   // the 3:4 floor was 853px in one and `round(640 * 4/3)` in the other. The
   // stylesheet now reads the numbers the card injects, the way it already
@@ -1743,7 +1744,7 @@ test('F17.19: the card injects its geometry, and the stylesheet reads it', async
   );
 });
 
-test('F17.20: the grid planner and the stylesheet derive the hero weights from one place', async () => {
+test('F17.27: the grid planner and the stylesheet derive the hero weights from one place', async () => {
   // The dangerous copy: the stylesheet drew `1.6fr` columns and the planner
   // wrote down the numbers *derived* from them — 1.625 and 0.583 — by hand.
   // Change the stylesheet and the planner still described the old grid, so the
@@ -2425,14 +2426,6 @@ test('F17.2: no theme paints pure white, and none ships a full-bleed gradient', 
 });
 
 test('F17.3: the value ramp is monotone from text to faint on every theme', () => {
-  const luminance = (hex: string): number => {
-    const n = parseInt(hex.slice(1), 16);
-    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
-      const s = c / 255;
-      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  };
   for (const id of THEME_IDS) {
     const { text, muted, faint } = THEMES[id].tokens;
     // A dark theme climbs toward the light; a light theme descends. Either way
@@ -2558,14 +2551,6 @@ test('F17.8: the preview mat reads as a board the sheet sits on, in every theme'
   // patch on the stage rather than paper on a board, which is the difference
   // between "a card" and "a design". Nocturne already separates well; this keeps
   // it that way and stops the light mats drifting back toward the surface.
-  const luminance = (hex: string): number => {
-    const channel = (c: number): number => {
-      const s = c / 255;
-      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    };
-    const n = parseInt(hex.slice(1), 16);
-    return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
-  };
   for (const id of THEME_IDS) {
     const { canvas, surface } = THEMES[id].tokens;
     const [hi, lo] = [luminance(canvas), luminance(surface)].sort((a, b) => b - a);
@@ -2594,23 +2579,6 @@ test('F17.9: body, handle, footnote and link all clear 4.5:1 on their own paper'
   // A footnote can be quiet, but "quieter" is a size decision, not a licence to
   // ship meta text below the contrast floor. This is the check that keeps a
   // future palette tweak from quietly dimming the stats row into the dark.
-  const srgb = (channel: number): number => {
-    const s = channel / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance = (hex: string): number => {
-    const n = parseInt(hex.slice(1), 16);
-    return (
-      0.2126 * srgb((n >> 16) & 255) +
-      0.7152 * srgb((n >> 8) & 255) +
-      0.0722 * srgb(n & 255)
-    );
-  };
-  const contrast = (a: string, b: string): number => {
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
-  };
-
   for (const id of THEME_IDS) {
     const { surface, text, muted, faint, link } = THEMES[id].tokens;
     for (const [label, colour] of [
@@ -2632,18 +2600,6 @@ test('F17.11: a filled quote panel is actually visible, and its text still reads
   // The old quote tints sat 1.06–1.12:1 off the sheet — the panel was there in
   // the DOM and invisible on the card. This locks both halves: the fill has to
   // separate from the sheet, and the quoted text has to stay legible on it.
-  const srgb = (channel: number): number => {
-    const s = channel / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance = (hex: string): number => {
-    const n = parseInt(hex.slice(1), 16);
-    return 0.2126 * srgb((n >> 16) & 255) + 0.7152 * srgb((n >> 8) & 255) + 0.0722 * srgb(n & 255);
-  };
-  const contrast = (a: string, b: string): number => {
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
-  };
 
   for (const id of THEME_IDS) {
     const { quoteStyle, quoteBackground, quoteBorder, surface, text, muted } = THEMES[id].tokens;
@@ -2688,50 +2644,6 @@ test('F17.23: the waiting sweep lifts every material’s recess, in one directio
     'the declaration that wins must lift the recess by a fixed perceptual step'
   );
 
-  const srgb = (channel: number): number => {
-    const s = channel / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance = (rgb: number[]): number =>
-    0.2126 * srgb(rgb[0]) + 0.7152 * srgb(rgb[1]) + 0.0722 * srgb(rgb[2]);
-  const contrast = (a: number[], b: number[]): number => {
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
-  };
-  const channels = (hex: string): number[] => {
-    const n = parseInt(hex.slice(1), 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  };
-  // sRGB -> OKLab -> sRGB, so the check can ask what the browser will paint.
-  const toLinear = (c: number): number => {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const toOklab = (rgb: number[]): [number, number, number] => {
-    const [r, g, b] = rgb.map(toLinear);
-    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-    return [
-      0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
-      1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
-      0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
-    ];
-  };
-  const fromOklab = (L: number, a: number, b: number): number[] => {
-    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
-    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
-    const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
-    const encode = (v: number): number => {
-      const c = Math.max(0, Math.min(1, v));
-      return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
-    };
-    return [
-      encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
-      encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
-      encode(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
-    ];
-  };
 
   for (const id of THEME_IDS) {
     const recess = channels(THEMES[id].tokens.quoteBackground);
@@ -2919,18 +2831,6 @@ test('F17.14b: every material\'s line ink is a real ink, and separates from its 
   // picture -- 1.32-1.38:1, the faintest drawn edge on any sheet, and under the
   // 1.4:1 floor F17.11 holds a drawn border to. That is a line you have to
   // hunt for, which is the same defect one step further from invisible.
-  const srgb = (channel: number): number => {
-    const s = channel / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance = (hex: string): number => {
-    const n = parseInt(hex.slice(1), 16);
-    return 0.2126 * srgb((n >> 16) & 255) + 0.7152 * srgb((n >> 8) & 255) + 0.0722 * srgb(n & 255);
-  };
-  const contrast = (a: string, b: string): number => {
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
-  };
 
   for (const id of THEME_IDS) {
     const { rule, surface } = THEMES[id].tokens;
@@ -2951,7 +2851,7 @@ test('F17.14b: every material\'s line ink is a real ink, and separates from its 
   }
 
   // And the token still has to reach the footer rule, so a future rename cannot
-  // leave the contract asserted but unenforced. Only the footer: F17.14 already
+  // leave the contract asserted but unenforced. Only the footer: F17.14b already
   // asserts the connector, and its `var(--rule, …)` is the declaration whose
   // fallback the whole bug was about. The footer's `border-top` carries
   // `var(--rule-style, …)` *and* `var(--rule, …)`, so a bare `includes('var(--rule')`
@@ -3643,7 +3543,7 @@ test('F21.6: Controls renders narrow-screen collapse toggle handle with proper a
   assert.ok(html.includes('controls-panel is-collapsed'), 'must have collapsed panel class initially');
 });
 
-test('F21.7: the sheet opens folded on a narrow window and open on a wide one', async () => {
+test('F21.14: the sheet opens folded on a narrow window and open on a wide one', async () => {
   // F21.6 covers the string renderer, which has no window to measure. The two
   // real viewports are what this default is about. The boundary is the shared
   // constant, not a number typed here: `geometry` is what the stylesheet's media
@@ -4369,7 +4269,7 @@ test('F25.7: an avatar the proxy cannot deliver exports as the silhouette, not a
 // -------------------------------------------------------------
 // F26: Clipboard Copy with Fallback
 // -------------------------------------------------------------
-test('F25.7: the rasterizer is handed a data URL, or nothing it can fetch', async () => {
+test('F25.8: the rasterizer is handed a data URL, or nothing it can fetch', async () => {
   // The rasterizer meets pictures of its own — a background it has to resolve —
   // and asks for them through a hook. The hook's contract is narrow: a data URL
   // to draw, or `false` to say "this one is not mine to fetch".
@@ -6011,7 +5911,7 @@ test('F29.8: the video badge follows the play-button preference', async () => {
 // -------------------------------------------------------------
 // F30: Action Bar Button Visibility & Configurable Toggle
 // -------------------------------------------------------------
-test('F30.1: the action-bar button ships on by default', () => {
+test('F30.15: the action-bar button ships on by default', () => {
   // The stored-value half lives in tier 2.76, beside the storage mock. The
   // storage key's literal is deliberately not pinned: what matters is that the
   // popup and the content script spell it the same, which `tier_hygiene` 2
@@ -6019,7 +5919,7 @@ test('F30.1: the action-bar button ships on by default', () => {
   assert.equal(DEFAULT_CARD_CONFIG.showActionBarButton, true);
 });
 
-test('F30.2: the controls offer the action-bar toggle, labelled in the active language', async () => {
+test('F30.16: the controls offer the action-bar toggle, labelled in the active language', async () => {
   const zh = await renderControls({ config: { locale: 'zh-CN' } });
   const en = await renderControls({ config: { locale: 'en-US' } });
 
