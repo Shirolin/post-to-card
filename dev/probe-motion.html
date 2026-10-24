@@ -18,7 +18,7 @@
                  changing, rather than one layout and one re-fit.
         picture  one picture that never arrives (the cell's waiting state), then
                  a real one (the dissolve), plus a cell whose chain fails (the
-                 pulse stopping).
+                 sweep stopping).
 
       The numbers are left in `window.__motionProbe` for the script to assert;
       the log on screen is for a human reading the page directly. Neither the
@@ -356,6 +356,22 @@
           const swapCell = cards[2].querySelectorAll('.media-box')[1];
           const errorCell = cards[3].querySelector('.media-box');
           const previewFailCell = cards[4].querySelector('.media-box');
+
+          // What the sweep's midpoint actually paints, per material: the sheet
+          // is the card's own surface, so a sweep that mixes toward it changes
+          // direction between materials. Reported rather than asserted here --
+          // the rule lives in tier1's contrast check, which can see the tokens.
+          const sheenReport = cards.map((card, i) => {
+            const layer = card.querySelector('.media-placeholder');
+            const bg = layer ? getComputedStyle(layer, '::after').backgroundImage : '';
+            return {
+              index: i,
+              theme: card.querySelector('.post-to-card-target')?.dataset.theme || '',
+              surface: getComputedStyle(card).getPropertyValue('--surface').trim(),
+              quoteBg: getComputedStyle(card).getPropertyValue('--quote-bg').trim(),
+              backgroundImage: bg,
+            };
+          });
           const sheenOf = (cell) => {
             const layer = cell.querySelector('.media-placeholder');
             return layer ? getComputedStyle(layer, '::after').transform : null;
@@ -442,7 +458,7 @@
           say(`ratio after a real 1.6 picture: ${ratioAfterRealLoad}`);
 
           // The same guard on the error path: an error the exporter caused says
-          // nothing about the picture, so it must not stop the pulse.
+          // nothing about the picture, so it must not stop the sweep.
           const errorImg = errorCell.querySelector('.media-picture');
           errorImg.setAttribute(EXPORT_SWAP_ATTR, 'true');
           errorImg.src = missing + '?during-export';
@@ -459,6 +475,7 @@
             waiting,
             failing,
             previewFailed,
+            sheenReport,
             previewFailClass: previewFailCell.className,
             previewFailIcon: opacity(outerOf(previewFailCell)?.querySelector('.media-placeholder-icon')),
             fade,

@@ -427,6 +427,18 @@ try {
     );
     check('the machine really is running the animations', reduced === 'no-preference', reduced);
 
+    // The sweep's colour has to be a step off the recess it lies on, in one
+    // direction, on every material. Mixing toward `--surface` could not promise
+    // that: it is the darker of the two on the dark materials and equal to the
+    // recess on glass. The resolved gradient is reported so a regression shows
+    // the colour rather than just a number.
+    const sheen = probe.sheenReport?.find((s) => s.backgroundImage.includes('oklch')) || probe.sheenReport?.[0];
+    check(
+      'the sweep lifts the recess instead of painting the sheet over it',
+      Boolean(sheen?.backgroundImage.includes('oklch')),
+      sheen?.backgroundImage || 'no computed gradient'
+    );
+
     const waiting = probe.waiting.filter((v) => typeof v === 'string' && v);
     const swept = new Set(waiting).size;
     check('the waiting cell sweeps its highlight', swept >= 4, `${swept} distinct transforms`);

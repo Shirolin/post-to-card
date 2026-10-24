@@ -2662,6 +2662,97 @@ test('F17.11: a filled quote panel is actually visible, and its text still reads
   }
 });
 
+test('F17.14: the waiting sweep lifts every material’s recess, in one direction', () => {
+  // The sweep used to be `color-mix(in srgb, var(--surface) 85%, transparent)`
+  // over the recess. That is only a highlight where the sheet happens to be
+  // lighter than the recess: on midnight, darkroom and terminal it darkened the
+  // block, on glass the two are the same colour and the sweep was invisible, and
+  // on brutalist it went the wrong way on a pale sheet. Measured across the
+  // twelve themes it produced 1.00–1.20:1 with no consistent direction.
+  //
+  // The rule is now a fixed perceptual step (`oklch(from var(--quote-bg)
+  // calc(l + 0.1) c h)`), so this check models exactly that: +0.10 OKLCH
+  // lightness, then the gamut clamp the browser applies, and asserts the result
+  // is (a) brighter than the recess and (b) far enough to read as a highlight.
+  const css = fs.readFileSync(path.resolve(__dirname, '../../src/content/styles/card.css'), 'utf-8');
+  const sheenRule = css.slice(css.indexOf('.media-placeholder::after'));
+  const sheen = sheenRule.slice(0, sheenRule.indexOf('}'));
+  assert.match(
+    sheen,
+    /oklch\(from var\(--quote-bg\) calc\(l \+ 0\.1\) c h\)/,
+    'the sweep must lift the recess by a fixed perceptual step'
+  );
+  assert.ok(
+    !/var\(--surface\)/.test(sheen.replace(/\/\*[\s\S]*?\*\//g, '')),
+    'the sweep must not paint the sheet over the recess again'
+  );
+
+  const srgb = (channel: number): number => {
+    const s = channel / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (rgb: number[]): number =>
+    0.2126 * srgb(rgb[0]) + 0.7152 * srgb(rgb[1]) + 0.0722 * srgb(rgb[2]);
+  const contrast = (a: number[], b: number[]): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const channels = (hex: string): number[] => {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  // sRGB -> OKLab -> sRGB, so the check can ask what the browser will paint.
+  const toLinear = (c: number): number => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const toOklab = (rgb: number[]): [number, number, number] => {
+    const [r, g, b] = rgb.map(toLinear);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [
+      0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+    ];
+  };
+  const fromOklab = (L: number, a: number, b: number): number[] => {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+    const encode = (v: number): number => {
+      const c = Math.max(0, Math.min(1, v));
+      return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+    };
+    return [
+      encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      encode(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
+    ];
+  };
+
+  for (const id of THEME_IDS) {
+    const recess = channels(THEMES[id].tokens.quoteBackground);
+    const [L, a, b] = toOklab(recess);
+    // The step is clamped by the gamut: a recess within 0.1 of white cannot be
+    // lifted a full step, and no colour is. That is a limit of the material, not
+    // of the rule, so those themes are held to "brighter and visible at all"
+    // rather than to the same ratio as the ones with headroom.
+    const clamped = L + 0.1 > 1;
+    const sheenColour = fromOklab(Math.min(1, L + 0.1), a, b);
+    assert.ok(
+      luminance(sheenColour) > luminance(recess),
+      `${id} sweep is not brighter than the recess it lies on`
+    );
+    const ratio = contrast(sheenColour, recess);
+    assert.ok(
+      ratio >= (clamped ? 1.04 : 1.1),
+      `${id} sweep only ${ratio.toFixed(2)}:1 off the recess — too faint to read as one`
+    );
+  }
+});
+
 test('F17.12: the watermark is footnote ink, never a fade', () => {
   // `opacity: 0.55` dropped the mark to 2.1–3.0:1 on every sheet, below the
   // floor the rest of the card holds, and contradicted the rule that quieter is

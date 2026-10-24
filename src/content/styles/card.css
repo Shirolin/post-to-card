@@ -801,10 +801,27 @@
   content: '';
   position: absolute;
   inset: 0;
+  /* The highlight is the recess lifted, not the sheet painted over it. Mixing
+     toward `--surface` assumed the sheet is lighter than the recess, which is
+     false wherever the material's surface is the darker of the two (midnight,
+     darkroom, terminal), equal to it (glass: the sweep was invisible), or
+     lighter but tinted the other way (brutalist). Measured across all twelve
+     themes, that produced 1.00–1.20:1 with no consistent direction.
+     A fixed perceptual step keeps one direction everywhere: +0.10 in OKLCH
+     lightness, clamped by the gamut, gives 1.13–1.47:1 and always brighter.
+     `oklch(from ...)` is Chrome 119, older than the `round()` this sheet
+     already relies on; the plain `color-mix` above is the fallback for a
+     browser without relative colour, and it is at least the right direction. */
   background: linear-gradient(
     100deg,
     transparent 25%,
-    color-mix(in srgb, var(--surface) 85%, transparent) 50%,
+    color-mix(in srgb, var(--quote-bg), #ffffff 30%) 50%,
+    transparent 75%
+  );
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    oklch(from var(--quote-bg) calc(l + 0.1) c h) 50%,
     transparent 75%
   );
   transform: translateX(-100%);

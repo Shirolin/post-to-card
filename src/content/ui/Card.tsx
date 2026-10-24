@@ -171,9 +171,10 @@ function renderRichTokens(
 /**
  * Advances a failed picture to the next URL in its chain.
  *
- * The placeholder that covers a picture's cell while it loads pulses, so it has
- * to know when waiting is over: a chain that ran out is a picture that is not
- * coming, and a block that goes on breathing would claim otherwise. The chain
+ * The placeholder that covers a picture's cell while it loads sweeps a
+ * highlight across it, so it has to know when waiting is over: a chain that ran
+ * out is a picture that is not coming, and a cell that keeps sweeping would
+ * claim otherwise. The chain
  * carries its own ending (it is the attribute that disappears), so "exhausted"
  * is read off the element after the walk, not reconstructed here.
  *
