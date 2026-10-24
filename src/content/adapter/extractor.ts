@@ -1216,47 +1216,40 @@ function findTweetStatusLink(article: Element, ownership: TweetOwnership): Eleme
  * Extracts tweet ID from status link or current URL.
  */
 export function extractTweetId(article: Element): string {
-  return idFromStatusHref(statusLinkHref(article, resolveOwnership(article)));
+  return postIdentity(article, resolveOwnership(article)).id;
 }
 
 /**
- * The id a status link names, with the page's own address as the fallback.
+ * The post's id and permalink, from the one status link.
  *
- * Split from the lookup so `extractTweetData` can resolve the ownership once and
- * still get both the id and the permalink: asking `resolveOwnership` and then
- * walking the article's links a second time for the URL was the same work twice.
+ * The two answers come from the same element, so the caller that already holds
+ * an `ownership` gets both from a single walk: asking `resolveOwnership` and
+ * then re-walking the article's links for the permalink was the same subtree
+ * search three times for one tweet.
+ *
+ * A link with no href still counts as the link. X leaves the attribute off in
+ * some renderings, and an empty href names the site — which is the permalink
+ * answer, not a reason to fall back to the page's own address.
  */
-function idFromStatusHref(href: string): string {
-  const match = href.match(/\/status\/(\d+)/);
-  if (match) return match[1];
+function postIdentity(
+  article: Element,
+  ownership: TweetOwnership
+): { id: string; url: string } {
+  const statusLink = findTweetStatusLink(article, ownership);
+  const href = statusLink?.getAttribute('href') || '';
 
-  if (typeof window !== 'undefined' && window.location?.pathname) {
-    const match = window.location.pathname.match(/\/status\/(\d+)/);
-    if (match) return match[1];
+  const idMatch = href.match(/\/status\/(\d+)/);
+  const pagePath = typeof window !== 'undefined' ? window.location?.pathname : undefined;
+  const pathMatch = !idMatch && pagePath ? pagePath.match(/\/status\/(\d+)/) : null;
+
+  const id = idMatch ? idMatch[1] : pathMatch ? pathMatch[1] : '';
+
+  if (statusLink) {
+    return { id, url: href.startsWith('http') ? href : `https://x.com${href}` };
   }
 
-  return '';
-}
-
-function statusLinkHref(article: Element, ownership: TweetOwnership): string {
-  return findTweetStatusLink(article, ownership)?.getAttribute('href') || '';
-}
-
-/**
- * The permalink a status href names, absolute, with the page's address as the
- * fallback.
- */
-function urlFromStatusHref(href: string): string {
-  if (href) {
-    if (href.startsWith('http')) return href;
-    return `https://x.com${href}`;
-  }
-
-  if (typeof window !== 'undefined' && window.location?.href) {
-    return window.location.href;
-  }
-
-  return '';
+  const pageHref = typeof window !== 'undefined' ? window.location?.href : undefined;
+  return { id, url: pageHref || '' };
 }
 
 /**
@@ -1330,14 +1323,11 @@ export function extractTweetData(article: Element): TweetData | null {
   // question — is this element the tweet's own, the quoted post's, or the
   // article's — and the answer does not change between one element and the
   // next, so it is asked once here rather than walked again per candidate.
-  // The status link is found from that same answer, once, for the id and the
-  // permalink alike: the two used to resolve ownership and re-walk the links
-  // separately, which was the same subtree search three times over.
   const ownership = resolveOwnership(article);
-  const statusHref = statusLinkHref(article, ownership);
 
-  const id = idFromStatusHref(statusHref);
-  const url = urlFromStatusHref(statusHref);
+  // The id and the permalink come from that same answer, so the status link is
+  // walked for once rather than per field.
+  const { id, url } = postIdentity(article, ownership);
   const author = extractAuthorInfo(article);
 
   const tweetTextEl = article.querySelector('div[data-testid="tweetText"]');
