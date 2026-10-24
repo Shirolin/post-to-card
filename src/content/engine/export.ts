@@ -57,8 +57,6 @@ export interface RenderOptions {
   report?: (report: RenderReport) => void;
   /** `preferHighResolution` from the user's preferences, possibly still loading. */
   preferHighResolution?: boolean | Promise<boolean>;
-  /** Measure only: no rasterizing, and `CardRender.blob` is null. */
-  geometryOnly?: boolean;
 }
 
 /**
@@ -477,25 +475,20 @@ export async function renderCardToBlob(
   // Nothing may be left unhandled when the caller stops caring; the render still
   // runs to its end, which is what tears the copy down and restores the card.
   ignoreRejection(render);
-  const blob = await (await render).blob;
-  // A measurement was asked for, not a picture.
-  if (!blob) {
-    throw new ExportRenderError('rasterizer', 'The render was measured but never rasterized.');
-  }
-  return blob;
+  return (await render).blob;
 }
 
 /**
  * What an export looks like the instant it is asked for.
  *
- * `blob` joins the object only when the picture exists -- it is the promise the
- * clipboard holds -- so the object itself resolves with the measurement. Both
- * settle the same tick, and the render is already under way by then: the
- * clipboard was claimed at the click, not here. That is why this splits in two.
+ * `blob` is the promise the clipboard holds, so the object itself resolves with
+ * the measurement. Both settle the same tick, and the render is already under
+ * way by then: the clipboard was claimed at the click, not here. That is why this
+ * splits in two.
  */
 export interface CardRender extends RenderReport {
   /** The picture. Rejects only when the export failed; never when it degraded. */
-  blob: Promise<Blob | null> | null;
+  blob: Promise<Blob>;
 }
 
 /**
@@ -503,16 +496,12 @@ export interface CardRender extends RenderReport {
  *
  * Rendering is dominated by fetching and encoding the pictures, so everything
  * the canvas will need runs ahead: the rasterization has started when this
- * returns. With `geometryOnly` the DOM is rewritten and restored but no canvas
- * is built, which is what makes a size readout cheap enough to ask for on every
- * resize; those renders settle with `blob` null, as does one that gave up early.
+ * returns.
  */
 export async function beginCardRender(
   cardElement: HTMLElement,
   options: RenderOptions = {}
 ): Promise<CardRender> {
-  const geometryOnly = options.geometryOnly === true;
-
   // Prepared before the rasterizing `try`: mounting the copy can throw (a
   // detached card, a hostile document), and that used to leave the live card
   // holding data URLs until the next export.
@@ -525,7 +514,7 @@ export async function beginCardRender(
   // The restoration lives inside the render, not in a `finally` around it: a
   // caller that hands the picture to the clipboard and returns would otherwise
   // put the remote sources back on the live card before the rasterizer drew it.
-  const render = mountAndRender(cardElement, preparation, options, geometryOnly);
+  const render = mountAndRender(cardElement, preparation, options);
   return render.measured;
 }
 
@@ -572,8 +561,7 @@ async function preferHighResolutionOf(prefer: RenderOptions['preferHighResolutio
 function mountAndRender(
   cardElement: HTMLElement,
   preparation: CardImagePreparation,
-  options: RenderOptions,
-  geometryOnly: boolean
+  options: RenderOptions
 ): { measured: Promise<CardRender> } {
   let resolveObject: ((render: CardRender) => void) | null = null;
   let rejectObject: ((err: unknown) => void) | null = null;
@@ -603,7 +591,7 @@ function mountAndRender(
     rejectObject = reject;
   });
 
-  const run = (async (): Promise<Blob | null> => {
+  const run = (async (): Promise<Blob> => {
     let mounted: { copy: HTMLElement; dispose: () => void } | null = null;
     try {
       mounted = mountUnzoomedCopy(cardElement);
@@ -656,11 +644,6 @@ function mountAndRender(
         } catch {
           // Reporting is a courtesy; it may not break the export.
         }
-      }
-
-      if (geometryOnly) {
-        resolved({ ...report, blob: null });
-        return null;
       }
 
       const filter = (node: Node): boolean => {
@@ -719,17 +702,15 @@ function mountAndRender(
 
   // The picture joins the object as soon as it exists, so the clipboard holds one
   // promise whatever the render's timing. A failure rejects that promise -- once,
-  // to the one caller that awaits it -- while the object itself resolves, so a
-  // caller that only wanted the size hears nothing about a picture it never asked
-  // for.
-  const published = new Promise<Blob | null>((resolve, reject) => {
+  // to the one caller that awaits it -- while the object itself resolves with the
+  // measurement that was already taken.
+  const published = new Promise<Blob>((resolve, reject) => {
     run.then(
       (picture) => {
         resolved({ ...lastReport, blob: published });
         resolve(picture);
       },
       (err) => {
-        resolve(null);
         rejected(err);
         reject(err);
       }
@@ -1021,12 +1002,11 @@ function conformForClipboard(
  * awaited.
  */
 function pictureOf(render: Promise<CardRender>): ClipboardWriteHandle['picture'] {
-  const settled = render.then(
-    (started) =>
-      (started.blob ?? Promise.reject(new Error('no picture was rendered'))).then(
-        (blob) => ({ blob, failure: null }),
-        (failure: unknown) => ({ blob: null, failure })
-      )
+  const settled = render.then((started) =>
+    started.blob.then(
+      (blob) => ({ blob, failure: null }),
+      (failure: unknown) => ({ blob: null, failure })
+    )
   );
   ignoreRejection(settled);
   return settled;
