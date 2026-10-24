@@ -56,28 +56,37 @@ function exclusionSignature(ids: string[] | undefined): string {
   return [...(ids ?? [])].sort().join('|');
 }
 
+interface FlipMove {
+  element: HTMLElement;
+  start: Partial<CSSStyleDeclaration>;
+  end: Partial<CSSStyleDeclaration>;
+  transition: string;
+}
+
 /**
- * Writes a start value, lets the browser keep it, then transitions to the end
- * value.
+ * Plays a batch of moves: writes every start value, lets the browser keep them,
+ * then transitions every element to its end value.
  *
  * The style read in the middle is the whole trick: without it the two writes
  * collapse before the next style pass, there is no "from" to interpolate, and
  * the property simply lands where it was going. Every FLIP here needs the same
- * three beats, so they live in one place.
+ * three beats, so they live in one place, and the beats are per batch rather
+ * than per element: one read forces the layout for all of them, where a read per
+ * post forced one synchronous layout per post on the animation's first frame.
  */
-function playFrom(
-  element: HTMLElement,
-  start: Partial<CSSStyleDeclaration>,
-  end: Partial<CSSStyleDeclaration>,
-  transition: string
-): void {
-  element.style.transition = 'none';
-  Object.assign(element.style, start);
-  // Forces a style recalculation, which is what makes `start` the value the
-  // transition below begins from.
-  void element.offsetWidth;
-  element.style.transition = transition;
-  Object.assign(element.style, end);
+function playFrom(moves: FlipMove[]): void {
+  if (moves.length === 0) return;
+  for (const move of moves) {
+    move.element.style.transition = 'none';
+    Object.assign(move.element.style, move.start);
+  }
+  // Forces a style recalculation, which is what makes each `start` above the
+  // value its transition begins from.
+  void moves[0].element.offsetWidth;
+  for (const move of moves) {
+    move.element.style.transition = move.transition;
+    Object.assign(move.element.style, move.end);
+  }
 }
 
 export interface AppProps {
@@ -445,6 +454,10 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
    * number is correct on both sides of the measurement.
    */
   const threadChangeRef = useRef<{ positions: Map<string, number>; showing: Set<string> } | null>(null);
+  // The pending release of the list's clip. Held rather than left as a bare
+  // timeout so a second exclusion inside the flight cannot have its clip opened
+  // by the previous turn's timer.
+  const threadClipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const snapshotThreadItems = (): Map<string, number> => {
     const snapshot = new Map<string, number>();
@@ -521,26 +534,42 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     const list = card.querySelector('.thread-list') as HTMLElement | null;
     if (list) list.style.overflow = 'hidden';
 
-    moves.forEach(({ item, shift }) => {
-      if (shift === null) {
-        playFrom(item, { opacity: '0' }, { opacity: '' }, `opacity ${THREAD_FLIP_MS}ms ease-out`);
-        return;
-      }
-      playFrom(
-        item,
-        { transform: `translateY(${shift}px)` },
-        { transform: '' },
-        `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`
-      );
-    });
+    playFrom(
+      moves.map(({ item, shift }) =>
+        shift === null
+          ? {
+              element: item,
+              start: { opacity: '0' },
+              end: { opacity: '' },
+              transition: `opacity ${THREAD_FLIP_MS}ms ease-out`,
+            }
+          : {
+              element: item,
+              start: { transform: `translateY(${shift}px)` },
+              end: { transform: '' },
+              transition: `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`,
+            }
+      )
+    );
 
-    if (list) {
-      // One frame past the longest move, so the clip is released after every
-      // post has arrived rather than mid-flight.
-      setTimeout(() => {
-        list.style.overflow = '';
-      }, THREAD_FLIP_MS + 60);
-    }
+    if (!list) return;
+
+    // One frame past the longest move, so the clip is released after every post
+    // has arrived rather than mid-flight. The cleanup runs before the next
+    // exclusion and on unmount: it drops this turn's timer and reopens the clip,
+    // which the next run re-applies if it also moves posts.
+    threadClipTimerRef.current = setTimeout(() => {
+      list.style.overflow = '';
+      threadClipTimerRef.current = null;
+    }, THREAD_FLIP_MS + 60);
+
+    return () => {
+      if (threadClipTimerRef.current) {
+        clearTimeout(threadClipTimerRef.current);
+        threadClipTimerRef.current = null;
+      }
+      list.style.overflow = '';
+    };
   }, [exclusionSignatureValue]);
 
   /**
@@ -572,12 +601,14 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     // Top centre: the stage centres the card horizontally and starts it at the
     // top, so that is the point the picture appears to scale around.
     element.style.transformOrigin = '50% 0';
-    playFrom(
-      element,
-      { transform: `scale(${ratio})` },
-      { transform: '' },
-      `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`
-    );
+    playFrom([
+      {
+        element,
+        start: { transform: `scale(${ratio})` },
+        end: { transform: '' },
+        transition: `transform ${THREAD_FLIP_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`,
+      },
+    ]);
   }, [cardHeight, zoom]);
 
   const getExportTarget = (): HTMLElement | null => {

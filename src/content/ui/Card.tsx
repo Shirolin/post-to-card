@@ -21,8 +21,9 @@ import {
 } from './imageFallback.ts';
 import { threadSession } from '../threadSession.ts';
 import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
-import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages } from 'lucide-preact';
+import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages, ImageOff } from 'lucide-preact';
 import { CARD_BUILD } from '../build.ts';
+import { getPhotoPreviewUrl } from '../adapter/urls.ts';
 
 export interface CardProps {
   data: ThreadData | TweetData;
@@ -284,6 +285,10 @@ function renderMediaGrid(
         // A floored box is a crop, so the picture has to cover it; 完整展示 and
         // the unfloored crop both leave the picture to its own fit rule.
         const cropsToFloor = boxRatio !== undefined && m.aspectRatio !== undefined && boxRatio !== m.aspectRatio;
+        // The picture's small variant, for the blurred stand-in. Derived from
+        // the mounted source, so a recovered picture keeps its preview; null for
+        // anything X did not serve, which leaves the tone block alone.
+        const previewUrl = getPhotoPreviewUrl(m.url);
 
         return (
           <div
@@ -321,20 +326,45 @@ function renderMediaGrid(
                   late; below the play badge, which is the one thing that may sit
                   on a poster that is not there yet.
 
-                  Two nodes, not one: the pulse is an animation on `opacity`, and
-                  an element cannot fade out of a property it is also being
-                  animated on -- removing the animation and writing `opacity: 0`
-                  in the same style change cuts instead of dissolving. The outer
-                  node owns the fade, the inner one owns the breathing.
+                  Inside it, in order: the picture's own small variant, blurred,
+                  and a highlight that sweeps the block until that variant
+                  arrives. The blur is what makes the wait read as a photograph
+                  coming into focus rather than as an empty or missing slot; the
+                  small file is derived from the mounted source
+                  (`getPhotoPreviewUrl`) and is a fraction of its size, so it
+                  usually lands first. No icon while waiting: a picture glyph over
+                  a grey block reads as a broken image, which is the one thing a
+                  wait must not look like.
+
+                  A picture whose whole chain failed gets the crossed mark
+                  instead, and the blur is hidden there too: the preview would
+                  keep showing a picture that is not coming. The mark lives in
+                  the tree and styles reveal it from the cell's classes, because
+                  `is-picture-loaded` / `is-picture-missing` are written
+                  imperatively and never re-render.
+
                   Deliberately kept out of the export: the engine waits for every
                   picture to decode, and a stand-in for a picture must never end
-                  up in the file. */}
+                  up in the file. The preview is inside this node, so it goes with
+                  it. */}
               <span
                 class="media-placeholder"
                 aria-hidden="true"
                 data-html2canvas-ignore="true"
               >
-                <span class="media-placeholder-pulse" />
+                {previewUrl && (
+                  <img
+                    class="media-placeholder-preview"
+                    src={previewUrl}
+                    alt=""
+                    aria-hidden="true"
+                    decoding="async"
+                    onLoad={(e: JSX.TargetedEvent<HTMLImageElement>) =>
+                      e.currentTarget.parentElement?.classList.add('is-preview-ready')
+                    }
+                  />
+                )}
+                <ImageOff class="media-placeholder-icon media-placeholder-icon-missing" aria-hidden="true" />
               </span>
               {/* Play badge sits on the poster without a scrim: the pill is
                   opaque, so a gradient would only dim the image. */}

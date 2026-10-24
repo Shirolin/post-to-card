@@ -8,10 +8,14 @@
       outside the modal's shadow root (`.ptc-scope` supplies the tokens), with a
       scripted gesture and per-frame sampling.
 
-      Two modes, selected by `?mode=`:
+      Three modes, selected by `?mode=`:
 
         flip     remove one post from a three-post card and record where every
                  post and the card's own scale went, frame by frame.
+        ratio    switch a single-post card from 3:4 to 16:9 and record the card's
+                 height and fitted zoom per frame: a layout transition under the
+                 ResizeObserver shows up as a height (and so a zoom) that keeps
+                 changing, rather than one layout and one re-fit.
         picture  one picture that never arrives (the cell's waiting state), then
                  a real one (the dissolve), plus a cell whose chain fails (the
                  pulse stopping).
@@ -98,6 +102,47 @@
           media: media ?? [{ type: 'image', url: paint(n * 90), aspectRatio: 1.6 }],
         });
 
+        const short = (m) =>
+          m === 'none' ? '-' : m.replace('matrix(', '').replace(')', '').trim();
+
+        /** One reading of the card, shared by every mode: what moved, by how much. */
+        const makeSnap = (scope) => () => {
+          const scale = scope.querySelector('.preview-scale');
+          const card = scope.querySelector('#post-to-card-export-target');
+          const cardBody = scope.querySelector('.post-to-card-target');
+          const list = scope.querySelector('.thread-list');
+          const single = scope.querySelector('.single-tweet-block');
+          return {
+            zoom: scale ? Number(Number(scale.style.zoom).toFixed(4)) : null,
+            scaleTransform: scale ? short(getComputedStyle(scale).transform) : null,
+            scaleTransition: scale ? scale.style.transition || '' : '',
+            scaleOrigin: scale ? scale.style.transformOrigin || '' : '',
+            height: card ? card.offsetHeight : null,
+            // The shape the card has committed to. The ratio switch reads it to
+            // prove the click landed on the card's control, not the canvas's,
+            // which offers the same two labels.
+            ratio: cardBody ? cardBody.dataset.ratio || '' : null,
+            listOverflow: list ? list.style.overflow || '' : '',
+            single: Boolean(single),
+            singleStyle: single
+              ? {
+                  transform: short(getComputedStyle(single).transform),
+                  opacity: Number(getComputedStyle(single).opacity).toFixed(2),
+                }
+              : null,
+            posts: Array.from(scope.querySelectorAll('[data-tweet-id]')).map((item) => ({
+              id: item.dataset.tweetId,
+              // Written once, in flip mode, so a post that keeps its own DOM
+              // across a reorder can be told apart from one drawn into a
+              // neighbour's.
+              tag: item.dataset.probeTag || '',
+              top: Math.round(item.offsetTop),
+              transform: short(getComputedStyle(item).transform),
+              opacity: Number(getComputedStyle(item).opacity).toFixed(2),
+            })),
+          };
+        };
+
         if (mode === 'flip') {
           const scope = document.createElement('div');
           scope.className = 'ptc-scope';
@@ -110,38 +155,7 @@
           };
           render(h(App, { threadData, onClose: () => {}, initialConfig: config }), scope);
 
-          const short = (m) =>
-            m === 'none' ? '-' : m.replace('matrix(', '').replace(')', '').trim();
-          const snap = () => {
-            const scale = scope.querySelector('.preview-scale');
-            const card = scope.querySelector('#post-to-card-export-target');
-            const list = scope.querySelector('.thread-list');
-            const single = scope.querySelector('.single-tweet-block');
-            return {
-              zoom: scale ? Number(Number(scale.style.zoom).toFixed(4)) : null,
-              scaleTransform: scale ? short(getComputedStyle(scale).transform) : null,
-              scaleTransition: scale ? scale.style.transition || '' : '',
-              scaleOrigin: scale ? scale.style.transformOrigin || '' : '',
-              height: card ? card.offsetHeight : null,
-              listOverflow: list ? list.style.overflow || '' : '',
-              single: Boolean(single),
-              singleStyle: single
-                ? {
-                    transform: short(getComputedStyle(single).transform),
-                    opacity: Number(getComputedStyle(single).opacity).toFixed(2),
-                  }
-                : null,
-              posts: Array.from(scope.querySelectorAll('[data-tweet-id]')).map((item) => ({
-                id: item.dataset.tweetId,
-                // Written once, below, so a post that keeps its own DOM across a
-                // reorder can be told apart from one drawn into a neighbour's.
-                tag: item.dataset.probeTag || '',
-                top: Math.round(item.offsetTop),
-                transform: short(getComputedStyle(item).transform),
-                opacity: Number(getComputedStyle(item).opacity).toFixed(2),
-              })),
-            };
-          };
+          const snap = makeSnap(scope);
 
           // Let the first measurement settle, then take the "before" reading.
           await frames(300);
@@ -198,6 +212,78 @@
           report('c', c);
 
           window.__motionProbe = { mode, a, b, c };
+        } else if (mode === 'ratio') {
+          // One post and one picture, mounted in the 3:4 shape. Switching to
+          // 16:9 changes the card's floor and the picture's height cap at once:
+          // the floor flips in one layout, while the cap used to be a 200ms
+          // layout transition -- and the card is measured by a ResizeObserver,
+          // so every frame of that transition re-derived the fit and replayed
+          // the scale. The reading that catches that is the height and the zoom
+          // across frames, not the curve of the scale.
+          const scope = document.createElement('div');
+          scope.className = 'ptc-scope';
+          document.body.appendChild(scope);
+          const threadData = {
+            author,
+            isSingle: true,
+            targetTweetIndex: 0,
+            tweets: [post(1)],
+          };
+          render(
+            h(App, {
+              threadData,
+              onClose: () => {},
+              initialConfig: { ...config, aspectRatio: '3:4' },
+            }),
+            scope
+          );
+
+          const snap = makeSnap(scope);
+          await frames(400);
+          const before = snap();
+
+          // The card's own ratio group, told apart from the canvas's by its
+          // three options: the canvas offers the same two ratio labels.
+          const group = Array.from(scope.querySelectorAll('.btn-group[role="radiogroup"]')).find((g) => {
+            const labels = Array.from(g.querySelectorAll('[role="radio"]')).map((b) => b.textContent.trim());
+            return labels.length === 3 && labels.includes('3:4') && labels.includes('16:9');
+          });
+          const target = group
+            ? Array.from(group.querySelectorAll('[role="radio"]')).find((b) => b.textContent.trim() === '16:9')
+            : null;
+          if (!target) throw new Error('the card has no 3:4 / 16:9 control');
+
+          target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          await Promise.resolve();
+          await Promise.resolve();
+          const atCommit = snap();
+
+          const samples = [];
+          const start = performance.now();
+          while (performance.now() - start < 700) {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            const s = snap();
+            const grid = scope.querySelector('.media-grid');
+            const item = scope.querySelector('.media-item');
+            // The properties the removed transitions used to drive. Sampled
+            // rather than assumed: a transition on either one moves its computed
+            // value across frames while the card is being measured, whether or
+            // not that value ends up changing the card's height.
+            s.layout =
+              grid && item
+                ? {
+                    marginTop: getComputedStyle(grid).marginTop,
+                    itemHeight: item.offsetHeight,
+                    itemMaxHeight: getComputedStyle(item).maxHeight,
+                  }
+                : null;
+            samples.push(s);
+          }
+          const settled = snap();
+          say(`ratio before  ${JSON.stringify(before)}`);
+          say(`ratio commit  ${JSON.stringify(atCommit)}`);
+          say(`ratio settled ${JSON.stringify(settled)}`);
+          window.__motionProbe = { mode, before, atCommit, samples, settled };
         } else {
           // Four cells: one whose picture never arrives, one that fails, one put
           // through the exporter's real source swap, and one used to drive the
@@ -253,7 +339,10 @@
           const missingCell = cards[1].querySelector('.media-box');
           const swapCell = cards[2].querySelectorAll('.media-box')[1];
           const errorCell = cards[3].querySelector('.media-box');
-          const pulseOf = (cell) => cell.querySelector('.media-placeholder-pulse');
+          const sheenOf = (cell) => {
+            const layer = cell.querySelector('.media-placeholder');
+            return layer ? getComputedStyle(layer, '::after').transform : null;
+          };
           const outerOf = (cell) => cell.querySelector('.media-placeholder');
           const opacity = (el) => (el ? Number(getComputedStyle(el).opacity) : null);
 
@@ -262,14 +351,18 @@
           const start = performance.now();
           while (performance.now() - start < 1600) {
             await new Promise((resolve) => setTimeout(resolve, 40));
-            waiting.push(opacity(pulseOf(slowCell)));
+            waiting.push(sheenOf(slowCell));
             // Only read once the chain has run out: a failing picture is allowed
-            // to breathe while it is still trying.
+            // to sweep while it is still trying.
             if (missingCell.className.includes('is-picture-missing')) {
-              failing.push(opacity(pulseOf(missingCell)));
+              failing.push(sheenOf(missingCell));
             }
           }
           const failureClass = missingCell.className;
+          // The mark cross-fades (0.2s), so read it once the class has settled
+          // rather than in the same frame it was written.
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          const missingIcon = opacity(outerOf(missingCell)?.querySelector('.media-placeholder-icon'));
           say(`waiting ${JSON.stringify(waiting.slice(0, 12))} …`);
           say(`failure cell ${failureClass}`);
 
@@ -342,6 +435,7 @@
             failing,
             fade,
             failureClass,
+            missingIcon,
             loadedClass: slowCell.className,
             exportSwap: {
               ratioBefore,

@@ -42,7 +42,7 @@ import { POPUP_COPY } from '../../src/content/popupCopy.ts';
 import { sanitizeImageFit } from '../../src/content/ui/themes.ts';
 import { planMediaGrid } from '../../src/content/ui/mediaGrid.ts';
 import { isAllowedHost, clearImageCache, getImageCacheSize } from '../../src/background/proxy.ts';
-import { upgradeAvatarUrl, upgradePhotoUrl } from '../../src/content/adapter/urls.ts';
+import { upgradeAvatarUrl, upgradePhotoUrl, getPhotoPreviewUrl } from '../../src/content/adapter/urls.ts';
 import { sanitizeQrUrl, generateQrCodeData, CardQrCode } from '../../src/content/ui/qrcode.ts';
 
 import { renderComponent, loadModule, rasterizer, exportEngine, cardRenderer, cssSheet, type CssRule } from '../env/render.ts';
@@ -1025,6 +1025,21 @@ test('F11.3: a legacy colon suffix is upgraded to :orig', () => {
   assert.equal(upgradePhotoUrl(original), 'https://pbs.twimg.com/media/legacy_photo.jpg:orig');
 });
 
+test('F11.3b: the blurred stand-in asks X for the small variant, and invents one nowhere else', () => {
+  // The card mounts `name=orig` and puts a blurred `name=small` copy underneath
+  // while it waits. Only X's photo paths have that variant: an avatar, a data URL
+  // or the harness's local picture must fall back to the tone block rather than
+  // request a URL no host promised.
+  const preview = getPhotoPreviewUrl('https://pbs.twimg.com/media/photo.jpg?format=jpg&name=orig');
+  assert.ok(preview, 'an X photo has a small variant');
+  assert.equal(new URL(preview).searchParams.get('name'), 'small');
+  assert.equal(new URL(preview).searchParams.get('format'), 'jpg', 'the format the source named is kept');
+
+  assert.equal(getPhotoPreviewUrl('https://pbs.twimg.com/profile_images/1/avatar_400x400.jpg'), null);
+  assert.equal(getPhotoPreviewUrl('data:image/svg+xml;utf8,<svg/>'), null);
+  assert.equal(getPhotoPreviewUrl('https://pbs.twimg.com/media/legacy_photo.jpg:orig'), null);
+});
+
 test('F11.4: extracts video poster frame from video component', () => {
   const tweet = createDomElement(VIDEO_POSTER_HTML);
   const video = tweet.querySelector('video')!;
@@ -1034,6 +1049,34 @@ test('F11.4: extracts video poster frame from video component', () => {
 test('F11.5: handles empty or missing media gracefully', () => {
   assert.equal(upgradeAvatarUrl(''), '');
   assert.equal(upgradePhotoUrl(''), '');
+});
+
+test('F11.5b: the blurred stand-in sits inside the placeholder the export ignores', async () => {
+  // Two things are locked here. The stand-in must be derived from the mounted
+  // picture (so it is the picture that is coming, not a generic shape), and it
+  // must live inside the node the engine drops, or a blurred thumbnail could be
+  // rasterized into the PNG. A non-X source must not get one invented for it.
+  const render = (media: MediaItem[]) =>
+    renderCard({
+      data: {
+        id: '93001',
+        url: 'https://x.com/ada_builds/status/93001',
+        author: { name: 'Ada', handle: '@ada_builds' },
+        text: 'one picture',
+        timestamp: '2026-10-24T00:00:00.000Z',
+        media,
+      } satisfies TweetData,
+    });
+
+  const html = await render([{ type: 'image', url: 'https://pbs.twimg.com/media/photo.jpg?format=jpg&name=orig' }]);
+  const start = html.indexOf('<span class="media-placeholder"');
+  const placeholder = html.slice(start, html.indexOf('</span>', start));
+  assert.ok(placeholder.includes('data-html2canvas-ignore="true"'), 'the stand-in is excluded from the export');
+  assert.ok(placeholder.includes('class="media-placeholder-preview"'), 'the copy is mounted inside the placeholder');
+  assert.ok(placeholder.includes('name=small'), 'the copy asks for the small variant');
+
+  const local = await render([{ type: 'image', url: 'data:image/svg+xml;utf8,<svg/>' }]);
+  assert.ok(!local.includes('media-placeholder-preview'), 'no variant is invented for a source without one');
 });
 
 // -------------------------------------------------------------
@@ -3870,6 +3913,11 @@ test('F24.4: filters out data-export-ignore controls from final render', async (
   const engine = await exportEngine();
 
   await withMountedCard(THREAD, async (card, doc) => {
+    // Read off the live card: the engine drops marked nodes from the copy, so
+    // the copy is exactly where they must no longer be found.
+    const marked = card.querySelectorAll('[data-html2canvas-ignore="true"]');
+    assert.ok(marked.length > 0, 'the card has to mark its UI-only controls for the rasterizer to skip');
+
     await engine.renderCardToBlob(card);
 
     // The filter is evaluated inside the environment: it asks
@@ -3878,11 +3926,13 @@ test('F24.4: filters out data-export-ignore controls from final render', async (
     const copy = stub.rasterizerCalls[0].target as DomElement;
     const { options } = stub.rasterizerCalls[0];
     assert.equal(typeof options.filter, 'function', 'the rasterizer is handed a filter');
-
-    const marked = copy.querySelectorAll('[data-html2canvas-ignore="true"]');
-    assert.ok(marked.length > 0, 'the card has to mark its UI-only controls for the rasterizer to skip');
+    assert.equal(
+      copy.querySelectorAll('[data-html2canvas-ignore="true"]').length,
+      0,
+      'a marked control must not reach the rasterizer at all'
+    );
     for (const node of marked) {
-      assert.equal(options.filter(node), false, 'a marked control was left in the picture');
+      assert.equal(options.filter(node), false, 'a marked control was drawn, not skipped');
     }
     assert.equal(options.filter(copy), true, 'and the filter does not simply drop everything');
 

@@ -43,12 +43,12 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = join(__dirname, '..', '..');
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.scratch', '.openchamber', 'coverage']);
 
-function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, out: string[] = [], extensions = /\.(ts|tsx)$/): string[] {
   for (const name of readdirSync(dir)) {
     if (SKIP_DIRS.has(name)) continue;
     const p = join(dir, name);
-    if (statSync(p).isDirectory()) walk(p, out);
-    else if (/\.(ts|tsx)$/.test(name)) out.push(p);
+    if (statSync(p).isDirectory()) walk(p, out, extensions);
+    else if (extensions.test(name)) out.push(p);
   }
   return out;
 }
@@ -326,6 +326,71 @@ test('hygiene.8: every image the README shows is in the repository', () => {
     assert.ok(!/^https?:/i.test(target), `README embeds a remote image (${target}); it must live in the repository`);
     assert.ok(existsSync(join(REPO_ROOT, target)), `README shows ${target}, which is not in the repository`);
   }
+});
+
+// 9. Two transitions written in the first commit outlived the rule that forbids
+// them. `.media-grid` and the exclude chip said `transition: all`, and
+// `.media-item` transitioned `max-height` and `object-fit` -- the first is a
+// layout property, so every frame reflows; the second is not animatable at all.
+// The rules landed a month later in docs/loading-states.md (决定规则 3), and
+// nothing re-read the stylesheets against them. So the card kept layout
+// animations directly under the ResizeObserver that measures its height, where
+// every frame that moves the height re-derives the fit. The ratio probe now
+// measures exactly that. A rule that only lives in a document is not a gate;
+// this is the gate.
+//
+// The scope is stated, not inferred. `transition: all` is banned in every
+// stylesheet, because it silently opts in whatever property is added next. The
+// layout list is enforced in `card.css` only: that is the sheet the measured,
+// rasterised card uses, while modal.css's mobile panel collapse animates
+// `max-height` on purpose, outside the measured tree.
+const LAYOUT_PROPERTIES = new Set([
+  'height', 'min-height', 'max-height', 'width', 'min-width', 'max-width',
+  'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'top', 'right', 'bottom', 'left', 'inset', 'inset-block', 'inset-inline',
+  'gap', 'row-gap', 'column-gap',
+  'flex', 'flex-basis', 'flex-grow', 'flex-shrink',
+  'grid-template-columns', 'grid-template-rows', 'grid-auto-rows', 'grid-auto-columns',
+  'zoom', 'aspect-ratio', 'font-size', 'line-height',
+  // Not layout, but not animatable either: a transition on it interpolates
+  // nothing, so the line only reads as if it did something.
+  'object-fit',
+]);
+
+// `transition: 0.2s ease` is the same mistake spelled without a property: the
+// shorthand defaults to `all`, and duration-only lines used to be common.
+const IMPLICIT_ALL = /^(?:[\d.]+m?s|ease|linear|step-start|step-end|cubic-bezier\()/;
+
+test('hygiene.9: transitions stay on compositor properties inside the card', () => {
+  const violations: string[] = [];
+
+  for (const file of walk(join(REPO_ROOT, 'src'), [], /\.css$/)) {
+    const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+      // Keep the newlines so a reported line still points at the declaration.
+      comment.replace(/[^\n]/g, ' ')
+    );
+    const isCard = file.endsWith(join('styles', 'card.css'));
+
+    for (const match of src.matchAll(/\btransition(?:-property)?\s*:\s*([^;}]+)/g)) {
+      const line = src.slice(0, match.index).split('\n').length;
+      for (const part of match[1].split(',')) {
+        const property = part.trim().split(/\s+/)[0];
+        if (!property) continue;
+        if (property === 'all' || IMPLICIT_ALL.test(property)) {
+          violations.push(`${relative(REPO_ROOT, file)}:${line}  transition without a property (implicitly all)`);
+        } else if (isCard && LAYOUT_PROPERTIES.has(property)) {
+          violations.push(`${relative(REPO_ROOT, file)}:${line}  transition on ${property}`);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    violations,
+    [],
+    `the card is measured and rasterised, so a transition inside it must move a compositor property only; replay layout changes with a transform (see docs/loading-states.md, 决定规则 3):\n  ${violations.join('\n  ')}`
+  );
 });
 
 export function runTierHygiene() {

@@ -9,9 +9,10 @@
  * this script.
  *
  * It serves `dev/probe-motion.html` through the harness's own Vite config (the
- * page mounts the real `App`/`Card`), drives three gestures and a picture
- * session, samples every frame, and asserts on the numbers rather than on a
- * screenshot. `docs/loading-states.md` explains what each animation is for.
+ * page mounts the real `App`/`Card`), drives three exclusion gestures, a ratio
+ * switch and a picture session, samples every frame, and asserts on the numbers
+ * rather than on a screenshot. `docs/loading-states.md` explains what each
+ * animation is for.
  *
  * Not in `npm test`: these are timings, and a loaded machine or a browser that
  * ignores the emulated preference would report a false failure. It is a review
@@ -345,6 +346,60 @@ try {
     );
   }
 
+  console.log('\nratio switch: 3:4 to 16:9, one layout and one refit');
+  {
+    const { probe, reduced } = await runMode('mode=ratio');
+    check('the machine really is running the animations', reduced === 'no-preference', reduced);
+
+    check('the click landed on the card’s own ratio', probe.settled.ratio === '16:9', probe.settled.ratio);
+    check(
+      'and the card really changed shape',
+      probe.settled.height < probe.before.height,
+      `${probe.before.height} → ${probe.settled.height}`
+    );
+
+    // The cause, read directly: a transition on a layout property inside the
+    // card keeps the measured height moving for its whole duration, and the
+    // ResizeObserver reports each frame of it.
+    // The proof that the removed transitions are gone: these two were what they
+    // drove, and both moved frame by frame under the old sheet. `margin-top` is
+    // the grid's, `itemMaxHeight` is the picture's cap; either one transitioning
+    // is a layout property animating inside the measured card.
+    const animated = ['marginTop', 'itemMaxHeight']
+      .map((key) => ({ key, values: [...new Set(probe.samples.map((s) => s.layout?.[key]))] }))
+      .filter((entry) => entry.values.length > 1);
+    check(
+      'the switch leaves no layout property animating',
+      animated.length === 0,
+      animated.length
+        ? animated.map((e) => `${e.key}: ${e.values.slice(0, 4).join(' → ')}`).join('; ')
+        : 'margin-top and the picture cap each hold one value'
+    );
+
+    const heights = probe.samples.map((s) => s.height);
+    let changingFrames = 0;
+    for (let i = 1; i < heights.length; i++) if (heights[i] !== heights[i - 1]) changingFrames++;
+    check(
+      'the measured height arrives in one layout, not a transition',
+      changingFrames <= 2,
+      `${changingFrames} changing frames of ${heights.length}`
+    );
+
+    // And the effect: one new height means one new zoom, rather than a fit
+    // re-derived per frame and a scale replay restarted per frame.
+    const zooms = new Set(probe.samples.map((s) => s.zoom));
+    check(
+      'so the fit is derived once, not once per frame',
+      zooms.size <= 2,
+      `${zooms.size} distinct zooms: ${[...zooms].join(', ')}`
+    );
+
+    const mid = probe.samples
+      .map((s) => matrix(s.scaleTransform).a)
+      .filter((v) => v > 0.05 && v < 0.995);
+    check('the card still re-fits as one animation', mid.length > 0, mid.slice(0, 4).join(' → '));
+  }
+
   console.log('\npictures: waiting, arriving, failing');
   {
     const { probe, reduced } = await runMode(
@@ -352,14 +407,18 @@ try {
     );
     check('the machine really is running the animations', reduced === 'no-preference', reduced);
 
-    const waiting = probe.waiting.filter((v) => typeof v === 'number');
-    check('the waiting cell breathes', Math.min(...waiting) < 0.7 && Math.max(...waiting) > 0.9,
-      `${Math.min(...waiting)} … ${Math.max(...waiting)}`);
+    const waiting = probe.waiting.filter((v) => typeof v === 'string' && v);
+    const swept = new Set(waiting).size;
+    check('the waiting cell sweeps its highlight', swept >= 4, `${swept} distinct transforms`);
 
-    check('a failed chain stops the breathing', probe.failureClass.includes('is-picture-missing'), probe.failureClass);
-    const failing = probe.failing.filter((v) => typeof v === 'number');
-    check('the failed cell holds still', Math.max(...failing) - Math.min(...failing) < 0.02,
-      `${Math.min(...failing)} … ${Math.max(...failing)}`);
+    check('a failed chain stops the sweep', probe.failureClass.includes('is-picture-missing'), probe.failureClass);
+    const failing = probe.failing.filter((v) => typeof v === 'string' && v);
+    check('the failed cell holds still', new Set(failing).size === 1, `${new Set(failing).size} distinct transforms`);
+    check(
+      'a failed cell marks the picture as not coming',
+      probe.missingIcon === 1,
+      String(probe.missingIcon)
+    );
 
     const fade = probe.fade.filter((v) => typeof v === 'number');
     const mid = fade.filter((v) => v > 0.05 && v < 0.95);
@@ -389,7 +448,7 @@ try {
     check('and the cell is still waiting', swap.afterSwap.loaded === false, swap.class);
 
     check(
-      'an error the exporter caused does not stop the pulse',
+      'an error the exporter caused does not stop the sweep',
       probe.exportError.missingWhileMarked === false,
       `is-picture-missing while marked: ${probe.exportError.missingWhileMarked}`
     );

@@ -624,7 +624,12 @@
      generous one (Brutalist) breathes. The flex column already contributes one
      `--rhythm-gap`; this adds the fractional remainder on top of it. */
   margin-top: calc(var(--rhythm-gap, 16px) * 0.25);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Nothing here transitions: a ratio or theme change moves `min-height`,
+     `margin-top` and `flex` on this node, all layout properties, and the grid
+     sits under the ResizeObserver that feeds `fit`. The probe saw the old rule
+     walk `margin-top` frame by frame; where a transition does move the card's
+     height, every frame it moves re-derives the fit (docs/loading-states.md,
+     规则 3). */
 }
 
 /* Base Media Item Behavior */
@@ -639,7 +644,11 @@
      overflow. Keeps the frame inside the box on every path, including the
      export clone. */
   box-sizing: border-box;
-  transition: max-height 0.2s cubic-bezier(0.16, 1, 0.3, 1), object-fit 0.15s ease;
+  /* Not transitioned: `--media-height-cap` is layout under the same measured
+     card, and `object-fit` is not animatable at all. On the probe's card the cap
+     never bit -- the picture's box carries its own aspect ratio -- so that rule
+     was inert rather than visibly slow; both are still the wrong property to
+     animate. */
 }
 
 /* Media is mounted, not pasted. A photo, video poster or GIF carries the
@@ -727,56 +736,122 @@
 
 /* The cell before its photograph has decoded.
 
-   Two nodes, because two animations meet here. The outer one owns the exit: it
-   covers the cell and fades once the picture has painted (`is-picture-loaded`,
-   written when the image loads), so the photograph is revealed by the block
-   leaving rather than by pixels landing in an empty box. The inner one owns the
-   wait: it breathes slowly and shallowly, because a cell can hold this tone for
-   seconds on a slow connection and a block that sits perfectly still reads as
-   part of the card rather than as something on its way.
+   A recessed block that states "a picture goes here" and covers the cell until
+   the photograph has painted: the block fades out over it (`is-picture-loaded`,
+   written when the image loads), so the picture is revealed by the block leaving
+   rather than by pixels landing in an empty box. The recess ink is the one the
+   quote panel already uses, because an empty picture slot and a quoted post are
+   the same thing on this sheet: a piece of the card below the surface.
 
-   They are separate elements for a reason: an element cannot fade out of
-   `opacity` while a CSS animation is also driving `opacity` -- removing the
-   animation and writing the new value in one style change makes the property
-   jump instead of transition, and the dissolve is the whole point.
+   A blurred copy of the picture itself (`media-placeholder-preview`) fades in
+   over that tone as soon as its small variant arrives, so most of the wait is
+   the photograph coming into focus rather than a grey rectangle. The small file
+   is derived from the mounted source in `getPhotoPreviewUrl`; a source with no
+   derivable variant keeps the tone. No icon while waiting: a picture glyph over
+   grey reads as a broken image, which is exactly what a wait must not look like.
 
-   The pulse is the one thing here that claims progress, so it stops the moment
-   that claim would be a lie: on arrival (`is-picture-loaded`) and on a picture
-   whose whole fallback chain failed (`is-picture-missing`). The recess ink is
-   the one the quote panel already uses, because an empty picture slot and a
-   quoted post are the same thing on this sheet: a piece of the card below the
-   surface. `prefers-reduced-motion` flattens the pulse with every other
-   animation in the dialog. */
+   Until the preview arrives, a highlight sweeps the block: at this contrast a
+   whole-block opacity pulse was the same light grey breathing into a slightly
+   lighter grey. The sweep stops as soon as the blurred copy does the talking
+   (`is-preview-ready`), when the picture arrives (`is-picture-loaded`) and when
+   the chain fails (`is-picture-missing`), because from any of those moments on
+   the sweep would claim progress that is no longer happening.
+
+   The sweep and the fade share this node: the sweep animates a pseudo-element's
+   `transform` -- a compositor property, per the loading-state rules -- while the
+   fade is this element's `opacity`, so the two never contend for a property.
+
+   `prefers-reduced-motion` flattens the sweep with every other animation in the
+   dialog, leaving the static recess and the blurred preview; the crossed mark
+   below is what keeps a failure distinct from a wait even then. */
 .media-placeholder {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   pointer-events: none;
+  background: var(--quote-bg);
   transition: opacity 0.24s ease-out;
+  /* The blurred copy below sizes its blur off the cell's own width, so a
+     four-up thumbnail is not smeared by a radius chosen for a hero picture. */
+  container-type: inline-size;
 }
 
-.media-placeholder-pulse {
+/* The blurred stand-in. `cover` and the slight upscale keep the blur's soft
+   edge off the frame: a blurred image sampled right up to its edge shows the
+   backdrop bleeding in, while the picture it stands for is cropped to fill. The
+   radius is a share of the cell's width (`cqw`), so it reads the same on a
+   hero picture and on a four-up thumbnail. */
+.media-placeholder-preview {
   position: absolute;
   inset: 0;
-  background: var(--quote-bg);
-  animation: ptc-picture-wait 1.6s ease-in-out infinite;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(3cqw);
+  transform: scale(1.12);
+  opacity: 0;
+  transition: opacity 0.32s ease-out;
+}
+
+.media-placeholder.is-preview-ready .media-placeholder-preview {
+  opacity: 1;
+}
+
+.media-placeholder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    color-mix(in srgb, var(--surface) 85%, transparent) 50%,
+    transparent 75%
+  );
+  transform: translateX(-100%);
+  animation: ptc-picture-sheen 1.4s ease-in-out infinite;
 }
 
 .media-box.is-picture-loaded > .media-placeholder {
   opacity: 0;
 }
 
-.media-box.is-picture-loaded .media-placeholder-pulse,
-.media-box.is-picture-missing .media-placeholder-pulse {
+/* The failure ending: the frame stays, but the sweep stops, the blurred copy is
+   hidden (it would keep showing a picture that is not coming) and a quiet
+   crossed mark says so. `--faint` at 55% keeps it below the copy's weight, so a
+   failed picture reads as missing rather than as new content. It lives in the
+   tree and is revealed by the cell's class, because that class is written
+   imperatively and never re-renders. */
+.media-placeholder-icon {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 24px;
+  height: 24px;
+  color: color-mix(in srgb, var(--faint) 55%, transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+
+.media-box.is-picture-missing .media-placeholder-icon {
+  opacity: 1;
+}
+
+.media-box.is-picture-missing .media-placeholder-preview {
+  opacity: 0;
+}
+
+.media-placeholder.is-preview-ready::after,
+.media-box.is-picture-loaded .media-placeholder::after,
+.media-box.is-picture-missing .media-placeholder::after {
   animation: none;
 }
 
-@keyframes ptc-picture-wait {
-  0%,
-  100% {
-    opacity: 1;
+@keyframes ptc-picture-sheen {
+  from {
+    transform: translateX(-100%);
   }
-  50% {
-    opacity: 0.55;
+  to {
+    transform: translateX(100%);
   }
 }
 
@@ -1445,7 +1520,7 @@
   cursor: pointer;
   opacity: 0;
   transform: scale(0.9);
-  transition: all 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
   z-index: 10;
   padding: 0;
 }

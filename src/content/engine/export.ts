@@ -227,6 +227,33 @@ function failedImageSrc(img: HTMLImageElement): string {
 }
 
 /**
+ * The attributes a card uses to mark preview-only furniture -- the exclude
+ * button, a picture's waiting block, the blurred stand-in inside it.
+ *
+ * Two spellings because the card emits html2canvas's convention and keeps the
+ * older name working; the rasterizer's filter accepts both.
+ */
+const IGNORE_ATTRS = ['data-html2canvas-ignore', 'data-export-ignore'] as const;
+
+function marksIgnored(node: Element): boolean {
+  return IGNORE_ATTRS.some((attr) => node.getAttribute(attr) === 'true');
+}
+
+/**
+ * Whether `node` sits inside an ignored node, looking only as far up as `root`.
+ *
+ * The bound matters: the preview shell around the card is marked as ignored
+ * furniture, so an unbounded `closest()` would report every picture in the card
+ * as ignored.
+ */
+function insideIgnoredNode(node: Element, root: Element): boolean {
+  for (let current: Element | null = node; current && current !== root; current = current.parentElement) {
+    if (marksIgnored(current)) return true;
+  }
+  return false;
+}
+
+/**
  * Traverses an element's subtree and temporarily substitutes remote image src
  * attributes with Base64 Data URLs so the HTML5 canvas remains origin-clean
  * during modern-screenshot export, reporting which ones could not be fetched.
@@ -237,7 +264,18 @@ function failedImageSrc(img: HTMLImageElement): string {
  * live card.
  */
 export async function prepareCardImages(cardElement: HTMLElement): Promise<CardImagePreparation> {
-  const images = Array.from(cardElement.querySelectorAll('img'));
+  // A node the rasterizer drops is not a picture on the card: preparing it would
+  // spend a fetch on it and, when that fetch failed, count a grey square that
+  // never reaches the PNG. That is exactly what the media placeholder's blurred
+  // copy is -- a preview the export deliberately leaves out (`Card` mounts it
+  // under `data-html2canvas-ignore`).
+  //
+  // The walk stops at the card: the preview shell *around* the card is marked
+  // too (it is app furniture the rasterizer never receives), and `closest()`
+  // would read that ancestor as if it marked the card's own pictures.
+  const images = Array.from(cardElement.querySelectorAll('img')).filter(
+    (img) => !insideIgnoredNode(img, cardElement)
+  );
   const originalSources: Array<{ img: HTMLImageElement; originalSrc: string }> = [];
   const pending: Array<{ img: HTMLImageElement; src: string }> = [];
 
@@ -571,6 +609,17 @@ function mountAndRender(
       mounted = mountUnzoomedCopy(cardElement);
       const copy = mounted.copy;
 
+      // Nodes the rasterizer would drop are dropped from the copy too. They are
+      // preview-only overlays (the exclude button, a picture's waiting block and
+      // its blurred stand-in), so removing them costs no layout, and it keeps
+      // their sources out of the decode wait below and out of the copy the
+      // rasterizer is handed.
+      for (const ignored of Array.from(
+        copy.querySelectorAll(IGNORE_ATTRS.map((attr) => `[${attr}="true"]`).join(', '))
+      )) {
+        ignored.remove();
+      }
+
       await Promise.all(
         Array.from(copy.querySelectorAll('img')).map((img) =>
           typeof img.decode === 'function' ? img.decode().catch(() => {}) : undefined
@@ -619,13 +668,7 @@ function mountAndRender(
           // `data-html2canvas-ignore` is the attribute the card actually emits
           // (the html2canvas convention). `data-export-ignore` is kept as an
           // alias so either spelling works.
-          if (
-            node.getAttribute('data-html2canvas-ignore') === 'true' ||
-            node.getAttribute('data-export-ignore') === 'true' ||
-            node.dataset?.exportIgnore === 'true'
-          ) {
-            return false;
-          }
+          if (marksIgnored(node)) return false;
         }
         if (options.filter) {
           return options.filter(node);

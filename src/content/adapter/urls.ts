@@ -69,6 +69,41 @@ export function getPhotoUrlCandidates(url: string): string[] {
 }
 
 /**
+ * The address of a picture's small variant, for the blurred stand-in the card
+ * shows while the full picture is in flight.
+ *
+ * Same host and path scope as `getPhotoUrlCandidates`: X serves `name=small`
+ * (~680px) from every `/media/` and `/card_img/` asset, which is a fraction of
+ * the `orig` the card mounts and arrives much sooner. The format is left as the
+ * source named it -- the browser decodes it either way, and asking for `jpg` here
+ * would only make this a second copy of the candidate rule.
+ *
+ * Returns null for anything that is not an X photo (data URLs, local harness
+ * pictures, legacy colon suffixes), so the caller falls back to the tone block
+ * rather than inventing a variant no host promised.
+ */
+export function getPhotoPreviewUrl(url: string): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    // The legacy colon suffix names the variant in the path, not in `name=`;
+    // adding a query parameter there would ask X for a URL it does not serve.
+    if (/:[\w-]+$/.test(parsed.pathname)) return null;
+    if (
+      parsed.hostname.includes('twimg.com') &&
+      (parsed.pathname.includes('/media/') || parsed.pathname.includes('/card_img/'))
+    ) {
+      const next = new URL(parsed.toString());
+      next.searchParams.set('name', 'small');
+      return next.toString();
+    }
+  } catch {
+    // Not a standard URL: nothing derivable.
+  }
+  return null;
+}
+
+/**
  * The ordered list of URLs to try for one card picture, best resolution first.
  *
  * The card mounts `preferredUrl`, which is the highest variant we believe
