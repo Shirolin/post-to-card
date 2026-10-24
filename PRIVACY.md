@@ -33,7 +33,7 @@ Post-to-Card（下称「本扩展」）是一个**完全在本机运行**的 Chr
 |---|---|
 | `clipboardWrite` | 把渲染好的图片放进剪贴板 |
 | `storage` | 记住你的主题与开关 |
-| `host_permissions: *.twimg.com` | 取回推文配图；Canvas 不能直接读跨域图片 |
+| `host_permissions: *.twimg.com` | 取回推文配图；Canvas 不能直接读跨域图片（`*` 已覆盖 `pbs.twimg.com` 等全部子域） |
 
 ## 导出的图片与第三方内容
 

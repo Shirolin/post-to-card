@@ -9,10 +9,10 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
+  "minimum_chrome_version": "111",
   "permissions": ["clipboardWrite", "storage"],
   "host_permissions": [
-    "https://*.twimg.com/*",
-    "https://pbs.twimg.com/*"
+    "https://*.twimg.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
