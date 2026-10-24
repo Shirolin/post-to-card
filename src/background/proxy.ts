@@ -16,6 +16,15 @@ export interface CachedImage {
  * fill a real 64MB budget without making the suite cost that much. So the store
  * is read through these, and `setImageCacheBudget` moves the ceiling for the
  * duration of a test. Production never calls the setter.
+ *
+ * The cache lives in this module, so it lives as long as the worker does: MV3
+ * terminates an idle service worker, and the map goes with it. That is the
+ * intended scope rather than an oversight. What it buys is one export's worth of
+ * reuse -- every card re-asks for the same avatar and the same pictures several
+ * times while it renders and again while it retries -- and that all happens
+ * inside a single worker lifetime, woken by the first message. Persisting it
+ * would mean `chrome.storage.session`, whose quota is smaller than this budget
+ * and whose writes cost more than the fetch they save.
  */
 let cacheBudgetChars = 64 * 1024 * 1024;
 const imageCache = new Map<string, CachedImage>();

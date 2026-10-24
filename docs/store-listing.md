@@ -92,7 +92,7 @@ Post-to-Card 把任意 X（Twitter）推文或长串，渲染成一张可以直�
 |---|---|
 | `clipboardWrite` | Puts the rendered PNG on the clipboard so you can paste it into a post or a chat. Used only when you press Copy. |
 | `storage` | Remembers your theme, canvas and toggle choices between sessions. Stored locally; never transmitted. |
-| `https://*.twimg.com/*`, `https://pbs.twimg.com/*` | Fetches the pictures that belong in the card. A canvas cannot read a cross-origin image, so the export would fail without these; the requests go only to X's own image hosts. |
+| `https://*.twimg.com/*` | Fetches the pictures that belong in the card. A canvas cannot read a cross-origin image, so the export would fail without this; requests go only to X's own image hosts. |
 
 ## 截图与素材
 
