@@ -12,7 +12,7 @@ import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadSession, toggleExcluded } from '../threadSession.ts';
 import { CARD_WIDTH, viewportPadding } from './geometry.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
-import { ExportRenderError, exportSizeReadout, ignoreRejection, beginCardRender } from '../engine/index.ts';
+import { ExportRenderError, exportSizeReadout } from '../engine/index.ts';
 
 import { getTranslation, sanitizeLocale, formatPreviewSummary } from '../i18n.ts';
 
@@ -735,17 +735,6 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     setIsErrorStatus(false);
     setIsWarningStatus(false);
     setRetry(null);
-
-    // Every image the export will need, fetched before the gesture's tick ends.
-    // The pictures are what a thread waits seconds for, and the proxy keeps what
-    // it fetches; an export started here finds them warm instead of spending the
-    // same round trips while the clipboard is already holding a promise. The
-    // measurement it returns is dropped: this is a prefetch, and the click that
-    // follows decides everything itself.
-    if (action === 'copy') {
-      const warm = beginCardRender(target, { geometryOnly: true });
-      ignoreRejection(warm);
-    }
 
     try {
       // The message follows the outcome, not the button that was pressed. A
