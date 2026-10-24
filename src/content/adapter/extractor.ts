@@ -1216,12 +1216,19 @@ function findTweetStatusLink(article: Element, ownership: TweetOwnership): Eleme
  * Extracts tweet ID from status link or current URL.
  */
 export function extractTweetId(article: Element): string {
-  const statusLink = findTweetStatusLink(article, resolveOwnership(article));
-  if (statusLink) {
-    const href = statusLink.getAttribute('href') || '';
-    const match = href.match(/\/status\/(\d+)/);
-    if (match) return match[1];
-  }
+  return idFromStatusHref(statusLinkHref(article, resolveOwnership(article)));
+}
+
+/**
+ * The id a status link names, with the page's own address as the fallback.
+ *
+ * Split from the lookup so `extractTweetData` can resolve the ownership once and
+ * still get both the id and the permalink: asking `resolveOwnership` and then
+ * walking the article's links a second time for the URL was the same work twice.
+ */
+function idFromStatusHref(href: string): string {
+  const match = href.match(/\/status\/(\d+)/);
+  if (match) return match[1];
 
   if (typeof window !== 'undefined' && window.location?.pathname) {
     const match = window.location.pathname.match(/\/status\/(\d+)/);
@@ -1231,13 +1238,16 @@ export function extractTweetId(article: Element): string {
   return '';
 }
 
+function statusLinkHref(article: Element, ownership: TweetOwnership): string {
+  return findTweetStatusLink(article, ownership)?.getAttribute('href') || '';
+}
+
 /**
- * Extracts canonical permalink URL for the tweet.
+ * The permalink a status href names, absolute, with the page's address as the
+ * fallback.
  */
-function extractTweetUrl(article: Element): string {
-  const statusLink = findTweetStatusLink(article, resolveOwnership(article));
-  if (statusLink) {
-    const href = statusLink.getAttribute('href') || '';
+function urlFromStatusHref(href: string): string {
+  if (href) {
     if (href.startsWith('http')) return href;
     return `https://x.com${href}`;
   }
@@ -1320,10 +1330,14 @@ export function extractTweetData(article: Element): TweetData | null {
   // question — is this element the tweet's own, the quoted post's, or the
   // article's — and the answer does not change between one element and the
   // next, so it is asked once here rather than walked again per candidate.
+  // The status link is found from that same answer, once, for the id and the
+  // permalink alike: the two used to resolve ownership and re-walk the links
+  // separately, which was the same subtree search three times over.
   const ownership = resolveOwnership(article);
+  const statusHref = statusLinkHref(article, ownership);
 
-  const id = extractTweetId(article);
-  const url = extractTweetUrl(article);
+  const id = idFromStatusHref(statusHref);
+  const url = urlFromStatusHref(statusHref);
   const author = extractAuthorInfo(article);
 
   const tweetTextEl = article.querySelector('div[data-testid="tweetText"]');
