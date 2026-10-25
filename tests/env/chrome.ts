@@ -19,6 +19,16 @@ class ChromeRuntimeMock {
   public listeners: MessageListener[] = [];
   public lastError: { message: string } | null = null;
 
+  /**
+   * This extension's id, as `chrome.runtime.id` reports it.
+   *
+   * The worker compares `sender.id` against it before answering anything, so a
+   * mock without one would make every message look like it came from another
+   * extension. The same string the mock already puts on `sender` below, so the
+   * two cannot disagree.
+   */
+  public readonly id = 'post-to-card-extension';
+
   public onMessage = {
     addListener: (cb: MessageListener) => {
       if (!this.listeners.includes(cb)) {
@@ -44,7 +54,7 @@ class ChromeRuntimeMock {
       // the one thing the expensive tests that go through the message channel
       // could never catch.
       let portClosed = false;
-      const sender = { id: 'post-to-card-extension', tab: { id: 1 } };
+      const sender = { id: this.id, tab: { id: 1 } };
 
       const sendResponse = (res: ExtensionResponse) => {
         if (portClosed) return;

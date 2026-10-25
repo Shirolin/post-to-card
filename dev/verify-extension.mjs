@@ -246,12 +246,15 @@ try {
     if (landed) {
       const probe = JSON.parse(await cdp.eval(page, `JSON.stringify({
         host: location.host,
+        active: document.documentElement.getAttribute('data-post-to-card') === 'true',
         hostElement: !!document.querySelector('post-to-card-container'),
         tweets: document.querySelectorAll('article[data-testid="tweet"]').length,
       })`));
       console.log(`        host=${probe.host} tweets in DOM=${probe.tweets}`);
-      check('content script announced itself',
-        entries.some((e) => e.ours && /Content script active/.test(e.text)));
+      // The entry marks <html> rather than logging: a console line here would
+      // print into every X user's console on every page load, which is what
+      // this check used to require of it.
+      check('content script announced itself', probe.active === true);
     } else {
       console.log('        Headless Chrome gets a 403 from x.com. Run headed.');
     }
