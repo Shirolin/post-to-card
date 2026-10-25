@@ -6624,13 +6624,35 @@ test('F31.4: the popup’s TRIGGER_ACTIVE_CARD message is answered', async () =>
     assert.ok(listener, 'the entry never listened for extension messages');
 
     let response: { success?: boolean } | null = null;
-    listener({ type: 'TRIGGER_ACTIVE_CARD' } as never, {} as never, (value) => {
+    // The sender is this extension, which is what `chrome.tabs.sendMessage`
+    // from the popup reports. A sender-less call is another extension's message
+    // and is refused, which is the assertion right below this one.
+    listener({ type: 'TRIGGER_ACTIVE_CARD' } as never, { id: chrome.runtime.id } as never, (value) => {
       response = value as { success?: boolean };
     });
 
     assert.deepEqual(response, { success: true },
       'the popup is told whether a card opened, and the post on screen is the one it opens');
     assert.ok(doc.querySelector('post-to-card-container'), 'and the card really opened');
+  });
+});
+
+test('F31.4b: a message from outside this extension is refused, not acted on', async () => {
+  // `onMessage` only carries messages from this extension's own contexts, so
+  // this is a wrong-sender bug being made visible rather than an attack. The
+  // refusal is worth pinning anyway: the listener used to answer whatever
+  // arrived, which meant a mistyped sender check would have looked correct.
+  await withEntryEnv({ before: withOnePost }, async ({ doc, chrome }) => {
+    const listener = chrome.runtime.listeners[0];
+    assert.ok(listener, 'the entry never listened for extension messages');
+
+    let response: unknown = 'nothing answered';
+    listener({ type: 'TRIGGER_ACTIVE_CARD' } as never, { id: 'some-other-extension' } as never, (value) => {
+      response = value;
+    });
+
+    assert.equal(response, 'nothing answered', 'another extension must not be able to open a card');
+    assert.equal(doc.querySelector('post-to-card-container'), null, 'and no card was opened');
   });
 });
 
