@@ -15,6 +15,7 @@ import { Controls } from '../src/content/ui/Controls';
 import { DEFAULT_CARD_CONFIG, sanitizeRadius, sanitizeTheme, sanitizeCanvasRatio, sanitizeCanvasBackground } from '../src/content/ui/themes';
 import modalCss from '../src/content/styles/modal.css?inline';
 import cardCss from '../src/content/styles/card.css?inline';
+import { sanitizeLocalePref } from '../src/content/i18n';
 
 const svg = (inner: string, w = 400, hgt = 300) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -499,7 +500,10 @@ if (params.get('layout')) harnessConfig.mediaLayout = params.get('layout') as ty
 if (params.get('canvas')) harnessConfig.canvasRatio = sanitizeCanvasRatio(params.get('canvas')!);
 if (params.get('bg')) harnessConfig.canvasBackground = sanitizeCanvasBackground(params.get('bg')!);
 if (params.get('shadow') === '1') harnessConfig.canvasShadow = true;
-if (params.get('locale')) harnessConfig.locale = params.get('locale') as typeof harnessConfig.locale;
+// A locale the build does not have (`?locale=klingon`) resolves to `'auto'`,
+// which is the same degradation a hand-edited store gets -- rather than a cast
+// that would put an id in the config no component can draw.
+if (params.get('locale')) harnessConfig.locale = sanitizeLocalePref(params.get('locale')!);
 // ?no=qr,stats,time,wm,watermark turns the corresponding card footer pieces off.
 const offParts = new Set((params.get('no') || '').split(',').filter(Boolean));
 if (offParts.has('qr')) harnessConfig.showQrCode = false;
@@ -660,8 +664,12 @@ const nextFrame = (): Promise<void> =>
 /**
  * ?a11y=radio verifies the roving-tabindex contract on the segmented controls:
  * only the checked radio is tabbable, and arrow keys move both selection and
- * focus within the group. Controls inside the collapsed "More" section are
- * skipped, since a hidden element is not reachable by keyboard anyway.
+ * focus within the group.
+ *
+ * The "More" disclosure is opened first, because the widest radio group in the
+ * panel -- the fifteen-language picker -- lives inside it. Skipping collapsed
+ * groups is what made this audit report success while never having looked at
+ * the one group whose size made it worth auditing.
  */
 async function runRadioGroupAudit(): Promise<void> {
   const host = document.querySelector('post-to-card-container') as HTMLElement;
@@ -673,6 +681,14 @@ async function runRadioGroupAudit(): Promise<void> {
     reportToLightDom(['FATAL: dialog not found']);
     return;
   }
+
+  for (const toggle of Array.from(dialog.querySelectorAll<HTMLElement>('.more-toggle'))) {
+    if (toggle.getAttribute('aria-expanded') === 'false') toggle.click();
+  }
+  // Let the click's render land before the groups are collected, or the audit
+  // runs against the markup that was there with the body still closed.
+  await nextFrame();
+  await nextFrame();
 
   const groups = Array.from(dialog.querySelectorAll<HTMLElement>('[role="radiogroup"]'));
   report.push(`radiogroups found: ${groups.length}`);

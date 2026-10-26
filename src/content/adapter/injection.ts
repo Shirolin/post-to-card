@@ -25,8 +25,8 @@
 
 import { TWEET_ARTICLE_SELECTOR, TWEET_ARTICLE_SELECTORS, withDescendant } from './thread.ts';
 import { loadUserPreferences, subscribePreferences } from '../prefs.ts';
-import { getTranslation, sanitizeLocale } from '../i18n.ts';
-import type { Locale } from '../../types/card.ts';
+import { getTranslation, resolveLocale } from '../i18n.ts';
+import type { LocalePreference } from '../../types/card.ts';
 
 export const HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn';
 export const VISIBILITY_STYLE_ID = 'post-to-card-visibility-style';
@@ -165,8 +165,8 @@ export function setInjectedButtonVisibility(visible: boolean): void {
  * page. The label is written onto the element rather than drawn by CSS because
  * it is also the button's accessible name.
  */
-export function applyTriggerLocale(locale?: Locale): void {
-  const label = getTranslation(sanitizeLocale(locale)).triggerButtonTitle;
+export function applyTriggerLocale(locale?: LocalePreference): void {
+  const label = getTranslation(resolveLocale(locale)).triggerButtonTitle;
   for (const btn of Array.from(document.querySelectorAll(TRIGGER_SELECTOR))) {
     btn.setAttribute('title', label);
     btn.setAttribute('aria-label', label);
@@ -203,8 +203,8 @@ export const TRIGGER_BUTTON_SVG = `
  * with no keyboard indicator at all. The states the reviewer saw were the
  * ones the stylesheet draws now.
  */
-export function createTriggerButton(onClick: () => void, locale?: Locale): HTMLElement {
-  const t = getTranslation(sanitizeLocale(locale));
+export function createTriggerButton(onClick: () => void, locale?: LocalePreference): HTMLElement {
+  const t = getTranslation(resolveLocale(locale));
   const btn = document.createElement('button');
   btn.setAttribute('type', 'button');
   btn.setAttribute('role', 'button');
@@ -255,7 +255,7 @@ interface CustomObserver {
 export function injectIntoActionBar(
   actionBar: Element,
   onTrigger?: (article: Element) => void,
-  locale?: Locale
+  locale?: LocalePreference
 ): boolean {
   if (!actionBar) return false;
 
@@ -314,7 +314,7 @@ export function injectIntoActionBar(
 /**
  * Scans document for un-injected tweet action bars and injects trigger buttons.
  */
-export function injectAll(onTrigger?: (article: Element) => void, locale?: Locale): number {
+export function injectAll(onTrigger?: (article: Element) => void, locale?: LocalePreference): number {
   // 1. Primary selector: the action group of a top-level tweet.
   //
   //    `div[role="group"]` is a generic container that is not specific to the
@@ -532,7 +532,7 @@ export function initTwitterInjection(
    * rather than passed through injectAll so a scan that fires later uses the
    * same language as the buttons already on the page.
    */
-  let triggerLocale: Locale | undefined;
+  let triggerLocale: LocalePreference | undefined;
 
   const handleArticleTrigger = (article: Element) => {
     onCardTrigger(article);

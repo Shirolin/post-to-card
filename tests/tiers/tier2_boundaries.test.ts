@@ -1861,6 +1861,34 @@ test('Tier 2.57: a language chosen after the triggers exist reaches them', () =>
   });
 });
 
+test('Tier 2.57b: an "auto" trigger follows the browser rather than falling back to English', () => {
+  // `'auto'` is a stored preference, not a locale, and the trigger's locale
+  // went from `Locale` to `LocalePreference` to carry it. The failure this
+  // guards is the one that widening invites: a path that indexes the
+  // dictionary with the preference itself gets `undefined` and falls back to
+  // English, so a Chinese browser would show an English button and nothing
+  // would report it. The resolution has to happen, and it has to happen here.
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { language: 'zh-CN' },
+    configurable: true,
+  });
+  try {
+    withFakeDocument((doc) => {
+      const injected = createTriggerButton(() => {}, 'auto');
+      doc.body.appendChild(injected);
+      assert.equal(
+        injected.getAttribute('title'),
+        getTranslation('zh-CN').triggerButtonTitle,
+        'an "auto" trigger must speak the browser language, not English'
+      );
+    });
+  } finally {
+    if (saved) Object.defineProperty(globalThis, 'navigator', saved);
+    else delete (globalThis as Record<string, unknown>).navigator;
+  }
+});
+
 test('Tier 2.58: a trigger injected after the change agrees with the ones above it', () => {
   // The manager holds the locale and hands it to each new button, so a tweet
   // that scrolls in later says the same thing as the tweets already on screen.

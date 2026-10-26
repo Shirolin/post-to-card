@@ -20,7 +20,7 @@ import {
   EXPORT_SWAP_ATTR,
 } from './imageFallback.ts';
 import { threadSession } from '../threadSession.ts';
-import { formatLocaleTimestamp, getTranslation, sanitizeLocale } from '../i18n.ts';
+import { formatLocaleTimestamp, getTranslation, resolveLocale } from '../i18n.ts';
 import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages, ImageOff } from 'lucide-preact';
 import { CARD_BUILD } from '../build.ts';
 import { getPhotoPreviewUrl } from '../adapter/urls.ts';
@@ -720,7 +720,8 @@ function renderSingleTweet(
   config: CardConfig,
   t: ReturnType<typeof getTranslation>,
   imageFit: ImageFitOption,
-  mediaLayout: MediaLayoutOption
+  mediaLayout: MediaLayoutOption,
+  locale: Locale
 ) {
   return (
     <div class="single-tweet-block">
@@ -729,7 +730,7 @@ function renderSingleTweet(
       {renderTranslationNotice(tweet)}
       {renderTweetContent(tweet, t, imageFit)}
       {renderMediaGrid(tweet.media, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-      {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
+      {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, locale)}
     </div>
   );
 }
@@ -741,8 +742,9 @@ function renderThreadTweet(
   t: ReturnType<typeof getTranslation>,
   imageFit: ImageFitOption,
   mediaLayout: MediaLayoutOption,
-  onExcludeTweet?: (tweetId: string) => void,
-  canExclude?: boolean
+  onExcludeTweet: ((tweetId: string) => void) | undefined,
+  canExclude: boolean | undefined,
+  locale: Locale
 ) {
   // The button only exists for a post that has an id. A post without one is
   // keyed by position, which means something different in a different thread,
@@ -783,14 +785,18 @@ function renderThreadTweet(
         {renderTranslationNotice(tweet)}
         {renderTweetContent(tweet, t, imageFit)}
         {renderMediaGrid(tweet.media, t.photoAlt, imageFit, config.aspectRatio, mediaLayout, t.videoLabel, config.showPlayButton !== false)}
-        {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, sanitizeLocale(config.locale))}
+        {tweet.quotePost && renderQuoteCard(tweet.quotePost, t, imageFit, config.aspectRatio, mediaLayout, config.showPlayButton !== false, locale)}
       </div>
     </div>
   );
 }
 
 export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.Element {
-  const t = getTranslation(sanitizeLocale(config.locale));
+  // One resolution per render: the dictionary, the quote cards' timestamps and
+  // the footer date all read it, and resolving again at each call site would be
+  // four chances for `'auto'` to be answered differently within one card.
+  const locale = resolveLocale(config.locale);
+  const t = getTranslation(locale);
   const thread = normalizeThreadData(data);
   // The one answer to which posts this card is showing, and to whether one
   // more may be dropped. The controls panel and the preview summary read the
@@ -828,7 +834,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
   // Only render the footer when it actually has content, otherwise its top
   // border and padding leave a stray divider at the bottom of the card.
   const footerTimestamp = config.showTimestamp
-    ? formatLocaleTimestamp(mainTweet.timestamp, sanitizeLocale(config.locale))
+    ? formatLocaleTimestamp(mainTweet.timestamp, locale)
     : '';
   const hasFooterStats = Boolean(config.showStats && hasRenderableStats(mainTweet.stats));
   const hasFooterLeft = Boolean(footerTimestamp || hasFooterStats);
@@ -860,6 +866,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
       id="post-to-card-export-target"
       ref={cardRef}
       class="ptc-mat"
+      lang={locale}
       data-canvas-ratio={canvasRatio}
       style={{
         // The card's own width, injected here so the mat's floor and the card's
@@ -950,7 +957,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
       >
       <div class="post-to-card-body-content">
         {!isThread ? (
-          renderSingleTweet(mainTweet, config, t, imageFit, mediaLayout)
+          renderSingleTweet(mainTweet, config, t, imageFit, mediaLayout, locale)
         ) : (
           <div class="thread-list">
             {effectiveTweets.map((tweet, index) => {
@@ -969,7 +976,8 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
                     imageFit,
                     mediaLayout,
                     onExcludeTweet,
-                    session.canExcludeMore
+                    session.canExcludeMore,
+                    locale
                   )}
                 </Fragment>
               );

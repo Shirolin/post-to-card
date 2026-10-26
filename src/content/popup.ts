@@ -12,14 +12,12 @@
  */
 
 import { STORAGE_KEY } from './prefs.ts';
-import { detectDefaultLocale, type Locale } from './i18n.ts';
+import { detectDefaultLocale, SUPPORTED_LOCALES, type Locale } from './i18n.ts';
 import { POPUP_COPY } from './popupCopy.ts';
 
 const toggleInput = document.getElementById('toggle-button') as HTMLInputElement | null;
 const triggerBtn = document.getElementById('btn-trigger-now') as HTMLButtonElement | null;
 const statusText = document.getElementById('status-text');
-
-const SUPPORTED_LOCALES = Object.keys(POPUP_COPY) as Locale[];
 
 // Starts from the browser so the popup is readable before storage answers, then
 // follows the stored preference — which is the point of the change, since the
@@ -62,7 +60,11 @@ if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
     // A stored locale wins over the browser's. An absent or unrecognised value
     // leaves the browser's answer in place, which is also what a fresh install
     // gets and what a corrupted preference should degrade to.
-    if (SUPPORTED_LOCALES.includes(prefs.locale)) {
+    //
+    // `'auto'` is deliberately not in this list: it means "follow the browser",
+    // which is what `detectDefaultLocale()` already answered above, so falling
+    // through leaves exactly the right language on screen.
+    if (SUPPORTED_LOCALES.includes(prefs.locale as Locale)) {
       locale = prefs.locale;
       renderLocale();
     }

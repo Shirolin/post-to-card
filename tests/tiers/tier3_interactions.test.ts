@@ -377,23 +377,34 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
     assert.equal((await loadUserPreferences()).canvasRatio, '4:5');
     assert.equal((await loadUserPreferences()).canvasBackground, 'plum');
 
-    // The locale is the one field whose default is not a constant: it follows
-    // the machine's language, so a test that saved a fixed value could agree
-    // with a mutation that ignored the stored one. Both directions are pinned
-    // against whatever this machine's default turns out to be.
-    const otherLocale: Locale = DEFAULT_CARD_CONFIG.locale === 'zh-CN' ? 'en-US' : 'zh-CN';
-    await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, locale: otherLocale });
+    // The locale's default is `'auto'` -- "follow the browser" -- and the field
+    // is the one in this table whose default is not a language. What has to
+    // survive a save/load round trip is the *preference*, not a resolution of
+    // it: writing `'auto'` and reading back a concrete language would pin what
+    // the user asked to keep following.
     assert.equal(
       (await loadUserPreferences()).locale,
-      otherLocale,
-      'a stored locale must survive, not be replaced by the machine default'
+      'auto',
+      'the shipped default must stay "follow the browser" across a load'
     );
 
+    for (const pinned of ['zh-CN', 'en-US'] as const) {
+      await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, locale: pinned });
+      assert.equal(
+        (await loadUserPreferences()).locale,
+        pinned,
+        `a stored locale (${pinned}) must survive, not be replaced by the machine default`
+      );
+    }
+
+    // An unrecognised value is the user's data too, but there is nothing to
+    // draw it with: it degrades to following the browser rather than to English,
+    // which is what it meant before it was corrupted.
     await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, locale: 'klingon' as Locale });
     assert.equal(
       (await loadUserPreferences()).locale,
-      DEFAULT_CARD_CONFIG.locale,
-      'and an unrecognised one degrades to the default'
+      'auto',
+      'an unrecognised preference degrades to "follow the browser"'
     );
 
     // And the restored config is one the card can actually render.

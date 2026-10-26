@@ -32,7 +32,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSuite } from '../env/harness.ts';
-import { TRANSLATIONS } from '../../src/content/i18n.ts';
+import { SUPPORTED_LOCALES } from '../../src/content/i18n.ts';
 import { POPUP_COPY } from '../../src/content/popupCopy.ts';
 
 const { test, run } = createSuite();
@@ -118,27 +118,17 @@ test('hygiene.2: the storage key is declared once, and the popup imports it', ()
 // so the two cannot diverge — but the rule is still worth stating, because a
 // locale added to one and not the other would leave the popup showing the
 // browser's default for a preference the modal had already written.
+//
+// Read off the table rather than off its source text. The previous version
+// scanned the file for `'xx-YY':` blocks, which broke two ways at once: an id
+// that carries no region is a valid bare identifier, so it is written unquoted
+// and the pattern never saw it; and a reformatting that changed the indentation
+// would have emptied the match list while the test stayed green.
 test('hygiene.3: the popup supports exactly the locales i18n.ts declares', () => {
-  const popupCopy = readFileSync(join(REPO_ROOT, 'src', 'content', 'popupCopy.ts'), 'utf8');
-
-  // Every locale in the bundle must have a copy block in the popup.
-  const missing: string[] = [];
-  for (const locale of Object.keys(TRANSLATIONS)) {
-    if (!popupCopy.includes(`'${locale}':`)) missing.push(locale);
-  }
-  assert.deepEqual(missing, [], `popupCopy.ts has no copy for: ${missing.join(', ')}`);
-
-  // And the popup must not carry a locale the bundle dropped, or it ships dead copy.
-  const popupLocales = [...popupCopy.matchAll(/^\s{2}'([a-z]{2}-[A-Z]{2})':\s*\{/gm)].map((m) => m[1]);
-  assert.ok(
-    popupLocales.length > 0,
-    'found no locale blocks in popupCopy.ts -- if POPUP_COPY was reformatted, update this test rather than delete it'
-  );
-  const declared = Object.keys(TRANSLATIONS).sort();
   assert.deepEqual(
-    popupLocales.slice().sort(),
-    declared,
-    'popupCopy.ts locale blocks and i18n.ts locales have diverged'
+    Object.keys(POPUP_COPY).sort(),
+    [...SUPPORTED_LOCALES].sort(),
+    'popupCopy.ts locales and i18n.ts locales have diverged'
   );
 });
 

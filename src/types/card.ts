@@ -80,7 +80,26 @@ export type CanvasBackgroundId =
   | 'flamingo'
   | 'aurora';
 
-export type Locale = 'zh-CN' | 'en-US';
+/**
+ * A language the interface, the card and the popup are drawn in.
+ *
+ * The full list and everything derived from it live in `content/i18n.ts`; this
+ * is the type layer's copy, and the two are held together by
+ * `SUPPORTED_LOCALES` being typed `readonly Locale[]` and `TRANSLATIONS` being
+ * a `Record<Locale, …>`. A region appears here only where it changes the words
+ * (`zh-CN`/`zh-TW`, `pt-BR`), matching Chrome's own locale table.
+ */
+export type Locale = 'en-US' | 'zh-CN';
+
+/**
+ * What the language setting stores: a language, or `'auto'`.
+ *
+ * `'auto'` is the default and means "follow the browser", which is not the same
+ * as "English": a German install shows German until the user pins something.
+ * Stored separately from `Locale` so a preference that only said `'auto'` is
+ * not silently rewritten into the language the machine happened to report.
+ */
+export type LocalePreference = Locale | 'auto';
 
 export type ImageFitOption = 'contain' | 'cover';
 export type MediaLayoutOption = 'grid' | 'stack';
@@ -99,7 +118,7 @@ export interface CardConfig {
   blurAuthor: boolean;
   showActionBarButton?: boolean;
   showPlayButton?: boolean;
-  locale?: Locale;
+  locale?: LocalePreference;
   excludedTweetIds?: string[];
   /** The exported canvas shape. `'auto'` shrinks the mat to the card. */
   canvasRatio?: CanvasRatioOption;

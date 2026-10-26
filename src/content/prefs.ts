@@ -9,7 +9,7 @@
  */
 
 import type { CardConfig } from '../types/card.ts';
-import { sanitizeLocale } from './i18n.ts';
+import { sanitizeLocalePref } from './i18n.ts';
 import { DEFAULT_CARD_CONFIG, sanitizeTheme } from './ui/themes.ts';
 import {
   ASPECT_RATIO,
@@ -65,7 +65,11 @@ function normalizeStoredConfig(saved: Record<string, any> | null | undefined): C
     preferHighResolution: saved.preferHighResolution === true,
     showActionBarButton: saved.showActionBarButton !== false,
     showPlayButton: saved.showPlayButton !== false,
-    locale: sanitizeLocale(saved.locale),
+    // Stored as a preference, not as the language it currently resolves to:
+    // `'auto'` has to survive a read/write cycle unchanged, or a German machine
+    // would turn "follow the browser" into a pinned German the first time the
+    // config is saved.
+    locale: sanitizeLocalePref(saved.locale),
   };
 }
 

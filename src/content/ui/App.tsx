@@ -14,7 +14,7 @@ import { CARD_WIDTH, viewportPadding } from './geometry.ts';
 import type { ExportAction, ExportOutcome } from '../engine/index.ts';
 import { ExportRenderError, exportSizeReadout } from '../engine/index.ts';
 
-import { getTranslation, sanitizeLocale, formatPreviewSummary } from '../i18n.ts';
+import { getTranslation, resolveLocale, formatPreviewSummary } from '../i18n.ts';
 
 /**
  * Zoom levels the preview offers.
@@ -235,7 +235,11 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     { preferHighResolution: config.preferHighResolution === true }
   );
 
-  const t = getTranslation(sanitizeLocale(config.locale));
+  // Resolved once, and the same value is what `Modal` and the card are handed:
+  // a second resolution further down would be a second answer to the same
+  // question, and `'auto'` is the one preference that could make them differ.
+  const locale = resolveLocale(config.locale);
+  const t = getTranslation(locale);
 
   /**
    * Measures what the stage can show: the stage's own box, and the exported
@@ -879,7 +883,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
   return (
     <Modal
       onClose={onClose}
-      locale={config.locale}
+      locale={locale}
       summary={summary}
     >
       <div class="preview-stage">
