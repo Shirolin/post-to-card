@@ -388,7 +388,7 @@ test('Tier 3.10: preferences saved through the store come back sanitized on the 
       'the shipped default must stay "follow the browser" across a load'
     );
 
-    for (const pinned of ['zh-CN', 'en-US'] as const) {
+    for (const pinned of ['zh-TW', 'ja', 'pt-BR'] as const) {
       await saveUserPreferences({ ...DEFAULT_CARD_CONFIG, locale: pinned });
       assert.equal(
         (await loadUserPreferences()).locale,

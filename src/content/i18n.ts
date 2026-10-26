@@ -17,6 +17,18 @@ import type { Locale, LocalePreference } from '../types/card.ts';
 import type { Translations } from './locales/types.ts';
 import { enUS } from './locales/en-US.ts';
 import { zhCN } from './locales/zh-CN.ts';
+import { zhTW } from './locales/zh-TW.ts';
+import { ja } from './locales/ja.ts';
+import { ko } from './locales/ko.ts';
+import { de } from './locales/de.ts';
+import { fr } from './locales/fr.ts';
+import { es } from './locales/es.ts';
+import { it } from './locales/it.ts';
+import { ptBR } from './locales/pt-BR.ts';
+import { ru } from './locales/ru.ts';
+import { tr } from './locales/tr.ts';
+import { uk } from './locales/uk.ts';
+import { id } from './locales/id.ts';
 
 export type { Translations } from './locales/types.ts';
 // Re-exported rather than declared again: `types/card.ts` owns the union, and a
@@ -31,7 +43,22 @@ export type { Locale, LocalePreference } from '../types/card.ts';
  * words: Chrome's own locale table has `zh_CN`, `zh_TW` and `pt_BR` but a bare
  * `de`, `fr`, `ja` and so on. `localeDirName` maps this list onto that one.
  */
-export const SUPPORTED_LOCALES: readonly Locale[] = ['en-US', 'zh-CN'];
+export const SUPPORTED_LOCALES: readonly Locale[] = [
+  'en-US',
+  'zh-CN',
+  'zh-TW',
+  'ja',
+  'ko',
+  'de',
+  'fr',
+  'es',
+  'it',
+  'pt-BR',
+  'ru',
+  'tr',
+  'uk',
+  'id',
+];
 
 /** The language every unresolvable preference and every missing key falls back to. */
 export const DEFAULT_LOCALE: Locale = 'en-US';
@@ -39,14 +66,26 @@ export const DEFAULT_LOCALE: Locale = 'en-US';
 /**
  * What each language calls itself, for the picker.
  *
- * Deliberately not in the dictionaries: an endonym is the same string in every
- * one of them, and a reader looking for Japanese should be able to find 日本語
- * whatever language the panel is currently in. That is also why `i18n.11`
- * requires every supported locale to have one.
+ * Deliberately not in the dictionaries: an endonym is the same string in all
+ * fourteen of them, and a reader looking for Japanese should be able to find
+ * 日本語 whatever language the panel is currently in. That is also why
+ * `i18n.11` requires every supported locale to have one.
  */
 export const LOCALE_ENDONYMS: Record<Locale, string> = {
   'en-US': 'English',
   'zh-CN': '简体中文',
+  'zh-TW': '繁體中文',
+  ja: '日本語',
+  ko: '한국어',
+  de: 'Deutsch',
+  fr: 'Français',
+  es: 'Español',
+  it: 'Italiano',
+  'pt-BR': 'Português',
+  ru: 'Русский',
+  tr: 'Türkçe',
+  uk: 'Українська',
+  id: 'Bahasa Indonesia',
 };
 
 /**
@@ -59,6 +98,18 @@ export const LOCALE_ENDONYMS: Record<Locale, string> = {
 export const TRANSLATIONS: Record<Locale, Translations> = {
   'en-US': enUS,
   'zh-CN': zhCN,
+  'zh-TW': zhTW,
+  ja,
+  ko,
+  de,
+  fr,
+  es,
+  it,
+  'pt-BR': ptBR,
+  ru,
+  tr,
+  uk,
+  id,
 };
 
 /**
@@ -84,22 +135,28 @@ export function localeDirName(locale: Locale): string {
  */
 const TAG_ALIASES: Record<string, Locale> = {
   // Chinese splits by script, not by country: `zh-Hant` and `zh-HK` are
-  // Traditional whatever their region says, and this build answers them with
-  // Simplified Chinese because that is the only Chinese dictionary it has.
-  'zh-hant': 'zh-CN',
-  'zh-hk': 'zh-CN',
-  'zh-mo': 'zh-CN',
-  'zh-tw': 'zh-CN',
+  // Traditional whatever their region says.
+  'zh-hant': 'zh-TW',
+  'zh-hk': 'zh-TW',
+  'zh-mo': 'zh-TW',
+  'zh-tw': 'zh-TW',
   zh: 'zh-CN',
   'zh-hans': 'zh-CN',
   'zh-cn': 'zh-CN',
   'zh-sg': 'zh-CN',
+  // Portuguese is served in Brazilian spelling; `pt-PT` has no dictionary of
+  // its own and is closer to `pt-BR` than to English.
+  pt: 'pt-BR',
+  'pt-br': 'pt-BR',
+  'pt-pt': 'pt-BR',
   // English is the default, and a British or Australian tag is the same words.
   en: 'en-US',
   'en-us': 'en-US',
   'en-gb': 'en-US',
   'en-au': 'en-US',
   'en-ca': 'en-US',
+  // Indonesian was tagged `in` before 1989 and some browsers still report it.
+  in: 'id',
 };
 
 const TAGS: Map<string, Locale> = (() => {
@@ -122,19 +179,20 @@ const LANGUAGE_TAG = /^[a-zA-Z]{2,3}([-_][a-zA-Z0-9]{2,8})*$/;
  * for it.
  *
  * Exact tag first, then the longest prefix of it the table names. Prefix rather
- * than base language because the script can come before the region: in
- * `zh-Hant-HK` the entry that answers is `zh-Hant`, and splitting on the first
- * `-` would throw that away and land on `zh`. Null rather than the default,
- * because the two callers below want different things from a miss: one wants
- * the browser's answer, the other wants to know to leave the preference alone.
+ * than base language because the script can come before the region:
+ * `zh-Hant-HK` has to reach `zh-TW` through `zh-Hant`, and splitting on the
+ * first `-` would hand it to `zh` and print Simplified Chinese. Null rather
+ * than the default, because the two callers below want different things from a
+ * miss: one wants the browser's answer, the other wants to know to leave the
+ * preference alone.
  */
 function localeForTag(tag: string): Locale | null {
   const normalized = tag.trim().toLowerCase().replace(/_/g, '-');
   const exact = TAGS.get(normalized);
   if (exact) return exact;
 
-  // `en-NZ`: the region does not change the words, so the entry that has no
-  // region answers for every region of it.
+  // `de-AT`, `fr-CA`, `en-NZ`: the region does not change the words, so the
+  // entry that has no region answers for every region of it.
   const parts = normalized.split('-');
   for (let end = parts.length - 1; end > 0; end--) {
     const prefix = TAGS.get(parts.slice(0, end).join('-'));
@@ -228,7 +286,9 @@ export function formatPreviewSummary(t: Translations, count: number): string {
  * Simplified Chinese and English are spelled out rather than handed to `Intl`:
  * both were chosen deliberately (`2026年9月30日 14:35` and `2:35 PM · Sep 30,
  * 2026`), both are pinned by a test, and `Intl`'s idea of either differs by
- * platform.
+ * platform. Every other language has no such decision behind it, so it gets
+ * `Intl`'s own medium date and short time -- the alternative is twelve
+ * hand-written formats, each a chance to be wrong for a region.
  */
 export function formatLocaleTimestamp(timestampStr: string, locale: Locale): string {
   if (!timestampStr) return '';
@@ -244,15 +304,29 @@ export function formatLocaleTimestamp(timestampStr: string, locale: Locale): str
     return `${year}年${month}月${day}日 ${hours}:${minutes}`;
   }
 
-  const timePart = d.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-  const datePart = d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  return `${timePart} · ${datePart}`;
+  if (locale === 'en-US') {
+    const timePart = d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    const datePart = d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    return `${timePart} · ${datePart}`;
+  }
+
+  // A locale whose data this engine does not carry (an old browser, a stripped
+  // ICU build) throws here; the raw X string is still readable, and is what the
+  // card printed before any of this existed.
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(d);
+  } catch {
+    return timestampStr;
+  }
 }

@@ -89,7 +89,21 @@ export type CanvasBackgroundId =
  * a `Record<Locale, …>`. A region appears here only where it changes the words
  * (`zh-CN`/`zh-TW`, `pt-BR`), matching Chrome's own locale table.
  */
-export type Locale = 'en-US' | 'zh-CN';
+export type Locale =
+  | 'en-US'
+  | 'zh-CN'
+  | 'zh-TW'
+  | 'ja'
+  | 'ko'
+  | 'de'
+  | 'fr'
+  | 'es'
+  | 'it'
+  | 'pt-BR'
+  | 'ru'
+  | 'tr'
+  | 'uk'
+  | 'id';
 
 /**
  * What the language setting stores: a language, or `'auto'`.

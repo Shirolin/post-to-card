@@ -1,11 +1,12 @@
 /**
  * i18n Test Suite: Internationalization and Localization
  *
- * What this tier is for: the dictionaries are typed against one interface, so
- * `tsc` already refuses a missing key. What it cannot see is a translation that
- * is present and *empty*, a placeholder a translator dropped, a locale name tag
- * the browser reports that lands on no dictionary, or a date format that comes
- * out of the wrong branch. Those are the assertions here.
+ * What this tier is for: the fourteen dictionaries are typed against one
+ * interface, so `tsc` already refuses a missing key. What it cannot see is a
+ * translation that is present and *empty*, a placeholder a translator dropped,
+ * a locale name tag the browser reports that lands on no dictionary, or a
+ * date format that comes out of the wrong branch. Those are the assertions
+ * here.
  *
  * Deliberately not asserted: that each locale's words differ from English's.
  * `i18n.2` records why -- pinning prose turns every copy edit into a failing
@@ -100,28 +101,39 @@ test('i18n.2: getTranslation falls back to English for a locale it has no dictio
 
 // 3. Locale resolution
 test('i18n.3: a browser language tag resolves to the locale that serves it', () => {
-  // Table-driven because the interesting cases are the ones a region adds: a
-  // Chinese tag can name a script as well as a region, and a language with no
-  // region in Chrome's table has to answer for every region of it.
+  // Table-driven because the interesting cases are the ones a region adds:
+  // Traditional Chinese is decided by script as well as by region, Portuguese
+  // has one dictionary for two variants, and a language with no region in
+  // Chrome's table has to answer for every region of it.
   const cases: Array<[string, Locale]> = [
     ['zh-CN', 'zh-CN'],
-    // Traditional Chinese has no dictionary yet; every Chinese tag lands on the
-    // one that exists rather than on English.
-    ['zh-TW', 'zh-CN'],
-    ['zh-HK', 'zh-CN'],
-    ['zh-Hant', 'zh-CN'],
+    ['zh-TW', 'zh-TW'],
+    ['zh-HK', 'zh-TW'],
+    ['zh-Hant', 'zh-TW'],
     ['zh-Hans', 'zh-CN'],
     ['zh-SG', 'zh-CN'],
     // The script sits in the middle of the tag, so a split on the first `-`
-    // would throw away the entry that answers for it.
-    ['zh-Hant-HK', 'zh-CN'],
-    ['zh-Hant-TW', 'zh-CN'],
+    // would hand this to `zh` and print Simplified Chinese in Hong Kong.
+    ['zh-Hant-HK', 'zh-TW'],
+    ['zh-Hant-TW', 'zh-TW'],
+    ['zh-Hant-CN', 'zh-TW'],
     ['zh-Hans-TW', 'zh-CN'],
+    ['pt-BR', 'pt-BR'],
+    ['pt-PT', 'pt-BR'],
+    ['de-DE', 'de'],
+    ['de-AT', 'de'],
+    ['fr-CA', 'fr'],
     ['en-GB', 'en-US'],
     ['en-US', 'en-US'],
+    ['ja-JP', 'ja'],
+    ['ko-KR', 'ko'],
+    ['ru-RU', 'ru'],
+    ['in', 'id'],
+    ['id-ID', 'id'],
     // Chrome reports underscored tags in some places and hyphenated ones in
     // others; both have to land on the same dictionary.
     ['zh_CN', 'zh-CN'],
+    ['pt_BR', 'pt-BR'],
     ['xx-YY', DEFAULT_LOCALE],
     ['klingon', DEFAULT_LOCALE],
     // A language this build has no dictionary for, in a region it does: the
@@ -157,10 +169,11 @@ test('i18n.3b: a stored language wins over the browser, whatever the browser say
   // machine. Resolving a stored id through the browser first would be the bug
   // this asserts against.
   withBrowserLanguage('de-DE', () => {
-    assert.equal(resolveLocale('zh-CN'), 'zh-CN');
+    assert.equal(resolveLocale('ja'), 'ja');
+    assert.equal(resolveLocale('zh-TW'), 'zh-TW');
     // A tag rather than an id is still accepted -- the setting used to store
     // `'zh-CN'` and a hand-edited store may say anything.
-    assert.equal(resolveLocale('zh_hant_hk'), 'zh-CN');
+    assert.equal(resolveLocale('fr-CA'), 'fr');
 
     // A named language this build does not have is English, *not* the German
     // this machine speaks: the user named a language, and following the machine
@@ -192,11 +205,27 @@ test('i18n.5: formatLocaleTimestamp outputs expected English date format (AM/PM 
   assert.ok(formattedEn.includes('2026'), 'English timestamp must include year');
 });
 
+// 5b. The other twelve go through Intl
+test('i18n.5b: every other locale formats the date through Intl and never prints the raw ISO string', () => {
+  // The two hand-written branches above are the only ones with a decided shape.
+  // Everything else hands the date to `Intl` -- and the failure this guards is
+  // that a branch is missing entirely and the card shows
+  // `2026-09-30T14:35:00.000Z` in its footer.
+  const isoTime = '2026-09-30T14:35:00.000Z';
+  for (const locale of SUPPORTED_LOCALES) {
+    if (locale === 'zh-CN' || locale === 'en-US') continue;
+    const formatted = formatLocaleTimestamp(isoTime, locale);
+    assert.ok(formatted.length > 0, `${locale} must format the timestamp`);
+    assert.ok(!formatted.includes('T14:35'), `${locale} must not print the raw ISO string, got "${formatted}"`);
+    assert.ok(formatted.includes('2026'), `${locale} must keep the year, got "${formatted}"`);
+  }
+});
+
 test('i18n.5c: an unparseable timestamp is passed through rather than replaced', () => {
   // The card's job here is not to invent a date. X's own string is still
   // readable, and dropping it would hide that the extraction disagreed.
-  assert.equal(formatLocaleTimestamp('not a date', 'zh-CN'), 'not a date');
-  assert.equal(formatLocaleTimestamp('', 'zh-CN'), '');
+  assert.equal(formatLocaleTimestamp('not a date', 'de'), 'not a date');
+  assert.equal(formatLocaleTimestamp('', 'de'), '');
 });
 
 // 6. Storage sanitiser
@@ -217,9 +246,11 @@ test('i18n.6: sanitizeLocalePref keeps a real preference and normalises the rest
     assert.equal(sanitizeLocalePref('nl-NL'), 'auto');
     assert.equal(sanitizeLocalePref('sr-Latn-RS'), 'auto');
     // A real language is normalised to its own id, never to the browser's.
+    assert.equal(sanitizeLocalePref('ja'), 'ja');
     assert.equal(sanitizeLocalePref('zh-CN'), 'zh-CN');
-    assert.equal(sanitizeLocalePref('zh-cn'), 'zh-CN');
-    assert.equal(sanitizeLocalePref('en-GB'), 'en-US');
+    assert.equal(sanitizeLocalePref('fr-CA'), 'fr');
+    assert.equal(sanitizeLocalePref('pt_PT'), 'pt-BR');
+    assert.equal(sanitizeLocalePref('zh-Hant-HK'), 'zh-TW');
   });
 });
 
@@ -354,7 +385,7 @@ test('i18n.10: every translation declares exactly the placeholders en-US declare
 
 test('i18n.11: every supported locale names itself, and nothing else does', () => {
   // The picker draws its labels from this table, so a locale without an endonym
-  // renders as its raw id (`pt-BR`) among the other languages' words. The reverse -- a name
+  // renders as its raw id (`pt-BR`) among fourteen words. The reverse -- a name
   // for a locale that was dropped -- is dead copy.
   assert.deepEqual(
     Object.keys(LOCALE_ENDONYMS).sort(),
@@ -369,10 +400,14 @@ test('i18n.11: every supported locale names itself, and nothing else does', () =
 test('i18n.12: the locale-to-_locales mapping is the underscored one Chrome expects', () => {
   // Chrome's table is underscored, and a directory name outside it is not an
   // error -- Chrome silently serves `default_locale` instead, which reads as
-  // "translated, but the translation never appears". An id that carries a
-  // region is the only shape where the two names differ.
+  // "translated, but the translation never appears". The two names that carry a
+  // region are the only ones that change.
   assert.equal(localeDirName('en-US'), 'en_US');
   assert.equal(localeDirName('zh-CN'), 'zh_CN');
+  assert.equal(localeDirName('zh-TW'), 'zh_TW');
+  assert.equal(localeDirName('pt-BR'), 'pt_BR');
+  assert.equal(localeDirName('ja'), 'ja');
+  assert.equal(localeDirName('de'), 'de');
 });
 
 export function runTierI18n() {
