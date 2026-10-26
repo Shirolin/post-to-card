@@ -116,7 +116,6 @@ export interface Translations {
   // Export Actions & Status
   copyImage: string;
   downloadPng: string;
-  exporting: string;
   copying: string;
   generatingPng: string;
   copiedSuccess: string;
@@ -260,7 +259,6 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     copyImage: '复制图片',
     downloadPng: '保存 PNG',
-    exporting: '正在导出...',
     copying: '正在复制到剪贴板...',
     generatingPng: '正在生成高清图...',
     copiedSuccess: '已复制到剪贴板',
@@ -400,7 +398,6 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
 
     copyImage: 'Copy Image',
     downloadPng: 'Download PNG',
-    exporting: 'Exporting...',
     copying: 'Copying to clipboard...',
     generatingPng: 'Generating PNG...',
     copiedSuccess: 'Copied to clipboard',
@@ -410,13 +407,13 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     exportTooTall:
       'The card is taller than the largest canvas; remove some posts or switch the media layout and try again',
     targetNotFound: 'Export target not found.',
-    clipboardFallbackNotice: 'Clipboard write failed; the PNG was saved to your downloads',
-    clipboardFallbackUnsupported: 'This browser cannot put images on the clipboard; the PNG was saved to your downloads',
-    clipboardFallbackPermission: 'Clipboard permission was denied; the PNG was saved to your downloads',
-    clipboardFallbackActivation: 'The window lost focus or the action took too long, so the clipboard refused; the PNG was saved to your downloads',
-    clipboardFallbackArtwork: 'The card could not be rendered; the PNG was saved to your downloads',
-    imagesUnavailableCount: '{count} image(s) could not be loaded',
-    exportScaleReduced: 'reduced to {scale}× by the canvas limit',
+    clipboardFallbackNotice: 'Clipboard write failed; PNG saved',
+    clipboardFallbackUnsupported: 'Cannot copy images here; PNG saved',
+    clipboardFallbackPermission: 'Clipboard denied; PNG saved',
+    clipboardFallbackActivation: 'Clipboard refused; PNG saved',
+    clipboardFallbackArtwork: 'Card render failed; PNG saved',
+    imagesUnavailableCount: '{count} image(s) missing',
+    exportScaleReduced: 'scaled to {scale}×',
     preferHighResolution: 'Highest resolution',
     preferHighResolutionHint:
       'Exports a single post at 3×; a long thread stays at 2×, where more is scaled back down by X. A bigger file, for channels that do not recompress',

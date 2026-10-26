@@ -429,14 +429,18 @@ const params = new URLSearchParams(location.search);
 const harnessConfig = { ...DEFAULT_CARD_CONFIG } as typeof DEFAULT_CARD_CONFIG;
 
 /**
- * ?export=degraded|fallback|empty makes the harness answer the export the way
- * the engine would in that situation.
+ * ?export=degraded|fallback|clean|empty makes the harness answer the export the
+ * way the engine would in that situation.
  *
  * The panel's outcome lines, warning tint and retry button only exist after an
  * export resolves, and the real engine cannot produce a degraded image in this
  * harness (its photos are inline SVG, so the proxy never fails). Without this
  * the one state worth reviewing could only be reached by editing the code under
  * review.
+ *
+ * `clean` is here for the opposite reason: a clean success says nothing at all
+ * -- it is a tick on the button -- so the state with the least text is the one
+ * hardest to reach by hand.
  */
 const exportScenario = params.get('export');
 const harnessOnExport = exportScenario
@@ -451,6 +455,13 @@ const harnessOnExport = exportScenario
       // copies: a degraded image is not a clipboard failure, and mixing the two
       // would make the line under review unreadable.
       const filename = 'post-to-card_ada_builds_2026-10-19.png';
+      if (exportScenario === 'clean') {
+        return {
+          success: true,
+          method: action === 'copy' ? ('clipboard' as const) : ('download' as const),
+          filename,
+        };
+      }
       if (exportScenario === 'degraded') {
         return {
           success: true,

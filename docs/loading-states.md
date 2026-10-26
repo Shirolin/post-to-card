@@ -1,8 +1,8 @@
 # 预览加载态：每一条的做与不做
 
-> **状态：五条都已定，四条已落地。** 首帧的 1:1 闪现、图片格子的空洞、占位块的等待信号、
-> 排除推文时的列表重排，都改完了（`App.tsx` / `Card.tsx` / `modal.css` / `card.css`，
-> 理由写在各自的注释里）。没动的是主题回读与导出等待，理由见逐条。
+> **状态：五条都已落地。** 首帧的 1:1 闪现、图片格子的空洞、占位块的等待信号、
+> 排除推文时的列表重排、导出等待，都改完了（`App.tsx` / `Card.tsx` / `modal.css` / `card.css`，
+> 理由写在各自的注释里）。主题回读仍未动，理由见逐条。
 >
 > 这篇记的是**为什么**和**怎么验**。实现是什么，代码注释说；本文不复述它。
 
@@ -43,7 +43,7 @@
 | 图片 | 空盒子，照片一张张「顶」进来 | 模糊的小图先淡入，小图到达前扫一道高光，落定后整层淡出；失败时停下并露出缺图标记 |
 | 排除/恢复推文 | 卡片瞬间缩短/变长，后面的帖子瞬移 | 位置 FLIP + 卡片比例 FLIP，同节拍；2→1 只动卡片，1→2 只让回来的那条淡入 |
 | 主题（存储回读） | 可能是默认主题闪一下 | 不动，见逐条 |
-| 导出等待 | 按钮 spinner + 状态行（已有） | 不动 |
+| 导出等待 | 按钮 spinner + 状态行复述一遍「正在导出…」 | 进行中与成功都交给按钮；状态行只留给警告/错误 |
 
 ## 逐条
 
@@ -154,10 +154,69 @@
 如果以后去掉 dialog 的入场动画，这条要重新考虑：那时首帧会露出来，做法应是把「有存储值」
 之前的那一帧也藏掉，而不是给主题加过渡。
 
-### 导出等待：不动
+### 导出等待：进行中不占状态行
 
-按钮 spinner、`exporting` 文案、`role="status"` 的实时播报都在。图片预热的进度条可以做，
-但那是给 4 并发 fetch 造第二套状态机，收益是几十毫秒的观感——不做。
+**改前**：按下按钮后，按钮变成 spinner + `正在导出...`，同一时刻状态行也写着
+`正在复制到剪贴板...`。同一件事说两遍，用的还是两个词（「导出」/「复制到剪贴板」）；
+而且状态行用的是成功绿——进行中在提前宣告成功。
+
+**处置**：等待状态属于按钮，成功也属于按钮；只有**有话说**的结果（警告、失败）才占状态行。
+
+- 按钮文案从头到尾不变（`复制图片`），只有图标在换：换文案会让按钮在按下的一刻重排。
+  图标三态——spinner（进行中）、✓（干净成功）、原本的图标（空闲）。
+- **干净的成功不再有一句话。** 按下发生在按钮上，「成了吗」也在按钮上回答。状态行因此
+  只留给带消息的结果，它才可以做到平时不占位。
+- 状态行在导出期间为空，进行中的话仍要读给读屏——但只能放在**看不见但没离开无障碍树**的元素里。
+- 结果行是带底色的 pill 加状态图标，不再只靠颜色区分三种状态。图标和文本必须是兄弟节点：
+  F24.7 / F35.4 逐字断言那行文字，嵌进同一个节点会污染断言。
+- **尺寸读数在导出中不隐藏。** 一度隐藏过，理由是「它描述你即将导出的文件，按下按钮就是过去时」。
+  实测：静止 116.1px → 按下瞬间 93.6px → 结果出来又弹回 116.1px。整条 bar 在点击那一刻塌陷
+  22.5px 再弹回，比一行过时的读数糟得多。一行读数过期 0.5 秒，换来操作栏在光标下不动。
+- 重试按钮和 pill **同一行**。它原来是独立一行，警告一落地就把 bar 顶高 31px——同一种抖动，
+  又晚一步。
+
+### 状态行平时不占高度
+
+**改前**：状态行按两行常驻预留（39.6px），理由是「结果落地时别把按钮顶下去」。代价是对话框
+开着的每一帧都在付——包括绝大多数什么都不用说的干净导出——bar 下面永远挂着一条空带。
+
+**不需要预留。** bar 是面板的最后一个 flex 子元素，所以加在按钮**上方**的内容是把 bar 的
+*上边缘*往上长进滚动列表，按钮原地不动。实测 1280×900：静止 97.5px、警告 145.1px，两种状态
+按钮都在 y=794，只有 bar 的 top 变了。保护按钮的一直是「它在最后」，从来不是那两行预留。
+
+- `.status-row` 平时高度 0。但它仍是 flex 子元素，会撑开 bar 自己的列间距，所以
+  `.status-row.is-quiet` 用负 margin 把那 8px 收回去——这才是「平时不占位」的全部内容。
+- 空状态用 class 而不是 `:has()`：`:not(:has(.status-message))` 的匹配是对的，但计算样式
+  没有跟着变。一条静默不生效的规则比一个多余的 class 名更糟。
+- 不用 `display: none`：里面的 live region 必须留在无障碍树里才announce得了等待状态。
+
+**英文仍必须压短。** 状态行不再预留高度，但长一行的消息仍然要把 bar 顶高一行的量：
+`Copied to clipboard; 2 image(s) could not be loaded; reduced to 1.63× by the canvas limit`
+在 340px 面板里是 **3 行**（两行留给文本的宽度被重试按钮吃掉 44px，只剩约 213px），
+反而更该压。改法是把所有英文结果文案压短：
+
+| 键 | 改前 | 改后 |
+|---|---|---|
+| `imagesUnavailableCount` | `{count} image(s) could not be loaded` | `{count} image(s) missing` |
+| `exportScaleReduced` | `reduced to {scale}× by the canvas limit` | `scaled to {scale}×` |
+| `clipboardFallbackNotice` | `Clipboard write failed; the PNG was saved to your downloads` | `Clipboard write failed; PNG saved` |
+| `clipboardFallbackUnsupported` | `This browser cannot put images on the clipboard; the PNG was saved to your downloads` | `Cannot copy images here; PNG saved` |
+| `clipboardFallbackPermission` | `Clipboard permission was denied; the PNG was saved to your downloads` | `Clipboard denied; PNG saved` |
+| `clipboardFallbackActivation` | `The window lost focus or the action took too long, so the clipboard refused; …` | `Clipboard refused; PNG saved` |
+| `clipboardFallbackArtwork` | `The card could not be rendered; the PNG was saved to your downloads` | `Card render failed; PNG saved` |
+
+「saved to your downloads」的落点从句子挪到了平台：PNG 走的是浏览器下载，用户本来就知道
+文件在哪，而这句话正是把每个降级结果都撑成 3 行的那个尾巴。`activation` 丢掉的
+「窗口未聚焦或操作间隔过长」是诊断细节，读屏和文案都不是它的合适载体。
+
+实测（`dev/` 面板，`?locale=en-US&export=degraded`，340px 与 375px 两种宽度）：五种 fallback
+各自配上两条注脚后都是 **2 行**。
+
+三行以上的结果仍会长高，这是有意的：夹到固定高度会把失败原因藏进省略号，触屏上也没有 hover
+能展开。错误很少见，而且发生在点击之后，不在点击过程中。`exportTooTall` 是唯一剩下的 3 行，
+它是错误态，不是成功态。
+
+图片预热的进度条仍然不做：那是给 4 并发 fetch 造第二套状态机，收益是几十毫秒的观感。
 
 ## 没有引动画库
 
