@@ -2178,6 +2178,33 @@ async function withContainerEnv(
   }
 }
 
+/**
+ * Waits for `condition`, and fails with `message` once `timeoutMs` is spent.
+ *
+ * The exports a few of these tests drive end when they end: a card with
+ * pictures asks the background proxy once per URL, and how many scheduler ticks
+ * that takes depends on the machine rather than on the assertion. A loop of a
+ * fixed number of sleeps is a bet on that machine being fast, and a loaded one
+ * loses it -- which is how F24.7 and F35.4 went red inside tier5 while passing
+ * on an idle box, counted as a regression in the four-hundred-test rerun.
+ *
+ * The deadline sits above the product's own image budget
+ * (`IMAGE_PROXY_BUDGET_MS`, 25s for a whole card), so reaching it means the
+ * export is stuck, never that it is still doing something the product allows.
+ */
+async function waitFor(
+  condition: () => boolean,
+  message: string,
+  timeoutMs = 30_000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (condition()) return;
+    if (Date.now() >= deadline) assert.fail(message);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 const CONTAINER_THREAD: ThreadData = {
   author: { name: 'Ada', handle: '@ada' },
   isSingle: true,
@@ -3999,12 +4026,13 @@ test('F24.7: a rasterizer failure reaches the user as the reason, not as a silen
     assert.ok(download, 'the preview has no download control to press');
     download.click();
     // The rejection travels back through the engine and the preview's own catch
-    // before it becomes a status line, which is several ticks after the click.
-    for (let i = 0; i < 40; i++) {
-      await flushEffects();
+    // before it becomes a status line. How long that takes is a property of the
+    // export, not of this test, so it waits for the line rather than for a
+    // quantity of ticks.
+    await waitFor(() => {
       const shown = container.shadow.querySelector('.status-message');
-      if (settled && shown && shown.className.includes('is-error')) break;
-    }
+      return settled && !!shown && shown.className.includes('is-error');
+    }, 'the export never reported its failure');
 
     const status = container.shadow.querySelector('.status-message');
     assert.ok(status, 'a failed export said nothing at all');
@@ -4873,11 +4901,12 @@ test('F35.4: an empty image reaches the user as actionable text with a retry', a
     await flushEffects();
 
     (container.shadow.querySelector('.export-actions .btn-primary') as any).click();
-    for (let i = 0; i < 40; i++) {
-      await flushEffects();
+    // Same reason as F24.7: the empty blob is only reported after the export
+    // has finished deciding it is empty, which is the export's clock.
+    await waitFor(() => {
       const shown = container.shadow.querySelector('.status-message');
-      if (shown && shown.className.includes('is-error')) break;
-    }
+      return !!shown && shown.className.includes('is-error');
+    }, 'the empty image was never reported');
 
     const status = container.shadow.querySelector('.status-message') as any;
     assert.ok(status, 'the empty image was reported as nothing at all');
