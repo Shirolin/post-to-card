@@ -215,7 +215,7 @@ try {
   cdp = await Cdp.connect(await waitForBrowser(debugPort));
   await cdp.send('Target.setDiscoverTargets', { discover: true });
 
-  const runMode = async (query) => {
+  const runMode = async (query, reducedMotion = 'no-preference') => {
     const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
     const tab = await cdp.attach(targetId);
     await cdp.send('Page.enable', {}, tab);
@@ -224,10 +224,13 @@ try {
     await cdp.send('Page.bringToFront', {}, tab);
     // This machine reports "reduce animations" at the OS level, and the dialog's
     // global rule flattens every duration to 0.01ms under it -- correct
-    // behaviour, useless for measuring motion. The preference is faked instead.
+    // behaviour, useless for measuring motion. Every mode that measures travel
+    // therefore fakes `no-preference`; the spinner mode is the one that needs
+    // the real preference, because its whole question is what the ring does
+    // *under* it.
     await cdp.send(
       'Emulation.setEmulatedMedia',
-      { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] },
+      { features: [{ name: 'prefers-reduced-motion', value: reducedMotion }] },
       tab
     );
     await cdp.send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/probe-motion.html?${query}` }, tab);
@@ -529,6 +532,32 @@ try {
       'while a real failure still does',
       probe.exportError.missingAfter === true,
       `is-picture-missing after: ${probe.exportError.missingAfter}`
+    );
+  }
+
+  // Both preferences, because the failure this covers only exists under one of
+  // them: the dialog's blanket rule runs once at 0.01ms, so a ring that inherits
+  // it holds its first frame forever and reads as stopped rather than busy.
+  for (const preference of ['no-preference', 'reduce']) {
+    console.log(`\nthe wait ring: ${preference}`);
+    const { probe } = await runMode('mode=spinner', preference);
+    check(
+      'the emulated preference is the one measured',
+      probe.reduced === (preference === 'reduce'),
+      String(probe.reduced)
+    );
+    check('the ring was on screen to sample', probe.frames > 10, `${probe.frames} frames`);
+    check(
+      'it runs one animation, and it repeats',
+      probe.names.length === 1 && probe.names[0].includes('infinite'),
+      probe.names.join(' | ')
+    );
+    // A moving ring changes either its angle or its brightness; a frozen one
+    // holds exactly one value for every frame, which is how the bug read.
+    check(
+      'and it is still moving',
+      new Set(probe.opacity).size > 1 || probe.names[0].includes('ptc-spin'),
+      `${new Set(probe.opacity).size} distinct opacities`
     );
   }
 } catch (err) {

@@ -1488,4 +1488,21 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* One exception, and only because the blanket rule breaks it rather than
+     calms it: a ring frozen at its first frame is indistinguishable from a
+     spinner that has stopped, which is the one thing this UI must never say.
+     Reduced motion is about vestibular triggers -- travel, scale, parallax --
+     and a 0.7s rotation of a 15px ring is not one of them. The pulse is the
+     substitute: brightness instead of movement, which is also what someone
+     who set this preference is more likely to be able to read. */
+  .spinner {
+    animation: ptc-pulse 1.6s ease-in-out infinite !important;
+  }
+}
+
+@keyframes ptc-pulse {
+  50% {
+    opacity: 0.35;
+  }
 }

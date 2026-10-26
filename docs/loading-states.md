@@ -31,7 +31,8 @@
    装饰节点挂 `data-html2canvas-ignore`。
 5. **打开时只有一段节拍。** 卡片跟着 dialog 的入场走，不再叠第二段独立动画。
 6. **失败不假装在加载。** 装饰性动效只在「确实在等」时出现；`prefers-reduced-motion` 的
-   全局降级在 `modal.css` 末尾，新动效自动继承它。
+   全局降级在 `modal.css` 末尾，新动效自动继承它。唯一例外是等待圈的旋转：全局规则把它
+   冻在第一帧，看起来像坏了而不是像在忙，那里改用不位移的明暗脉冲（见下文「等待圈」）。
 7. **容器变了尺寸，就是内容位移的一部分。** 卡片按高度重新适配时，只动内容一定会看到
    「内容在动、整张卡在跳」；两层必须同一时长、同一曲线地一起动，否则不如都不动。
 
@@ -241,15 +242,32 @@
 ## 探针
 
 `node dev/verify-motion.mjs` 就是这条探针：它起 vite 与 Chrome，把真实的 `App`/`Card` 挂进
-`dev/probe-motion.html`，做三次手势（3→2、2→1、1→2）、一次换画幅（3:4→16:9）与一段图片等待，
-逐帧采样后**断言**：帖子与卡片各层是否真的在飞、边界处是否只有卡片在动、换画幅时卡片内还有没有
-布局属性在过渡、占位块的高光是否在扫、每个主题的亮部是否都比凹色亮一档、而不是糊一层白（把亮部画在凹色上读实际像素）、
-失败后是否停下且露出缺图标记、淡出有没有中间帧、导出换源会不会被当成「图片到了」。改这两个动效的一侧时跑它，别靠截图。
+`dev/probe-motion.html`，做三次手势（3→2、2→1、1→2）、一次换画幅（3:4→16:9）、一段图片等待，
+以及**两种 `prefers-reduced-motion` 下的等待圈**，逐帧采样后**断言**：帖子与卡片各层是否真的在飞、
+边界处是否只有卡片在动、换画幅时卡片内还有没有布局属性在过渡、占位块的高光是否在扫、
+每个主题的亮部是否都比凹色亮一档、而不是糊一层白（把亮部画在凹色上读实际像素）、
+失败后是否停下且露出缺图标记、淡出有没有中间帧、导出换源会不会被当成「图片到了」、
+等待圈在两种偏好下都还在动。改动效的一侧时跑它，别靠截图。
 
 读什么：`.preview-scale` 的 `style.zoom` 与 `getComputedStyle().transform`、
 `[data-tweet-id]` 的 `offsetTop`、计算后的 `transform` 与 `opacity`、
 `#post-to-card-export-target` 的 `offsetHeight`、`.media-grid` 的 `margin-top`、
-`.media-item` 的 `max-height`、占位块 `::after` 的 `transform` 与缺图标记的 `opacity`。
+`.media-item` 的 `max-height`、占位块 `::after` 的 `transform` 与缺图标记的 `opacity`、
+`.export-actions .spinner` 的 `animation-name` / `animation-duration` / `animation-iteration-count`。
+
+### 等待圈：`prefers-reduced-motion` 下换成脉冲
+
+**改前**：`modal.css` 末尾的全局降级把每个动画压到 `0.01ms` 且只跑一次。对位移类动效这是对的，
+对等待圈不是：它停在第一帧，一个不动的圈和「已经卡死」长得一模一样——而这个 UI 唯一不能说的
+就是这句话。
+
+**处置**：只给 `.spinner` 开一个例外。转 15px 的圈不是前庭刺激（reduced motion 防的是位移、缩放、
+视差），但也不硬转回 0.7s——改成 **1.6s 的明暗脉冲**（`ptc-pulse`，opacity 到 0.35 再回来）。
+不位移，仍然明确地在动。
+
+判据在 `dev/verify-motion.mjs` 的 `mode=spinner`：同一段断言跑 `no-preference` 与 `reduce` 两遍，
+要求「只有一个动画、且是 `infinite`」并读到逐帧变化的 opacity。**拿掉例外就会红**——实测
+`ptc-spin 1e-05s 1`、40 帧只有 1 个 opacity；加回例外是 `ptc-pulse 1.6s infinite`、40 帧 40 个值。
 
 换画幅那条的红落在 **`margin-top` 与图片高度上限逐帧变化**，不是卡片高度逐帧变化：实测旧规则下
 上限虽然过渡了，但图片盒子自带比例，限制根本没生效，卡片高度只动了 3px。要让它为「高度在动」而红，
