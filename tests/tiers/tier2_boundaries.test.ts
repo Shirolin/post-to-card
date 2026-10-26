@@ -1866,11 +1866,11 @@ test('Tier 2.57b: an "auto" trigger follows the browser rather than falling back
   // went from `Locale` to `LocalePreference` to carry it. The failure this
   // guards is the one that widening invites: a path that indexes the
   // dictionary with the preference itself gets `undefined` and falls back to
-  // English, so a Chinese browser would show an English button and nothing
+  // English, so a Japanese browser would show an English button and nothing
   // would report it. The resolution has to happen, and it has to happen here.
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', {
-    value: { language: 'zh-CN' },
+    value: { language: 'ja-JP' },
     configurable: true,
   });
   try {
@@ -1879,7 +1879,7 @@ test('Tier 2.57b: an "auto" trigger follows the browser rather than falling back
       doc.body.appendChild(injected);
       assert.equal(
         injected.getAttribute('title'),
-        getTranslation('zh-CN').triggerButtonTitle,
+        getTranslation('ja').triggerButtonTitle,
         'an "auto" trigger must speak the browser language, not English'
       );
     });

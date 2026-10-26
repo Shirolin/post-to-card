@@ -33,6 +33,8 @@ The persistent styling and layout configuration (visual theme, padding tier, cor
 
 Interface and card language is one setting with two scopes, deliberately. It localizes the modal's own chrome and the extension popup, and it also formats the dates printed inside the card, because a card is shared with people who read the poster's language rather than the reader's. It does **not** reach the card's prose or a translated-from notice: those are reproduced verbatim from the source page, since they are the author's words and X's own attribution rather than card UI.
 
+The setting is a *preference*, not a language: **Auto** (the shipped default) means follow the browser's own language, while naming a language pins it and stops the following. Fourteen languages are supported — English, Simplified and Traditional Chinese, Japanese, Korean, German, French, Spanish, Italian, Brazilian Portuguese, Russian, Turkish, Ukrainian and Indonesian — and a stored value that names none of them is treated as Auto rather than as English, because it was following the browser before it went unreadable. The extension's own name and description in `chrome://extensions` and the store are a separate surface: Chrome picks those from the browser's language through the manifest's `default_locale`, and the in-card setting does not reach them.
+
 A stored preference that names nothing the card can show is treated exactly like one that was never stored: both fall back to the option's shipped default. A value that cannot be read is not a choice, and the card does not make one on the user's behalf — the corner goes back to the material's own rather than to a fixed roundness.
 
 ### Media Item

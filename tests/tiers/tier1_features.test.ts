@@ -3375,8 +3375,8 @@ test('F21.14: the language picker marks the stored preference, "auto" included',
     '"auto" must be the only marked option when the preference is "auto"'
   );
 
-  const pinned = checkedInPicker(await renderControls({ config: { locale: 'zh-CN' } }));
-  assert.deepEqual(pinned, ['简体中文'], 'a pinned language marks exactly its own option');
+  const german = checkedInPicker(await renderControls({ config: { locale: 'de' } }));
+  assert.deepEqual(german, ['Deutsch'], 'a pinned language marks exactly its own option');
 });
 
 test('F21.12: the media controls lead the panel, ahead of the choices that hold', async () => {
@@ -6260,15 +6260,27 @@ test('F30.10: the popup reads its language off the browser when storage has none
     { language: 'zh-CN', prefs: {} }
   );
 
-  // A language the build has no dictionary for still lands somewhere readable
-  // rather than on an empty table lookup.
+  // A language the build has a dictionary for, reached by a regional tag: the
+  // picker stores ids, but the browser reports `de-DE`, and the two have to
+  // land on the same panel.
   await withPopup(
     { kind: 'response', response: { success: false } },
     ({ locale, text }) => {
-      assert.equal(locale, 'en-US', 'and anything else gets English');
-      assert.equal(text('btn-text'), popupCopy('trigger', 'en-US'));
+      assert.equal(locale, 'de', 'a German browser gets the German popup');
+      assert.equal(text('btn-text'), popupCopy('trigger', 'de'));
     },
     { language: 'de-DE', prefs: {} }
+  );
+
+  // And a language the build has no dictionary for still lands somewhere
+  // readable rather than on an empty table lookup.
+  await withPopup(
+    { kind: 'response', response: { success: false } },
+    ({ locale, text }) => {
+      assert.equal(locale, 'en-US', 'a language with no dictionary gets English');
+      assert.equal(text('btn-text'), popupCopy('trigger', 'en-US'));
+    },
+    { language: 'nl-NL', prefs: {} }
   );
 });
 

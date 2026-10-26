@@ -104,6 +104,8 @@ Post-to-Card 是一个基于 Manifest V3 的离线 Chrome 扩展，将 Twitter/X
 见 `src/types/card.ts`。`ThemeId` 是 12 个在用材质 id（`minimal` … `brutalist`），已退役的旧 id 在
 `LegacyThemeId` 里、经 `sanitizeTheme` 映射；`CardConfig` 还带 `imageFit`、`mediaLayout`、`locale`、
 `showActionBarButton`、`showPlayButton`、`excludedTweetIds`、`canvasRatio`、`canvasBackground`。
+`locale` 的类型是 `LocalePreference`（14 门语言的 id 或 `'auto'`），不是 `Locale`：设置里存的是偏好，
+「自动」的含义与解析规则见 `docs/i18n.md`。
 最后两项的取值表与解析器在 `src/content/ui/themes.ts`（`CANVAS_BACKGROUNDS` / `resolveCanvasBackground`），
 几何规则在 `src/content/styles/card.css` 的 `.ptc-mat`——它们不是字段而是配置面，所以只在这里点名。
 

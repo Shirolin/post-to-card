@@ -224,17 +224,21 @@ export interface ThemeDefinition {
  * is how Japanese and Chinese bodies end up set in mismatched metrics. Simplified
  * Chinese faces come first because zh-CN is the product's default locale — a
  * Japanese face ahead of them would ship Chinese glyph variants with the wrong
- * shapes for a few characters.
+ * shapes for a few characters. Korean follows the Chinese and Japanese faces,
+ * not ahead of them: Hangul has no glyph variants to get wrong, so it only needs
+ * a face that has it at all.
  */
 const SANS =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, "Helvetica Neue", Arial, sans-serif';
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, "Apple SD Gothic Neo", "Malgun Gothic", "Helvetica Neue", Arial, sans-serif';
 
 /**
  * Display stack: Georgia for Latin, then the platform Song/Mincho face so a
  * non-Latin title sets in a serif instead of silently falling back to a sans.
+ * AppleMyungjo and Batang are the two platforms' Korean serifs, for the same
+ * reason the Chinese and Japanese ones are here.
  */
 const SERIF =
-  'Georgia, "Times New Roman", "Songti SC", "Source Han Serif SC", "Noto Serif SC", SimSun, "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif';
+  'Georgia, "Times New Roman", "Songti SC", "Source Han Serif SC", "Noto Serif SC", SimSun, "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "AppleMyungjo", Batang, serif';
 
 /**
  * Neo-grotesque for the gallery label: Helvetica where it exists (macOS), Arial

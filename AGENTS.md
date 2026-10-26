@@ -42,6 +42,12 @@ README 与 CONTRIBUTING 因此也只写 pnpm）。
 `docs/architecture-review-2026-10-21.md` 记着哪些方向**已经被查证过、不要再试**，以及每处有理由
 的行为变更的理由。做架构改动前先看它——它记的是「为什么不是别的」，代码只说「是什么」。
 
+## 语言
+
+`docs/i18n.md`：14 种语言怎么组织、为什么是类型化字典而不是 `t('key')`、为什么不引 ICU 复数、
+加一门语言的清单，以及 `_locales` 目录名写错会**静默回落**这个坑。改 `locales/`、`popupCopy.ts`、
+`public/_locales/` 或 `Locale` 联合之前读它。
+
 ## 预览
 
 `docs/loading-states.md`：加载态（首帧 `fit`、图片占位、主题首帧、列表重排）与「要不要引动画库」
