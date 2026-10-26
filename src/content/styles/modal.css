@@ -478,14 +478,17 @@
   gap: 9px;
 }
 
+/* Two levels, told apart by size and weight rather than by case. The
+   `uppercase` + wide tracking this used to carry did the separating in latin
+   only -- CJK has no case, so in ja/zh the heading and its sub-label collapsed
+   into the same grey at the same size. Size and weight survive every script. */
 .control-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   color: var(--ptc-text-muted);
 }
 
@@ -498,8 +501,8 @@
    labels but without the uppercase treatment, so the hierarchy stays readable at
    this size and the two are not mistaken for peers. */
 .control-sub-label {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   color: var(--ptc-text-muted);
 }
 
@@ -549,6 +552,10 @@
   transition: background 0.15s ease, border-color 0.15s ease;
   color: var(--ptc-text-muted);
   font-family: inherit;
+  /* Grid items default to `min-width: auto`, so a long label in one language
+     forces its column wider and clips its neighbours. Zero lets all four
+     columns stay equal while the label itself wraps below. */
+  min-width: 0;
 }
 
 .theme-button:hover {
@@ -606,14 +613,22 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
+/* Theme labels wrap to two lines instead of ellipsising. One line fits ~6
+   CJK characters in a 4-column grid; `ミッドナイト` et al. need the second.
+   Fixed at two lines with `min-height` so short names don't jitter the row.
+   The button's own `title` still carries the full name on hover. */
 .theme-button-label {
   font-size: 11px;
   font-weight: 500;
   line-height: 1.2;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  min-height: 2.4em;
   max-width: 100%;
 }
 
@@ -990,10 +1005,15 @@
 
 /* The exported pixel size, read beside the button that produces it. Only rendered
    once the card has been measured -- before that there is no figure to state, and
-   a placeholder would reserve a line for a number that may never arrive. */
+   a placeholder would reserve a line for a number that may never arrive.
+   Wraps instead of clipping: ja/de readouts run ~40% longer than en and would
+   otherwise hit the panel's `overflow: hidden`. `anywhere` lets the `×`-joined
+   figure break; `max-width` keeps it inside the bar's padding. */
 .export-size-hint {
   display: block;
   text-align: center;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* A pill rather than bare coloured text. At 12px/500 in the panel's own muted
