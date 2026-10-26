@@ -9,7 +9,7 @@ import type { Translations } from './types.ts';
  * harness check in the plan measures the rest.
  */
 export const de: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Fenster schließen',
   triggerButtonTitle: 'Post als Karte',
 

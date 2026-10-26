@@ -1,4 +1,4 @@
-# Post-to-Card
+# PostPress · 印推
 
 把 X（Twitter）推文与同作者长串，优雅渲染为出版级高分辨率卡片。
 
@@ -46,7 +46,7 @@ pnpm run build
 ## 常见问题 (FAQ)
 
 **Q: 为什么不直接截屏？**  
-A: 普通截屏受限于当前屏幕 DPI 与缩放，夹带浏览器 UI 与杂乱元素。Post-to-Card 在完全隔离的 Shadow DOM 中按主题设计规范以 2×/3× 高分辨率重新光栅化，输出纯净且具有出版质感的卡片。
+A: 普通截屏受限于当前屏幕 DPI 与缩放，夹带浏览器 UI 与杂乱元素。PostPress 在完全隔离的 Shadow DOM 中按主题设计规范以 2×/3× 高分辨率重新光栅化，输出纯净且具有出版质感的卡片。
 
 **Q: 长推文发到信息流中会被压糊吗？**  
 A: 单条推文按 3× 导出，缩放至信息流宽度依然锐利。对于超长推文串，等比缩进信息流会导致实际阅读字号偏小，此时弹窗会主动发出**可读性警示**；长串默认采用 2× 规避超大尺寸，无损分发渠道可在「导出设置」中手动开启 3× 极清。
@@ -130,7 +130,7 @@ pnpm exec vite --config dev/vite.harness.config.ts
 
 ## 赞助与支持
 
-如果你觉得 Post-to-Card 帮到了你，欢迎支持开发者的持续维护与迭代：
+如果你觉得 PostPress 帮到了你，欢迎支持开发者的持续维护与迭代：
 
 - ❤️ **爱发电 (Afdian)**：[https://ifdian.net/a/shirolin](https://ifdian.net/a/shirolin)
 - ☕ **Ko-fi**：[https://ko-fi.com/shirolin](https://ko-fi.com/shirolin)

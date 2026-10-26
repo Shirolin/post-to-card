@@ -7,7 +7,7 @@ import type { Translations } from './types.ts';
  * interface itself still says it.
  */
 export const it: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Chiudi finestra',
   triggerButtonTitle: 'Crea la card del post',
 

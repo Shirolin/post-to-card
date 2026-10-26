@@ -8,7 +8,7 @@ import type { Translations } from './types.ts';
  * than to English, which is closer to what a Portuguese reader expects.
  */
 export const ptBR: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Fechar janela',
   triggerButtonTitle: 'Criar cartão do post',
 

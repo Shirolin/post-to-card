@@ -8,7 +8,7 @@ import type { Translations } from './types.ts';
  * a label written by a non-native speaker.
  */
 export const ja: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'ウィンドウを閉じる',
   triggerButtonTitle: 'ポストのカードを作成',
 

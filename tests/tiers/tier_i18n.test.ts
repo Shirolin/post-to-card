@@ -87,7 +87,7 @@ test('i18n.1: every locale has exactly the keys en-US has, and none of them empt
 test('i18n.2: getTranslation falls back to English for a locale it has no dictionary for', () => {
   const fallback = getTranslation('xx-YY' as unknown as Locale);
   assert.equal(fallback.copyImage, 'Copy Image');
-  assert.equal(fallback.brandName, 'Post to Card');
+  assert.equal(fallback.brandName, 'PostPress');
 
   const zh = getTranslation('zh-CN');
   assert.equal(zh.copyImage, '复制图片');

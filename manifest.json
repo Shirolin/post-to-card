@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Post-to-Card",
+  "name": "__MSG_extTitle__",
   "version": "1.0.0",
   "default_locale": "en_US",
   "description": "__MSG_extDesc__",
