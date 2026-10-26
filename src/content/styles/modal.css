@@ -497,12 +497,14 @@
 }
 
 /* A sub-label inside a section that already has a heading of its own -- the
-   padding and radius controls, which share one group. Same type as the section
-   labels but without the uppercase treatment, so the hierarchy stays readable at
-   this size and the two are not mistaken for peers. */
+   padding and radius controls, which share one group. It sits between the two
+   other levels in the panel: one step under `.control-label` (12px/700) and one
+   step over `.control-hint` (11px/400). Weight is what keeps it off the hint --
+   at the same 11px, a 400 sub-label and a 400 hint are the same object, and the
+   canvas section puts both on screen at once. */
 .control-sub-label {
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--ptc-text-muted);
 }
 
@@ -515,7 +517,6 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
-  text-transform: none;
 }
 
 /* Secondary text under a control, at the same weight as the 11px labels around
@@ -613,16 +614,17 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-/* Theme labels wrap to two lines instead of ellipsising. One line fits ~6
-   CJK characters in a 4-column grid; `ミッドナイト` et al. need the second.
-   Fixed at two lines with `min-height` so short names don't jitter the row.
-   The button's own `title` still carries the full name on hover. */
+/* Theme labels wrap instead of ellipsising. One line holds about five CJK
+   characters in a four-column grid, so `ミッドナイト` and `Фотолаборатория`
+   need a second. `line-clamp` caps them at two, and `min-height` reserves that
+   height on every cell so short names do not let the row jitter.
+   Three lines would ellipsise again -- no shipped dictionary reaches one, and
+   the button's `title` still carries the full name if a future one does. */
 .theme-button-label {
   font-size: 11px;
   font-weight: 500;
   line-height: 1.2;
   text-align: center;
-  white-space: normal;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1006,14 +1008,14 @@
 /* The exported pixel size, read beside the button that produces it. Only rendered
    once the card has been measured -- before that there is no figure to state, and
    a placeholder would reserve a line for a number that may never arrive.
-   Wraps instead of clipping: ja/de readouts run ~40% longer than en and would
-   otherwise hit the panel's `overflow: hidden`. `anywhere` lets the `×`-joined
-   figure break; `max-width` keeps it inside the bar's padding. */
+   It wraps on its own: a column-flex child of `.export-actions` is stretched to
+   the bar's content box, and every shipped readout breaks at its spaces or
+   between CJK glyphs. Measured in ja/ru/de/en, wide and reduced, with and
+   without `overflow-wrap`/`max-width` -- identical two lines either way, so
+   neither is declared here. */
 .export-size-hint {
   display: block;
   text-align: center;
-  max-width: 100%;
-  overflow-wrap: anywhere;
 }
 
 /* A pill rather than bare coloured text. At 12px/500 in the panel's own muted
