@@ -4804,16 +4804,29 @@ test('F35.2: an export that succeeds with grey squares says so, and offers a ret
     );
 
     (container.shadow.querySelector('.status-retry') as any).click();
-    // The panel's locale follows the machine unless a test pins it, so the
-    // expected success line is read from the same table the panel reads.
-    const copied = TRANSLATIONS[sanitizeLocale(DEFAULT_CARD_CONFIG.locale)].copiedSuccess;
+    // A clean result says nothing under the buttons: the tick on the button that
+    // was pressed is the whole confirmation. So this waits for that tick rather
+    // than for a sentence -- and for the sentence to be gone.
     for (let i = 0; i < 40; i++) {
       await flushEffects();
-      if (container.shadow.querySelector('.status-message')?.textContent === copied) break;
+      if (
+        !container.shadow.querySelector('.status-message') &&
+        container.shadow.querySelector('.export-actions .btn-primary .lucide-check')
+      ) {
+        break;
+      }
     }
 
     assert.equal(calls, 3, 'the retry re-ran the export rather than reusing the first result');
     assert.ok(!container.shadow.querySelector('.status-retry'), 'a clean export leaves nothing to retry');
+    assert.ok(
+      !container.shadow.querySelector('.status-message'),
+      'a clean export said something, when the button already answered it'
+    );
+    assert.ok(
+      container.shadow.querySelector('.export-actions .btn-primary .lucide-check'),
+      'the button that was pressed never confirmed that it worked'
+    );
   });
 });
 

@@ -9,6 +9,7 @@ import { threadSession, toggleExcluded, selectCurrentOnly } from '../threadSessi
 import { hasRenderableStats } from './Card.tsx';
 import { NARROW_BREAKPOINT } from './geometry.ts';
 import { isLongCard } from '../engine/scale.ts';
+import type { ExportAction } from '../engine/export.ts';
 import {
   Languages,
   Palette,
@@ -17,6 +18,9 @@ import {
   Square,
   Copy,
   Download,
+  CircleCheck,
+  TriangleAlert,
+  CircleAlert,
   ListFilter,
   ChevronDown,
   ChevronUp,
@@ -41,7 +45,22 @@ export interface ControlsProps {
   onChange: (newConfig: CardConfig) => void;
   onExportCopy: () => void;
   onExportDownload: () => void;
-  isExporting?: boolean;
+  /**
+   * Which of the two actions is in flight, or null when nothing is.
+   *
+   * Null-or-not *is* the exporting flag; there is no separate boolean to keep in
+   * step with it. Only the button named here spins -- the other is disabled and
+   * keeps its icon, because two spinners would claim two things are happening.
+   */
+  pendingAction?: ExportAction | null;
+  /**
+   * The action that just finished cleanly, or null.
+   *
+   * A clean export says nothing in words -- it ticks the button that was pressed
+   * and clears itself. That is what lets the status line stop reserving a row:
+   * the common outcome no longer needs one.
+   */
+  flash?: ExportAction | null;
   statusMessage?: string;
   isErrorStatus?: boolean;
   /**
@@ -259,7 +278,8 @@ export function Controls({
   onChange,
   onExportCopy,
   onExportDownload,
-  isExporting = false,
+  pendingAction = null,
+  flash = null,
   statusMessage = '',
   isErrorStatus = false,
   isWarningStatus = false,
@@ -269,6 +289,7 @@ export function Controls({
   exportSize,
 }: ControlsProps): JSX.Element {
   const t = getTranslation(sanitizeLocale(config.locale));
+  const isExporting = pendingAction !== null;
   const [showMore, setShowMore] = useState<boolean>(false);
   const [showAllThemes, setShowAllThemes] = useState<boolean>(false);
   /**
@@ -856,27 +877,56 @@ export function Controls({
 
       {/* Sticky primary action bar — always reachable regardless of scroll position */}
       <div class="export-actions">
-        <div class="status-region" role="status" aria-live="polite">
-          {statusMessage && (
-            <div
-              class={`status-message ${isErrorStatus ? 'is-error' : isWarningStatus ? 'is-warning' : ''}`}
-            >
-              {statusMessage}
-            </div>
-          )}
-        </div>
-        {/* Two reasons this is a sibling of the live region rather than a child:
-            the failure text is asserted verbatim (F24.7), so a button next to it
-            must not join `textContent`; and a control inside `role="status"` is
-            announced as part of every message, then removed on retry while it
-            still holds focus -- which drops a keyboard user out of the dialog. */}
-        {onRetry && !isExporting && (
-          <div class="status-retry-row">
+        {/* The outcome line, in flow above the size readout and claiming no
+            height until it has something to say. It used to reserve two lines at
+            all times so a message would not move the buttons -- an empty band
+            paid on every frame the dialog was open, including the clean exports,
+            which have nothing to report.
+
+            Nothing had to be reserved to protect them: the bar is the panel's
+            last flex child, so content added above the buttons grows the bar
+            upward into the scrolling list and leaves the buttons where they
+            were.
+
+            The region stays mounted even when empty: `role="status"` announces
+            only what is inserted into it, so the wait text needs a live home
+            that is not itself conditionally rendered. */}
+        <div class={`status-row${statusMessage ? '' : ' is-quiet'}`}>
+          <div class="status-region" role="status" aria-live="polite">
+            {isExporting && (
+              <span class="sr-only">
+                {pendingAction === 'download' ? t.generatingPng : t.copying}
+              </span>
+            )}
+            {statusMessage && (
+              <div
+                class={`status-message ${isErrorStatus ? 'is-error' : isWarningStatus ? 'is-warning' : ''}`}
+              >
+                {/* The icon is a sibling of the text, never a parent of it: the
+                    failure line is asserted verbatim (F24.7, F35.4), and an icon
+                    inside the same node would join its `textContent`. Colour alone
+                    does not distinguish success from warning from failure, so the
+                    glyph carries the state a second time. */}
+                {isErrorStatus
+                  ? <CircleAlert size={13} strokeWidth={2.5} aria-hidden="true" />
+                  : isWarningStatus
+                    ? <TriangleAlert size={13} strokeWidth={2.5} aria-hidden="true" />
+                    : <CircleCheck size={13} strokeWidth={2.5} aria-hidden="true" />}
+                <span>{statusMessage}</span>
+              </div>
+            )}
+          </div>
+          {/* Outside the live region, not inside it: the failure text is asserted
+              verbatim (F24.7), so a button inside it would join `textContent`;
+              and a control inside `role="status"` is announced with every message,
+              then removed on retry while it still holds focus -- which drops a
+              keyboard user out of the dialog. */}
+          {onRetry && !isExporting && (
             <button type="button" class="status-retry" onClick={onRetry}>
               {t.retryExport}
             </button>
-          </div>
-        )}
+          )}
+        </div>
         {/* The exported pixel size belongs here rather than under the aspect ratio,
             which it used to sit beneath. It is not that control's output: the card's
             height moves with padding, radius and the media grid as well, so under the
@@ -884,6 +934,11 @@ export function Controls({
             button that produces it, it reads as what it is -- what you are about to
             export. Hidden until the card has been measured, so a frame does not show a
             zero-height figure. */}
+        {/* Never removed while exporting. It was, briefly, on the argument that
+            the figure is past tense once you press the button -- and the bar
+            collapsed 22px on press and sprang back when the outcome landed. A
+            readout that is one frame out of date costs less than the whole
+            action bar jumping under the cursor. */}
         {exportSize && (
           <span class="control-hint export-size-hint">
             {(exportSize.impossible
@@ -915,10 +970,17 @@ export function Controls({
             onClick={onExportCopy}
             disabled={isExporting || exportSize?.impossible === true}
           >
-            {isExporting
+            {/* Three icons, one label. The label never changes -- swapping it
+                for "正在导出…" re-laid the button out mid-press -- and the icon
+                carries all three states: idle, working, and the tick that says
+                the copy landed. The tick is the whole success message now; there
+                is no sentence under the bar repeating it. */}
+            {isExporting && pendingAction === 'copy'
               ? <span class="spinner" aria-hidden="true" />
-              : <Copy size={16} strokeWidth={2} aria-hidden="true" />}
-            <span>{isExporting ? t.exporting : t.copyImage}</span>
+              : flash === 'copy'
+                ? <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+                : <Copy size={16} strokeWidth={2} aria-hidden="true" />}
+            <span>{t.copyImage}</span>
           </button>
           <button
             type="button"
@@ -928,7 +990,15 @@ export function Controls({
             aria-label={t.downloadPng}
             title={t.downloadPng}
           >
-            <Download size={16} strokeWidth={2} aria-hidden="true" />
+            {/* This button's only label is its icon, so it is the one place the
+                spinner has to stand in for the glyph rather than sit beside it.
+                Exactly one button is in a working state: the one that was
+                pressed. */}
+            {isExporting && pendingAction === 'download'
+              ? <span class="spinner spinner-on-panel" aria-hidden="true" />
+              : flash === 'download'
+                ? <Check size={16} strokeWidth={2.5} aria-hidden="true" />
+                : <Download size={16} strokeWidth={2} aria-hidden="true" />}
           </button>
         </div>
       </div>

@@ -1,8 +1,8 @@
 # 预览加载态：每一条的做与不做
 
-> **状态：五条都已定，四条已落地。** 首帧的 1:1 闪现、图片格子的空洞、占位块的等待信号、
-> 排除推文时的列表重排，都改完了（`App.tsx` / `Card.tsx` / `modal.css` / `card.css`，
-> 理由写在各自的注释里）。没动的是主题回读与导出等待，理由见逐条。
+> **状态：五条都已落地。** 首帧的 1:1 闪现、图片格子的空洞、占位块的等待信号、
+> 排除推文时的列表重排、导出等待，都改完了（`App.tsx` / `Card.tsx` / `modal.css` / `card.css`，
+> 理由写在各自的注释里）。主题回读仍未动，理由见逐条。
 >
 > 这篇记的是**为什么**和**怎么验**。实现是什么，代码注释说；本文不复述它。
 
@@ -31,7 +31,8 @@
    装饰节点挂 `data-html2canvas-ignore`。
 5. **打开时只有一段节拍。** 卡片跟着 dialog 的入场走，不再叠第二段独立动画。
 6. **失败不假装在加载。** 装饰性动效只在「确实在等」时出现；`prefers-reduced-motion` 的
-   全局降级在 `modal.css` 末尾，新动效自动继承它。
+   全局降级在 `modal.css` 末尾，新动效自动继承它。唯一例外是等待圈的旋转：全局规则把它
+   冻在第一帧，看起来像坏了而不是像在忙，那里改用不位移的明暗脉冲（见下文「等待圈」）。
 7. **容器变了尺寸，就是内容位移的一部分。** 卡片按高度重新适配时，只动内容一定会看到
    「内容在动、整张卡在跳」；两层必须同一时长、同一曲线地一起动，否则不如都不动。
 
@@ -43,7 +44,7 @@
 | 图片 | 空盒子，照片一张张「顶」进来 | 模糊的小图先淡入，小图到达前扫一道高光，落定后整层淡出；失败时停下并露出缺图标记 |
 | 排除/恢复推文 | 卡片瞬间缩短/变长，后面的帖子瞬移 | 位置 FLIP + 卡片比例 FLIP，同节拍；2→1 只动卡片，1→2 只让回来的那条淡入 |
 | 主题（存储回读） | 可能是默认主题闪一下 | 不动，见逐条 |
-| 导出等待 | 按钮 spinner + 状态行（已有） | 不动 |
+| 导出等待 | 按钮 spinner + 状态行复述一遍「正在导出…」 | 进行中与成功都交给按钮；状态行只留给警告/错误 |
 
 ## 逐条
 
@@ -154,10 +155,69 @@
 如果以后去掉 dialog 的入场动画，这条要重新考虑：那时首帧会露出来，做法应是把「有存储值」
 之前的那一帧也藏掉，而不是给主题加过渡。
 
-### 导出等待：不动
+### 导出等待：进行中不占状态行
 
-按钮 spinner、`exporting` 文案、`role="status"` 的实时播报都在。图片预热的进度条可以做，
-但那是给 4 并发 fetch 造第二套状态机，收益是几十毫秒的观感——不做。
+**改前**：按下按钮后，按钮变成 spinner + `正在导出...`，同一时刻状态行也写着
+`正在复制到剪贴板...`。同一件事说两遍，用的还是两个词（「导出」/「复制到剪贴板」）；
+而且状态行用的是成功绿——进行中在提前宣告成功。
+
+**处置**：等待状态属于按钮，成功也属于按钮；只有**有话说**的结果（警告、失败）才占状态行。
+
+- 按钮文案从头到尾不变（`复制图片`），只有图标在换：换文案会让按钮在按下的一刻重排。
+  图标三态——spinner（进行中）、✓（干净成功）、原本的图标（空闲）。
+- **干净的成功不再有一句话。** 按下发生在按钮上，「成了吗」也在按钮上回答。状态行因此
+  只留给带消息的结果，它才可以做到平时不占位。
+- 状态行在导出期间为空，进行中的话仍要读给读屏——但只能放在**看不见但没离开无障碍树**的元素里。
+- 结果行是带底色的 pill 加状态图标，不再只靠颜色区分三种状态。图标和文本必须是兄弟节点：
+  F24.7 / F35.4 逐字断言那行文字，嵌进同一个节点会污染断言。
+- **尺寸读数在导出中不隐藏。** 一度隐藏过，理由是「它描述你即将导出的文件，按下按钮就是过去时」。
+  实测：静止 116.1px → 按下瞬间 93.6px → 结果出来又弹回 116.1px。整条 bar 在点击那一刻塌陷
+  22.5px 再弹回，比一行过时的读数糟得多。一行读数过期 0.5 秒，换来操作栏在光标下不动。
+- 重试按钮和 pill **同一行**。它原来是独立一行，警告一落地就把 bar 顶高 31px——同一种抖动，
+  又晚一步。
+
+### 状态行平时不占高度
+
+**改前**：状态行按两行常驻预留（39.6px），理由是「结果落地时别把按钮顶下去」。代价是对话框
+开着的每一帧都在付——包括绝大多数什么都不用说的干净导出——bar 下面永远挂着一条空带。
+
+**不需要预留。** bar 是面板的最后一个 flex 子元素，所以加在按钮**上方**的内容是把 bar 的
+*上边缘*往上长进滚动列表，按钮原地不动。实测 1280×900：静止 97.5px、警告 145.1px，两种状态
+按钮都在 y=794，只有 bar 的 top 变了。保护按钮的一直是「它在最后」，从来不是那两行预留。
+
+- `.status-row` 平时高度 0。但它仍是 flex 子元素，会撑开 bar 自己的列间距，所以
+  `.status-row.is-quiet` 用负 margin 把那 8px 收回去——这才是「平时不占位」的全部内容。
+- 空状态用 class 而不是 `:has()`：`:not(:has(.status-message))` 的匹配是对的，但计算样式
+  没有跟着变。一条静默不生效的规则比一个多余的 class 名更糟。
+- 不用 `display: none`：里面的 live region 必须留在无障碍树里才announce得了等待状态。
+
+**英文仍必须压短。** 状态行不再预留高度，但长一行的消息仍然要把 bar 顶高一行的量：
+`Copied to clipboard; 2 image(s) could not be loaded; reduced to 1.63× by the canvas limit`
+在 340px 面板里是 **3 行**（两行留给文本的宽度被重试按钮吃掉 44px，只剩约 213px），
+反而更该压。改法是把所有英文结果文案压短：
+
+| 键 | 改前 | 改后 |
+|---|---|---|
+| `imagesUnavailableCount` | `{count} image(s) could not be loaded` | `{count} image(s) missing` |
+| `exportScaleReduced` | `reduced to {scale}× by the canvas limit` | `scaled to {scale}×` |
+| `clipboardFallbackNotice` | `Clipboard write failed; the PNG was saved to your downloads` | `Clipboard write failed; PNG saved` |
+| `clipboardFallbackUnsupported` | `This browser cannot put images on the clipboard; the PNG was saved to your downloads` | `Cannot copy images here; PNG saved` |
+| `clipboardFallbackPermission` | `Clipboard permission was denied; the PNG was saved to your downloads` | `Clipboard denied; PNG saved` |
+| `clipboardFallbackActivation` | `The window lost focus or the action took too long, so the clipboard refused; …` | `Clipboard refused; PNG saved` |
+| `clipboardFallbackArtwork` | `The card could not be rendered; the PNG was saved to your downloads` | `Card render failed; PNG saved` |
+
+「saved to your downloads」的落点从句子挪到了平台：PNG 走的是浏览器下载，用户本来就知道
+文件在哪，而这句话正是把每个降级结果都撑成 3 行的那个尾巴。`activation` 丢掉的
+「窗口未聚焦或操作间隔过长」是诊断细节，读屏和文案都不是它的合适载体。
+
+实测（`dev/` 面板，`?locale=en-US&export=degraded`，340px 与 375px 两种宽度）：五种 fallback
+各自配上两条注脚后都是 **2 行**。
+
+三行以上的结果仍会长高，这是有意的：夹到固定高度会把失败原因藏进省略号，触屏上也没有 hover
+能展开。错误很少见，而且发生在点击之后，不在点击过程中。`exportTooTall` 是唯一剩下的 3 行，
+它是错误态，不是成功态。
+
+图片预热的进度条仍然不做：那是给 4 并发 fetch 造第二套状态机，收益是几十毫秒的观感。
 
 ## 没有引动画库
 
@@ -182,15 +242,32 @@
 ## 探针
 
 `node dev/verify-motion.mjs` 就是这条探针：它起 vite 与 Chrome，把真实的 `App`/`Card` 挂进
-`dev/probe-motion.html`，做三次手势（3→2、2→1、1→2）、一次换画幅（3:4→16:9）与一段图片等待，
-逐帧采样后**断言**：帖子与卡片各层是否真的在飞、边界处是否只有卡片在动、换画幅时卡片内还有没有
-布局属性在过渡、占位块的高光是否在扫、每个主题的亮部是否都比凹色亮一档、而不是糊一层白（把亮部画在凹色上读实际像素）、
-失败后是否停下且露出缺图标记、淡出有没有中间帧、导出换源会不会被当成「图片到了」。改这两个动效的一侧时跑它，别靠截图。
+`dev/probe-motion.html`，做三次手势（3→2、2→1、1→2）、一次换画幅（3:4→16:9）、一段图片等待，
+以及**两种 `prefers-reduced-motion` 下的等待圈**，逐帧采样后**断言**：帖子与卡片各层是否真的在飞、
+边界处是否只有卡片在动、换画幅时卡片内还有没有布局属性在过渡、占位块的高光是否在扫、
+每个主题的亮部是否都比凹色亮一档、而不是糊一层白（把亮部画在凹色上读实际像素）、
+失败后是否停下且露出缺图标记、淡出有没有中间帧、导出换源会不会被当成「图片到了」、
+等待圈在两种偏好下都还在动。改动效的一侧时跑它，别靠截图。
 
 读什么：`.preview-scale` 的 `style.zoom` 与 `getComputedStyle().transform`、
 `[data-tweet-id]` 的 `offsetTop`、计算后的 `transform` 与 `opacity`、
 `#post-to-card-export-target` 的 `offsetHeight`、`.media-grid` 的 `margin-top`、
-`.media-item` 的 `max-height`、占位块 `::after` 的 `transform` 与缺图标记的 `opacity`。
+`.media-item` 的 `max-height`、占位块 `::after` 的 `transform` 与缺图标记的 `opacity`、
+`.export-actions .spinner` 的 `animation-name` / `animation-duration` / `animation-iteration-count`。
+
+### 等待圈：`prefers-reduced-motion` 下换成脉冲
+
+**改前**：`modal.css` 末尾的全局降级把每个动画压到 `0.01ms` 且只跑一次。对位移类动效这是对的，
+对等待圈不是：它停在第一帧，一个不动的圈和「已经卡死」长得一模一样——而这个 UI 唯一不能说的
+就是这句话。
+
+**处置**：只给 `.spinner` 开一个例外。转 15px 的圈不是前庭刺激（reduced motion 防的是位移、缩放、
+视差），但也不硬转回 0.7s——改成 **1.6s 的明暗脉冲**（`ptc-pulse`，opacity 到 0.35 再回来）。
+不位移，仍然明确地在动。
+
+判据在 `dev/verify-motion.mjs` 的 `mode=spinner`：同一段断言跑 `no-preference` 与 `reduce` 两遍，
+要求「只有一个动画、且是 `infinite`」并读到逐帧变化的 opacity。**拿掉例外就会红**——实测
+`ptc-spin 1e-05s 1`、40 帧只有 1 个 opacity；加回例外是 `ptc-pulse 1.6s infinite`、40 帧 40 个值。
 
 换画幅那条的红落在 **`margin-top` 与图片高度上限逐帧变化**，不是卡片高度逐帧变化：实测旧规则下
 上限虽然过渡了，但图片盒子自带比例，限制根本没生效，卡片高度只动了 3px。要让它为「高度在动」而红，

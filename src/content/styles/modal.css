@@ -918,33 +918,77 @@
    Sticky Export Action Bar
    ------------------------------------------------------------- */
 .export-actions {
+  --export-bar-gap: 8px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--export-bar-gap);
   padding: 12px 18px 16px;
   background: var(--ptc-bg-panel);
   border-top: 1px solid var(--ptc-border);
   box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, 0.9);
 }
 
-/* The live region. Fixed-height so the buttons below do not shift when a
-   message appears or clears; the retry button is its sibling rather than its
-   child, which is why the centring is done here and not by the region. */
-.status-region {
-  min-height: 16px;
+/* Visually hidden, still announced. The wait state's text lives here: a screen
+   reader has no spinner to look at, and `role="status"` only reports what is
+   inside it. Not `display: none` and not `visibility: hidden` -- both remove it
+   from the accessibility tree, which is the whole point of the element. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The outcome line, in flow above the size readout, claiming no height until it
+   has something to say.
+
+   It used to reserve two lines at all times, so a message would not move the
+   buttons -- an empty band paid on every frame the dialog was open, including
+   the clean exports, which have nothing to report.
+
+   The row did not need to reserve anything to protect them. The bar is the
+   panel's last flex child, so content added above the buttons grows the bar
+   *upward* into the scrolling list and leaves the buttons exactly where they
+   were: reserving height was never what held them still. Measured at 1280x900,
+   the buttons sit at the same y in all three states, and only the bar's top
+   edge moves.
+
+   Empty, the row is zero-height: what it costs is the column's own gap, which
+   is why it is not `display: none` -- the live region inside has to stay in the
+   accessibility tree to announce the wait state. */
+.status-row {
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 8px;
 }
 
-/* The retry button is a sibling of the live region, sharing its row: a button
-   inside `role="status"` would be announced with every message and would drop
-   a keyboard user's focus when it disappears on retry. The row keeps the
-   column's normal 8px gap, so the layout is the same as when it sat inside. */
-.status-retry-row {
+/* Quiet: no outcome to show. The row is then zero-height but still a flex item,
+   so the bar would open its 8px column gap below it -- dead space under the
+   controls for the whole life of the dialog, which is the band this change
+   exists to remove. Taking that gap back is the whole of what quiet needs.
+
+   Not `display: none`: the live region inside has to stay mounted and in the
+   accessibility tree to announce the wait state -- which is also why the class
+   is keyed on the outcome and not on the row's contents. Not `:has()` either:
+   it matched correctly while the computed style never followed it. */
+.status-row.is-quiet {
+  margin-bottom: calc(-1 * var(--export-bar-gap));
+}
+
+.status-region {
+  position: relative;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 /* The exported pixel size, read beside the button that produces it. Only rendered
@@ -955,15 +999,30 @@
   text-align: center;
 }
 
+/* A pill rather than bare coloured text. At 12px/500 in the panel's own muted
+   grey family, the old line was the weakest thing in the bar and read as one
+   more hint; a tinted surface gives it the boundary that says "this is the
+   result". The tint is `currentColor`, so one rule covers success, warning and
+   failure -- each already sets `color` below -- and no fourth colour is named. */
 .status-message {
   display: flex;
   align-items: center;
   gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.4;
   text-align: center;
   color: var(--ptc-success);
+  background: color-mix(in srgb, currentColor 14%, transparent);
   animation: ptc-fade-in 0.15s ease-out;
+}
+
+/* The icon is a flex child of the pill, so it must not be squashed by a long
+   message and must not shrink the text either. */
+.status-message > svg {
+  flex: 0 0 auto;
 }
 
 .status-message.is-error {
@@ -1039,6 +1098,16 @@
   cursor: not-allowed;
 }
 
+/* The button doing the work is disabled too, but "disabled" here means "do not
+   press this twice", not "unavailable" -- and 55% opacity dims the spinner,
+   which is the only thing on screen saying something is happening. The pressed
+   button keeps full contrast; its neighbour stays dimmed. */
+.btn-primary:disabled:has(.spinner),
+.btn-secondary:disabled:has(.spinner) {
+  opacity: 1;
+  cursor: progress;
+}
+
 .btn-secondary {
   display: flex;
   align-items: center;
@@ -1074,6 +1143,15 @@
   border-radius: 50%;
   animation: ptc-spin 0.7s linear infinite;
   flex-shrink: 0;
+}
+
+/* The download button's spinner sits on the raised panel fill, not on the
+   accent, so it takes the panel's text colour instead of white-on-white. */
+.spinner-on-panel {
+  width: 14px;
+  height: 14px;
+  border-color: var(--ptc-text);
+  border-top-color: var(--ptc-text-muted);
 }
 
 @keyframes ptc-spin {
@@ -1309,16 +1387,25 @@
      keeps the fixed floor and a tall one gets a real share.
 
      It sits inside the cap rather than on the stage as a `min-height` on purpose.
-     A cap can only ever make the panel smaller, so the column cannot overflow at
-     any height and a window too short for both degrades to the floor below
-     instead of clipping the export button. 132px is that floor, and it is derived
-     rather than chosen: the pinned export bar is 87px and the scrolling list
-     cannot shrink below its own padding (24px below), which is 111px plus room
-     for a status message that wraps to a second line. A reachable primary action
-     outranks a larger preview. */
+     A cap can only ever make the panel smaller, so the column cannot overflow
+     while the floor fits; past that the floor wins and the stage is what
+     shrinks. 157px is that floor, and it is derived rather than chosen: the
+     pinned export bar is 132px at its *largest* -- a two-line outcome pill plus
+     the size readout and the buttons, measured at 375x812 -- and the scrolling
+     list cannot shrink below its own padding (24px below). It is the tallest
+     the bar gets that the floor has to hold, not its idle height (86.5px):
+     a floor sized for idle is one the message does not fit in. A reachable
+     primary action outranks a larger preview.
+
+     157 + the stage's own 168px floor is 325px: a 320px-tall landscape window
+     spends more than it has. Measured at 568x320 the panel still fits and the
+     export button is fully on screen (bottom 308 of 320) because the stage floor
+     is a `max()` and gives way first -- but the pair of floors no longer sums to
+     something a 320px window can honour, so this is the number to re-check if
+     either floor moves again. */
   .controls-panel {
     width: 100%;
-    max-height: max(132px, min(52vh, calc(100% - max(168px, 40vh))));
+    max-height: max(157px, min(52vh, calc(100% - max(168px, 40vh))));
     border-left: none;
     border-top: 1px solid var(--ptc-border);
     transition: max-height 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1374,8 +1461,9 @@
   /* The export bar is fixed chrome on every screen, so it trades some of its
      generous padding for control space. It stays pinned and tappable. */
   .export-actions {
+    --export-bar-gap: 6px;
     padding: 8px 12px 12px;
-    gap: 6px;
+    gap: var(--export-bar-gap);
   }
 }
 
@@ -1399,5 +1487,22 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* One exception, and only because the blanket rule breaks it rather than
+     calms it: a ring frozen at its first frame is indistinguishable from a
+     spinner that has stopped, which is the one thing this UI must never say.
+     Reduced motion is about vestibular triggers -- travel, scale, parallax --
+     and a 0.7s rotation of a 15px ring is not one of them. The pulse is the
+     substitute: brightness instead of movement, which is also what someone
+     who set this preference is more likely to be able to read. */
+  .spinner {
+    animation: ptc-pulse 1.6s ease-in-out infinite !important;
+  }
+}
+
+@keyframes ptc-pulse {
+  50% {
+    opacity: 0.35;
   }
 }

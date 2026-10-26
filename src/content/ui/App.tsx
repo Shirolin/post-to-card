@@ -109,8 +109,26 @@ export interface AppProps {
 
 export function App({ threadData, onClose, onExport, initialConfig }: AppProps): JSX.Element {
   const [config, setConfig] = useState<CardConfig>(initialConfig ?? DEFAULT_CARD_CONFIG);
-  const [isExporting, setIsExporting] = useState<boolean>(false);
+  /**
+   * Which action is in flight, or null when nothing is.
+   *
+   * One state, not a boolean beside it: "exporting" is exactly "some action is
+   * pending", and two states that must be set and cleared together are one
+   * state with a nullable value. It also says *which* button carries the
+   * spinner, so exactly one of the two spins -- two spinners would claim two
+   * things are happening.
+   */
+  const [pendingAction, setPendingAction] = useState<ExportAction | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
+  /**
+   * A clean export's confirmation, held on the button that produced it.
+   *
+   * A successful copy needs no sentence: the button is where the press happened,
+   * and a check on it answers "did that work" without moving the eye. The status
+   * line is therefore reserved for outcomes that carry news -- a warning, a
+   * failure -- which is what lets it claim no height at all the rest of the time.
+   */
+  const [flash, setFlash] = useState<ExportAction | null>(null);
   const [isErrorStatus, setIsErrorStatus] = useState<boolean>(false);
   const [isWarningStatus, setIsWarningStatus] = useState<boolean>(false);
   /**
@@ -657,6 +675,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
     statusTimerRef.current = setTimeout(() => {
       statusTimerRef.current = null;
       setStatusMessage('');
+      setFlash(null);
     }, delayMs);
   };
 
@@ -730,8 +749,13 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
       return;
     }
 
-    setIsExporting(true);
-    setStatusMessage(action === 'copy' ? t.copying : t.generatingPng);
+    setPendingAction(action);
+    // A new export owns the line from here: the previous outcome is no longer
+    // what is happening, and leaving it up while the spinner runs reads as a
+    // result for a run that has not finished. `needsAttention` paths below put
+    // their own line back.
+    setStatusMessage('');
+    setFlash(null);
     setIsErrorStatus(false);
     setIsWarningStatus(false);
     setRetry(null);
@@ -752,7 +776,6 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
         );
         setIsErrorStatus(!outcome.success);
         setIsWarningStatus(outcome.success && degraded);
-        setStatusMessage(describeOutcome(outcome, action));
         // Anything short of a clean copy/download can be worth another try --
         // except a clipboard this browser simply does not have. Retrying that
         // can only fail the same way and save a second copy of the PNG.
@@ -761,6 +784,14 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
           Boolean(outcome.degradedImageCount || outcome.scaleReduced) ||
           Boolean(outcome.clipboardFailure && outcome.clipboardFailure !== 'unsupported');
         setRetry(needsAttention ? action : null);
+        // A clean result is a tick on the button, not a sentence under it: the
+        // press happened there and "did it work" is answered there. Everything
+        // else -- anything with something to say -- goes to the status line.
+        if (needsAttention) {
+          setStatusMessage(describeOutcome(outcome, action));
+        } else {
+          setFlash(action);
+        }
       }
       // A warning stays until the next export. Auto-clearing it while the
       // button that earned it is still on screen is how the warning was missed
@@ -792,7 +823,7 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
       // outlive the timer. An unrecognized error has no retry, so it fades.
       if (!retryable) scheduleStatusClear(4000);
     } finally {
-      if (mountedRef.current) setIsExporting(false);
+      if (mountedRef.current) setPendingAction(null);
     }
   };
 
@@ -924,7 +955,8 @@ export function App({ threadData, onClose, onExport, initialConfig }: AppProps):
         onChange={handleConfigChange}
         onExportCopy={() => handleExport('copy')}
         onExportDownload={() => handleExport('download')}
-        isExporting={isExporting}
+        pendingAction={pendingAction}
+        flash={flash}
         statusMessage={statusMessage}
         isErrorStatus={isErrorStatus}
         isWarningStatus={isWarningStatus}
