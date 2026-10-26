@@ -32,7 +32,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSuite } from '../env/harness.ts';
-import { SUPPORTED_LOCALES } from '../../src/content/i18n.ts';
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES, localeDirName } from '../../src/content/i18n.ts';
 import { POPUP_COPY } from '../../src/content/popupCopy.ts';
 
 const { test, run } = createSuite();
@@ -114,16 +114,17 @@ test('hygiene.2: the storage key is declared once, and the popup imports it', ()
 });
 
 // 3. Same duplication, one level up: the supported locales. The popup's copy
-// lives in `src/content/popupCopy.ts` now and is keyed by the same locale type,
-// so the two cannot diverge — but the rule is still worth stating, because a
+// lives in `src/content/popupCopy.ts` and is keyed by the same locale type, so
+// the two cannot diverge — but the rule is still worth stating, because a
 // locale added to one and not the other would leave the popup showing the
 // browser's default for a preference the modal had already written.
 //
 // Read off the table rather than off its source text. The previous version
-// scanned the file for `'xx-YY':` blocks, which broke two ways at once: an id
-// that carries no region is a valid bare identifier, so it is written unquoted
-// and the pattern never saw it; and a reformatting that changed the indentation
-// would have emptied the match list while the test stayed green.
+// scanned the file for `'xx-YY':` blocks, which two things broke at once:
+// eleven of the fourteen ids carry no region and are valid bare identifiers, so
+// they are written unquoted and the pattern never saw them; and a reformatting
+// that changed the indentation would have emptied the match list while the test
+// stayed green.
 test('hygiene.3: the popup supports exactly the locales i18n.ts declares', () => {
   assert.deepEqual(
     Object.keys(POPUP_COPY).sort(),
@@ -132,17 +133,24 @@ test('hygiene.3: the popup supports exactly the locales i18n.ts declares', () =>
   );
 });
 
-// 4. The popup's markup ships the Chinese strings inline, because the popup
-// paints before its script runs. The script then rewrites them from the copy
-// table — so the two spellings have to agree, or the user reads one sentence
-// and then watches it change.
+// 4. The popup's markup ships its strings inline, because the popup paints
+// before its script runs. The script then rewrites them from the copy table —
+// so the two spellings have to agree, or the user reads one sentence and then
+// watches it change.
+//
+// Which language the markup carries is decided by the manifest's
+// `default_locale`, not by the author's own language: Chrome names the
+// extension in the store and in `chrome://extensions` with that locale, so a
+// first paint in anything else is a flash of a language the user did not ask
+// for. `en_US` is that locale (hygiene.10 checks the two still agree), so the
+// comparison target is `POPUP_COPY['en-US']`.
 //
 // Nothing kept them agreeing: the markup is HTML, the copy is TypeScript, and
 // a test that read the source of both would have pinned the prose rather than
 // the words. So the words themselves are compared.
-test('hygiene.4: the popup’s inline Chinese matches the copy the script writes', () => {
+test('hygiene.4: the popup’s inline markup matches the copy the script writes', () => {
   const html = readFileSync(join(REPO_ROOT, 'public', 'popup.html'), 'utf8');
-  const copy = POPUP_COPY['zh-CN'];
+  const copy = POPUP_COPY[DEFAULT_LOCALE];
 
   // The markup's own text for a node, tags and whitespace removed.
   //
@@ -179,7 +187,7 @@ test('hygiene.4: the popup’s inline Chinese matches the copy the script writes
     assert.equal(
       plain(actual),
       plain(expected),
-      `popup.html's "${id}" and POPUP_COPY's Chinese disagree: "${plain(actual)}" against "${plain(expected)}"`
+      `popup.html's "${id}" and POPUP_COPY's ${DEFAULT_LOCALE} disagree: "${plain(actual)}" against "${plain(expected)}"`
     );
   }
 });
@@ -381,6 +389,99 @@ test('hygiene.9: transitions stay on compositor properties inside the card', () 
     [],
     `the card is measured and rasterised, so a transition inside it must move a compositor property only; replay layout changes with a transform (see docs/loading-states.md, 决定规则 3):\n  ${violations.join('\n  ')}`
   );
+});
+
+// 10. Chrome's `_locales` tree is the second catalogue of this project's
+// languages, and the manifest cannot read TypeScript, so nothing derives it.
+// Two failures are silent rather than loud:
+//
+//   - a directory name outside Chrome's own table (`de_DE`, `pt_PT`, or a
+//     hyphenated `zh-CN`) is not an error. Chrome falls back to
+//     `default_locale`, so the translation ships, is never shown, and nothing
+//     anywhere reports it.
+//   - a `__MSG_name__` placeholder with no `name` in a `messages.json` fails
+//     the whole extension install, which `dev/verify-extension.mjs` would catch
+//     only if someone ran it.
+//
+// Chrome's table (developer.chrome.com/docs/extensions/reference/api/i18n) uses
+// underscores and carries a region only where the words differ. That list is
+// hardcoded here on purpose: reading it from a locale would make the gate agree
+// with whatever the build happens to emit.
+const CHROME_LOCALE_DIRS = new Set([
+  'en_US', 'zh_CN', 'zh_TW', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'pt_BR',
+  'ru', 'tr', 'uk', 'id',
+]);
+
+const LOCALES_DIR = join(REPO_ROOT, 'public', '_locales');
+
+/** Every `{ message, ... }` in one `messages.json`, keyed by message name. */
+function messagesOf(dir: string): Record<string, { message?: string }> {
+  return JSON.parse(readFileSync(join(LOCALES_DIR, dir, 'messages.json'), 'utf8'));
+}
+
+test('hygiene.10: the _locales tree names Chrome’s directories, one per supported locale', () => {
+  const dirs = readdirSync(LOCALES_DIR).filter((name) =>
+    statSync(join(LOCALES_DIR, name)).isDirectory()
+  );
+
+  assert.deepEqual(
+    dirs.slice().sort(),
+    SUPPORTED_LOCALES.map(localeDirName).sort(),
+    'public/_locales must hold exactly one directory per supported locale'
+  );
+
+  const unknown = dirs.filter((dir) => !CHROME_LOCALE_DIRS.has(dir));
+  assert.deepEqual(
+    unknown,
+    [],
+    `Chrome has no locale ${unknown.join(', ')} -- it would silently serve default_locale instead`
+  );
+
+  // Every file has the same key set, and none is a placeholder. Key equality is
+  // what a translator forgetting a key breaks; non-empty is what a `"message":
+  // ""` breaks, and Chrome renders that as the literal `__MSG_extDesc__`.
+  const reference = Object.keys(messagesOf(localeDirName(DEFAULT_LOCALE))).sort();
+  assert.ok(reference.length > 0, 'the default locale declares no messages');
+  for (const dir of dirs) {
+    const messages = messagesOf(dir);
+    assert.deepEqual(
+      Object.keys(messages).sort(),
+      reference,
+      `${dir}/messages.json must declare the same messages as ${localeDirName(DEFAULT_LOCALE)}`
+    );
+    for (const key of reference) {
+      assert.ok(
+        typeof messages[key].message === 'string' && messages[key].message!.trim().length > 0,
+        `${dir}/messages.json's ${key} must be a non-empty message`
+      );
+    }
+  }
+});
+
+test('hygiene.11: the manifest localizes only names the _locales tree defines', () => {
+  const manifestSrc = readFileSync(join(REPO_ROOT, 'manifest.json'), 'utf8');
+  const manifest = JSON.parse(manifestSrc) as { default_locale?: string };
+
+  assert.equal(
+    manifest.default_locale,
+    localeDirName(DEFAULT_LOCALE),
+    'the manifest default_locale must be the underscored name of the default locale'
+  );
+
+  // Every placeholder in the manifest, wherever it sits, has to resolve in
+  // every messages.json -- Chrome refuses the install otherwise.
+  const used = [...new Set([...manifestSrc.matchAll(/__MSG_(\w+)__/g)].map((m) => m[1]))];
+  assert.ok(used.length > 0, 'the manifest uses no __MSG_ placeholder; hygiene.11 would guard nothing');
+
+  for (const locale of SUPPORTED_LOCALES) {
+    const messages = messagesOf(localeDirName(locale));
+    for (const name of used) {
+      assert.ok(
+        messages[name],
+        `${localeDirName(locale)}/messages.json has no "${name}", which manifest.json references`
+      );
+    }
+  }
 });
 
 export function runTierHygiene() {

@@ -1093,6 +1093,57 @@ async function runAdversarialSuite() {
     assert.ok(contentCode.includes('hidden'), 'Must lock overflow with hidden');
   });
 
+  await challenge('T5.3.9: the built extension carries the _locales tree the manifest points at', () => {
+    // Only two of the four build entries copy `public/`: `background` and
+    // `content` set `publicDir`, while `popup` and `hook` pass `false`. So
+    // `dist/_locales` exists only because one of the first two ran, and a
+    // change to that flag would drop every translation from a bundle that still
+    // builds, still installs, and simply shows English everywhere. Nothing else
+    // in the suite looks inside `dist/` for anything but the scripts.
+    const localesDir = path.resolve(rootDir, 'dist/_locales');
+    assert.ok(
+      fs.existsSync(localesDir),
+      'dist/_locales is missing -- a bundle built without public/ cannot localise the manifest'
+    );
+
+    const built = fs.readdirSync(localesDir).filter((name) =>
+      fs.statSync(path.join(localesDir, name)).isDirectory()
+    );
+    const shipped = fs.readdirSync(path.resolve(rootDir, 'public/_locales')).filter((name) =>
+      fs.statSync(path.resolve(rootDir, 'public/_locales', name)).isDirectory()
+    );
+    assert.deepEqual(
+      built.sort(),
+      shipped.sort(),
+      'dist/_locales must hold exactly the directories public/_locales does'
+    );
+
+    // And every one of them is loadable, with the same messages: a copy that
+    // truncated a file would leave Chrome rejecting the install, which reads as
+    // "the extension will not load" with no hint where to look. The reference
+    // is the default locale by name rather than `shipped[0]`, which would be
+    // whatever `readdir` happened to return first on this platform.
+    const reference = Object.keys(
+      JSON.parse(fs.readFileSync(path.join(localesDir, 'en_US', 'messages.json'), 'utf8'))
+    ).sort();
+    for (const dir of built) {
+      const messages = JSON.parse(
+        fs.readFileSync(path.join(localesDir, dir, 'messages.json'), 'utf8')
+      ) as Record<string, { message?: string }>;
+      assert.deepEqual(
+        Object.keys(messages).sort(),
+        reference,
+        `dist/_locales/${dir}/messages.json declares a different message set`
+      );
+      for (const key of reference) {
+        assert.ok(
+          typeof messages[key]?.message === 'string' && messages[key].message!.trim().length > 0,
+          `dist/_locales/${dir}/messages.json's ${key} is empty`
+        );
+      }
+    }
+  });
+
   // -------------------------------------------------------------
   // CHALLENGE GROUP 4: Verification of the standard suite (Tiers 1-4)
   // -------------------------------------------------------------
