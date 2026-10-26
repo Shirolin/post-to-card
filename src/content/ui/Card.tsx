@@ -1001,7 +1001,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
           {hasFooterRight && (
             <div class="card-footer-right">
               {config.showWatermark && (
-                <div class="card-watermark" title="Post-to-Card">
+                <div class="card-watermark" title="PostPress">
                   <Sparkles size={13} strokeWidth={2} aria-hidden="true" />
                   {/* The name links to the licence's source. GPL-3.0 asks for the
                       corresponding source to be offered to whoever receives a
@@ -1017,7 +1017,7 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
                     rel="noopener noreferrer"
                     title="Source code — GPL-3.0"
                   >
-                    <span>Post to Card</span>
+                    <span>{t.brandName}</span>
                     <span class="card-build">{CARD_BUILD}</span>
                   </a>
                 </div>

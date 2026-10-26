@@ -7,7 +7,7 @@ import type { Translations } from './types.ts';
  * years ago, and the extension sits inside that interface.
  */
 export const fr: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Fermer la fenêtre',
   triggerButtonTitle: 'Créer la carte du post',
 

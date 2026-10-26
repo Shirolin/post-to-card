@@ -7,7 +7,7 @@ import type { Translations } from './types.ts';
  * at every count, where "{count} постів" would need three.
  */
 export const uk: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Закрити вікно',
   triggerButtonTitle: 'Створити картку поста',
 

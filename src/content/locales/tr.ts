@@ -8,7 +8,7 @@ import type { Translations } from './types.ts';
  * exists it wins, because the panel's buttons are ~10 characters wide.
  */
 export const tr: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Pencereyi kapat',
   triggerButtonTitle: 'Gönderi kartı oluştur',
 

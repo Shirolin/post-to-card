@@ -7,7 +7,7 @@ import type { Translations } from './types.ts';
  * country, and "post" is X's own word in every Spanish interface.
  */
 export const es: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Cerrar ventana',
   triggerButtonTitle: 'Crear tarjeta del post',
 

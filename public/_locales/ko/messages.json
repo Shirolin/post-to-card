@@ -1,8 +1,8 @@
 {
   "extTitle": {
-    "message": "Post to Card"
+    "message": "PostPress · 트윗판화"
   },
   "extDesc": {
-    "message": "X 게시물과 스레드를 오프라인에서 고해상도 카드 이미지로 만들어 줍니다."
+    "message": "X(트위터) 게시물과 타래를 출판급 고해상도 카드로 인화하세요. 12가지 질감 테마와 캔버스 매트 지원, 100% 로컬 렌더링."
   }
 }

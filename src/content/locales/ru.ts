@@ -9,7 +9,7 @@ import type { Translations } from './types.ts';
  * correctly at every count is the only honest option short of ICU plurals.
  */
 export const ru: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Закрыть окно',
   triggerButtonTitle: 'Создать карточку поста',
 
