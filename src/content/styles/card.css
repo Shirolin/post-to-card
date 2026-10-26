@@ -1725,7 +1725,9 @@
 
 .card-watermark {
   display: flex;
-  align-items: center;
+  /* The credit is two lines tall now, so `center` would hang the mark between
+     them; `flex-start` keeps it on the brand line, where it belongs. */
+  align-items: flex-start;
   gap: 4px;
   font-size: 11px;
   font-weight: 500;
@@ -1748,13 +1750,18 @@
    contrast. */
 .card-credit {
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  /* Name over stamp, not beside it. On one line the two read as a single run of
+     text -- "PostPress v1.0.0·2153" -- which puts a build identifier at the same
+     level as the name it belongs to. Stacked, the stamp is the name's footnote,
+     and the credit gives back the width the footer's right side was spending on
+     it. No gap: a gap would make the stamp its own item again. */
+  flex-direction: column;
+  gap: 0;
   color: inherit;
   text-decoration: none;
 }
 
-/* The build stamp. Quieter than the mark beside it by size and weight alone,
+/* The build stamp. Quieter than the name above it by size and weight alone,
    which is the same decision the watermark's own ink is made on: a step down,
    never a fade. It is the one place the card names the build that drew it, so
    a shared image can be traced back to the code that produced it. */
@@ -1765,5 +1772,4 @@
   /* Keeps the stamp whole on one line: a break here would read as a fault in
      the card rather than as the mark it belongs to. */
   white-space: nowrap;
-  opacity: 0.72;
 }
