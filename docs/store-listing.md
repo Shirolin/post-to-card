@@ -94,6 +94,18 @@ Post-to-Card 把任意 X（Twitter）推文或长串，渲染成一张可以直�
 | `storage` | Remembers your theme, canvas and toggle choices between sessions. Stored locally; never transmitted. |
 | `https://*.twimg.com/*` | Fetches the pictures that belong in the card. A canvas cannot read a cross-origin image, so the export would fail without this; requests go only to X's own image hosts. |
 
+## 语言
+
+商店的**每个字段只存一份**，不是每语言一份：后台里选的默认语言就是访客看到的语言。扩展自己的
+14 种语言（`public/_locales/`，见 `docs/i18n.md`）只影响 manifest 的 `name` / `description` 在
+`chrome://extensions` 里怎么显示，**不影响商店页**。
+
+所以上面的英文文案是商店页唯一在用的版本，中文那版留作中文商店页或其详情的参考。要 14 种语言的
+商店描述，得在后台逐语言另填一遍，不在本次范围。
+
+清单里的 `description` 已经是 `__MSG_extDesc__`，它的英文版本在 `public/_locales/en_US/messages.json`，
+和上面「简短说明」的英文**要一起改**——两边现在是两句不同的话（清单那句更早、没提「不经服务器」）。
+
 ## 截图与素材
 
 商店要求至少一张 1280×800 截图。仓库里没有现成的，需要用可视化 harness 拍：
