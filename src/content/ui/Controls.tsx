@@ -15,7 +15,6 @@ import {
   Palette,
   Maximize2,
   Scaling,
-  Square,
   Copy,
   Download,
   CircleCheck,
@@ -852,7 +851,6 @@ export function Controls({
 
             <div class="control-section">
               <span class="control-label">
-                <Square size={14} strokeWidth={2} />
                 <span>{t.presentation}</span>
               </span>
               <div class="toggles-list">
