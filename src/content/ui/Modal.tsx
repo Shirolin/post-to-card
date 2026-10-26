@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { Locale } from '../../types/card.ts';
-import { getTranslation, sanitizeLocale } from '../i18n.ts';
+import { getTranslation } from '../i18n.ts';
 import { X } from 'lucide-preact';
 
 let activeScrollLocks = 0;
@@ -109,7 +109,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(', ');
 
 export function Modal({ isOpen = true, locale, summary, onClose, children }: ModalProps): JSX.Element | null {
-  const t = getTranslation(sanitizeLocale(locale));
+  const t = getTranslation(locale);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   // Captured before the dialog steals focus, so it can be restored on close.
   const restoreFocusRef = useRef<HTMLElement | null>(null);
@@ -229,6 +229,10 @@ export function Modal({ isOpen = true, locale, summary, onClose, children }: Mod
         role="dialog"
         aria-modal="true"
         aria-label={t.brandName}
+        // The panel is rendered inside the page's own document, so without this
+        // the browser and a screen reader take the interface for whatever
+        // language X is in. It also decides where CJK punctuation gets its width.
+        lang={locale}
         tabIndex={-1}
       >
         {/* Header */}

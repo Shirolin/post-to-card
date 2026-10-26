@@ -1,5 +1,4 @@
 import type { ThemeId, PaddingOption, RadiusOption, AspectRatioOption, ImageFitOption, MediaLayoutOption, CardConfig, LegacyThemeId, CanvasRatioOption, CanvasBackgroundId } from '../../types/card.ts';
-import { detectDefaultLocale } from '../i18n.ts';
 import {
   ASPECT_RATIO,
   CANVAS_BACKGROUND,
@@ -1217,7 +1216,11 @@ export const DEFAULT_CARD_CONFIG: CardConfig = {
   blurAuthor: false,
   showActionBarButton: true,
   showPlayButton: true,
-  locale: detectDefaultLocale(),
+  // `'auto'` rather than the machine's language read at module load: the
+  // preference the panel stores is "follow the browser", and folding that into
+  // a concrete language here would make the setting unable to follow a browser
+  // whose language changes after the config was written.
+  locale: 'auto',
   excludedTweetIds: [],
   // Both default to "leave the export alone". A default of anything else would
   // repaint every existing user's PNG the moment they upgrade.

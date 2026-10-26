@@ -1,8 +1,8 @@
 import type { JSX } from 'preact';
 import type { ThreadData, TweetData } from '../../types/tweet.ts';
-import type { CardConfig, ThemeId, PaddingOption, RadiusOption, CanvasRatioOption, CanvasBackgroundId } from '../../types/card.ts';
+import type { CardConfig, ThemeId, PaddingOption, RadiusOption, CanvasRatioOption, CanvasBackgroundId, LocalePreference } from '../../types/card.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, PADDING_OPTIONS, RADIUS_OPTIONS, ASPECT_RATIO_OPTIONS, IMAGE_FIT_OPTIONS, MEDIA_LAYOUT_OPTIONS, CANVAS_RATIO_OPTIONS, CANVAS_BACKGROUNDS, CANVAS_BACKGROUND_ORDER, resolveCanvasBackground, themePreview } from './themes.ts';
-import { getTranslation, sanitizeLocale, type Translations } from '../i18n.ts';
+import { getTranslation, resolveLocale, sanitizeLocalePref, SUPPORTED_LOCALES, LOCALE_ENDONYMS, type Translations } from '../i18n.ts';
 import { useId, useState } from 'preact/hooks';
 import { handleRadioKeyDown } from './radioGroup.ts';
 import { threadSession, toggleExcluded, selectCurrentOnly } from '../threadSession.ts';
@@ -39,6 +39,15 @@ import {
  * one and a textured one.
  */
 const THEME_GRID_VISIBLE = 4;
+
+/**
+ * What the language picker offers, in the order it offers them.
+ *
+ * `'auto'` first because it is the default and the answer most users want; the
+ * languages then follow the order `SUPPORTED_LOCALES` declares, so the list is
+ * not a second place to keep in step.
+ */
+const LOCALE_OPTIONS: readonly LocalePreference[] = ['auto', ...SUPPORTED_LOCALES];
 
 export interface ControlsProps {
   config: CardConfig;
@@ -288,7 +297,7 @@ export function Controls({
   threadData,
   exportSize,
 }: ControlsProps): JSX.Element {
-  const t = getTranslation(sanitizeLocale(config.locale));
+  const t = getTranslation(resolveLocale(config.locale));
   const isExporting = pendingAction !== null;
   const [showMore, setShowMore] = useState<boolean>(false);
   const [showAllThemes, setShowAllThemes] = useState<boolean>(false);
@@ -790,22 +799,31 @@ export function Controls({
           <div id={moreId} class="more-body" hidden={!showMore}>
             {/* Language opens the disclosure. It is the slowest-moving control in
                 the panel -- set once, then read rather than changed -- and it is
-                the one about to grow past two options, which is a shape a fixed
-                row cannot hold. Inside here it costs one tap when it is actually
-                wanted and nothing when it is not. */}
-            <div class="control-section control-row-inline">
+                the widest, at fifteen options. A row with the label on the left
+                and a fixed group on the right cannot hold that: the group wraps
+                instead, so the label sits above it. Inside the disclosure it
+                costs one tap when it is actually wanted and nothing when it is
+                not. */}
+            <section class="control-section">
               <span class="control-label">
                 <Languages size={14} strokeWidth={2} />
                 <span>{t.language}</span>
               </span>
-              <Segmented
-                name={t.language}
-                options={['zh-CN', 'en-US'] as const}
-                value={sanitizeLocale(config.locale)}
-                onSelect={(next) => updateConfig({ locale: next })}
-                labels={{ 'zh-CN': '中文', 'en-US': 'English' }}
-              />
-            </div>
+              <div class="locale-grid">
+                {/* The options are derived, not listed: a language added to
+                    `SUPPORTED_LOCALES` and given a dictionary shows up here
+                    without a second edit, and an endonym is never translated --
+                    someone looking for 日本語 should find it whatever the panel
+                    is currently in. */}
+                <Segmented
+                  name={t.language}
+                  options={LOCALE_OPTIONS}
+                  value={sanitizeLocalePref(config.locale)}
+                  onSelect={(next) => updateConfig({ locale: next })}
+                  labels={{ auto: t.languageAuto, ...LOCALE_ENDONYMS }}
+                />
+              </div>
+            </section>
 
             {/* Padding and radius are the knobs that go with the theme chosen
                 above, so the settings proper open with them -- one tap from the

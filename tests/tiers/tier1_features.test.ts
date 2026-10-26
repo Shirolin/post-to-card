@@ -35,7 +35,7 @@ import { restoreUnicodeEmojis } from '../../src/content/adapter/emojis.ts';
 import { toggleExcluded, selectCurrentOnly } from '../../src/content/threadSession.ts';
 import { MIXED_FEED_WITH_ADS_AND_REPLIES_HTML } from '../fixtures/ads-replies.ts';
 import { RICH_TOKENS_HTML, EXPECTED_TOKENS } from '../fixtures/rich-tokens.ts';
-import { TRANSLATIONS, getTranslation, sanitizeLocale } from '../../src/content/i18n.ts';
+import { TRANSLATIONS, SUPPORTED_LOCALES, getTranslation, resolveLocale } from '../../src/content/i18n.ts';
 import { THEMES, THEME_ORDER, EXPERIMENTAL_THEMES, DEFAULT_CARD_CONFIG, LEGACY_THEME_ALIASES, RADIUS_OPTIONS, PADDING_OPTIONS, resolveRadius, sanitizeRadius, sanitizeTheme, sanitizePadding, sanitizeAspectRatio, MEDIA_LAYOUT_OPTIONS, sanitizeMediaLayout, CANVAS_RATIO_OPTIONS, CANVAS_BACKGROUNDS, CANVAS_BACKGROUND_ORDER, resolveCanvasBackground, sanitizeCanvasRatio, sanitizeCanvasBackground } from '../../src/content/ui/themes.ts';
 import { ASPECT_RATIO, CANVAS_BACKGROUND, CANVAS_RATIO, IMAGE_FIT, MEDIA_LAYOUT, PADDING, RADIUS } from '../../src/content/ui/options.ts';
 import { aspectMinHeight, CARD_WIDTH, GRID_TRACKS, heroCellRatio, heroRowShare, MEDIA_MOUNT, NARROW_BREAKPOINT, viewportPadding } from '../../src/content/ui/geometry.ts';
@@ -2537,12 +2537,13 @@ test('F17.6c: no theme ships a surface gradient any more', () => {
   assert.deepEqual(withGradient, []);
 });
 
-test('F17.7: every theme name is localised in both locales', () => {
+test('F17.7: every theme name is localised in every language', () => {
   for (const id of THEME_IDS) {
     // Must match Controls.tsx's lookup: hyphens become underscores.
     const key = `theme_${id.replace(/-/g, '_')}` as keyof typeof TRANSLATIONS['en-US'];
-    assert.ok(TRANSLATIONS['zh-CN'][key], `zh-CN missing ${key}`);
-    assert.ok(TRANSLATIONS['en-US'][key], `en-US missing ${key}`);
+    for (const locale of SUPPORTED_LOCALES) {
+      assert.ok(TRANSLATIONS[locale][key], `${locale} missing ${key}`);
+    }
   }
 });
 
@@ -3315,6 +3316,40 @@ test('F21.11: the media controls are withheld when the card draws no picture', a
   // And with nothing to judge -- the string renderer, or a mount that has not
   // resolved a thread yet -- both are offered rather than guessed away.
   assert.deepEqual(await mediaControls(), both, 'with no post to judge, both are offered');
+});
+
+test('F21.14: the language picker marks the stored preference, "auto" included', async () => {
+  // The picker is a radio group whose checked item is the one the panel says
+  // you chose. It draws `sanitizeLocalePref(config.locale)`, not the resolved
+  // language, and that distinction is the whole feature: resolving first would
+  // light up "Deutsch" on a German machine whose setting is still "follow the
+  // browser", and the user would have no way to see -- let alone keep -- the
+  // setting they actually have.
+  //
+  // Nothing asserted the checked state before, so a picker that always marked
+  // the first option passed everything.
+  // Confined to the locale grid: the panel has eight other radio groups, and a
+  // search over the whole document would count their selections too.
+  const checkedInPicker = (html: string): string[] => {
+    const start = html.indexOf('class="locale-grid"');
+    assert.ok(start > -1, 'the language picker is not in the markup');
+    const grid = html.slice(start, html.indexOf('</section>', start));
+    return [...grid.matchAll(/aria-checked="true"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  };
+
+  // The panel draws itself in the language the preference resolves to, so the
+  // word for "auto" is that language's -- not English's, which is what a test
+  // running on this machine's own tag would otherwise be pinning.
+  const autoLabel = getTranslation(resolveLocale('auto')).languageAuto;
+  const auto = checkedInPicker(await renderControls({ config: { locale: 'auto' } }));
+  assert.deepEqual(
+    auto,
+    [autoLabel],
+    '"auto" must be the only marked option when the preference is "auto"'
+  );
+
+  const pinned = checkedInPicker(await renderControls({ config: { locale: 'zh-CN' } }));
+  assert.deepEqual(pinned, ['简体中文'], 'a pinned language marks exactly its own option');
 });
 
 test('F21.12: the media controls lead the panel, ahead of the choices that hold', async () => {
@@ -4885,7 +4920,7 @@ test('F35.4: an empty image reaches the user as actionable text with a retry', a
     // pin it, so an exact zh-CN comparison would pass here and fail on CI.
     assert.equal(
       status.textContent,
-      TRANSLATIONS[sanitizeLocale(DEFAULT_CARD_CONFIG.locale)].exportEmpty
+      TRANSLATIONS[resolveLocale(DEFAULT_CARD_CONFIG.locale)].exportEmpty
     );
     assert.ok(status.className.includes('is-error'));
     assert.ok(container.shadow.querySelector('.status-retry'), 'an empty image is worth one more try');
@@ -5243,12 +5278,12 @@ test('F36.10: a shape with no paint says the ring is transparent', async () => {
   );
 });
 
-test('F36.11: every background the picker offers has a label in both languages', () => {
+test('F36.11: every background the picker offers has a label in every language', () => {
   // The picker no longer keeps its own id->label map; it derives `canvasBg_<id>`
   // from the dictionary the way the theme grid derives `theme_<id>`. A missing
   // key would silently fall back to the table's English name, which is exactly
   // the kind of drift this assertion exists to catch.
-  for (const locale of ['zh-CN', 'en-US'] as const) {
+  for (const locale of SUPPORTED_LOCALES) {
     for (const id of CANVAS_BACKGROUND_ORDER) {
       const key = `canvasBg_${id}` as keyof (typeof TRANSLATIONS)[typeof locale];
       const label = TRANSLATIONS[locale][key];
@@ -6182,10 +6217,11 @@ test('F30.9: the popup paints the stored preference over the browser default', a
 });
 
 test('F30.10: the popup reads its language off the browser when storage has none', async () => {
-  // The locale table is hand-synced with `src/content/i18n.ts` -- public/ is
-  // copied into the bundle verbatim and cannot import from src/ -- so the only
-  // thing keeping the duplicate honest is a test that drives it. Nothing pinned
-  // `browserLocale`, and a mutation to a constant survived.
+  // The locale table is shared with `src/content/i18n.ts` through the bundle
+  // now, so what this drives is the popup's own use of it: the browser's tag
+  // has to reach `document.documentElement.lang` and the inline nodes before
+  // storage answers, or the popup opens in the default language and then
+  // visibly changes.
   await withPopup(
     { kind: 'response', response: { success: false } },
     ({ locale, text }) => {
@@ -6195,6 +6231,8 @@ test('F30.10: the popup reads its language off the browser when storage has none
     { language: 'zh-CN', prefs: {} }
   );
 
+  // A language the build has no dictionary for still lands somewhere readable
+  // rather than on an empty table lookup.
   await withPopup(
     { kind: 'response', response: { success: false } },
     ({ locale, text }) => {
@@ -6486,9 +6524,10 @@ test('F32.4: a post without the marker is not flagged', () => {
   assert.equal(tweet?.truncated, undefined);
 });
 
-test('F32.5: both locales name the truncated state', () => {
-  assert.ok(TRANSLATIONS['zh-CN'].truncatedContent, 'zh-CN has the notice copy');
-  assert.ok(TRANSLATIONS['en-US'].truncatedContent, 'en-US has the notice copy');
+test('F32.5: every language names the truncated state', () => {
+  for (const locale of SUPPORTED_LOCALES) {
+    assert.ok(TRANSLATIONS[locale].truncatedContent, `${locale} has the notice copy`);
+  }
 });
 
 // -------------------------------------------------------------

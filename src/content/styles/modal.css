@@ -493,30 +493,6 @@
   flex-shrink: 0;
 }
 
-/* A control that shares its row with its own label rather than sitting under it.
-   Used for the language picker: its two options fit beside the label, so it does
-   not spend a second row on itself inside the disclosure. */
-.control-row-inline {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.control-row-inline .control-label {
-  min-width: 0;
-}
-
-.control-row-inline .btn-group {
-  flex: 0 0 auto;
-  width: auto;
-}
-
-.control-row-inline .btn-group-item {
-  flex: 0 0 auto;
-  padding: 5px 12px;
-}
-
 /* A sub-label inside a section that already has a heading of its own -- the
    padding and radius controls, which share one group. Same type as the section
    labels but without the uppercase treatment, so the hierarchy stays readable at
@@ -728,6 +704,27 @@
   width: auto;
   flex: 0 0 auto;
 }
+/* The language picker: fifteen entries, and no width a panel row could give
+   them. The group wraps onto as many lines as it needs and each entry sizes to
+   its own words, so "Bahasa Indonesia" and "Українська" set at their natural
+   width instead of being ellipsised into each other. The ellipsis rule on
+   `.btn-group-item` is overridden here for the same reason. */
+.locale-grid {
+  margin-top: 6px;
+}
+
+.locale-grid .btn-group {
+  flex-wrap: wrap;
+}
+
+.locale-grid .btn-group-item {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
 .btn-group-compact .btn-group-item {
   flex: 0 0 auto;
   padding: 4px 11px;
