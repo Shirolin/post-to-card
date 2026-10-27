@@ -1005,10 +1005,18 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
                 <div class="card-watermark" title="PostPress">
                   {/* Line art, not the icon: it strokes in `currentColor`, so
                       it takes the footer's own ink on every theme, and it
-                      rasterizes into the export without a picture to fetch. */}
+                      rasterizes into the export without a picture to fetch.
+
+                      28.5, not the 16 a single 11px line would take: the
+                      credit is two lines, and the mark spans both. The drawing
+                      only fills 19.75 of its 24-unit box (3..21 plus half the
+                      1.75 stroke), so 28.5 puts 23.5px of ink on the card --
+                      exactly the block's own ink, name cap to version
+                      baseline. Sizing the box to 23.5 would have left the mark
+                      visibly smaller than the text it stands beside. */}
                   <span
                     class="card-brand-icon"
-                    dangerouslySetInnerHTML={{ __html: brandMarkSvg(16) }}
+                    dangerouslySetInnerHTML={{ __html: brandMarkSvg(28.5) }}
                     aria-hidden="true"
                   />
                   {/* The name links to the licence's source. GPL-3.0 asks for the

@@ -1725,10 +1725,12 @@
 
 .card-watermark {
   display: flex;
-  /* The credit is two lines tall, and the mark belongs to the pair: it centres
-     on the block, not on either line. `flex-start` put it on the row box's top
+  /* The credit is two lines tall, and the mark belongs to the pair: it spans
+     the block, not one line of it. `flex-start` put it on the row box's top
      edge -- 4.5px above the name's cap and overlapping the version line below
-     -- so it lined up with nothing. */
+     -- so it lined up with nothing, and centring a 16px mark left it shorter
+     than the text it stands beside. The size in `Card.tsx` matches the block's
+     ink; these flex lines only have to line the two up. */
   align-items: center;
   gap: 7px;
   font-size: 11px;
