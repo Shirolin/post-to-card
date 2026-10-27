@@ -71,18 +71,42 @@ const TRIGGER_CSS = `
   user-select: none;
   position: relative;
   z-index: 1;
-  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  transition: color 0.15s ease, transform 0.1s ease;
 }
 [data-post-to-card-btn="true"] svg { display: block; }
+
+/* X paints its own action-button hover as a 34.75px circle centred on the
+   icon. Ours is 34.75 wide but only as tall as the action row (~20px), so the
+   same background on the button itself drew a wide oval that matched nothing
+   in the row. The circle is a pseudo-element instead: it can be a circle
+   without making the action bar 34.75px tall, and its size is X's own number,
+   already used for the button's width. */
+[data-post-to-card-btn="true"]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34.75px;
+  height: 34.75px;
+  margin: -17.375px 0 0 -17.375px;
+  border-radius: 9999px;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+  z-index: -1;
+  pointer-events: none;
+}
+[data-post-to-card-btn="true"]:hover::before {
+  background-color: rgba(255, 255, 255, 0.12);
+}
 
 /* Neutral on hover. The button used to hard-code X's own brand blue,
    rgb(29, 155, 240), as its inline hover colour — the same blue the card themes
    are forbidden from carrying, and the same blue the tweet's own reply button
    turns on hover, so the trigger lit up exactly like a native control and had
    nothing of its own. This stays neutral grey and adds a focus ring instead, which
-   is the affordance a keyboard user actually needs. */
+   is the affordance a keyboard user actually needs. The background is the
+   circle above, not this box -- see the ::before rule. */
 [data-post-to-card-btn="true"]:hover {
-  background-color: rgba(255, 255, 255, 0.12);
   color: rgb(231, 233, 234);
 }
 [data-post-to-card-btn="true"]:active {
@@ -101,7 +125,8 @@ const TRIGGER_CSS = `
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-post-to-card-btn="true"] { transition-duration: 0.01ms; }
+  [data-post-to-card-btn="true"],
+  [data-post-to-card-btn="true"]::before { transition-duration: 0.01ms; }
 }
 
 [data-post-to-card-wrapper="true"] {
@@ -109,6 +134,8 @@ const TRIGGER_CSS = `
   align-items: center;
   justify-content: center;
   align-self: center;
+  /* The hover circle is taller than the action row. Nothing here may clip it. */
+  overflow: visible;
   height: 100% !important;
   max-height: 100%;
   margin: auto 0 !important;
