@@ -1673,18 +1673,25 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  /* Far enough in on a narrow card, a row of four figures does not fit. Let it
+     break between items rather than inside one: `3.1万` has a legal break before
+     the CJK unit, and a figure split across two lines reads as a different
+     number. */
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
   gap: 5px;
+  /* One figure, one line: the icon and count must not straddle a break. */
+  white-space: nowrap;
 }
 
 /* Clay sets each count as a small pressed pill, in the secondary ink: the faint
    footnote step does not clear contrast on the recess the chip is drawn on. */
 .post-to-card-target[data-stat-chip="on"] .stats-row {
-  flex-wrap: wrap;
   gap: 8px;
 }
 
