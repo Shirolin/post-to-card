@@ -22,7 +22,7 @@ import {
 import { threadSession } from '../threadSession.ts';
 import { formatLocaleTimestamp, getTranslation, resolveLocale } from '../i18n.ts';
 import { MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages, ImageOff } from 'lucide-preact';
-import { brandMarkSvg } from './brandMark.ts';
+import { brandIconSrc } from './brandIcon.ts';
 import { CARD_BUILD } from '../build.ts';
 import { getPhotoPreviewUrl } from '../adapter/urls.ts';
 
@@ -1003,13 +1003,16 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
             <div class="card-footer-right">
               {config.showWatermark && (
                 <div class="card-watermark" title="PostPress">
-                  {/* The product's mark: the icon's subject as line art, so
-                      it rasterizes into the export in the footer's own ink.
-                      Same drawing the popup and the action-bar trigger
-                      carry. */}
-                  <span
+                  {/* The extension icon itself, inlined as a data URL so the
+                      rasterizer can draw it: a `chrome-extension://` src would
+                      taint the export canvas, and a `data:` src is also what
+                      keeps `prepareCardImages` from trying to proxy it. */}
+                  <img
                     class="card-brand-icon"
-                    dangerouslySetInnerHTML={{ __html: brandMarkSvg(14) }}
+                    src={brandIconSrc}
+                    width={14}
+                    height={14}
+                    alt=""
                     aria-hidden="true"
                   />
                   {/* The name links to the licence's source. GPL-3.0 asks for the

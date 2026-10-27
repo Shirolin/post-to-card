@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { Locale } from '../../types/card.ts';
 import { getTranslation } from '../i18n.ts';
 import { X } from 'lucide-preact';
-import { brandMarkSvg } from './brandMark.ts';
+import { brandIconSrc } from './brandIcon.ts';
 
 let activeScrollLocks = 0;
 let previousOverflow = '';
@@ -239,9 +239,12 @@ export function Modal({ isOpen = true, locale, summary, onClose, children }: Mod
         {/* Header */}
         <div class="modal-header">
           <div class="modal-brand">
-            <div
+            <img
               class="modal-brand-icon"
-              dangerouslySetInnerHTML={{ __html: brandMarkSvg(19) }}
+              src={brandIconSrc}
+              width={22}
+              height={22}
+              alt=""
               aria-hidden="true"
             />
             <span class="modal-brand-name">{t.brandName}</span>

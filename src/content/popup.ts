@@ -14,17 +14,17 @@
 import { STORAGE_KEY } from './prefs.ts';
 import { detectDefaultLocale, SUPPORTED_LOCALES, type Locale } from './i18n.ts';
 import { POPUP_COPY } from './popupCopy.ts';
-import { brandMarkSvg } from './ui/brandMark.ts';
+import { brandIconSrc } from './ui/brandIcon.ts';
 
 const toggleInput = document.getElementById('toggle-button') as HTMLInputElement | null;
 const triggerBtn = document.getElementById('btn-trigger-now') as HTMLButtonElement | null;
 const statusText = document.getElementById('status-text');
 
-// The product's mark, drawn from the one description in `brandMark.ts` rather
-// than pasted into the page. The script sits at the end of the body, so this
+// The extension icon, inlined by `brandMark.ts` so the page does not name a
+// `chrome-extension://` path. The script sits at the end of the body, so this
 // runs before the popup is shown -- there is no empty slot to see.
-const brandSlot = document.querySelector<HTMLElement>('[data-brand-mark]');
-if (brandSlot) brandSlot.innerHTML = brandMarkSvg(22);
+const brandSlot = document.querySelector<HTMLImageElement>('[data-brand-mark]');
+if (brandSlot) brandSlot.src = brandIconSrc;
 
 // Starts from the browser so the popup is readable before storage answers, then
 // follows the stored preference — which is the point of the change, since the

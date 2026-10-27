@@ -1744,13 +1744,11 @@
   user-select: none;
 }
 
-/* The product mark: the extension icon's subject as line art, drawn inline so
-   it cannot drift from the modal header, the popup and the injected trigger. It
-   strokes in `currentColor`, so it sits in the watermark's faint ink like the
-   name does, and it does not shrink -- a squeezed one reads as a smudge rather
-   than a logo. */
+/* The extension icon itself, as a data URL. It carries its own fills, so the
+   watermark's ink does not reach it; it only must not shrink, because a
+   squeezed one reads as a smudge rather than a logo. */
 .card-brand-icon {
-  display: flex;
+  display: block;
   flex-shrink: 0;
 }
 
