@@ -8,7 +8,7 @@ import type { Translations } from './types.ts';
  * descriptive phrase that would wrap every button.
  */
 export const ko: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: '창 닫기',
   triggerButtonTitle: '게시물 카드 만들기',
 

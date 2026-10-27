@@ -8,7 +8,7 @@ import type { Translations } from './types.ts';
  * placeholders against.
  */
 export const enUS: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Close modal',
   triggerButtonTitle: 'Post to Card',
 

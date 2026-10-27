@@ -7,7 +7,7 @@ import type { Translations } from './types.ts';
  * plain counted form ("{count} postingan") and read correctly at every count.
  */
 export const id: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress',
   close: 'Tutup jendela',
   triggerButtonTitle: 'Buat kartu postingan',
 

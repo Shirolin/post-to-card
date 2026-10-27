@@ -9,7 +9,7 @@ import type { Translations } from './types.ts';
  * languages.
  */
 export const zhCN: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress · 印推',
   close: '关闭窗口',
   triggerButtonTitle: '生成推文卡片',
 

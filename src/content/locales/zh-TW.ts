@@ -8,7 +8,7 @@ import type { Translations } from './types.ts';
  * mainland sentence reads as a machine translation to a Taiwanese reader.
  */
 export const zhTW: Translations = {
-  brandName: 'Post to Card',
+  brandName: 'PostPress · 印推',
   close: '關閉視窗',
   triggerButtonTitle: '產生推文卡片',
 
