@@ -177,14 +177,14 @@ export function applyTriggerLocale(locale?: LocalePreference): void {
 /**
  * The product's mark, at the action bar's icon size.
  *
- * It used to be lucide's `layout-panel-top`, a generic three-block glyph that
- * stood in for the product. `brandMark.ts` now holds the drawing, and every
- * surface that names this product -- this button, the popup header, the modal
- * header, the card footer -- draws it from there.
+ * This is the one surface that draws the mark rather than showing the icon.
+ * The footer, the modal header and the popup all put the extension icon itself
+ * on screen; here it would be a filled tile dropped into X's row of thin
+ * outline icons. So `brandMark.ts` draws the same subject as line art --
+ * `currentColor`, 1.75/24, round joins -- which sits in the row instead of
+ * against it.
  *
- * The size is the one the old glyph used, and the drawing keeps the action
- * bar's weight: it strokes in `currentColor` at 1.75/24, next to X's own thin
- * outline icons rather than against them.
+ * The size is the one the old glyph used.
  */
 export const TRIGGER_BUTTON_SVG = brandMarkSvg(18.75);
 
