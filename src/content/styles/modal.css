@@ -243,15 +243,14 @@
   color: #ffffff;
 }
 
+/* The mark strokes in `currentColor`, so it takes the header's white and needs
+   no tile of its own. This box only sizes the slot. */
 .modal-brand-icon {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 7px;
-  background: var(--ptc-accent-fill);
-  color: #ffffff;
   flex-shrink: 0;
 }
 

@@ -27,6 +27,7 @@ import { TWEET_ARTICLE_SELECTOR, TWEET_ARTICLE_SELECTORS, withDescendant } from 
 import { loadUserPreferences, subscribePreferences } from '../prefs.ts';
 import { getTranslation, resolveLocale } from '../i18n.ts';
 import type { LocalePreference } from '../../types/card.ts';
+import { brandMarkSvg } from '../ui/brandMark.ts';
 
 export const HIDE_ACTION_BUTTON_CLASS = 'post-to-card-hide-action-btn';
 export const VISIBILITY_STYLE_ID = 'post-to-card-visibility-style';
@@ -174,21 +175,18 @@ export function applyTriggerLocale(locale?: LocalePreference): void {
 }
 
 /**
- * Lucide's `layout-panel-top`, copied from the installed package so the shape
- * matches exactly. The previous glyph was the Image icon, whose rounded square
- * plus circle reads as a camera at this size and was easily confused with X's
- * own media controls.
+ * The product's mark, at the action bar's icon size.
  *
- * It is also the product's mark: the popup header and the modal header now draw
- * the same three blocks, so the three places that name this extension agree.
+ * It used to be lucide's `layout-panel-top`, a generic three-block glyph that
+ * stood in for the product. `brandMark.ts` now holds the drawing, and every
+ * surface that names this product -- this button, the popup header, the modal
+ * header, the card footer -- draws it from there.
+ *
+ * The size is the one the old glyph used, and the drawing keeps the action
+ * bar's weight: it strokes in `currentColor` at 1.75/24, next to X's own thin
+ * outline icons rather than against them.
  */
-export const TRIGGER_BUTTON_SVG = `
-<svg viewBox="0 0 24 24" width="18.75" height="18.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <rect width="18" height="7" x="3" y="3" rx="1" ry="1"></rect>
-  <rect width="7" height="7" x="3" y="14" rx="1" ry="1"></rect>
-  <rect width="7" height="7" x="14" y="14" rx="1" ry="1"></rect>
-</svg>
-`.trim();
+export const TRIGGER_BUTTON_SVG = brandMarkSvg(18.75);
 
 /**
  * Creates the Post-to-Card trigger button, formatted to blend into the X tweet

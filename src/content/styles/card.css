@@ -1728,7 +1728,7 @@
   /* The credit is two lines tall now, so `center` would hang the mark between
      them; `flex-start` keeps it on the brand line, where it belongs. */
   align-items: flex-start;
-  gap: 4px;
+  gap: 6px;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -1742,6 +1742,16 @@
      "quieter" is a size decision. */
   color: var(--faint, var(--text-sec, #9ca3af));
   user-select: none;
+}
+
+/* The product mark: the extension icon's subject as line art, drawn inline so
+   it cannot drift from the modal header, the popup and the injected trigger. It
+   strokes in `currentColor`, so it sits in the watermark's faint ink like the
+   name does, and it does not shrink -- a squeezed one reads as a smudge rather
+   than a logo. */
+.card-brand-icon {
+  display: flex;
+  flex-shrink: 0;
 }
 
 /* The credit's link. It exists for the preview only -- the rasterizer draws text,
