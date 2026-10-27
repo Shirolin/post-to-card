@@ -3845,6 +3845,38 @@ test('F23.6: a hidden preview toolbar is actually hidden, not just marked', () =
 });
 
 // -------------------------------------------------------------
+// F23.8: the dialog takes focus only after the frame the click returns in
+//
+// Measuring is what put this rule here: focusing a dialog that was just
+// inserted makes the browser run the host page's first style and layout pass
+// before `focus()` returns — 180–280 ms of blocked main thread on an X status
+// page, over half of the first card open (no focus: 28 ms). The focus has to
+// land eventually, or the Tab trap and Escape handler are dead, so this
+// asserts both halves: not in the click's own turn, and yes by the next one.
+// -------------------------------------------------------------
+
+test('F23.8: the dialog is not focused during the click that opened it', async () => {
+  await withContainerEnv(async ({ doc, openCardModal }) => {
+    const container = openCardModal(CONTAINER_THREAD);
+    const dialog = container.mountPoint.querySelector('#post-to-card-dialog');
+    assert.ok(dialog, 'the modal rendered no dialog');
+
+    // Back to back, as they run inside the click handler: `openCardModal`
+    // commits the render, and the ref and the effects are flushed right after
+    // it. Nothing here awaits, so the focus, were it taken synchronously, would
+    // already have landed on the line below.
+    assert.notEqual(doc.activeElement, dialog, 'taking focus synchronously is what blocks the click');
+
+    // The other half, so a modal that never focused at all cannot pass: the
+    // shim has no frames, so the deferred focus lands on the next task.
+    await waitFor(
+      () => doc.activeElement === dialog,
+      'the focus has to land on the next frame, not never'
+    );
+  });
+});
+
+// -------------------------------------------------------------
 // F24: Modern-Screenshot Retina Export
 //
 // Driven through the real engine with only the rasterizer replaced

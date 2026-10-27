@@ -109,6 +109,25 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+/**
+ * Runs `run` on the next frame, or on the next task where frames do not exist
+ * (the DOM shim the tiers run against has no `requestAnimationFrame`).
+ */
+function nextFrame(run: () => void): number {
+  if (typeof requestAnimationFrame === 'function') {
+    return requestAnimationFrame(() => run());
+  }
+  return setTimeout(run, 0) as unknown as number;
+}
+
+function cancelFrame(handle: number): void {
+  if (typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(handle);
+    return;
+  }
+  clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+}
+
 export function Modal({ isOpen = true, locale, summary, onClose, children }: ModalProps): JSX.Element | null {
   const t = getTranslation(locale);
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -116,45 +135,76 @@ export function Modal({ isOpen = true, locale, summary, onClose, children }: Mod
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   // Guards the initial focus so a later re-render cannot yank focus back.
   const hasFocusedRef = useRef(false);
+  // The frame the initial focus is queued on, so a close can take it back.
+  const focusFrameRef = useRef<number | null>(null);
+
+  const cancelPendingFocus = useCallback(() => {
+    if (focusFrameRef.current === null) return;
+    cancelFrame(focusFrameRef.current);
+    focusFrameRef.current = null;
+  }, []);
 
   /**
    * Callback ref rather than a plain ref read inside the effect: Preact has
-   * not attached the node during the first effect pass, so focusing from
-   * there silently did nothing. This fires the moment the node is inserted.
+   * not attached the node during the first effect pass, so reading it from
+   * there would silently do nothing. This fires the moment the node is
+   * inserted.
    *
    * The callback identity must stay stable. An inline ref is re-invoked on
    * every render — Preact detaches it with `null` and reattaches the node —
    * which pulled focus back onto the dialog each time a control was changed
    * and broke arrow-key navigation inside the radio groups.
    */
-  const attachDialog = useCallback((node: HTMLDivElement | null) => {
-    dialogRef.current = node;
-    if (!node) return;
-    if (!restoreFocusRef.current) {
-      restoreFocusRef.current = document.activeElement as HTMLElement | null;
-    }
-    if (!hasFocusedRef.current) {
-      hasFocusedRef.current = true;
-      node.focus();
-    }
-  }, []);
+  const attachDialog = useCallback(
+    (node: HTMLDivElement | null) => {
+      dialogRef.current = node;
+      if (node) {
+        if (!restoreFocusRef.current) {
+          restoreFocusRef.current = document.activeElement as HTMLElement | null;
+        }
+        return;
+      }
+      // The dialog left the tree (closed, or remounted between renders): a
+      // focus still queued for it would land on whatever replaced it.
+      cancelPendingFocus();
+    },
+    [cancelPendingFocus]
+  );
 
   useEffect(() => {
     if (!isOpen) {
       // Reset so a reopen (without unmounting) focuses the dialog again.
       hasFocusedRef.current = false;
+      cancelPendingFocus();
       return;
     }
 
     lockScroll();
 
-    // Fallback for the case where the node already existed before this effect
-    // ran (e.g. a re-render that did not remount the dialog). Guarded so it can
-    // only ever fire once: an unguarded focus here runs after the first user
-    // interaction and pulls focus off whatever control was just used.
-    if (!hasFocusedRef.current) {
+    // The initial focus is deferred to the next frame, and this is a measured
+    // performance rule, not a preference. Focusing a dialog that was just
+    // inserted makes the browser run the host page's first style and layout
+    // pass before `focus()` returns — 180–280 ms of blocking on an X status
+    // page, over half of the first card open. Nothing the card drew is on
+    // screen before that frame anyway, so the click returns first and the
+    // dialog takes focus in the frame that paints the card. A plain
+    // `focus({ preventScroll: true })` does not help: measured, it costs the
+    // same.
+    //
+    // Guarded so it can only ever fire once: an unguarded focus here runs
+    // after the first user interaction and pulls focus off whatever control
+    // was just used.
+    const node = dialogRef.current;
+    if (!hasFocusedRef.current && node) {
       hasFocusedRef.current = true;
-      dialogRef.current?.focus();
+      cancelPendingFocus();
+      focusFrameRef.current = nextFrame(() => {
+        focusFrameRef.current = null;
+        // Closed between the click and this frame: the dialog is gone, and a
+        // focus here would pull the caret back off whatever the user moved to.
+        if (!node.isConnected) return;
+        node.focus();
+      });
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -197,6 +247,7 @@ export function Modal({ isOpen = true, locale, summary, onClose, children }: Mod
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      cancelPendingFocus();
       unlockScroll();
       // The container may already be detached at this point, so guard the
       // restore instead of assuming the trigger still exists.
