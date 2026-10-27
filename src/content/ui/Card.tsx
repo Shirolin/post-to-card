@@ -21,7 +21,8 @@ import {
 } from './imageFallback.ts';
 import { threadSession } from '../threadSession.ts';
 import { formatLocaleTimestamp, getTranslation, resolveLocale } from '../i18n.ts';
-import { Sparkles, MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages, ImageOff } from 'lucide-preact';
+import { MessageCircle, Repeat2, Heart, ChartNoAxesColumn, Bookmark, Languages, ImageOff } from 'lucide-preact';
+import { brandMarkSvg } from './brandMark.ts';
 import { CARD_BUILD } from '../build.ts';
 import { getPhotoPreviewUrl } from '../adapter/urls.ts';
 
@@ -1002,7 +1003,15 @@ export function Card({ data, config, onExcludeTweet, cardRef }: CardProps): JSX.
             <div class="card-footer-right">
               {config.showWatermark && (
                 <div class="card-watermark" title="PostPress">
-                  <Sparkles size={13} strokeWidth={2} aria-hidden="true" />
+                  {/* The product's mark: the icon's subject as line art, so
+                      it rasterizes into the export in the footer's own ink.
+                      Same drawing the popup and the action-bar trigger
+                      carry. */}
+                  <span
+                    class="card-brand-icon"
+                    dangerouslySetInnerHTML={{ __html: brandMarkSvg(14) }}
+                    aria-hidden="true"
+                  />
                   {/* The name links to the licence's source. GPL-3.0 asks for the
                       corresponding source to be offered to whoever receives a
                       covered work, and a PNG that leaves the machine is one: the
