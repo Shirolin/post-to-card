@@ -1,18 +1,18 @@
 /**
- * The product's mark for the one surface that draws it: the button injected
- * into a tweet's action bar.
+ * The product's mark, drawn as line art, for every surface that shows it.
  *
- * The other three -- the card footer, the modal header and the popup's page --
- * show the extension icon itself, from `brandIcon.ts`. This one cannot: the
- * action bar is X's own row of thin outline icons, and a filled tile at 18.75px
- * is a black square in the middle of them. So the icon's subject is drawn
- * instead -- a post, a card with a folded corner, an avatar and a media block --
- * on a 24-unit grid at `stroke-width` 1.75 with round joins, in `currentColor`,
- * so it takes the ink of the row it lands in.
+ * The extension icon itself is a filled tile: near-black background, cream
+ * card, red fold. That is what a favicon needs at 16px on a browser toolbar. It
+ * is not what these surfaces need. The card footer sits on the card's own paper
+ * or its dark sheet, the modal header on a dark panel, the popup on its own
+ * near-black page -- and on the dark ones a near-black tile against a near-black
+ * ground measures 1.05:1, so the icon stops being a shape at all. A tile also
+ * carries more weight than the 11px credit line it stands beside.
  *
- * The two modules sit side by side because they answer the same question -- what
- * is this product's mark -- and a change to one should make someone look at the
- * other.
+ * So the icon's subject is drawn instead, on a 24-unit grid at `stroke-width`
+ * 1.75 with round joins, in `currentColor`. Each surface decides the ink: the
+ * footer's faint text colour, the modal's white, the popup's accent, the action
+ * bar's own grey. One drawing, four surfaces, and the four cannot drift.
  */
 const LINE_ART =
   // The card. Its top-right corner is where the fold is, so the outline turns
@@ -26,10 +26,12 @@ const LINE_ART =
   '<rect x="5.4" y="11.6" width="13.2" height="6.4" rx="1.3"/>';
 
 /**
- * The line-art mark as markup, sized in CSS pixels.
+ * The mark as markup, sized in CSS pixels.
  *
- * It is a string rather than elements because the action-bar button is built
- * with `innerHTML` before any component can mount.
+ * It is a string rather than elements because two of the four surfaces are not
+ * Preact: the popup's page paints before its script runs, and the action-bar
+ * button is built with `innerHTML`. Those two would otherwise need a second
+ * copy of the shapes, which is the copy that drifts.
  */
 export function brandMarkSvg(size: number): string {
   return (

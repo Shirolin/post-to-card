@@ -58,13 +58,14 @@
       gap: 8px;
     }
 
-    /* The extension icon, loaded as a data URL by the script. The slot is
-       sized here so the header does not move when the image decodes. */
+    /* The mark strokes in `currentColor`, so the accent ink the camera glyph
+       this replaced used to take is still what decides its contrast. */
     .brand-icon {
-      display: block;
+      display: flex;
       width: 22px;
       height: 22px;
       flex-shrink: 0;
+      color: var(--accent-ink);
     }
 
     .brand-title {
@@ -252,10 +253,10 @@
 <body>
   <div class="header">
     <div class="brand">
-      <!-- The extension icon. `src/content/ui/brandMark.ts` inlines the PNG as
-           a data URL and the script assigns it here, so the page never names a
-           `chrome-extension://` path. -->
-      <img class="brand-icon" data-brand-mark alt="" aria-hidden="true">
+      <!-- The product mark: a post, as line art. `src/content/ui/brandMark.ts`
+           holds the geometry and writes this same markup for the action-bar
+           trigger and the card footer. -->
+      <span class="brand-icon" data-brand-mark></span>
       <span class="brand-title">Post-to-Card</span>
     </div>
     <span class="badge">v1.0</span>

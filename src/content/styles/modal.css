@@ -243,13 +243,14 @@
   color: #ffffff;
 }
 
-/* The extension icon itself. It paints its own tile, so nothing is drawn
-   behind it -- an accent square would show through the icon's transparent
-   corners as a halo. This only sizes the slot. */
+/* The mark strokes in `currentColor`, so it takes the header's white and needs
+   no tile of its own. This box only sizes the slot. */
 .modal-brand-icon {
-  display: block;
-  width: 22px;
-  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
 }
 

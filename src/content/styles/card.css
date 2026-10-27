@@ -1725,10 +1725,12 @@
 
 .card-watermark {
   display: flex;
-  /* The credit is two lines tall now, so `center` would hang the mark between
-     them; `flex-start` keeps it on the brand line, where it belongs. */
-  align-items: flex-start;
-  gap: 6px;
+  /* The credit is two lines tall, and the mark belongs to the pair: it centres
+     on the block, not on either line. `flex-start` put it on the row box's top
+     edge -- 4.5px above the name's cap and overlapping the version line below
+     -- so it lined up with nothing. */
+  align-items: center;
+  gap: 7px;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -1744,11 +1746,11 @@
   user-select: none;
 }
 
-/* The extension icon itself, as a data URL. It carries its own fills, so the
-   watermark's ink does not reach it; it only must not shrink, because a
+/* The product mark as line art. It strokes in `currentColor`, so it sits in
+   the watermark's faint ink on every theme, and it does not shrink -- a
    squeezed one reads as a smudge rather than a logo. */
 .card-brand-icon {
-  display: block;
+  display: flex;
   flex-shrink: 0;
 }
 
