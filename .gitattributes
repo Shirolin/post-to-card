@@ -1,0 +1,14 @@
+# Every text file is stored with LF, on every platform. The repository was
+# authored on Windows and holds exactly one CRLF file, so pinning the line
+# ending is what stops that from spreading again; the dev scripts and the CI
+# shell do not care either way, and a diff that only changes line endings is
+# noise in review.
+* text=auto eol=lf
+
+# Raster assets: never diffed as text, never converted.
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

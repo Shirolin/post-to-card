@@ -1,0 +1,89 @@
+# The repository had no automated guardrail: `npm run typecheck` and
+# `node tests/runner.ts` ran only because the agent remembered to run them. This
+# workflow makes the same chain the gate, so forgetting is not possible.
+#
+# Order is load-bearing. The build runs before tier5 because T5.3.8 audits
+# `dist/content.js` and deliberately refuses a bundle older than `src/` — auditing a
+# stale artifact passes while saying nothing about the current source, which is the
+# failure that check exists to catch.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A superseded run on the same ref tells you nothing the newer one will not.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The committed lockfile is pnpm-lock.yaml at lockfileVersion 9.0, which pnpm 9
+      # and 10 both write. package.json declares no `packageManager`, so corepack has
+      # no version to honour and would fall back to its default -- possibly too new to
+      # read the lockfile. Pinning the major explicitly is the reproducible option, and
+      # it avoids guessing a patch number that may not exist. This must precede
+      # setup-node, whose pnpm cache looks for the binary on PATH.
+      - name: Install pnpm 10
+        run: npm install -g pnpm@10
+
+      # v7, not v4: the v4 line targets the deprecated Node 20 action runtime, which
+      # GitHub is already force-overriding to Node 24 and will eventually stop running.
+      # v7 is the current major for both actions.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # `--frozen-lockfile` fails rather than silently resolving something else,
+      # which is the whole point of committing a lockfile.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Runs the two tsconfig programs and a `node --check` on each dev script
+      # tsc cannot see, then the knip lint and the four Vite bundles. Which
+      # scripts those are is `package.json`'s `typecheck` line, not this file's.
+      - name: Build (typecheck + lint + four Vite bundles)
+        run: pnpm run build
+
+      - name: Test (tiers 1-4, i18n, graphql, resolver, hygiene)
+        run: pnpm test
+
+      # Audits the bundle the step above just produced, including the Shadow DOM
+      # and style-injection checks that only make sense against real output.
+      - name: Tier 5 adversarial audit (needs the fresh bundle)
+        run: pnpm run test:tier5
+
+      # Runs the built content bundle in a real browser, against the tweet
+      # markup the repository collected from a logged-in timeline, and checks
+      # that the card it opens carries the post's own words. The tiers above
+      # read that markup through a DOM shim with no layout engine, so a rule
+      # that only holds once the browser has laid the page out is not covered
+      # by any of them. It never touches x.com, so headless is enough.
+      #
+      # The binary's path is taken from the action's own output rather than
+      # guessed: on Linux it lands in the tool cache under a versioned
+      # directory, and the name is not always `chrome`. `install-dependencies`
+      # is on because a bare runner has no libnss3, and Chrome will not start
+      # without it.
+      - name: Chrome (for the extractor check)
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-dependencies: true
+
+      - name: Extractor in a real browser (needs the fresh bundle)
+        run: pnpm run verify:extractor
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}

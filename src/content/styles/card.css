@@ -1,0 +1,1856 @@
+/* ==========================================================================
+   Post-to-Card Rendering Target Styles
+   100% self-contained styling for the exported card
+   ========================================================================== */
+
+/* The card is the sheet, not the picture. `#post-to-card-export-target` is the
+   mat it is mounted on, and it is the mat that carries the fixed width -- see
+   `.ptc-mat` below. This selector used to be a list of both spellings, which
+   would now stretch the mat to the card's 640px and leave the ring of mat with
+   nowhere to be. */
+.post-to-card-target {
+  /* The one number the mat's geometry is built on, declared on the mat so the
+     card and the four ratio floors cannot disagree about it. The fallback keeps
+     a card rendered outside a mat (a test harness, a future host) at the fixed
+     width exports have always had. */
+  width: var(--card-width, 640px);
+  min-width: var(--card-width, 640px);
+  max-width: var(--card-width, 640px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: visible;
+  height: auto;
+  font-family: var(--font-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif);
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* -------------------------------------------------------------
+   The mat: the exported picture, which the card is mounted on
+
+   This is the element `#post-to-card-export-target` names, so it is what the
+   rasterizer captures and what the card's own width no longer bounds. Every
+   part of its shape is set inline by Card.tsx from two custom properties:
+   `--mat-pad` (0 when nothing is selected) and `--mat-bg`.
+
+   `min-height` is a floor, never a clamp, and that is the whole of "fill,
+   never crop": a card taller than the chosen shape simply makes a taller
+   picture. The ratio is therefore exact only while the card is shorter than
+   it, which is the case it exists for -- a card that is already taller keeps
+   its own proportions rather than being squeezed into a frame that would cut
+   the post.
+
+   The ratio is derived from the outer width so that `border-box` makes it
+   true: 640 + 2 * 48 = 736, and 736 / 920 = 0.8 for 4:5.
+   ------------------------------------------------------------- */
+/* `--card-width` is the card's fixed width. The card injects it, the way it
+   injects every theme colour, so the width has one home — the geometry module
+   that both this stylesheet and the TypeScript read. It is a custom property
+   rather than a preprocessor constant because the value also has to reach a
+   cloned subtree, and custom properties inherit. */
+.ptc-mat {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Explicit rather than `fit-content`: the export clones this element into a
+     shrink-to-fit wrapper, and `max-content` does not consult that wrapper's
+     available width. */
+  width: max-content;
+  min-width: calc(var(--card-width, 640px) + 2 * var(--mat-pad, 0px));
+  min-height: var(--mat-min-height, auto);
+  padding: var(--mat-pad, 0px);
+  background: var(--mat-bg, none);
+  overflow: visible;
+}
+
+/* Each floor is the outer width (card + ring) divided by the ratio, so the
+   ratio holds edge to edge; the padding is part of the picture. `border-box`
+   is what makes that arithmetic exact. A card taller than the floor simply
+   makes a taller mat -- these are minimums, never fixed heights. */
+.ptc-mat[data-canvas-ratio="1:1"] {
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 1);
+}
+
+.ptc-mat[data-canvas-ratio="4:5"] {
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 0.8);
+}
+
+.ptc-mat[data-canvas-ratio="3:4"] {
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 0.75);
+}
+
+.ptc-mat[data-canvas-ratio="16:9"] {
+  --mat-min-height: calc((var(--card-width) + 2 * var(--mat-pad, 0px)) / 1.7778);
+}
+
+/* -------------------------------------------------------------
+   Retweet Attribution
+   The body shown belongs to the original author, so the card states
+   plainly whose words these are instead of implying the visible account
+   wrote them.
+   ------------------------------------------------------------- */
+.retweet-notice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sec);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px var(--rule-style, solid) var(--divider);
+}
+
+.retweet-notice svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.retweet-handle {
+  /* `--link`, like every other handle in the card. Raw accent is the decorative
+     terracotta and does not clear text contrast on the light papers. */
+  color: var(--link, var(--accent));
+  font-weight: 700;
+}
+
+/* X's own "translated from <language>" notice, reproduced verbatim. */
+.translation-notice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--text-sec);
+  white-space: nowrap;
+  margin-bottom: 0px;
+}
+
+.translation-notice-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+/* X rendered only a preview of a long post. The body ends in an ellipsis and
+   this line says what it means, so the cut is not read as the author's ending.
+   Both take existing material ink: the mark is fainter than the prose, the
+   notice the same secondary ink as the card's other provenance lines. */
+.truncation-ellipsis {
+  color: var(--faint, var(--text-sec, #9ca3af));
+}
+
+.truncation-notice {
+  margin-top: 8px;
+  font-size: var(--type-meta-size, 13px);
+  color: var(--text-sec);
+}
+
+.quote-card-unavailable {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quote-unavailable-text {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-sec);
+}
+
+/* -------------------------------------------------------------
+   Aspect Ratio Rules (Downward Fluid Expansion: min-height floor)
+
+   Each floor is the card's own width divided by the ratio, rounded to whole
+   pixels -- the same figure the geometry module gives the inline style, so the
+   two cannot disagree about a third of a pixel. The width comes from
+   `--card-width`, which the card injects.
+
+   The card's inline style is what actually paints the floor; these rules are
+   the fallback for a card rendered without the card component, where there is
+   no inline style to carry the figure. `round()` is Baseline 2024 (Chrome 125,
+   Firefox 118, Safari 17.2); a browser that does not know it drops the
+   declaration and the card simply has no floor, which is the same state a
+   card with no poster ratio is in.
+   ------------------------------------------------------------- */
+.post-to-card-target[data-ratio="auto"] {
+  min-height: unset;
+  height: auto;
+}
+
+.post-to-card-target[data-ratio="3:4"] {
+  min-height: round(calc(var(--card-width, 640px) * 4 / 3), 1px);
+  height: auto;
+}
+
+.post-to-card-target[data-ratio="16:9"] {
+  min-height: round(calc(var(--card-width, 640px) * 9 / 16), 1px);
+  height: auto;
+}
+/* Inner content expansion wrapper: keeps footer pinned to bottom when content is short */
+.post-to-card-body-content {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* -------------------------------------------------------------
+   Padding Options
+
+   The card's own gap separates the body column from the footer. The body's
+   internal breathing is the theme's `--rhythm-gap`, so a material keeps its
+   character at every padding tier.
+   ------------------------------------------------------------- */
+.post-to-card-target[data-padding="16px"] {
+  padding: 16px;
+  gap: 14px;
+}
+
+.post-to-card-target[data-padding="32px"] {
+  padding: 32px;
+  gap: 20px;
+}
+
+.post-to-card-target[data-padding="48px"] {
+  padding: 48px;
+  gap: 26px;
+}
+
+/* -------------------------------------------------------------
+   Border Radius Options
+
+   The card's own corner is the explicit option; the corner inside it is
+   `--media-radius`, which Card.tsx resolves from `resolveRadius` and injects
+   unconditionally. This used to be a second copy of that table, written by hand
+   per explicit option and with no `theme` row at all — so the default option
+   left multi-image media at 0px while a single image of the same material took
+   the material's own radius. One table now, and the default option is a real
+   option rather than the one the copy forgot.
+   ------------------------------------------------------------- */
+.post-to-card-target[data-radius="0px"] {
+  border-radius: 0px;
+}
+.post-to-card-target[data-radius="12px"] {
+  border-radius: 12px;
+}
+.post-to-card-target[data-radius="20px"] {
+  border-radius: 20px;
+}
+.post-to-card-target .media-grid,
+.post-to-card-target .media-item,
+.post-to-card-target .quote-card {
+  border-radius: var(--media-radius, 0px);
+}
+
+/* -------------------------------------------------------------
+   Themes — paper, not gradient.
+
+   The values below are NOT defined here. Each theme's colours, type pair and
+   edge weight are injected as custom properties on the card root by Card.tsx
+   from the single token table in themes.ts. This file only consumes them.
+
+   That split exists because a second hand-written copy of every theme in this
+   file silently drifted from the token table: a contrast fix landed in
+   themes.ts and never reached the rendered card, because CSS was still using
+   its own stale hex. One source, or the two disagree.
+
+   The mat the sheet sits on is the theme's `canvas` token, applied by App.tsx
+   to the preview stage — it is not a property of the card, so it is not
+   injected here.
+   ------------------------------------------------------------- */
+.post-to-card-target {
+  /* The flat sheet colour, then the material's own texture on top (a no-op for
+     the papers, a CRT band or blueprint grid for the process materials). The
+     texture is a plain `background-image`, so it survives the export clone and
+     needs no pseudo-element of its own. */
+  background-color: var(--surface, #faf9f5);
+  background-image: var(--surface-texture, none);
+  border-style: solid;
+  border-width: var(--border-width, 1px);
+  border-color: var(--border-color, #e8e6dc);
+  color: var(--text, #141413);
+}
+
+/* A print keyline, the certificate/nameplate detail: a hairline set inside the
+   sheet's edge, in the same ink the pictures are mounted with. A pseudo-element
+   border rather than `outline`, because the export clones computed styles and
+   only a real box is guaranteed to survive into the PNG. The inset corners stay
+   concentric with the card via `--card-radius`, clamped so a square material
+   never feeds a negative radius. The card's padding (16–48px) keeps every piece
+   of content clear of a line inset only 7px. */
+.post-to-card-target[data-keyline="on"]::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border: 1px solid var(--media-border);
+  border-radius: max(0px, calc(var(--card-radius, 0px) - 7px));
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* -------------------------------------------------------------
+   Type scale is part of the material: the paper and the letterforms
+   move together, which is what makes the switch read as a change of
+   material rather than a repaint.
+
+   The values are the material's `type` tokens, injected on the card
+   root by Card.tsx and consumed here. Nothing in this section names a
+   material. That is the point: type used to be a hand-written block
+   per theme, so adding one meant remembering three rule blocks and a
+   missed one silently inherited another material's letterforms. A
+   missing value is now a compile error.
+   ------------------------------------------------------------- */
+.author-name,
+.quote-name {
+  font-family: var(--font-display);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
+}
+
+.author-name {
+  font-size: var(--type-display-size);
+}
+
+/* The quoted post's byline is a nested author, so it is set smaller than the
+   one the card is about. It shares the display weight and tracking, which carry
+   the material's voice, and takes a size of its own. */
+.quote-name {
+  font-size: var(--type-quote-size);
+}
+
+/* -------------------------------------------------------------
+   One data strip per material, keyed on `data-meta-divider`.
+
+   Hairline draws its stats as a ruled strip rather than a spaced row. The
+   alternative is a rule naming one material, which is the pattern the type
+   tokens just replaced.
+   ------------------------------------------------------------- */
+.post-to-card-target[data-meta-divider="on"] .stats-row {
+  gap: 0;
+}
+
+.post-to-card-target[data-meta-divider="on"] .stat-item + .stat-item {
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid var(--divider);
+}
+
+/* -------------------------------------------------------------
+   One signature rule per material, driven by `data-signature`.
+
+   Every theme names its signature style in the token table; this is the one
+   place the style becomes geometry. A new material is a table entry, not
+   another block of hand-written pseudo-element CSS, and no material can be
+   left as flat colour by omission.
+
+   Positioned rather than a flex child, so it sits inside the card's padding
+   without being pushed around by the body's gap.
+
+   The sizes here are the card's own, and they are not the sizes the picker's
+   swatch uses: the swatch is a 34px reduction of a 640px sheet, so its dots
+   are smaller and its marks are proportionally placed. The two draw the same
+   *shape* at different scales, which is what a reduction is. What they must
+   agree on is the shape itself -- a seal is a square in both, a perforation is
+   a row of dots in both -- and that is what the `signature.style` names.
+   ------------------------------------------------------------- */
+.post-to-card-body-content {
+  position: relative;
+  /* The rule's own thickness plus its breathing room, so it never sits on the
+     first line of the body. */
+  padding-top: calc(var(--signature-height, 0px) + 16px);
+  gap: var(--rhythm-gap, 16px);
+}
+
+.post-to-card-target[data-signature] .post-to-card-body-content::before,
+.post-to-card-target[data-signature] .post-to-card-body-content::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+}
+
+/* A plain bar: the gallery label's ink rule and the sticker's thick rule are the
+   same decision at two weights. */
+.post-to-card-target[data-signature="rule"] .post-to-card-body-content::before,
+.post-to-card-target[data-signature="block"] .post-to-card-body-content::before {
+  height: var(--signature-height, 1px);
+  background: var(--rule);
+}
+
+/* Gallery, Darkroom: a section flag — one accent tick riding a full hairline.
+   The tick is `::after`, sitting above the neutral hairline so the two read as
+   one mark. */
+.post-to-card-target[data-signature="tick-rule"] .post-to-card-body-content::before {
+  top: var(--signature-height, 2px);
+  height: 1px;
+  background: var(--rule);
+}
+
+.post-to-card-target[data-signature="tick-rule"] .post-to-card-body-content::after {
+  left: 0;
+  right: auto;
+  top: 0;
+  width: 40px;
+  height: var(--signature-height, 2px);
+  background: var(--accent);
+}
+
+/* Receipt: the perforation a till slip is torn along — a row of small dots, not
+   a line. */
+.post-to-card-target[data-signature="perforation"] .post-to-card-body-content::before {
+  height: var(--signature-height, 4px);
+  background-image: radial-gradient(circle at 50% 50%, var(--rule) 1.5px, transparent 2px);
+  background-size: 10px 100%;
+  background-repeat: repeat-x;
+}
+
+/* Terminal: window chrome — three traffic dots in the title bar. Drawn from the
+   sheet's own inks (accent, secondary text, rule) so no stock red/amber/green
+   leaks onto the card as a second palette. */
+.post-to-card-target[data-signature="titlebar"] .post-to-card-body-content::before {
+  right: auto;
+  width: 54px;
+  height: var(--signature-height, 10px);
+  background:
+    radial-gradient(circle at 5px 50%, var(--accent) 4.5px, transparent 5px),
+    radial-gradient(circle at 21px 50%, var(--text-sec) 4.5px, transparent 5px),
+    radial-gradient(circle at 37px 50%, var(--rule) 4.5px, transparent 5px);
+}
+
+/* Sumi: a seal stamped at the end of a ruled line, the way a scroll is signed. */
+.post-to-card-target[data-signature="seal"] .post-to-card-body-content::before {
+  top: calc(var(--signature-height, 16px) / 2);
+  height: 1px;
+  background: var(--rule);
+}
+
+.post-to-card-target[data-signature="seal"] .post-to-card-body-content::after {
+  left: auto;
+  right: 0;
+  top: 0;
+  width: var(--signature-height, 16px);
+  height: var(--signature-height, 16px);
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* Riso: a registration mark — a line carrying two overlapping discs, one in
+   each ink, deliberately a few pixels off, the way a two-colour print misses. */
+.post-to-card-target[data-signature="registration"] .post-to-card-body-content::before {
+  height: var(--signature-height, 2px);
+  background: var(--rule);
+}
+
+.post-to-card-target[data-signature="registration"] .post-to-card-body-content::after {
+  left: 0;
+  right: auto;
+  top: calc(var(--signature-height, 2px) / 2 - 5px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 6px 0 0 0 var(--rule);
+}
+
+/* Clay: a short rounded bar, pressed in like the rest of the card. */
+.post-to-card-target[data-signature="pill"] .post-to-card-body-content::before {
+  right: auto;
+  width: 44px;
+  height: var(--signature-height, 6px);
+  border-radius: 999px;
+  background: var(--accent);
+}
+/* Footnote and data treatment live with the type tokens: size, tracking, case
+   and figures are the material's `type` fields, applied by the base rules for
+   `.card-timestamp` and `.stats-row`, and the ruled strip Hairline draws is
+   keyed on `data-meta-divider`. Nothing here names a material. */
+
+/* -------------------------------------------------------------
+   Author Header & Profile Information
+   ------------------------------------------------------------- */
+.author-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+
+.author-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--avatar-radius, 50%);
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  /* The recess colour, one per theme, so a transparent or slow-loading avatar
+     has an edge that belongs to the sheet. The light papers used to take this
+     from `--quote-bg` while the darks took a hard-coded white wash — the same
+     "recess" idea implemented twice. One token serves both now. */
+  background: var(--quote-bg);
+  /* A mounting ring in the same ink as the media frame, so the portrait is
+     set into the sheet rather than floating on it. It scales with the card's
+     edge weight, staying a hairline on the papers and reading as a heavy
+     outline on Brutalist. */
+  box-shadow: var(--avatar-shadow, none);
+}
+
+.author-avatar img,
+.author-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--avatar-radius, 50%);
+  display: block;
+}
+
+.author-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Size, weight and tracking come from the material's type tokens; what is left
+   here is how the name behaves as a line of text. */
+.author-name {
+  line-height: 1.3;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Verification tick is printed in the sheet's own ink, not Twitter blue.
+   Three themes share one accent, and a hard-coded brand blue was slipping a
+   second, louder colour onto every card — most jarring on Hairline, where the
+   whole system is black rules on warm white. The badge shape and its tooltip
+   still carry the meaning; only the ink changed. */
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.author-handle {
+  font-size: var(--type-meta-size, 14px);
+  color: var(--text-sec, #9ca3af);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -------------------------------------------------------------
+   Author Privacy Blur (F22)
+   ------------------------------------------------------------- */
+.author-avatar.is-blurred img,
+.is-blurred .author-avatar img,
+.author-avatar-img.is-blurred {
+  filter: blur(6px);
+  transform: translateZ(0);
+}
+
+.author-name.is-blurred,
+.is-blurred .author-name {
+  filter: blur(6px);
+  user-select: none;
+}
+
+.author-handle.is-blurred,
+.is-blurred .author-handle {
+  filter: blur(6px);
+  user-select: none;
+}
+
+/* The quoted author is blurred as well: a quote panel carries a name and a face
+   of its own, and a sharp one there would undo the blur on the byline above. */
+.quote-avatar.is-blurred,
+.quote-name.is-blurred,
+.quote-handle.is-blurred {
+  filter: blur(6px);
+  user-select: none;
+  transform: translateZ(0);
+}
+
+/* -------------------------------------------------------------
+   Per-post author privacy (the avatar is the switch)
+   ------------------------------------------------------------- */
+
+/* The control, for either portrait (the post's own and the quoted author's).
+   Both buttons *are* the portrait's element, so this resets what a `<button>`
+   would otherwise bring -- a 2px outset border, a `ButtonFace` background, its
+   own font and a hand cursor.
+
+   The avatar's width, height, corner, recess and `overflow` stay on
+   `.author-avatar`, where every other surface reads them; the quoted portrait's
+   20px box stays on `.quote-avatar`. The button therefore carries no size of
+   its own, and both surfaces keep drawing the portrait they always drew.
+
+   There is deliberately no badge on the button. A blurred face already says the
+   author is hidden, `aria-pressed` says it to a screen reader, and the panel
+   lists the state; a mark drawn on top had nowhere good to go -- outside the
+   round portrait it was clipped away by the `overflow: hidden` that makes the
+   portrait round, inside it ate the face, and at the quoted panel's 20px it was
+   unreadable. The preview stays the artifact. */
+.author-privacy-toggle {
+  padding: 0;
+  border: none;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  display: block;
+  cursor: pointer;
+  /* Kept as insurance: a blurred element that a clipping ancestor
+     (`overflow: hidden`, which `.author-avatar` has) composes through a
+     non-degraded property is documented to be drawn sharp in some cases.
+     `dev/verify-motion.mjs` measures the blur in painted pixels -- it catches
+     the blur being lost, and it passes with or without this line on this
+     machine. Trust the probe, not this comment, if that ever changes. */
+  zoom: 1;
+}
+
+/* The quoted portrait is not an `.author-avatar`, so it has no recess of its own
+   -- without this the UA button's face shows behind and around it. */
+.quote-author .author-privacy-toggle {
+  background: transparent;
+}
+
+.author-privacy-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------
+   Tweet Text & Rich Content
+   ------------------------------------------------------------- */
+.tweet-text-content {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-leading);
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  white-space: pre-wrap;
+  color: inherit;
+}
+
+/* Paragraph separation marker for multi-paragraph bodies. Caps double newlines
+   to a balanced paragraph gap instead of a full line-height empty line. */
+.tweet-paragraph-gap {
+  display: block;
+  height: 0.45em;
+  line-height: 0;
+}
+
+.token-mention,
+.token-hashtag,
+.token-cashtag,
+.token-link {
+  color: var(--link, var(--accent, #6366f1));
+  text-decoration: none;
+}
+
+.token-mention:hover,
+.token-hashtag:hover,
+.token-link:hover {
+  text-decoration: underline;
+}
+
+/* -------------------------------------------------------------
+   Multi-Image Grid (1 to 4 Images) & Ratio-Aware Responsive Layout
+   ------------------------------------------------------------- */
+.media-grid {
+  display: grid;
+  gap: var(--media-gap, 4px);
+  width: 100%;
+  overflow: hidden;
+  /* Media sits a touch further from the copy than two text blocks sit from each
+     other, but that extra air is the theme's, not a magic 12px: it is derived
+     from `--rhythm-gap`, so a tight material (Terminal) stays tight and a
+     generous one (Brutalist) breathes. The flex column already contributes one
+     `--rhythm-gap`; this adds the fractional remainder on top of it. */
+  margin-top: calc(var(--rhythm-gap, 16px) * 0.25);
+  /* Nothing here transitions: a ratio or theme change moves `min-height`,
+     `margin-top` and `flex` on this node, all layout properties, and the grid
+     sits under the ResizeObserver that feeds `fit`. The probe saw the old rule
+     walk `margin-top` frame by frame; where a transition does move the card's
+     height, every frame it moves re-derives the fit (docs/loading-states.md,
+     规则 3). */
+}
+
+/* Base Media Item Behavior */
+.media-item {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  /* Explicit, not inherited from modal.css's global reset: the mounting border
+     below must not add to the track size and get clipped by the grid's
+     overflow. Keeps the frame inside the box on every path, including the
+     export clone. */
+  box-sizing: border-box;
+  /* Not transitioned: `--media-height-cap` is layout under the same measured
+     card, and `object-fit` is not animatable at all. On the probe's card the cap
+     never bit -- the picture's box carries its own aspect ratio -- so that rule
+     was inert rather than visibly slow; both are still the wrong property to
+     animate. */
+}
+
+/* Media is mounted, not pasted. A photo, video poster or GIF carries the
+   material's own mounting ink (`--media-border`), one step darker than the
+   card `border`, which is tuned to sit quietly against the sheet and is too
+   faint to frame a picture. The weight follows the card's edge token, so a
+   heavy material frames heavily and a hairline material stays hairline. */
+.media-item {
+  border: var(--border-width, 1px) solid var(--media-border, var(--border-color));
+}
+
+/* Fit Modes (Contain vs Cover) - Single Attribute Selector
+   The only place `object-fit` is decided, and the only place a picture is sized
+   inside its cell. The per-count blocks below size a *cell* and must not pick how
+   the picture meets it: a cell is a fixed box, so a hard-coded `cover` there
+   silently overrode `完整展示` on every multi-image post.
+
+   A cell is a frame, not a picture: the ring, the gutter and the play badge
+   stay where the layout put them, and the picture gets its own box inside the
+   cell (`.media-box`). That is what lets 完整展示 round the picture without
+   moving the frame -- a picture stretched across its cell and letterboxed
+   inside it keeps square corners, because its own corners never reach the
+   cell's radius, so only the empty bars ever got cut.
+   Both of that box's sizes are `fit-content` with the cell's two ceilings,
+   because that is the one box CSS can make hug the picture's own rectangle: a
+   definite `width: 100%` makes the browser clamp the height alone and letterbox
+   the picture inside a box of the cell's shape again. A picture smaller than its
+   cell therefore sits at its own size instead of being stretched up to the cell
+   -- contain used to scale it up, as a side effect of its box being the cell.
+   The centring rule carries one attribute more than the per-count blocks below,
+   which set a cell's `display`; this has to outrank them or the picture sits in
+   the cell's corner instead of its middle. */
+[data-fit="contain"] .media-grid[data-layout][data-count] .media-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The picture's box: contain hands it the picture's own shape, cover hands it
+   the whole cell. Everything here sizes the box; the picture just fills it. */
+[data-fit="contain"] .media-grid .media-item > .media-box {
+  width: fit-content;
+  height: fit-content;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+[data-fit="cover"] .media-grid .media-item > .media-box {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+}
+
+/* The picture fills its box in both modes. Cover crops it to that box; contain
+   only holds a picture whose real shape has not arrived yet, because the box is
+   already the picture's own rectangle. */
+.media-grid .media-item > .media-box > .media-picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+[data-fit="contain"] .media-grid .media-item > .media-box > .media-picture {
+  object-fit: contain;
+}
+[data-fit="cover"] .media-grid .media-item > .media-box > .media-picture {
+  object-fit: cover;
+}
+
+/* The radius belongs to the picture's box in both modes: on cover that box is
+   the cell, so the picture meets the cell's own corner; on 完整展示 it is the
+   only thing that can round the picture at all. `--media-radius` is the token
+   the cell's own ring uses, so the two round alike and a square material stays
+   square. `position: relative` is what makes the box the corner the play badge
+   hangs on. */
+.media-grid .media-item > .media-box {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--media-radius, 0px);
+}
+
+/* The cell before its photograph has decoded.
+
+   A recessed block that states "a picture goes here" and covers the cell until
+   the photograph has painted: the block fades out over it (`is-picture-loaded`,
+   written when the image loads), so the picture is revealed by the block leaving
+   rather than by pixels landing in an empty box. The recess ink is the one the
+   quote panel already uses, because an empty picture slot and a quoted post are
+   the same thing on this sheet: a piece of the card below the surface.
+
+   A blurred copy of the picture itself (`media-placeholder-preview`) fades in
+   over that tone as soon as its small variant arrives, so most of the wait is
+   the photograph coming into focus rather than a grey rectangle. The small file
+   is derived from the mounted source in `getPhotoPreviewUrl`; a source with no
+   derivable variant keeps the tone. No icon while waiting: a picture glyph over
+   grey reads as a broken image, which is exactly what a wait must not look like.
+
+   Until the preview arrives, a highlight sweeps the block: at this contrast a
+   whole-block opacity pulse was the same light grey breathing into a slightly
+   lighter grey. The sweep stops as soon as the blurred copy does the talking
+   (`is-preview-ready`), when the picture arrives (`is-picture-loaded`) and when
+   the chain fails (`is-picture-missing`), because from any of those moments on
+   the sweep would claim progress that is no longer happening.
+
+   The sweep and the fade share this node: the sweep animates a pseudo-element's
+   `transform` -- a compositor property, per the loading-state rules -- while the
+   fade is this element's `opacity`, so the two never contend for a property.
+
+   `prefers-reduced-motion` flattens the sweep with every other animation in the
+   dialog, leaving the static recess and the blurred preview; the crossed mark
+   below is what keeps a failure distinct from a wait even then. */
+.media-placeholder {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--quote-bg);
+  transition: opacity 0.24s ease-out;
+  /* The blurred copy below sizes its blur off the cell's own width, so a
+     four-up thumbnail is not smeared by a radius chosen for a hero picture. */
+  container-type: inline-size;
+}
+
+/* The blurred stand-in. `cover` and the slight upscale keep the blur's soft
+   edge off the frame: a blurred image sampled right up to its edge shows the
+   backdrop bleeding in, while the picture it stands for is cropped to fill. The
+   radius is a share of the cell's width (`cqw`), so it reads the same on a
+   hero picture and on a four-up thumbnail. */
+.media-placeholder-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(3cqw);
+  transform: scale(1.12);
+  opacity: 0;
+  transition: opacity 0.32s ease-out;
+}
+
+.media-placeholder.is-preview-ready .media-placeholder-preview {
+  opacity: 1;
+}
+
+.media-placeholder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* The highlight is the recess lifted, not the sheet painted over it. Mixing
+     toward `--surface` assumed the sheet is lighter than the recess, which is
+     false wherever the material's surface is the darker of the two (midnight,
+     darkroom, terminal), equal to it (glass: the sweep was invisible), or
+     lighter but tinted the other way (brutalist). Measured across all twelve
+     themes, that produced 1.00–1.20:1 with no consistent direction.
+     A fixed step in OKLCH lightness keeps one direction on every material.
+     Near-white recesses clamp, so their lift is the gamut's limit, not the
+     rule's. `oklch(from ...)` is Chrome 119, older than the `round()` this
+     sheet already relies on; the `color-mix` before it is the fallback for a
+     browser without relative colour. It always goes the right way, but on a
+     pale recess it is only a hint of a highlight. */
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    color-mix(in srgb, var(--quote-bg), #ffffff 30%) 50%,
+    transparent 75%
+  );
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    oklch(from var(--quote-bg) calc(l + 0.1) c h) 50%,
+    transparent 75%
+  );
+  transform: translateX(-100%);
+  animation: ptc-picture-sheen 1.4s ease-in-out infinite;
+}
+
+.media-box.is-picture-loaded > .media-placeholder {
+  opacity: 0;
+}
+
+/* The failure ending: the frame stays, but the sweep stops, the blurred copy is
+   hidden (it would keep showing a picture that is not coming) and a quiet
+   crossed mark says so. `--faint` at 55% keeps it below the copy's weight, so a
+   failed picture reads as missing rather than as new content. It lives in the
+   tree and is revealed by the cell's class, because that class is written
+   imperatively and never re-renders. */
+.media-placeholder-icon {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 24px;
+  height: 24px;
+  color: color-mix(in srgb, var(--faint) 55%, transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+
+.media-box.is-picture-missing .media-placeholder-icon {
+  opacity: 1;
+}
+
+.media-box.is-picture-missing .media-placeholder-preview {
+  opacity: 0;
+}
+
+/* A small variant that failed stops the sweep without pretending the picture
+   failed: the cell keeps its tone and its place in the wait, and the sweep has
+   nothing left to announce. */
+.media-placeholder.is-preview-ready::after,
+.media-placeholder.is-preview-failed::after,
+.media-box.is-picture-loaded .media-placeholder::after,
+.media-box.is-picture-missing .media-placeholder::after {
+  animation: none;
+}
+
+@keyframes ptc-picture-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* A passe-partout: the picture sits inside a thick mount in the material's own
+   mat colour, the way a print is hung behind glass. Declared after the fit
+   rules and one class deeper, because those reset `background` and would
+   otherwise paint the mount transparent. The padding is inside the box (the
+   item is border-box), so the frame never grows the grid track. */
+.post-to-card-target[data-media-frame="mat"] .media-grid .media-item {
+  padding: var(--media-mount, 8px);
+}
+
+/* The mount colour, stated once. The video item is a media item too, so the
+   rule above already reaches it -- but `.media-item.media-video-item` sets its
+   own background further down and would win on specificity, so the colour is
+   restated for it in the same place rather than duplicated apart. */
+.post-to-card-target[data-media-frame="mat"] .media-grid .media-item,
+.post-to-card-target[data-media-frame="mat"] .media-grid .media-video-item {
+  background: var(--mat);
+}
+
+/* ---------------- Single Image (Count = 1) ---------------- */
+.media-grid[data-count="1"] {
+  grid-template-columns: 1fr;
+}
+
+/* Single Image in Auto Ratio: natural proportion without harsh limits.
+   The ceiling is stated once per variant as `--media-height-cap`, and consumed
+   twice: by the cell, so the ring never stretches past it, and by the picture's
+   box inside it, so a capped picture is capped rather than left to spill out of
+   the cell that was capped around it. Stack is excluded -- nothing is capped
+   there, which is the cell's `max-height: unset` below, and the box has to
+   agree. */
+/* Auto has no absolute ceiling: a 520px one shrank a 1:1 video below the column
+   width and left the recess showing beside it. Height follows from the shape
+   instead. Under `cover` Card.tsx floors a lone picture's ratio at 3:4, so the
+   tallest that mode gets is 4/3 of the column; under 完整展示 there is no floor
+   and the card grows to a tall picture, which is what that mode promises. The
+   poster ratios below keep their own ceilings. */
+.media-grid[data-count="1"] {
+  --media-height-cap: none;
+}
+.media-grid[data-count="1"] .media-item {
+  height: auto;
+}
+.media-grid[data-count="1"] .media-item,
+.media-grid[data-count="1"]:not([data-layout="stack"]) .media-item > .media-box {
+  max-height: var(--media-height-cap);
+}
+
+/* Single Image in 3:4 Poster Ratio: expand dynamically to fill vertical canvas & eliminate dead space */
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] {
+  --media-height-cap: 580px;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+  margin-top: 14px;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-count="1"] .media-item {
+  height: 100%;
+  width: 100%;
+}
+
+/* Single Image in 16:9 Landscape Ratio: compact constraint to maintain tight landscape frame */
+.post-to-card-target[data-ratio="16:9"] .post-to-card-body-content {
+  gap: 10px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-count="1"] {
+  --media-height-cap: 200px;
+  margin-top: 8px;
+}
+
+/* ---------------- Multi Images (Count = 2, 3, 4) in Grid Mode ---------------- */
+.media-grid[data-layout="grid"][data-count="2"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 16 / 10;
+}
+.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="stacked"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 16 / 11;
+}
+/* Dual Portrait (2 tall / mobile screenshots side-by-side in Auto or Grid) */
+.media-grid[data-layout="grid"][data-count="2"][data-grid-layout="portrait-columns"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  aspect-ratio: 1 / 1;
+}
+.post-to-card-target[data-ratio="auto"] .media-grid[data-layout="grid"][data-count="2"][data-grid-layout="portrait-columns"] {
+  aspect-ratio: 1 / 1;
+  /* The grid's own height ceiling, which is the card's width: a grid may not be
+     taller than the sheet is wide, or the pictures push the post's own words off
+     the card. Read from `--card-width` rather than written out as 640px, for the
+     same reason the ratio floors are (F17.26): one number decides how wide the
+     card is, and moving it has to move the ceiling with it -- stated here, a 720
+     card would quietly keep a 640 ceiling. The aspect ratios above bound the
+     wide arrangements; this cap only ever binds a tall one. */
+  max-height: var(--card-width, 640px);
+}
+.media-grid[data-layout="grid"][data-count="2"] .media-item {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* 2 images in 3:4: richer vertical aspect ratio */
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-layout="grid"][data-count="2"] {
+  aspect-ratio: 4 / 3;
+  min-height: 280px;
+}
+/* 2 images in 16:9: sleeker horizontal grid */
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-layout="grid"][data-count="2"] {
+  aspect-ratio: 21 / 9;
+  max-height: 180px;
+}
+
+/* 3 images: Auto ratio uses comfortable 4:3 */
+.media-grid[data-layout="grid"][data-count="3"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 4 / 3;
+}
+/* Top-Hero: First image is wide/landscape/square -> spans 2 columns on top (row 1: 1.4fr), bottom 2 images on row 2 (1fr)
+   The hero row's weight comes from `--grid-top-hero`, which the card injects
+   from the geometry module: the grid planner's arithmetic is derived from the
+   same number, so a change to the weight cannot leave the planner describing
+   a grid the stylesheet no longer draws. */
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, var(--grid-top-hero, 1.4fr)) minmax(0, 1fr);
+}
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] .media-item:first-child {
+  grid-column: span 2;
+  grid-row: 1;
+}
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] .media-item:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+/* The same ceiling as the two-picture portrait grid: a grid may not be taller
+   than the card is wide. */
+.post-to-card-target[data-ratio="auto"] .media-grid[data-layout="grid"][data-count="3"][data-grid-layout="top-hero"] {
+  aspect-ratio: 16 / 15;
+  max-height: var(--card-width, 640px);
+}
+/* Left-Hero: First image is portrait/square/standard (< 1.2) -> spans 2 rows on left (1.6fr), right 2 images stacked vertically (1fr)
+   The hero column's weight comes from `--grid-left-hero`, injected from the
+   geometry module for the same reason as the hero row's above. */
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] {
+  grid-template-columns: minmax(0, var(--grid-left-hero, 1.6fr)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 4 / 3;
+}
+.post-to-card-target[data-ratio="auto"] .media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] {
+  aspect-ratio: 4 / 3;
+  max-height: var(--card-width, 640px);
+}
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] .media-item:first-child {
+  grid-row: span 2;
+  grid-column: 1;
+}
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+.media-grid[data-layout="grid"][data-count="3"][data-grid-layout="left-hero"] .media-item:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.media-grid[data-layout="grid"][data-count="3"] .media-item {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-layout="grid"][data-count="3"] {
+  aspect-ratio: 1 / 1;
+  min-height: 320px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-layout="grid"][data-count="3"] {
+  aspect-ratio: 21 / 9;
+  max-height: 180px;
+}
+
+/* 4 images: Auto ratio uses comfortable 4:3 */
+.media-grid[data-layout="grid"][data-count="4"] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  aspect-ratio: 4 / 3;
+}
+.media-grid[data-layout="grid"][data-count="4"] .media-item {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.post-to-card-target[data-ratio="3:4"] .media-grid[data-layout="grid"][data-count="4"] {
+  aspect-ratio: 1 / 1;
+  min-height: 320px;
+}
+.post-to-card-target[data-ratio="16:9"] .media-grid[data-layout="grid"][data-count="4"] {
+  aspect-ratio: 21 / 9;
+  max-height: 180px;
+}
+
+/* ---------------- 完整展示 (Contain) in the Auto Ratio: exact packing ----------------
+   A cell is a frame — it carries the mounting ink, the gutter and the play badge.
+   完整展示 therefore cannot letterbox a picture inside a cell of some other shape:
+   the frame would be drawn around empty space, with the picture floating in the
+   middle of it, and the ring would sit a gutter away from the picture's edge.
+   Instead each cell *is* its picture's rectangle, and the grid is laid out as
+   lines of pictures that share a height.
+
+   The widths are not computed here: `planMediaGrid` hands each cell a width in
+   proportion to its picture's own shape, less its share of the line's gutters.
+   The browser only has to keep them on one line, which is what `flex-wrap` with
+   those widths does. A line is therefore as wide as the track, every picture in
+   it is the same height, and the cell's edge meets the picture's edge.
+
+   The selectors outrank the per-count blocks above, which state a fixed shape
+   for the grid and its tracks. Those stay for `cover` (a crop wants a box to
+   crop into) and for the poster ratios (the user picked the canvas). */
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  aspect-ratio: unset;
+  min-height: unset;
+  max-height: unset;
+}
+
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] .media-item {
+  /* The width is the plan's, inline. */
+  flex: 0 0 auto;
+  display: block;
+  height: auto;
+}
+
+/* The picture's box fills its cell, so the cell's two dimensions are the
+   picture's. Height comes from the box's own ratio, which the plan supplies:
+   a box with both dimensions stated would letterbox the picture again.
+
+   The cell is `overflow: visible` here rather than clipping: a mount makes the
+   cell's border-box taller than its content box by a constant, and the cell's
+   height follows from its picture's shape, so the two cannot agree to the
+   pixel. The ring is drawn on the cell, so a picture that stands a pixel over
+   its content box passes under it rather than being cut off by it — which is
+   the only one of the two errors that is invisible. */
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] .media-item {
+  overflow: visible;
+}
+
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count] .media-item > .media-box {
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+}
+
+/* Left-hero cannot be a line: the hero holds a column to itself and the other
+   two divide the second. It stays a two-column grid, sized by the plan's column
+   weights, with rows that take their height from the pictures in them. */
+.post-to-card-target[data-fit="contain"][data-ratio="auto"] .media-grid[data-layout="grid"][data-count][data-grid-layout="left-hero"] {
+  display: grid;
+  grid-template-rows: auto auto;
+}
+
+/* ---------------- Multi Images (Stack Mode: 100% Full Display) ---------------- */
+.post-to-card-target .media-grid[data-layout="stack"] {
+  display: flex;
+  flex-direction: column;
+  /* Stacked full-width images need more air than a grid gutter, so this stays a
+     fixed step rather than the theme's `--media-gap` (the grid gutter). */
+  gap: 12px;
+  width: 100%;
+  aspect-ratio: unset;
+  min-height: unset;
+  max-height: unset;
+  /* Matches the grid's material-derived top step, so switching between grid and
+     stack does not change the space above the media. */
+  margin-top: calc(var(--rhythm-gap, 16px) * 0.6);
+}
+
+.post-to-card-target .media-grid[data-layout="stack"] .media-item {
+  width: 100%;
+  height: auto;
+  max-height: unset;
+  aspect-ratio: unset;
+  object-fit: contain;
+  display: block;
+}
+
+.post-to-card-target .media-grid[data-layout="stack"][data-fit="cover"] .media-item {
+  object-fit: cover;
+}
+
+/* -------------------------------------------------------------
+   Video & Animated GIF Presentation (Non-obstructive Elegant UI)
+   ------------------------------------------------------------- */
+.media-item.media-video-item {
+  overflow: hidden;
+  display: block;
+  /* A contained poster leaves letterbox bars; they should be the material's
+     recess, not a hard-coded 20% black that reads as a smudge on warm paper.
+     Same token as the quote panel and the avatar, so every "behind the media"
+     surface on the card is one material decision. */
+  background: var(--quote-bg);
+  width: 100%;
+}
+
+/* No bottom scrim. There used to be a 56px black gradient whose only job was
+   to give the translucent play badge something to sit against. The badge is now
+   an opaque pill, so the scrim only darkened the poster — and on the many posts
+   with burnt-in subtitles it was dimming text the card cannot re-typeset. */
+
+/* The badge hangs on the picture's box, not on the cell: a poster whose shape
+   differs from its cell sits inside it, so a corner taken from the cell would
+   land on the recess beside the picture. */
+.media-video-item .video-indicator-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* Video Indicator Badge: flat solid pill (zero center obstruction).
+
+   Deliberately not frosted glass — the three themes ban blurred surfaces,
+   and a backdrop-filter reads as a smudge in a flat export. */
+.media-video-item .video-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  background: rgba(20, 20, 19, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.media-video-item .video-badge-pill.gif-badge {
+  padding: 0 8px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  background: rgba(20, 20, 19, 0.86);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.media-video-item .video-play-icon {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.media-video-item .video-duration-text {
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+}
+
+/* -------------------------------------------------------------
+   Quote Tweet Box — a nested surface, not a blockquote.
+
+   An earlier version carried a 3px theme-accent stripe down the left edge.
+   That is the stock "blockquote" chrome every generator emits, and it fought
+   the card for attention while encoding nothing: the nested author row already
+   says "another post". The quote now reads as a recessed panel — same family as
+   the card, one step quieter — and the hierarchy comes from surface, spacing
+   and type size rather than an arbitrary colour bar.
+   ------------------------------------------------------------- */
+.quote-card {
+  position: relative;
+  /* Same material-derived step as the media grid: the quote is a block in the
+     same column, so it takes the same fractional `--rhythm-gap` rather than a
+     hard-coded 12px that ignored the theme. */
+  margin-top: calc(var(--rhythm-gap, 16px) * 0.6);
+  padding: 12px 14px 13px;
+  background: var(--quote-bg, rgba(255, 255, 255, 0.04));
+  border: var(--border-width, 1px) solid var(--quote-border, rgba(255, 255, 255, 0.1));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+/* Outlined materials (Hairline, Broadsheet, Terminal, Brutalist) draw the quote
+   as a rule-framed block rather than a filled recess: on a black rule grid a
+   fill that clears 1.15:1 on warm paper reads as a grey smudge, so the material
+   declares which treatment it wants and one tint never has to serve both. */
+.post-to-card-target[data-quote-style="outlined"] .quote-card {
+  background: transparent;
+  border: var(--border-width, 1px) var(--rule-style, solid) var(--quote-border);
+}
+
+.quote-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.quote-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--avatar-radius, 50%);
+  object-fit: cover;
+  flex-shrink: 0;
+  /* Block, so it fills the button that may wrap it rather than sitting on a
+     line box with the descender space under it. In the flex row it is
+     blockified anyway, so the un-buttoned (level-2) portrait is unchanged. */
+  display: block;
+  /* Same mounting ring as the byline avatar, one step thinner: at 20px a full
+     card-weight ring would close over the portrait. The nested author reads as
+     set into the recess, not floating on it. */
+  box-shadow: 0 0 0 1px var(--media-border, var(--border-color));
+}
+
+.quote-name {
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex-shrink: 0;
+  max-width: 60%;
+}
+
+.quote-verified-badge {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.quote-handle,
+.quote-timestamp {
+  font-size: var(--type-meta-size, 12px);
+  color: var(--text-sec, #9ca3af);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Time is footnote material: a step below the handle it sits beside. */
+.quote-timestamp {
+  color: var(--faint, var(--text-sec, #9ca3af));
+}
+
+.quote-timestamp-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.quote-timestamp-link:hover {
+  text-decoration: underline;
+}
+
+.quote-timestamp::before {
+  content: "·";
+  margin-right: 6px;
+}
+
+.quote-text {
+  font-size: var(--type-quote-size, 14.5px);
+  line-height: 1.6;
+  color: inherit;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  white-space: pre-wrap;
+}
+
+/* Keep quoted media inside the box's own radius. `--media-radius` is set by
+   Card.tsx from the resolved radius (theme's mediaRadius, or the explicit
+   tier), so a square material no longer gets a rounded photo pasted inside it
+   by a hard-coded value. */
+.post-to-card-target .quote-card .media-grid {
+  margin-top: 3px;
+  border-radius: var(--media-radius, 8px);
+}
+
+/* A quote inside a quote. X renders this chain, so the card draws it as the
+   nesting it is: a second panel one step deeper into the sheet, not the same
+   panel twice with no hierarchy between them.
+
+   The step is carried by three things, in order of how much each says:
+
+     indentation  the panel is set in from the outer one's left edge, so the two
+                  read as stacked surfaces rather than two paragraphs. This is
+                  the only cue an outlined material gets, because a fill on a
+                  ruled sheet is the smudge its `quoteStyle` refuses.
+     surface      one step nearer the sheet's own colour. Mixed toward `--surface`
+                  because that is the colour the recess is a recess *in*, and it
+                  is direction-agnostic: a light paper's deeper panel lightens
+                  and a dark one's darkens, and both read as further in. Mixed
+                  toward `--quote-border` instead would make the depth track a
+                  theme's decorative border colour — on Riso that is Klein blue,
+                  so the nested panel came out outlined in 45% accent.
+     type         the nested byline steps down and its avatar shrinks with it,
+                  so the deeper post's identity does not compete with the one
+                  the card is about.
+
+   The background is written as its own declaration, never by redefining
+   `--quote-bg` on this element. A custom property that reads itself is a cycle
+   and is invalid at computed-value time, which is not a fallback: the element
+   silently lost its background and both panels printed the same beige. */
+.quote-card[data-quote-depth="2"] {
+  background: color-mix(in srgb, var(--quote-bg) 55%, var(--surface));
+  border-color: color-mix(in srgb, var(--quote-border) 55%, var(--surface));
+  margin-inline-start: 14px;
+  padding: 9px 11px 10px;
+  gap: 5px;
+}
+
+/* One step of type as well, so the deeper byline does not shout over the
+   panel it sits in. The media inside keeps its own framing. */
+.quote-card[data-quote-depth="2"] .quote-name {
+  font-size: calc(var(--type-quote-size, 14.5px) - 1.5px);
+}
+
+.quote-card[data-quote-depth="2"] .quote-avatar {
+  width: 16px;
+  height: 16px;
+}
+
+/* -------------------------------------------------------------
+   Long-form post (article)
+
+   X renders an article as a nested reading surface inside the tweet. The card
+   keeps the cover, the kicker, the title and — under them — the post's own lead,
+   and leaves the article's prose behind, because a card is a poster rather than
+   a reader.
+
+   The cover is a plain one-item media grid, so it inherits the theme's mounting
+   frame, corner and fit behaviour for free; nothing here re-states any of that.
+
+   The title's size is derived from the material's own display size rather than
+   added as a per-theme token: a headline is a display line, so a material that
+   sets a big byline gets a big title and the typewriter receipt stays small,
+   with no table to keep in sync across twelve themes.
+   ------------------------------------------------------------- */
+.article-block {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--rhythm-gap, 16px) * 0.6);
+}
+
+.article-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The kicker names what this block is, so the title is not mistaken for a
+   headline the author typed into the post body. Set in the accent, which is the
+   one chromatic highlight the card allows itself. */
+.article-kicker {
+  font-family: var(--font-display);
+  font-size: calc(var(--type-meta-size, 12px) * 0.92);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent, var(--link));
+}
+
+.article-title {
+  font-family: var(--font-display);
+  font-size: calc(var(--type-display-size, 18px) * 1.7);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
+  line-height: 1.2;
+  color: inherit;
+  text-wrap: balance;
+}
+
+/* The article's cover is a one-item media grid only so it inherits the theme's
+   mount, corner and fit; its *shape* must not come from the card's aspect ratio.
+   The single-image rules above are keyed on `[data-ratio]` because a lone photo
+   is meant to fill a poster — a 3:4 card stretches it to 380px and a 16:9 card
+   clips it to 200px — which turns a 5:2 cover band into a hero portrait. These
+   overrides put the cover back on its own proportions at every card ratio; they
+   carry the same specificity as the rules they override and come later, which is
+   what lets them win without `!important`. */
+.post-to-card-target .article-block .media-grid[data-count="1"],
+.post-to-card-target[data-ratio="3:4"] .article-block .media-grid[data-count="1"],
+.post-to-card-target[data-ratio="16:9"] .article-block .media-grid[data-count="1"] {
+  /* The cover's own ceiling, consumed by the cell and by the picture inside it
+     like every other lone picture. */
+  --media-height-cap: 360px;
+  flex: 0 0 auto;
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
+  min-height: 0;
+  aspect-ratio: auto;
+  /* The block's own gap already separates the cover from the lead above it; the
+     base grid's top margin would add a second helping on top. */
+  margin-top: 0;
+}
+
+.post-to-card-target .article-block .media-grid[data-count="1"] .media-item,
+.post-to-card-target[data-ratio="3:4"] .article-block .media-grid[data-count="1"] .media-item,
+.post-to-card-target[data-ratio="16:9"] .article-block .media-grid[data-count="1"] .media-item {
+  /* Natural proportions: the ceiling is `--media-height-cap`, set above. */
+  height: auto;
+  width: 100%;
+}
+
+/* -------------------------------------------------------------
+   Single Tweet Layout
+   ------------------------------------------------------------- */
+.single-tweet-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rhythm-gap, 14px);
+}
+
+/* -------------------------------------------------------------
+   Thread Timeline Layout (Native Twitter Two-Column Gutter)
+   ------------------------------------------------------------- */
+.thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
+.thread-item {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+  position: relative;
+}
+
+/* Preview-only affordance: excluded from the export by
+   `data-html2canvas-ignore`, and hidden at rest so the preview stays close to the
+   artifact it produces.
+
+   24x24 rather than the 22 it was, which is the floor WCAG 2.2 Target Size
+   (Minimum) asks for. It is still well under the 44pt Apple's guidance prefers,
+   which is a deliberate trade for a preview-only chip; the panel's list is the
+   real control on a phone. */
+.thread-exclude-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(15, 20, 25, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.9);
+  /* The hover rule repaints the chip red, so the colours transition too. This
+     node is `data-html2canvas-ignore` and absolutely positioned, so it is
+     outside the measured, rasterised card and rule 3 does not reach it; the gate
+     still asks for named properties rather than `all`. */
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  z-index: 10;
+  padding: 0;
+}
+
+/* `:focus-visible` is not redundant with `:hover` here. At `opacity: 0` the
+   element and its focus ring are both invisible, so a keyboard user tabbing onto
+   the button saw nothing at all until they activated it -- the global
+   `:focus-visible` ring in modal.css is painted, but at zero opacity. */
+.thread-item:hover .thread-exclude-btn,
+.thread-exclude-btn:focus-visible {
+  opacity: 0.85;
+  transform: scale(1);
+}
+
+.thread-exclude-btn:hover {
+  opacity: 1 !important;
+  background: rgba(239, 68, 68, 0.85);
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+.thread-gutter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 48px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.thread-gutter .author-avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.thread-connector-line {
+  width: 2px;
+  flex: 1 1 auto;
+  min-height: 16px;
+  /* The material's line ink, not `--divider`: a connector is a drawn thread,
+     and on Terminal the divider step (1.22:1) made it disappear entirely. */
+  background: var(--rule, var(--divider, rgba(255, 255, 255, 0.18)));
+  margin-top: 6px;
+  margin-bottom: 6px;
+  border-radius: 1px;
+}
+
+.thread-content-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  /* Intra-tweet spacing: keeps author details tightly grouped with the post's
+     own prose/media, so the reader never confuses which author owns the text. */
+  gap: calc(var(--rhythm-gap, 18px) * 0.4);
+  /* Inter-tweet spacing: clearly separates adjacent tweets in the thread with
+     ample breathing room, through which the continuous timeline connector runs. */
+  padding-bottom: calc(var(--rhythm-gap, 18px) + 18px);
+}
+
+.thread-content-col .author-details {
+  min-height: 48px;
+  justify-content: center;
+}
+
+.thread-content-col .media-grid,
+.thread-content-col .quote-card {
+  margin-top: calc(var(--rhythm-gap, 18px) * 0.25);
+}
+
+.thread-item:last-child .thread-content-col {
+  padding-bottom: 8px;
+}
+
+
+/* -------------------------------------------------------------
+   Card Footer (Timestamp, Stats, QR Code, Watermark)
+   ------------------------------------------------------------- */
+.card-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  margin-top: auto;
+  /* The foot rule is the head rule's echo: drawn in the material's own line
+     ink rather than the near-invisible divider, so the column is framed top and
+     bottom by the same hand. On the papers it stays a whisper; on Terminal it
+     is what keeps the footer from floating in the dark. */
+  border-top: 1px var(--rule-style, solid) var(--rule, var(--divider, rgba(255, 255, 255, 0.1)));
+}
+
+.card-footer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Footnote and data figures share the material's meta treatment. Stated once,
+   because both take all four of the same tokens and only the layout differs. */
+.card-timestamp,
+.stats-row {
+  font-size: var(--type-meta-size);
+  letter-spacing: var(--type-meta-tracking);
+  text-transform: var(--type-meta-transform);
+  font-variant-numeric: var(--type-meta-numeric);
+  color: var(--faint, var(--text-sec, #9ca3af));
+}
+
+.card-timestamp {
+  line-height: 1.4;
+}
+
+/* Tweet Interaction Statistics */
+.stats-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  /* Far enough in on a narrow card, a row of four figures does not fit. Let it
+     break between items rather than inside one: `3.1万` has a legal break before
+     the CJK unit, and a figure split across two lines reads as a different
+     number. */
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* One figure, one line: the icon and count must not straddle a break. */
+  white-space: nowrap;
+}
+
+/* Clay sets each count as a small pressed pill, in the secondary ink: the faint
+   footnote step does not clear contrast on the recess the chip is drawn on. */
+.post-to-card-target[data-stat-chip="on"] .stats-row {
+  gap: 8px;
+}
+
+.post-to-card-target[data-stat-chip="on"] .stat-item {
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  background: var(--quote-bg);
+  color: var(--text-sec);
+}
+.stat-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.card-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.card-qr-container {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-qr-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.card-watermark {
+  display: flex;
+  /* The credit is two lines tall, and the mark belongs to the pair: it spans
+     the block, not one line of it. `flex-start` put it on the row box's top
+     edge -- 4.5px above the name's cap and overlapping the version line below
+     -- so it lined up with nothing, and centring a 16px mark left it shorter
+     than the text it stands beside. The size in `Card.tsx` matches the block's
+     ink; these flex lines only have to line the two up. */
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  /* The mark reads as one item: "Post to Card" must not break onto a second
+     line when the QR code and the build stamp crowd the footer's right side.
+     The build stamp carries the same rule; the brand text needs it too. */
+  white-space: nowrap;
+  /* Footnote ink, not a fade. The old `opacity: 0.55` dropped the mark to
+     2.1–3.0:1 on every sheet — below the floor the rest of the card holds —
+     and stacking a fade on the dimmest ramp step contradicted the rule that
+     "quieter" is a size decision. */
+  color: var(--faint, var(--text-sec, #9ca3af));
+  user-select: none;
+}
+
+/* The product mark as line art. It strokes in `currentColor`, so it sits in
+   the watermark's faint ink on every theme, and it does not shrink -- a
+   squeezed one reads as a smudge rather than a logo. */
+.card-brand-icon {
+  display: flex;
+  flex-shrink: 0;
+}
+
+/* The credit's link. It exists for the preview only -- the rasterizer draws text,
+   not addresses -- so it carries no underline and no colour of its own: the mark
+   looks exactly as it did before, and the footer's ink rule still decides its
+   contrast. */
+.card-credit {
+  display: inline-flex;
+  /* Name over stamp, not beside it. On one line the two read as a single run of
+     text -- "PostPress v1.0.0·2153" -- which puts a build identifier at the same
+     level as the name it belongs to. Stacked, the stamp is the name's footnote,
+     and the credit gives back the width the footer's right side was spending on
+     it. No gap: a gap would make the stamp its own item again. */
+  flex-direction: column;
+  gap: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The build stamp. Quieter than the name above it by size and weight alone,
+   which is the same decision the watermark's own ink is made on: a step down,
+   never a fade. It is the one place the card names the build that drew it, so
+   a shared image can be traced back to the code that produced it. */
+.card-build {
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  /* Keeps the stamp whole on one line: a break here would read as a fault in
+     the card rather than as the mark it belongs to. */
+  white-space: nowrap;
+}

@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PostPress · 印推：把 X 推文排印成卡片</title>
+    <meta
+      name="description"
+      content="PostPress 把 X 的推文与同作者长串重新排印成 3× 高清卡片：十二套材质、四种画幅，纯本地渲染，不登录、不上传。"
+    />
+    <meta name="theme-color" content="#0c0e11" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://shirolin.github.io/post-to-card/" />
+    <meta property="og:title" content="PostPress · 印推：把 X 推文排印成卡片" />
+    <meta
+      property="og:description"
+      content="十二套材质、四种画幅、十四种界面语言。排版与导出全部在本机完成。"
+    />
+    <meta property="og:image" content="https://shirolin.github.io/post-to-card/assets/cards/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="https://shirolin.github.io/post-to-card/" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "PostPress · 印推",
+        "applicationCategory": "DesignApplication",
+        "operatingSystem": "Chrome, Edge",
+        "url": "https://shirolin.github.io/post-to-card/",
+        "downloadUrl": "https://github.com/Shirolin/post-to-card",
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "image": "https://shirolin.github.io/post-to-card/assets/cards/og.png",
+        "description": "把 X 的推文与同作者长串排印成 3× 高清卡片，十二套材质，全程在本机渲染。",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" }
+      }
+    </script>
+    <link rel="icon" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://api.fontshare.com" />
+    <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script>
+      // 深色是默认；?theme=light 或上次的选择在首帧之前就落到 <html> 上，避免闪一下。
+      (function () {
+        try {
+          var q = new URLSearchParams(location.search).get('theme');
+          var t = q === 'light' || q === 'dark' ? q : localStorage.getItem('pp-theme');
+          if (t === 'light') document.documentElement.dataset.theme = 'light';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main" data-i18n="skip">跳到正文</a>
+
+    <div class="hero">
+      <div class="hero-left">
+        <header class="bar">
+          <a class="brand" href="#top" aria-label="PostPress">
+            <svg class="mark" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false">
+              <rect x="3" y="3.75" width="18" height="10.5" rx="3" fill="#6CC59C" stroke="#1E5A44" stroke-width="1.5" />
+              <path d="M3.75 7.75V6.9A2.4 2.4 0 0 1 6.15 4.5H17.85A2.4 2.4 0 0 1 20.25 6.9V7.75Z" fill="#A6E2C6" />
+              <rect x="5.75" y="11" width="12.5" height="1.6" rx=".875" fill="#1E5A44" />
+              <g fill="#142019"><ellipse cx="9.5" cy="8.1" rx="1.4" ry="1.9" /><ellipse cx="14.5" cy="8.1" rx="1.4" ry="1.9" /></g>
+              <g fill="#fff"><circle cx="10" cy="7.25" r=".55" /><circle cx="15" cy="7.25" r=".55" /></g>
+              <path d="M7.5 11.75h9v7.5A1.75 1.75 0 0 1 14.75 21h-5.5A1.75 1.75 0 0 1 7.5 19.25Z" fill="#F8F8F5" stroke="#1E5A44" stroke-width="1.5" stroke-linejoin="round" />
+              <circle cx="10" cy="15.4" r="1.05" fill="#6CC59C" />
+              <g stroke="#6CC59C" stroke-width="1.3" stroke-linecap="round"><path d="M12.1 15.4h2.2" /><path d="M9.6 18.3h4.8" /></g>
+            </svg>
+            <span class="brand-name">PostPress</span>
+            <span class="brand-cn">· 印推</span>
+          </a>
+          <nav class="bar-nav" aria-label="页面导航">
+            <a href="#thread" data-i18n="nav.thread">长串</a>
+            <a href="#article" data-i18n="nav.article">长文</a>
+            <a href="#privacy" data-i18n="nav.privacy">隐私</a>
+            <a href="#install" data-i18n="nav.install">安装</a>
+          </nav>
+          <button class="lang" id="theme" type="button" aria-label="切换到浅色版">浅色</button>
+          <button class="lang" id="lang" type="button" aria-label="Switch to English">EN</button>
+        </header>
+
+        <div class="hero-copy">
+          <h1 data-i18n="hero.h1">把推文排成卡片。</h1>
+          <p class="hero-sub" data-i18n="hero.sub">
+            十二套材质、四种画幅、十四种界面语言。排版与导出全部在本机完成，不登录、不上传、不碰 X API。
+          </p>
+          <div class="hero-actions">
+            <a class="btn" href="#install" data-i18n="cta.install">装到浏览器</a>
+            <a class="link" href="https://github.com/Shirolin/post-to-card" data-i18n="cta.source">源码与文档</a>
+          </div>
+          <p class="hero-meta" data-i18n="hero.meta">
+            免费开源 · GPL-3.0-or-later · Chrome / Edge（Manifest V3，Chrome 111 起）
+          </p>
+          <ul class="facts">
+            <li><b>12</b><span data-i18n="facts.materials">套材质</span></li>
+            <li><b>4</b><span data-i18n="facts.canvas">种外层画幅</span></li>
+            <li><b>14</b><span data-i18n="facts.locales">种界面语言</span></li>
+            <li><b>3×</b><span data-i18n="facts.export">超清导出</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="hero-stage" id="studio">
+        <a class="repo" href="https://github.com/Shirolin/post-to-card">GitHub</a>
+        <div class="studio" data-ui>
+          <figure class="studio-card">
+            <img
+              id="specimen-img"
+              src="./assets/cards/midnight.webp"
+              alt="夜幕材质的卡片：PostPress 印推的一条推文，正文下方引用排版样张的一句短推。"
+              width="1280"
+              height="766"
+            />
+          </figure>
+          <div class="rack">
+            <p class="rack-label" id="rack-label" data-i18n="spec.pick">挑一种材质</p>
+            <div class="rack-list" role="group" aria-labelledby="rack-label">
+              <button class="material" type="button" data-material="minimal" aria-pressed="false">
+                <img src="./assets/cards/thumb-minimal.webp" alt="" width="320" height="192" /><span data-i18n="theme.minimal">极简</span>
+              </button>
+              <button class="material" type="button" data-material="midnight" aria-pressed="true">
+                <img src="./assets/cards/thumb-midnight.webp" alt="" width="320" height="192" /><span data-i18n="theme.midnight">夜幕</span>
+              </button>
+              <button class="material" type="button" data-material="glass" aria-pressed="false">
+                <img src="./assets/cards/thumb-glass.webp" alt="" width="320" height="192" /><span data-i18n="theme.glass">液态玻璃</span>
+              </button>
+              <button class="material" type="button" data-material="material" aria-pressed="false">
+                <img src="./assets/cards/thumb-material.webp" alt="" width="320" height="192" /><span data-i18n="theme.material">质感</span>
+              </button>
+              <button class="material" type="button" data-material="gallery" aria-pressed="false">
+                <img src="./assets/cards/thumb-gallery.webp" alt="" width="320" height="192" /><span data-i18n="theme.gallery">画廊</span>
+              </button>
+              <button class="material" type="button" data-material="darkroom" aria-pressed="false">
+                <img src="./assets/cards/thumb-darkroom.webp" alt="" width="320" height="192" /><span data-i18n="theme.darkroom">暗房</span>
+              </button>
+              <button class="material" type="button" data-material="riso" aria-pressed="false">
+                <img src="./assets/cards/thumb-riso.webp" alt="" width="320" height="192" /><span data-i18n="theme.riso">孔版</span>
+              </button>
+              <button class="material" type="button" data-material="sumi" aria-pressed="false">
+                <img src="./assets/cards/thumb-sumi.webp" alt="" width="320" height="192" /><span data-i18n="theme.sumi">水墨</span>
+              </button>
+              <button class="material" type="button" data-material="clay" aria-pressed="false">
+                <img src="./assets/cards/thumb-clay.webp" alt="" width="320" height="192" /><span data-i18n="theme.clay">软陶</span>
+              </button>
+              <button class="material" type="button" data-material="terminal" aria-pressed="false">
+                <img src="./assets/cards/thumb-terminal.webp" alt="" width="320" height="192" /><span data-i18n="theme.terminal">终端</span>
+              </button>
+              <button class="material" type="button" data-material="receipt" aria-pressed="false">
+                <img src="./assets/cards/thumb-receipt.webp" alt="" width="320" height="192" /><span data-i18n="theme.receipt">小票</span>
+              </button>
+              <button class="material" type="button" data-material="brutalist" aria-pressed="false">
+                <img src="./assets/cards/thumb-brutalist.webp" alt="" width="320" height="192" /><span data-i18n="theme.brutalist">粗野派</span>
+              </button>
+            </div>
+          </div>
+          <p class="cap">
+            <span class="cap-name" id="cap-name">夜幕</span>
+            <span class="cap-note" id="cap-note">深墨底、浅字，夜里读也不刺眼。</span>
+            <span class="cap-tokens" aria-hidden="true">
+              <i style="background: #181b22"></i><!-- taste-skill-ignore 材质自己的纸色，不是页面配色 -->
+              <i style="background: #f0f2f5"></i><i style="background: #7aa2ff"></i>
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <main id="main">
+      <section class="sec thread" id="thread">
+        <div class="thread-text">
+          <h2 data-i18n="thread.h2">长串会自己接上。</h2>
+          <p data-i18n="thread.body">
+            同一条串里的推文按作者与时间接起来，广告和第三方回复被剔除。解析走两条路：先读 X 自己的 GraphQL
+            缓存，读不到再退回页面上的 DOM 标记。不想展示的那一条，点一下剔掉。
+          </p>
+        </div>
+        <figure class="thread-figure">
+          <img
+            class="drift"
+            data-card="thread"
+            src="./assets/cards/thread-midnight.webp"
+            alt="示例卡片：三条同作者推文，前两条各带一张配图，第三条引用另一条推文。"
+            width="900"
+            height="1863"
+          />
+          <figcaption data-i18n="thread.cap">三条同作者推文，其中一条带引用，导出的就是这一整张长卡片。</figcaption>
+        </figure>
+        <div class="thread-data">
+          <dl class="thread-stats">
+            <div><dt data-i18n="thread.d1">推文</dt><dd>3</dd></div>
+            <div><dt data-i18n="thread.d2">配图</dt><dd>2</dd></div>
+            <div><dt data-i18n="thread.d3">引用</dt><dd>1</dd></div>
+            <div><dt data-i18n="thread.d4">导出</dt><dd>1280 × 2785</dd></div>
+          </dl>
+          <ul class="ticks">
+            <li data-i18n="thread.tick1">同作者连续推文自动拼合，广告与路人回复不进来</li>
+            <li data-i18n="thread.tick2">长串默认 2× 导出，躲开平台尺寸上限</li>
+            <li data-i18n="thread.tick3">比例过大、缩进信息流会看不清时，面板会先提醒你分段</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="sec article" id="article">
+        <div class="sec-head article-head">
+          <h2 data-i18n="article.h2">长文、引用、四宫格，都不丢。</h2>
+        </div>
+        <div class="article-body">
+          <figure class="article-figure">
+            <img
+              class="drift"
+              data-card="article"
+              src="./assets/cards/article-midnight.webp"
+              alt="示例卡片：一条带 X 长文的推文，上方是横版封面照片，下方是长文标题与导语。"
+              width="1100"
+              height="1176"
+            />
+          </figure>
+          <div class="article-side">
+            <p class="article-lead" data-i18n="article.lead">
+              X 长文会带出封面与导语；引用贴按材质填充或描边；一到四张配图按各自比例拼成网格。
+            </p>
+            <p class="article-lede" data-i18n="article.lede">“不是滤镜，是纸、线与字的比例。”</p>
+            <ul class="article-points">
+              <li>
+                <b data-i18n="article.s1t">长文</b>
+                <span data-i18n="article.s1">封面、栏目名、标题与导语一起带出来。</span>
+              </li>
+              <li>
+                <b data-i18n="article.s2t">引用</b>
+                <span data-i18n="article.s2">填充或描边，跟当前材质走。</span>
+              </li>
+              <li>
+                <b data-i18n="article.s3t">配图</b>
+                <span data-i18n="article.s3">一到四张按各自比例拼成网格，不裁成方块。</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec switches" id="switches">
+        <div class="sec-head">
+          <h2 data-i18n="switch.h2">八个开关，一块面板。</h2>
+          <p class="lead" data-i18n="switch.lead">
+            材质、画幅、背景、页脚信息、作者模糊、导出清晰度都在这一块面板上；改一下，卡片立刻跟着变。
+          </p>
+        </div>
+        <div class="switches-body">
+          <figure class="panel-shot">
+            <img
+              data-card="panel"
+              src="./assets/cards/panel-midnight.webp"
+              alt="PostPress 的控制面板：材质网格、画幅与背景、页脚三个开关、作者隐私脱敏，底部是复制与保存。"
+              width="680"
+              height="1906"
+            />
+            <figcaption data-i18n="switch.panelCap">面板本体，1:1 大小。</figcaption>
+          </figure>
+          <div class="switch-list">
+            <figure>
+              <img data-card="switch-full" src="./assets/cards/switch-full-midnight.webp" alt="示例卡片：页脚带二维码、互动数据、发布时间与署名。" width="900" height="539" />
+              <figcaption>
+                <span class="tag" data-i18n="switch.cap1">全开</span>
+                <span data-i18n="switch.cap1b">二维码、数据、时间、署名。</span>
+              </figcaption>
+            </figure>
+            <figure>
+              <img data-card="switch-plain" src="./assets/cards/switch-plain-midnight.webp" alt="示例卡片：页脚只留正文，二维码、数据与时间已关闭。" width="900" height="436" />
+              <figcaption>
+                <span class="tag" data-i18n="switch.cap2">关页脚</span>
+                <span data-i18n="switch.cap2b">只剩正文。</span>
+              </figcaption>
+            </figure>
+            <figure>
+              <img data-card="switch-blur" src="./assets/cards/switch-blur-midnight.webp" alt="示例卡片：作者与引用作者的头像、昵称、账号都被高斯模糊。" width="900" height="436" />
+              <figcaption>
+                <span class="tag" data-i18n="switch.cap3">打码</span>
+                <span data-i18n="switch.cap3b">作者与引用作者一起模糊。</span>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec privacy" id="privacy">
+        <div class="privacy-text">
+          <h2 data-i18n="privacy.h2">全程在本机跑完。</h2>
+          <p data-i18n="privacy.body">
+            没有账号，没有服务器，没有遥测。排版在隔离的 Shadow DOM 里完成，导出交给浏览器自己的画布；除了向 X
+            的图片域名取你卡片里本来就有的配图，不发任何请求。
+          </p>
+          <p class="note" data-i18n="privacy.note">
+            不读取你的时间线，不需要 X 账号，也不用 X API。与 X Corp. 无关联。
+          </p>
+        </div>
+        <ul class="perms">
+          <li>
+            <code>clipboardWrite</code>
+            <span data-i18n="privacy.p1">把渲染好的图片放进剪贴板，只在你点「复制」时用。</span>
+          </li>
+          <li>
+            <code>storage</code>
+            <span data-i18n="privacy.p2">记住你选的材质、画幅与开关；只存在本地。</span>
+          </li>
+          <li>
+            <code>*.twimg.com</code>
+            <span data-i18n="privacy.p3">取卡片里的配图。画布读不了跨域图片，没有它导出会失败。</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="sec install" id="install">
+        <div class="sec-head">
+          <h2 data-i18n="install.h2">三步装进浏览器。</h2>
+          <p class="lead" data-i18n="install.lead">
+            目前只提供源码安装：Node 24 与 pnpm 10 构建一次，之后就在每条推文的操作栏里。
+          </p>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3 data-i18n="install.s1t">构建</h3>
+            <p data-i18n="install.s1">拉下源码装依赖再构建，产物在 <code>dist/</code>。</p>
+          </li>
+          <li>
+            <h3 data-i18n="install.s2t">载入</h3>
+            <p data-i18n="install.s2">
+              打开 <code>chrome://extensions</code>，开启「开发者模式」，点「加载已解压的扩展程序」，选 <code>dist/</code>。
+            </p>
+          </li>
+          <li>
+            <h3 data-i18n="install.s3t">用</h3>
+            <p data-i18n="install.s3">在任意推文的操作栏点卡片按钮，或把鼠标停在推文上按 <kbd>Alt</kbd> + <kbd>C</kbd>。</p>
+          </li>
+        </ol>
+        <div class="install-code">
+          <pre><code>git clone https://github.com/Shirolin/post-to-card.git
+cd post-to-card
+pnpm install
+pnpm run build   <span class="c"># → dist/</span></code></pre>
+          <div class="install-side">
+            <a class="btn" href="https://github.com/Shirolin/post-to-card" data-i18n="install.cta">打开仓库</a>
+            <p class="note" data-i18n="install.note">以 GPL-3.0-or-later 发布：改完再分发请同样开源。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec faq" id="faq">
+        <div class="faq-row faq-head">
+          <h2 data-i18n="faq.h2">常被问到的</h2>
+          <p class="lead" data-i18n="faq.lead">六个真问题，答案就在右边。</p>
+        </div>
+        <div class="faq-row">
+          <h3 data-i18n="faq.q1">为什么不直接截屏？</h3>
+          <p data-i18n="faq.a1">
+            截屏跟着屏幕 DPI 走，还夹带浏览器界面。卡片是在隔离环境里按材质规范重新排版、再以 3× 光栅化的，输出干净，缩到信息流宽度依然锐利。
+          </p>
+        </div>
+        <div class="faq-row">
+          <h3 data-i18n="faq.q2">长串发到信息流会被压糊吗？</h3>
+          <p data-i18n="faq.a2">
+            单条按 3× 导出。超长串默认 2× 以躲开尺寸上限；缩进信息流会小到难读时，面板会提示并建议分段。要极清可以在导出设置里强制 3×。
+          </p>
+        </div>
+        <div class="faq-row">
+          <h3 data-i18n="faq.q3">需要登录或绑定 X 吗？</h3>
+          <p data-i18n="faq.a3">
+            不需要。没有账号体系，只读当前页面已经渲染出来的内容和宿主自己的缓存，不碰任何凭据。
+          </p>
+        </div>
+        <div class="faq-row">
+          <h3 data-i18n="faq.q4">导出的东西会被上传吗？</h3>
+          <p data-i18n="faq.a4">
+            不会。图片只写到剪贴板和你的硬盘；关掉预览即释放内存，不在本地保存推文内容。
+          </p>
+        </div>
+        <div class="faq-row">
+          <h3 data-i18n="faq.q5">能商用吗？</h3>
+          <p data-i18n="faq.a5">
+            软件本身是 GPL-3.0-or-later，可以商用。卡片里的文字与配图仍属于原作者，公开可见不等于可以随意商用，分发前请自己确认。
+          </p>
+        </div>
+        <div class="faq-row">
+          <h3 data-i18n="faq.q6">能装在哪些浏览器上？</h3>
+          <p data-i18n="faq.a6">
+            Chrome 与 Edge，Chrome 111 起（Manifest V3）。Firefox 与 Safari 还没适配——扩展用的是 Chromium 的扩展接口。
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <section class="close" id="close">
+      <h2 class="close-line" data-i18n="close.h2">下一条推文，印出来。</h2>
+      <div class="close-foot">
+        <p data-i18n="close.sub">装一次，之后每条推文的操作栏里都有它。渲染在本地，图在剪贴板。</p>
+        <a class="btn btn-dark" href="#install" data-i18n="cta.install2">装到浏览器</a>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="foot-top">
+        <p class="foot-brand">PostPress · 印推</p>
+        <nav aria-label="链接">
+          <a href="https://github.com/Shirolin/post-to-card">GitHub</a>
+          <a href="https://github.com/Shirolin/post-to-card/blob/main/README.md" data-i18n="foot.readme">README</a>
+          <a href="https://github.com/Shirolin/post-to-card/blob/main/PRIVACY.md" data-i18n="foot.privacy">隐私说明</a>
+          <a href="https://github.com/Shirolin/post-to-card/blob/main/LICENSE" data-i18n="foot.license">许可</a>
+        </nav>
+      </div>
+      <p class="foot-credit" data-i18n="foot.credit">
+        示例卡片里的照片：Amos Paul Kennedy Jr 的活版海报，摄影 Michellecornelison（CC BY-SA 4.0）；金属活字，摄影 Willi
+        Heidelbach（CC BY 2.5），均来自 Wikimedia Commons。卡片里的 @postpress_demo 与 @typeset_demo 是虚构的示例账号，人名与推文同样是示例。
+      </p>
+      <p class="foot-legal">
+        <span data-i18n="foot.gpl">GPL-3.0-or-later</span> · X（Twitter）是 X Corp. 的商标，本项目与其无关联。
+      </p>
+    </footer>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

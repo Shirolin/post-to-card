@@ -1,0 +1,44 @@
+# 发布 site/ 到 GitHub Pages。
+#
+# 页面是纯静态的：index.html + styles.css + app.js + assets/cards/*，没有构建步骤，
+# 所以这个工作流只做「打包 site 目录」和「部署」两件事，不跑 CI 链（CI 在 ci.yml，
+# 审的是扩展的产物，与这个页面无关）。
+#
+# 仓库设置里 Pages 的 Source 要选 GitHub Actions，否则这个工作流不会生效。
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

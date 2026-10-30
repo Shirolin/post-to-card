@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PostPress · motion probe</title>
+    <!--
+      The page `dev/verify-motion.mjs` drives: the real `App`/`Card`, mounted
+      outside the modal's shadow root (`.ptc-scope` supplies the tokens), with a
+      scripted gesture and per-frame sampling.
+
+      Four modes, selected by `?mode=`:
+
+        flip     remove one post from a three-post card and record where every
+                 post and the card's own scale went, frame by frame.
+        ratio    switch a single-post card from 3:4 to 16:9 and record the card's
+                 height and fitted zoom per frame: a layout transition under the
+                 ResizeObserver shows up as a height (and so a zoom) that keeps
+                 changing, rather than one layout and one re-fit.
+        picture  one picture that never arrives (the cell's waiting state), then
+                 a real one (the dissolve), plus a cell whose chain fails (the
+                 sweep stopping), and one waiting cell per material so the
+                 sweep's colour can be read on every theme.
+        blur     three authors blurred by the switch at 1:1, one of them then
+                 taken back to sharp. The pixels are read from screenshots the
+                 caller takes, because `drawImage` ignores the `filter` on the
+                 element -- only the painted face can say whether the blur
+                 survived.
+
+      The numbers are left in `window.__motionProbe` for the script to assert;
+      the log on screen is for a human reading the page directly. Neither the
+      harness page nor a screenshot can show the motion: it only exists in a
+      browser that runs the render loop, and the blur only exists in the painted
+      pixels (see docs/loading-states.md).
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: #171716;
+      }
+      #out {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 99;
+        max-width: 100vw;
+        max-height: 100vh;
+        overflow: auto;
+        margin: 0;
+        padding: 6px 8px;
+        background: rgba(0, 0, 0, 0.86);
+        color: #9fe6a0;
+        font: 11px/1.4 ui-monospace, monospace;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <pre id="out">starting…</pre>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      const mode = params.get('mode') || 'flip';
+      const out = document.getElementById('out');
+      const log = [];
+      const say = (line) => {
+        log.push(line);
+        out.textContent = log.join('\n');
+      };
+      window.__motionProbe = null;
+      window.addEventListener('error', (e) => say('ERROR: ' + (e.message || e.error)));
+      window.addEventListener('unhandledrejection', (e) => say('REJECT: ' + e.reason));
+
+      const frames = (ms) =>
+        new Promise((resolve) => {
+          const start = performance.now();
+          const tick = () => {
+            if (performance.now() - start < ms) requestAnimationFrame(tick);
+            else resolve();
+          };
+          requestAnimationFrame(tick);
+        });
+
+      const paint = (hue) =>
+        'data:image/svg+xml;utf8,' +
+        encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect width="100%" height="100%" fill="hsl(${hue},60%,55%)"/></svg>`
+        );
+
+      try {
+        const { render, h } = await import('preact');
+        const modalCss = (await import('../src/content/styles/modal.css?inline')).default;
+        const cardCss = (await import('../src/content/styles/card.css?inline')).default;
+        const { App } = await import('../src/content/ui/App.tsx');
+        const { Card } = await import('../src/content/ui/Card.tsx');
+        const { DEFAULT_CARD_CONFIG, THEME_ORDER } = await import('../src/content/ui/themes.ts');
+
+        const style = document.createElement('style');
+        style.textContent = [modalCss, cardCss].join('\n\n');
+        document.head.appendChild(style);
+
+        const config = { ...DEFAULT_CARD_CONFIG, showQrCode: false };
+        const author = { name: 'Ada Nakamura', handle: '@ada_builds', avatarUrl: paint(280) };
+        const post = (n, media) => ({
+          id: `t${n}`,
+          url: `https://x.com/ada_builds/status/${n}`,
+          author,
+          timestamp: '2026-09-14T10:05:00.000Z',
+          text: `Post ${n}. The card is a column of posts, so removing one moves every post below it. That is the distance this probe measures, in the card's own pixels.`,
+          stats: { replies: '12', reposts: '34', likes: '56', views: '78' },
+          media: media ?? [{ type: 'image', url: paint(n * 90), aspectRatio: 1.6 }],
+        });
+
+        const short = (m) =>
+          m === 'none' ? '-' : m.replace('matrix(', '').replace(')', '').trim();
+
+        /** One reading of the card, shared by every mode: what moved, by how much. */
+        const makeSnap = (scope) => () => {
+          const scale = scope.querySelector('.preview-scale');
+          const card = scope.querySelector('#post-to-card-export-target');
+          const cardBody = scope.querySelector('.post-to-card-target');
+          const list = scope.querySelector('.thread-list');
+          const single = scope.querySelector('.single-tweet-block');
+          return {
+            zoom: scale ? Number(Number(scale.style.zoom).toFixed(4)) : null,
+            scaleTransform: scale ? short(getComputedStyle(scale).transform) : null,
+            scaleTransition: scale ? scale.style.transition || '' : '',
+            scaleOrigin: scale ? scale.style.transformOrigin || '' : '',
+            height: card ? card.offsetHeight : null,
+            // The shape the card has committed to. The ratio switch reads it to
+            // prove the click landed on the card's control, not the canvas's,
+            // which offers the same two labels.
+            ratio: cardBody ? cardBody.dataset.ratio || '' : null,
+            listOverflow: list ? list.style.overflow || '' : '',
+            single: Boolean(single),
+            singleStyle: single
+              ? {
+                  transform: short(getComputedStyle(single).transform),
+                  opacity: Number(getComputedStyle(single).opacity).toFixed(2),
+                }
+              : null,
+            posts: Array.from(scope.querySelectorAll('[data-tweet-id]')).map((item) => ({
+              id: item.dataset.tweetId,
+              // Written once, in flip mode, so a post that keeps its own DOM
+              // across a reorder can be told apart from one drawn into a
+              // neighbour's.
+              tag: item.dataset.probeTag || '',
+              top: Math.round(item.offsetTop),
+              transform: short(getComputedStyle(item).transform),
+              opacity: Number(getComputedStyle(item).opacity).toFixed(2),
+            })),
+          };
+        };
+
+        if (mode === 'flip') {
+          const scope = document.createElement('div');
+          scope.className = 'ptc-scope';
+          document.body.appendChild(scope);
+          const threadData = {
+            author,
+            isSingle: false,
+            targetTweetIndex: 0,
+            tweets: [post(1), post(2), post(3)],
+          };
+          render(h(App, { threadData, onClose: () => {}, initialConfig: config }), scope);
+
+          const snap = makeSnap(scope);
+
+          // Let the first measurement settle, then take the "before" reading.
+          await frames(300);
+          // Names each post's DOM node, so a later snapshot can say whether the
+          // post kept its own node or was drawn into a neighbour's.
+          scope.querySelectorAll('[data-tweet-id]').forEach((item) => {
+            item.dataset.probeTag = `node-${item.dataset.tweetId}`;
+          });
+
+          /**
+           * One gesture, sampled the way a FLIP has to be: the state the click
+           * lands in (a couple of microtasks after the dispatch, before any
+           * frame), then every frame for long enough to watch it settle.
+           */
+          const gesture = async (trigger) => {
+            const before = snap();
+            trigger();
+            await Promise.resolve();
+            await Promise.resolve();
+            const atCommit = snap();
+            const samples = [];
+            const start = performance.now();
+            while (performance.now() - start < 700) {
+              await new Promise((resolve) => requestAnimationFrame(resolve));
+              samples.push(snap());
+            }
+            return { before, atCommit, samples, settled: snap() };
+          };
+          const click = (element) => {
+            if (!element) throw new Error('nothing to click');
+            element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          };
+
+          const report = (label, g) => {
+            say(`${label} before  ${JSON.stringify(g.before)}`);
+            say(`${label} commit  ${JSON.stringify(g.atCommit)}`);
+            say(`${label} settled ${JSON.stringify(g.settled)}`);
+          };
+
+          // 3 → 2: the posts below move, and the card re-fits.
+          const a = await gesture(() => click(scope.querySelectorAll('.thread-exclude-btn')[1]));
+          report('a', a);
+
+          // 2 → 1: the card becomes a single post, which draws no measured
+          // items. Nothing inside it can move; only the card may re-fit.
+          const b = await gesture(() => click(scope.querySelectorAll('.thread-exclude-btn')[1]));
+          report('b', b);
+
+          // 1 → 2: the post coming back is new; the post that stayed is not.
+          // The last excluded one, i.e. the one this card's own button removed.
+          // The row is a box now; its control is the pick button inside it.
+          const c = await gesture(() =>
+            click(Array.from(scope.querySelectorAll('.tweet-manager-item.is-excluded .tweet-manager-pick')).at(-1))
+          );
+          report('c', c);
+
+          window.__motionProbe = { mode, a, b, c };
+        } else if (mode === 'spinner') {
+          // The wait ring, read under whichever reduced-motion setting the
+          // caller emulated. The dialog's blanket rule flattens every animation
+          // under `reduce`, which froze this ring at its first frame -- the ring
+          // looked broken instead of busy. What the caller asserts is therefore
+          // the animation the ring actually runs, and that it keeps running.
+          //
+          // The ring is only in the DOM while an export is in flight, so the
+          // probe answers the export itself: a promise that resolves on demand,
+          // holding the button in its working state for as long as the sample
+          // needs it.
+          let finish = null;
+          const scope = document.createElement('div');
+          scope.className = 'ptc-scope';
+          document.body.appendChild(scope);
+          render(
+            h(App, {
+              threadData: { author, isSingle: true, targetTweetIndex: 0, tweets: [post(1)] },
+              onClose: () => {},
+              onExport: () =>
+                new Promise((resolve) => {
+                  finish = () =>
+                    resolve({ success: true, method: 'clipboard', filename: 'probe.png' });
+                }),
+              initialConfig: config,
+            }),
+            scope
+          );
+          await frames(300);
+
+          scope
+            .querySelector('.export-actions .btn-primary')
+            .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          await Promise.resolve();
+          await Promise.resolve();
+
+          const opacity = [];
+          const names = new Set();
+          for (let i = 0; i < 40; i++) {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            const ring = scope.querySelector('.export-actions .spinner');
+            if (!ring) break;
+            const cs = getComputedStyle(ring);
+            names.add(`${cs.animationName} ${cs.animationDuration} ${cs.animationIterationCount}`);
+            opacity.push(Number(Number(cs.opacity).toFixed(3)));
+          }
+          if (finish) finish();
+          const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+          say(`spinner reduced=${reduced} ${[...names].join(' | ')} opacities=${opacity.slice(0, 12).join(',')}`);
+          window.__motionProbe = {
+            mode,
+            reduced,
+            names: [...names],
+            opacity,
+            frames: opacity.length,
+          };
+        } else if (mode === 'ratio') {
+          // One post and one picture, mounted in the 3:4 shape. Switching to
+          // 16:9 changes the card's floor and the picture's height cap at once:
+          // the floor flips in one layout, while the cap used to be a 200ms
+          // layout transition -- and the card is measured by a ResizeObserver,
+          // so every frame of that transition re-derived the fit and replayed
+          // the scale. The reading that catches that is the height and the zoom
+          // across frames, not the curve of the scale.
+          const scope = document.createElement('div');
+          scope.className = 'ptc-scope';
+          document.body.appendChild(scope);
+          const threadData = {
+            author,
+            isSingle: true,
+            targetTweetIndex: 0,
+            tweets: [post(1)],
+          };
+          render(
+            h(App, {
+              threadData,
+              onClose: () => {},
+              initialConfig: { ...config, aspectRatio: '3:4' },
+            }),
+            scope
+          );
+
+          const snap = makeSnap(scope);
+          await frames(400);
+          const before = snap();
+
+          // The card's own ratio group, told apart from the canvas's by its
+          // three options: the canvas offers the same two ratio labels.
+          const group = Array.from(scope.querySelectorAll('.btn-group[role="radiogroup"]')).find((g) => {
+            const labels = Array.from(g.querySelectorAll('[role="radio"]')).map((b) => b.textContent.trim());
+            return labels.length === 3 && labels.includes('3:4') && labels.includes('16:9');
+          });
+          const target = group
+            ? Array.from(group.querySelectorAll('[role="radio"]')).find((b) => b.textContent.trim() === '16:9')
+            : null;
+          if (!target) throw new Error('the card has no 3:4 / 16:9 control');
+
+          target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          await Promise.resolve();
+          await Promise.resolve();
+          const atCommit = snap();
+
+          const samples = [];
+          const start = performance.now();
+          while (performance.now() - start < 700) {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            const s = snap();
+            const grid = scope.querySelector('.media-grid');
+            const item = scope.querySelector('.media-item');
+            // The properties the removed transitions used to drive. Sampled
+            // rather than assumed: a transition on either one moves its computed
+            // value across frames while the card is being measured, whether or
+            // not that value ends up changing the card's height.
+            s.layout =
+              grid && item
+                ? {
+                    marginTop: getComputedStyle(grid).marginTop,
+                    itemHeight: item.offsetHeight,
+                    itemMaxHeight: getComputedStyle(item).maxHeight,
+                  }
+                : null;
+            samples.push(s);
+          }
+          const settled = snap();
+          say(`ratio before  ${JSON.stringify(before)}`);
+          say(`ratio commit  ${JSON.stringify(atCommit)}`);
+          say(`ratio settled ${JSON.stringify(settled)}`);
+          window.__motionProbe = { mode, before, atCommit, samples, settled };
+        } else if (mode === 'blur') {
+          // The author's blur, measured where it can actually be lost: a blurred
+          // element inside a clipping ancestor (`overflow: hidden` on the
+          // portrait) is silently drawn sharp by Chrome when the box composes
+          // through a non-degraded property. `zoom: 1` on the button is what
+          // keeps it a real blur, and this mode is the check that says so: with
+          // that one declaration removed it must fail.
+          //
+          // The card is mounted on its own, at 1:1 -- not through App, whose
+          // preview zoom shrinks a 48px portrait to ~14px, where neither the
+          // stripes nor the 6px blur survive as measurable detail. What the
+          // click does is the tiers' business; what these pixels answer is
+          // whether the blur reaches the screen at all.
+          const scope = document.createElement('div');
+          scope.className = 'ptc-scope';
+          document.body.appendChild(scope);
+          // An avatar with edges, unlike the flat swatches the other modes use:
+          // a solid fill has no neighbouring-pixel difference to lose, so a blur
+          // could not be seen on it at all.
+          const striped =
+            'data:image/svg+xml;utf8,' +
+            encodeURIComponent(
+              `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">` +
+                `<rect width="100%" height="100%" fill="hsl(210,55%,45%)"/>` +
+                Array.from({ length: 16 }, (_, i) =>
+                  `<rect x="${i * 10}" y="0" width="5" height="160" fill="hsl(270,65%,88%)"/>`
+                ).join('') +
+                `</svg>`
+            );
+          const textured = { ...author, avatarUrl: striped };
+          const threadData = {
+            author: textured,
+            isSingle: false,
+            targetTweetIndex: 0,
+            tweets: [1, 2, 3].map((n) => ({ ...post(n), author: textured, media: undefined })),
+          };
+          const mount = (overrides) =>
+            render(
+              h(Card, {
+                data: threadData,
+                config: { ...config, blurAuthor: true, authorBlurOverrides: overrides },
+                onToggleAuthorBlur: () => {},
+              }),
+              scope
+            );
+          mount({});
+          await frames(400);
+
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          /**
+           * How blurred a screen region is, as the mean absolute difference
+           * between neighbouring pixels along a horizontal scan through its
+           * middle.
+           *
+           * The pixels come from a screenshot the caller took, not from
+           * `drawImage`: canvas draws an image's own bytes and ignores the CSS
+           * filter on the element that shows it, so a blur could never be seen
+           * that way -- which is the whole question here. A sharp portrait has
+           * edges and its neighbours differ a lot; a blurred one is smooth.
+           */
+          window.__sharpness = async (dataUrl) => {
+            const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(bitmap, 0, 0);
+            const row = Math.round(canvas.height / 2);
+            const data = ctx.getImageData(0, row, canvas.width, 1).data;
+            let total = 0;
+            for (let x = 4; x < data.length; x += 4) total += Math.abs(data[x] - data[x - 4]);
+            return total / ((data.length - 4) / 4);
+          };
+
+          const portraits = () =>
+            Array.from(scope.querySelectorAll('.author-privacy-toggle')).map((button) => button.querySelector('img'));
+          const report = () => {
+            const images = portraits();
+            return {
+              classes: images.map((img) => img.className),
+              // The screen region of each portrait, in CSS pixels: what the
+              // caller has to capture to answer "is this one blurred".
+              rects: images.map((img) => {
+                const box = img.getBoundingClientRect();
+                return { x: box.left, y: box.top, width: box.width, height: box.height };
+              }),
+            };
+          };
+
+          // The avatars have to have decoded before anything is measured: an
+          // empty portrait and a blurred one both have no edges.
+          const loaded = await Promise.all(
+            portraits().map((img) => (img.complete ? true : img.decode().then(() => true, () => false)))
+          );
+          await frames(120);
+
+          /**
+           * Takes the first post's author back to sharp, then reports again.
+           * Driven by the caller so that every screenshot is taken between the
+           * two states, outside the page's own frame loop.
+           */
+          window.__unblurFirst = () => {
+            mount({ t1: 'clear' });
+          };
+          window.__after = () => report();
+
+          say(`blur loaded=${JSON.stringify(loaded)}`);
+          window.__motionProbe = { mode, loaded, before: report() };
+        } else {
+          // Four cells: one whose picture never arrives, one that fails, one put
+          // through the exporter's real source swap, and one used to drive the
+          // card's error handler while the exporter's mark is on it.
+          const { EXPORT_SWAP_ATTR } = await import('../src/content/ui/imageFallback.ts');
+          const slow = params.get('slow') || 'http://10.255.255.1/never.jpg';
+          const missing = params.get('missing') || 'http://10.255.255.1/missing.jpg';
+          // A picture whose stand-in is derivable and 404s while the picture
+          // itself stalls: `previewFail` below is the card that uses it.
+          const previewFail = params.get('preview') || 'http://pbs.twimg.com/media/full.jpg';
+          const root = document.createElement('div');
+          document.body.appendChild(root);
+          render(
+            h(
+              'div',
+              { style: 'display:flex;flex-direction:column;gap:24px;padding:24px' },
+              [
+                h(Card, {
+                  data: { author, isSingle: true, tweets: [post('slow', [{ type: 'image', url: slow, aspectRatio: 1.6 }])] },
+                  config,
+                }),
+                h(Card, {
+                  data: { author, isSingle: true, tweets: [post('missing', [{ type: 'image', url: missing, aspectRatio: 1.6 }])] },
+                  config,
+                }),
+                h(Card, {
+                  // Two pictures, one shape known and one not: the plan has to
+                  // give the unknown one the height of its line, so its box is
+                  // not 1:1 -- which is the only way an unguarded stand-in load
+                  // (100x100) could visibly re-plan the grid.
+                  data: {
+                    author,
+                    isSingle: true,
+                    tweets: [
+                      post('swap', [
+                        { type: 'image', url: paint(300), aspectRatio: 1.6 },
+                        { type: 'image', url: slow + '?swap' },
+                      ]),
+                    ],
+                  },
+                  config,
+                }),
+                h(Card, {
+                  data: { author, isSingle: true, tweets: [post('error', [{ type: 'image', url: slow + '?error', aspectRatio: 1.6 }])] },
+                  config,
+                }),
+                h(Card, {
+                  // An X-shaped address whose `name=small` variant 404s while the
+                  // full picture is still in flight: the only way to reach the
+                  // stand-in's own failure path, since every other fixture here
+                  // derives no variant at all. The 404 is on `/media/`, which is
+                  // what makes `getPhotoPreviewUrl` produce a preview URL.
+                  data: {
+                    author,
+                    isSingle: true,
+                    tweets: [post('previewFail', [{ type: 'image', url: previewFail, aspectRatio: 1.6 }])],
+                  },
+                  config,
+                }),
+              ]
+            ),
+            root
+          );
+
+          const cards = Array.from(root.querySelectorAll('.ptc-mat'));
+          // The cell each check is about. The swap card holds two pictures and
+          // the one that stalls is the second of them.
+          const slowCell = cards[0].querySelector('.media-box');
+          const missingCell = cards[1].querySelector('.media-box');
+          const swapCell = cards[2].querySelectorAll('.media-box')[1];
+          const errorCell = cards[3].querySelector('.media-box');
+          const previewFailCell = cards[4].querySelector('.media-box');
+
+          const sheenOf = (cell) => {
+            const layer = cell.querySelector('.media-placeholder');
+            return layer ? getComputedStyle(layer, '::after').transform : null;
+          };
+          const outerOf = (cell) => cell.querySelector('.media-placeholder');
+          const opacity = (el) => (el ? Number(getComputedStyle(el).opacity) : null);
+
+          const waiting = [];
+          const failing = [];
+          // Read after the 404 has landed, and only while the picture itself is
+          // still on its way: the sweep has to stop without the cell deciding
+          // the picture failed.
+          const previewFailed = [];
+          const start = performance.now();
+          while (performance.now() - start < 1600) {
+            await new Promise((resolve) => setTimeout(resolve, 40));
+            waiting.push(sheenOf(slowCell));
+            // Only read once the chain has run out: a failing picture is allowed
+            // to sweep while it is still trying.
+            if (missingCell.className.includes('is-picture-missing')) {
+              failing.push(sheenOf(missingCell));
+            }
+            const layer = previewFailCell.querySelector('.media-placeholder');
+            if (layer?.classList.contains('is-preview-failed')) {
+              previewFailed.push(sheenOf(previewFailCell));
+            }
+          }
+          const failureClass = missingCell.className;
+          // The mark cross-fades (0.2s), so read it once the class has settled
+          // rather than in the same frame it was written.
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          const missingIcon = opacity(outerOf(missingCell)?.querySelector('.media-placeholder-icon'));
+          say(`waiting ${JSON.stringify(waiting.slice(0, 12))} …`);
+          say(`failure cell ${failureClass}`);
+
+          // The waiting picture finally arrives.
+          root.querySelectorAll('.media-picture')[0].src = paint(200);
+          const fade = [];
+          const afterLoad = performance.now();
+          while (performance.now() - afterLoad < 500) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            fade.push(opacity(outerOf(slowCell)));
+          }
+          say(`fade ${JSON.stringify(fade)}`);
+          say(`loaded cell ${slowCell.className}`);
+
+          // What a render preparation does to a cell that is still waiting: it
+          // swaps the source for a stand-in, then puts the original back. The
+          // stand-in loads, and must not be mistaken for the picture arriving.
+          // Run against the real preparation, not a re-enactment of it: with no
+          // extension messaging in this page, its proxy call fails at once, which
+          // is exactly the path that substitutes the grey placeholder.
+          const { prepareCardImages } = await import('../src/content/engine/export.ts');
+          const swapCard = cards[2];
+          const swapImg = swapCell.querySelector('.media-picture');
+          const ratioBefore = swapCell.style.aspectRatio || '';
+          const srcBefore = swapImg.getAttribute('src');
+          const preparation = await prepareCardImages(swapCard);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const duringSwap = {
+            // Proves the swap happened at all, so the checks below are about the
+            // guard rather than about a preparation that did nothing.
+            isDataUrl: (swapImg.getAttribute('src') || '').startsWith('data:'),
+            marked: swapImg.hasAttribute(EXPORT_SWAP_ATTR),
+            loaded: swapCell.className.includes('is-picture-loaded'),
+            ratio: swapCell.style.aspectRatio || '',
+          };
+          preparation.restore();
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const afterSwap = {
+            marked: swapImg.hasAttribute(EXPORT_SWAP_ATTR),
+            srcRestored: swapImg.getAttribute('src') === srcBefore,
+            loaded: swapCell.className.includes('is-picture-loaded'),
+            ratio: swapCell.style.aspectRatio || '',
+          };
+          say(`export swap: during=${JSON.stringify(duringSwap)} after=${JSON.stringify(afterSwap)}`);
+
+          // And the shape it would have recorded must not stick: let a real
+          // 1.6 picture arrive afterwards. If the stand-in's 1:1 had been taken,
+          // `recordShape` would now skip this one and the box would stay square.
+          swapImg.src = paint(300);
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          const ratioAfterRealLoad = swapCell.style.aspectRatio || '';
+          say(`ratio after a real 1.6 picture: ${ratioAfterRealLoad}`);
+
+          // The same guard on the error path: an error the exporter caused says
+          // nothing about the picture, so it must not stop the sweep.
+          const errorImg = errorCell.querySelector('.media-picture');
+          errorImg.setAttribute(EXPORT_SWAP_ATTR, 'true');
+          errorImg.src = missing + '?during-export';
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const missingWhileMarked = errorCell.className.includes('is-picture-missing');
+          errorImg.removeAttribute(EXPORT_SWAP_ATTR);
+          errorImg.src = missing + '?after-export';
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const missingAfter = errorCell.className.includes('is-picture-missing');
+          say(`export error: whileMarked=${missingWhileMarked} after=${missingAfter}`);
+
+          // The sweep's colour rule is per material, so it has to be read on
+          // every material. One card per theme, each with a picture that never
+          // answers so the cell stays in its waiting state; the gradient is
+          // painted here, over the recess, because that composite -- not the
+          // colour string -- is what the reader sees. Reported rather than
+          // asserted here: the rule lives in the script.
+          const sheenRoot = document.createElement('div');
+          document.body.appendChild(sheenRoot);
+          render(
+            h(
+              'div',
+              { style: 'display:flex;flex-wrap:wrap;gap:12px' },
+              THEME_ORDER.map((theme) =>
+                h(Card, {
+                  data: {
+                    author,
+                    isSingle: true,
+                    tweets: [post(`sheen-${theme}`, [{ type: 'image', url: slow, aspectRatio: 1.6 }])],
+                  },
+                  config: { ...config, theme },
+                })
+              )
+            ),
+            sheenRoot
+          );
+          await frames(150);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 1;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          /** The pixel a colour paints when it lies on the recess. */
+          const paintOver = (base, top) => {
+            ctx.clearRect(0, 0, 1, 1);
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, 1, 1);
+            ctx.fillStyle = top;
+            ctx.fillRect(0, 0, 1, 1);
+            return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+          };
+          const sheenReport = Array.from(sheenRoot.querySelectorAll('.ptc-mat')).map((card) => {
+            const target = card.querySelector('.post-to-card-target');
+            const layer = card.querySelector('.media-placeholder');
+            const backgroundImage = layer ? getComputedStyle(layer, '::after').backgroundImage : '';
+            // The middle stop of the sweep: the only part that crosses the cell.
+            // Taken as the span between the 25% and 50% stops, so a stop that is
+            // itself a function with commas (`color-mix(…)`) still comes out whole.
+            const stop = /\d+%\s*,\s*([\s\S]*?)\s+50%/.exec(backgroundImage);
+            // The card injects its tokens on the target, not on the mount.
+            const recess = target ? getComputedStyle(target).getPropertyValue('--quote-bg').trim() : '';
+            return {
+              theme: target?.dataset.theme || '',
+              backgroundImage,
+              recess: paintOver(recess, recess),
+              lifted: stop ? paintOver(recess, stop[1]) : null,
+            };
+          });
+
+          window.__motionProbe = {
+            mode,
+            waiting,
+            failing,
+            previewFailed,
+            sheenReport,
+            previewFailClass: previewFailCell.className,
+            previewFailIcon: opacity(outerOf(previewFailCell)?.querySelector('.media-placeholder-icon')),
+            fade,
+            failureClass,
+            missingIcon,
+            loadedClass: slowCell.className,
+            exportSwap: {
+              ratioBefore,
+              duringSwap,
+              afterSwap,
+              ratioAfterRealLoad,
+              class: swapCell.className,
+            },
+            exportError: { missingWhileMarked, missingAfter, class: errorCell.className },
+          };
+        }
+      } catch (err) {
+        say('THREW: ' + (err && err.stack ? err.stack : err));
+        window.__motionProbe = { mode, error: String((err && err.stack) || err) };
+      }
+    </script>
+  </body>
+</html>

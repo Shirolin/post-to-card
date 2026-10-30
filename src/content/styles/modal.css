@@ -1,0 +1,1790 @@
+/* ==========================================================================
+   Post-to-Card Modal & Shell Styles
+   100% self-contained styles for Shadow DOM isolation
+
+   One accent colour for the whole dialog: the press's own mint (`#6CC59C`, the
+   body of the mark in `ui/brandMark.ts`). Two jobs compete for that one hue —
+   accent ink on dark sheets (text, icons, rules) and the accent fill that text
+   sits on (the primary button, the selected segmented option) — and both are
+   the same mint. What used to be a split into an ink and a darker fill is now a
+   split between the fill and the ink *on* it: `--ptc-accent` and
+   `--ptc-on-accent`. A dark wall green on the fill satisfies what white cannot
+   (2.08:1 on the mint).
+   ========================================================================== */
+
+/* `.ptc-scope` mirrors the token host for the dev harness, which renders the
+   panels outside a shadow root where `:host` cannot match. */
+:host,
+.ptc-scope {
+  all: initial;
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  box-sizing: border-box;
+
+  /* Design tokens */
+  /* One accent, the press's mint, and one ink to sit on it.
+
+     The old pair split the accent into an ink for dark sheets and a darker fill
+     for text to sit on, because a single blue could not do both. A mint can: the
+     fill needs no darker sibling, only a foreground that reads on it, and white
+     does not (2.08:1). So the split moved: the accent stays one colour and the
+     *ink on the fill* is the dark wall green of the mark's own outline,
+     deepened until it clears AA there. Hover, pressed, wash, ring and the
+     swatch glow are all derived from `--ptc-accent` with `color-mix`, so no
+     second mint exists to drift from the first.
+
+       --ptc-accent      #6cc59c  the accent: ink, icons, rules and every filled
+                         surface. As ink it is 9.36:1 on the shell, 8.62:1 on
+                         the panel, 7.81:1 on a hovered row and 6.51:1 on its
+                         own 15% wash over the panel.
+       --ptc-on-accent   #123a2c  text, ticks and spinners on the fill: 6.06:1
+                         on the accent, 6.67:1 on the hover tint, 4.85:1 on the
+                         pressed tint. */
+  --ptc-accent: #6cc59c;
+  --ptc-on-accent: #123a2c;
+  /* The two tints and the wash, all from the one accent. `oklch` for the tints
+     because it moves lightness without dragging the hue off the mint; `srgb` for
+     the wash because it is an alpha over whatever is behind it, not a colour of
+     its own. */
+  --ptc-accent-hover: color-mix(in oklch, var(--ptc-accent), white 12%);
+  --ptc-accent-press: color-mix(in oklch, var(--ptc-accent), black 8%);
+  --ptc-accent-soft: color-mix(in srgb, var(--ptc-accent) 15%, transparent);
+  /* 6.11:1 on the panel and 5.55:1 on a hovered row. `#f4212e` was X's own
+     danger red and measured 4.35:1 / 3.96:1, so the export-failure line was the
+     one message in this dialog that could not be read. */
+  --ptc-danger: #ff6169;
+  --ptc-success: #00ba7c;
+  /* A degraded export is not a failure: the file exists but is missing a
+     picture or some pixels. Amber keeps it visible without borrowing the red
+     that means "nothing was produced". 7.2:1 on the panel. */
+  --ptc-warning: #ffd166;
+
+  /* The shell is an off-black rather than `#000000`. A pure black backdrop made
+     three things worse and fixed none: the dialog's own drop shadow was drawn in
+     rgba(0,0,0,.85) on black and so was invisible, the panel and the mat could
+     not be told apart at a glance, and the shadow-readable edge between dialog
+     and backdrop had nothing to land on. `#0b0d11` is cool and neutral, which
+     keeps it in the same grey family as the panel below rather than mixing a
+     warm black with a cool grey. 1.09:1 off the panel — enough separation to
+     read as an object lying on a board, like `canvas` on the cards. */
+  --ptc-bg-shell: #0b0d11;
+  --ptc-bg-panel: #16171b;
+  --ptc-bg-raised: rgba(255, 255, 255, 0.04);
+  --ptc-bg-hover: rgba(255, 255, 255, 0.08);
+  /* Boundaries are not text, but WCAG 1.4.11 still asks for 3:1 where a
+     boundary is what tells a control apart from the surface it sits on. Both
+     were below it: `rgba(255,255,255,.1)` measured 1.21:1 and `.2` measured
+     1.88:1. `.34` clears 3:1 on the panel (3.12:1) and on a hovered row
+     (3.10:1), which are the two surfaces every boundary here has to be seen
+     against. */
+  --ptc-border: rgba(255, 255, 255, 0.34);
+  --ptc-border-strong: rgba(255, 255, 255, 0.44);
+
+  --ptc-text: #e7e9ea;
+  /* Secondary text: the 11-12px labels, unselected segmented options and swatch
+     names. Eleven rules use it, and the value has to clear AA on more than one
+     background -- the bare panel plus the translucent white the tweet section
+     (2.5%) and the segmented groups (3%) lay over it, and the hover state (4%):
+
+       #71767b  panel 3.91  tweet 3.68  group 3.63  hover 3.54
+       #848a91  panel 5.14  tweet 4.84  group 4.78  hover 4.65
+
+     #848a91 is the smallest step of that hue that clears 4.5:1 on all four. A value
+     chosen against the panel alone (#7c8288, 4.61) looks right in a screenshot and
+     still fails inside the groups, which is why this was measured on the surfaces
+     rather than the token in isolation. Selected states are unaffected: they are
+     the fill's own ink on the accent at 6.06:1, so the gap to unselected is
+     still wide. */
+  --ptc-text-muted: #848a91;
+  /* Only the disabled text action uses this, and WCAG 1.4.3 exempts inactive
+     controls from contrast minimums, so it stays dim on purpose. */
+  --ptc-text-dim: #536471;
+
+  --ptc-radius-sm: 6px;
+  --ptc-radius: 10px;
+  --ptc-radius-lg: 16px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Single visible focus treatment for every interactive element. */
+:is(button, [role="button"], [role="switch"], [role="radio"], [role="checkbox"], a):focus {
+  outline: none;
+}
+
+/* Single visible focus treatment for every interactive element.
+
+   The ring is the accent, and on the dark surfaces it is the accent as ink:
+   9.36:1 on the shell, 8.62:1 on the panel, 6.51:1 on its own 15% wash over that
+   panel. What it cannot do is ring an accent *fill* — there it is 1:1,
+   invisible — so the filled states take the fill's ink instead (below). */
+:is(button, [role="button"], [role="switch"], [role="radio"], [role="checkbox"], a):focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: 2px;
+  border-radius: var(--ptc-radius-sm);
+}
+
+/* The accent fills take the fill's own ink as their ring: 6.06:1 on the mint,
+   where a ring in the accent itself would be 1:1 and white would be 2.08:1.
+   `outline-offset` goes negative so the ring is drawn inside the fill rather
+   than floating outside it. */
+.btn-primary:focus-visible,
+.btn-group-item.is-active:focus-visible,
+.theme-button.is-active .theme-swatch-check:focus-visible {
+  outline: 2px solid var(--ptc-on-accent);
+  outline-offset: -4px;
+}
+
+/* The dialog is focused programmatically on open, so a screen reader lands inside
+   it rather than behind it. It is a container rather than a control, so the
+   browser's own ring has nothing to point at -- and because the dialog is the
+   whole 1140px modal, that ring traces its entire outline and reads as a
+   rendering fault.
+
+   Deliberately a separate rule instead of another entry in the list above: it must
+   never be added to the `:focus-visible` selector, or the dialog would trade a
+   browser-drawn ring for a 2px accent ring around the same 1140px. Keeping it out
+   of that list is the point. */
+#post-to-card-dialog:focus,
+.post-to-card-dialog:focus {
+  outline: none;
+}
+
+/* -------------------------------------------------------------
+   Modal Backdrop
+   ------------------------------------------------------------- */
+#post-to-card-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: hidden;
+  z-index: 2147483647;
+  animation: ptc-fade-in 0.16s ease-out;
+}
+
+@keyframes ptc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ptc-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.975) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* -------------------------------------------------------------
+   Modal Dialog Shell
+   ------------------------------------------------------------- */
+#post-to-card-dialog,
+.post-to-card-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1140px;
+  /* `dvh`, not `vh`: on iOS Safari `vh` is the largest possible viewport and
+     does not shrink when the browser chrome retracts, so the dialog's bottom
+     edge sat under the URL bar with the export button out of reach. Both
+     heights take the unit so they stay consistent. */
+  max-height: 92dvh;
+  height: 90dvh;
+  background: var(--ptc-bg-shell);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius-lg);
+  /* Tinted to the shell's own hue rather than pure black, so the dialog sits on
+     the board with depth instead of being crowned by a void that was invisible
+     when the shell was `#000000`. */
+  box-shadow: 0 24px 60px -12px rgba(2, 4, 8, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  color: var(--ptc-text);
+  overflow: hidden;
+  animation: ptc-scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* -------------------------------------------------------------
+   Modal Header
+   ------------------------------------------------------------- */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px 12px 18px;
+  border-bottom: 1px solid var(--ptc-border);
+  background: var(--ptc-bg-panel);
+  flex-shrink: 0;
+}
+
+.modal-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+/* The mark strokes in `currentColor`, so it takes the header's white and needs
+   no tile of its own. This box only sizes the slot. */
+.modal-brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.modal-brand-name {
+  white-space: nowrap;
+}
+
+.modal-header-summary {
+  padding-left: 10px;
+  margin-left: 2px;
+  border-left: 1px solid var(--ptc-border);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ptc-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--ptc-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.modal-close-btn svg {
+  stroke: currentColor;
+  stroke-width: 2px;
+}
+
+.modal-close-btn:hover {
+  background: var(--ptc-bg-hover);
+  color: #ffffff;
+}
+
+/* -------------------------------------------------------------
+   The one-time "click an avatar" hint
+   ------------------------------------------------------------- */
+
+/* A full-width strip above the preview, not an overlay on the card: the card is
+   the artifact, and covering part of it to explain the artifact would be the
+   thing this strip exists to avoid. It is one line at the top of the body and
+   costs the preview the height of that line until it is dismissed. */
+.author-blur-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 7px 12px;
+  background: var(--ptc-accent-soft);
+  border-bottom: 1px solid var(--ptc-border);
+  color: var(--ptc-text);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.author-blur-hint-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.author-blur-hint-action {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--ptc-accent);
+  border-radius: 999px;
+  color: var(--ptc-accent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.author-blur-hint-action:hover {
+  background: var(--ptc-accent);
+  color: var(--ptc-on-accent);
+}
+
+.author-blur-hint-action:focus-visible,
+.author-blur-hint-dismiss:focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: 2px;
+}
+
+.author-blur-hint-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--ptc-radius-sm);
+  color: var(--ptc-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.author-blur-hint-dismiss:hover {
+  color: var(--ptc-text);
+  background: var(--ptc-bg-hover);
+}
+
+/* -------------------------------------------------------------
+   Modal Body: Dual-Pane Preview + Controls
+   ------------------------------------------------------------- */
+.modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left Stage / Preview Pane */
+.preview-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f0e;
+  overflow: hidden;
+}
+
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--ptc-border);
+  background: var(--ptc-bg-panel);
+  flex-shrink: 0;
+}
+
+/* The `hidden` attribute alone is defeated by the `display: flex` above, which
+   is an author rule and therefore outranks the user-agent `[hidden]` style. On a
+   window narrower than the smallest fixed zoom level the toolbar is meant to
+   disappear -- the row is all disabled buttons except `fit`, which the stage
+   resolves to anyway -- but it kept occupying its 48px and eating the stage it
+   was supposed to yield. Same guard `.more-body[hidden]` already carries. */
+.preview-toolbar[hidden] {
+  display: none;
+}
+
+/* The label's ink, not its leading box.
+   `align-items: center` centres the label's leading box against the group, and
+   that box carries the font's descender slot under the ink plus `baseline`
+   metrics that the toolbar's font inherits at a different size than the label
+   sets. The result was two families of readings: whatever the label said read
+   low by ~1.7px at 11.5px, and any text in the row that inherited the font
+   instead of setting it read ~7px low against every 11px option. Two different
+   offsets is what made "some sliders sit high, some low" true of one row.
+   So the row is split in two: the segments' `line-height: 1` makes every
+   option's leading box hug its own glyphs, which makes the group's centre the
+   line the row reads along; the label's box is then padded to put its ink on
+   that line, symmetric padding so it keeps the row's height. No em-derived
+   number is involved, so the fix does not move when the font does.
+   Measured at dpr 1, 1.25, 1.5 and 2: label ink centre and segment ink centre
+   within 0.3px, across the harness's locales. */
+.preview-toolbar-label {
+  font-size: 11.5px;
+  padding: 7.6px 0 7.7px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ptc-text-muted);
+}
+
+/* Top-aligned: a tall thread must start at the top of the scroll area rather
+   than being centered and clipped out of view.
+   The card is centered by the child's auto margins, not `justify-content`,
+   because a 640px card wider than a narrow viewport would otherwise overflow
+   the left edge into a region the scroll container cannot reach. */
+.preview-viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  /* The stage's own breathing room, uniform on both axes. The script subtracts
+     the same figure to know how much room the card has, so the two must agree;
+     it reads it from `VIEWPORT_PADDING` in `ui/geometry.ts`, and the narrow
+     layout below trims it to `NARROW_VIEWPORT_PADDING`. */
+  padding: 24px;
+  overflow: auto;
+  /* The mat follows the theme's canvas token (set by App), so a warm paper
+     reads as paper on a mat instead of a light rectangle floating on black.
+
+     The first four layers are the scroll cue, and the order is the whole trick.
+     Layers paint back to front, so each `scroll` layer -- the shadow, pinned to an
+     edge of the scrollport -- is listed underneath an identical `local` copy that
+     rides the content. At rest the content copy sits on top and hides the shadow
+     on that side; scrolling it away exposes it. The result is a gradient on
+     exactly the side that has more card beyond it and none on the side that does
+     not, with no script and no way for the two to disagree. The copy is mat
+     coloured over a mat, so it is invisible; only the shadow is ever perceived.
+
+     The cover is 30px with its opaque run out to 18px, and the shadow is 14px.
+     That relationship is load-bearing: the cover's opaque part has to outlast the
+     shadow band, or both are partly transparent where they overlap and the shadow
+     seeps through at rest. Giving them the same height does not work.
+
+     The shadow is a darkening rather than a mat-coloured fade on purpose: fading
+     the card into the mat reads as the card ending there, which is the one thing
+     the cue exists to contradict. It is kept short so it reads as depth on a
+     paper theme instead of a printing fault. */
+  background:
+    linear-gradient(var(--ptc-preview-canvas, #171716) 60%, rgba(0, 0, 0, 0)) top / 100% 30px no-repeat local,
+    linear-gradient(rgba(0, 0, 0, 0), var(--ptc-preview-canvas, #171716) 40%) bottom / 100% 30px no-repeat local,
+    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0)) top / 100% 14px no-repeat scroll,
+    linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.3)) bottom / 100% 14px no-repeat scroll,
+    var(--ptc-preview-canvas, #171716);
+}
+
+/* One scrollbar idiom for both scroll regions in the dialog.
+
+   These were two hand-written copies — 10px for the stage, 8px for the panel,
+   with different thumb alphas — which read as two scrollbars that happened to
+   sit adjacent rather than one surface. Both selectors are on elements that
+   already exist, so sharing is a selector list rather than a new class nobody
+   would put on anything. The stage keeps the wider track because it is the
+   region the card actually scrolls in. */
+.preview-viewport::-webkit-scrollbar,
+.controls-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.preview-viewport::-webkit-scrollbar-track,
+.controls-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.preview-viewport::-webkit-scrollbar-thumb,
+.controls-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.preview-viewport::-webkit-scrollbar-thumb:hover,
+.controls-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+  background-clip: content-box;
+}
+
+/* `zoom` scales layout space too, so the scroll container stays accurate
+   without transform hacks that would blur the card. Auto margins centre the
+   card while a card wider than the viewport stays reachable by scrolling
+   instead of being clipped on the left. */
+.preview-scale {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  margin: 0 auto;
+  /* Hidden until the first measurement, for the reason `isCardMeasured` states:
+     the first paint has no stage width and no card height, so `fit` resolves to
+     1:1 and the card is drawn at its full 640px before snapping down to the
+     fitted scale. `opacity` rather than `display` or `visibility` because the
+     measurement reads the card's own box: it has to be laid out, simply not
+     seen. The fade is matched to the dialog's own entrance, so the card arrives
+     while the panel is still settling instead of after it. */
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+
+.preview-scale.is-measured {
+  opacity: 1;
+}
+
+/* Right Controls Panel */
+.controls-panel {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ptc-bg-panel);
+  border-left: 1px solid var(--ptc-border);
+  overflow: hidden;
+}
+
+/* Narrow-screen collapse toggle handle (hidden on desktop) */
+.panel-collapse-toggle {
+  display: none;
+}
+
+/* Scrolling region sits between the panel edges; the export bar stays pinned. */
+.controls-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 20px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* Two levels, told apart by size and weight rather than by case. The
+   `uppercase` + wide tracking this used to carry did the separating in latin
+   only -- CJK has no case, so in ja/zh the heading and its sub-label collapsed
+   into the same grey at the same size. Size and weight survive every script. */
+.control-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ptc-text-muted);
+}
+
+.control-label svg {
+  flex-shrink: 0;
+}
+
+/* A sub-label inside a section that already has a heading of its own -- the
+   padding and radius controls, which share one group. It sits between the two
+   other levels in the panel: one step under `.control-label` (12px/700) and one
+   step over `.control-hint` (11px/400). Weight is what keeps it off the hint --
+   at the same 11px, a 400 sub-label and a 400 hint are the same object, and the
+   canvas section puts both on screen at once. */
+.control-sub-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ptc-text-muted);
+}
+
+.control-count {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  /* The accent at 15% under the accent itself: 6.51:1 on the panel, and the
+     wash follows the ink instead of being a second, unrelated tint. */
+  background: var(--ptc-accent-soft);
+  color: var(--ptc-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* Secondary text under a control, at the same weight as the 11px labels around
+   it. `--ptc-text-dim` was authored for this rule when nothing used it, and came
+   out at 2.9:1 against the panel -- too dim to read. `--ptc-text-muted` is what
+   every other small label here already uses (3.9:1), so the hint reads as the
+   same class of information as the section labels rather than as a footnote. */
+.control-hint {
+  font-size: 11px;
+  color: var(--ptc-text-muted);
+}
+
+/* Theme Swatches Grid
+   Four across, one row. The grid is the largest block in the panel, and two rows
+   of swatches pushed every control below it -- the toggles included -- past the
+   first screen. One row buys back roughly 90px, which is what lets the footer
+   group, the privacy group and the disclosure itself land in view. */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.theme-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 5px 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ptc-radius);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  color: var(--ptc-text-muted);
+  font-family: inherit;
+  /* Grid items default to `min-width: auto`, so a long label in one language
+     forces its column wider and clips its neighbours. Zero lets all four
+     columns stay equal while the label itself wraps below. */
+  min-width: 0;
+}
+
+.theme-button:hover {
+  background: var(--ptc-bg-raised);
+}
+
+.theme-button.is-active {
+  color: #ffffff;
+}
+
+.theme-swatch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 34px;
+  /* No radius here on purpose: each material's corner is a token-derived value
+     (`themeSwatch`), set inline. A second number in this file is how the two
+     answers drift. */
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: border-color 0.15s ease;
+}
+
+.theme-button:hover .theme-swatch {
+  border-color: rgba(255, 255, 255, 0.44);
+}
+
+/* The selected swatch is marked by the *accent*, not by a fill. This is the one
+   place the selection is drawn on top of twelve different sheet colours, so it
+   has to hold against all of them — a fill colour measured against the panel
+   disappears on Brutalist's yellow. The 2px ring in the panel's own tone is what
+   separates the accent from whatever material the swatch is showing, so the
+   accent ring is always read against the panel (8.62:1) rather than against the
+   sheet inside it. The glow is the accent at 0.4 rather than 0.35. */
+.theme-button.is-active .theme-swatch {
+  border-color: var(--ptc-accent);
+  box-shadow:
+    0 0 0 2px var(--ptc-bg-panel),
+    0 0 0 4px var(--ptc-accent),
+    0 4px 12px color-mix(in srgb, var(--ptc-accent) 40%, transparent);
+}
+
+/* Badge in upper-right corner so it never obscures the material preview. The
+   tick sits on the accent, so it takes the fill's ink (6.06:1), not white. */
+.theme-swatch-check {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--ptc-accent);
+  color: var(--ptc-on-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Theme labels wrap instead of ellipsising. One line holds about five CJK
+   characters in a four-column grid, so `ミッドナイト` and `Фотолаборатория`
+   need a second. `line-clamp` caps them at two, and `min-height` reserves that
+   height on every cell so short names do not let the row jitter.
+   Three lines would ellipsise again -- no shipped dictionary reaches one, and
+   the button's `title` still carries the full name if a future one does. */
+.theme-button-label {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  min-height: 2.4em;
+  max-width: 100%;
+}
+
+.theme-button.is-active .theme-button-label {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Canvas Background Swatches
+   Paint chips in a fixed five-column grid, equal width. Equal rather than
+   intrinsic so the grid reads as one control -- differently-sized bands would
+   look like unrelated buttons. Five columns rather than one row: the panel is
+   340px, so fifteen chips in a single row would be ~16px wide each, narrower
+   than the chip's own 4px selection ring, and every gradient would be a sliver
+   too small to judge. At five they are ~53px and the three rows read as a
+   palette.
+   They are chips, not theme cards: 30px tall against the theme grid's 34px
+   swatch plus label, because the background is a single choice and the theme
+   grid is the panel's largest block. */
+.swatch-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.swatch {
+  flex: 1;
+  height: 30px;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.swatch:hover {
+  border-color: rgba(255, 255, 255, 0.44);
+}
+
+/* Selection is drawn as a ring in the accent, the same mark the theme grid
+   uses, so the panel has one way of saying "this is the chosen one". A border
+   colour alone cannot do it here: the chips are the colours themselves, and
+   several of them are close to the border they would have to contrast with. The
+   outer ring is what carries the state, and it sits on the panel (8.62:1). */
+.swatch.is-active {
+  border-color: var(--ptc-accent);
+  box-shadow: 0 0 0 1px var(--ptc-accent), 0 0 0 4px var(--ptc-accent-soft);
+}
+
+/* A chip is a filled swatch, not an accent surface: the ring keeps its accent
+   colour here and is drawn outside the chip's own border, on the panel. */
+.swatch:focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: 2px;
+}
+
+/* "No background" is the absence of paint, so it is drawn as the absence of
+   paint: a crossed-out chip. Without this it would be an empty rectangle next
+   to six colours and read as a chip that failed to load. */
+.swatch.is-none {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.03);
+  background-image:
+    linear-gradient(to top right, transparent calc(50% - 1px), var(--ptc-danger) calc(50% - 1px),
+      var(--ptc-danger) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+/* Reveals the themes the grid holds back. Deliberately carries no styling of
+   its own: it reuses `.more-toggle` whole, so the panel has one disclosure
+   idiom rather than two. It used to override `justify-content` and `font-size`
+   here, which made the theme expansion a centred, smaller variant of the same
+   button — a second idiom by another name. */
+
+/* Button Group (Language, Image Fit, Layout, Padding, Radius, Ratio, Zoom) */
+.btn-group {
+  display: flex;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius);
+  padding: 3px;
+  gap: 2px;
+}
+
+.btn-group-compact {
+  padding: 2px;
+}
+/* Compact groups size to content instead of stretching, so short labels
+   like "100%" are never clipped by the ellipsis rule. */
+.btn-group-compact {
+  width: auto;
+  flex: 0 0 auto;
+}
+/* The language picker: fifteen entries, and no width a panel row could give
+   them. The group wraps onto as many lines as it needs and each entry sizes to
+   its own words, so "Bahasa Indonesia" and "Українська" set at their natural
+   width instead of being ellipsised into each other. The ellipsis rule on
+   `.btn-group-item` is overridden here for the same reason. */
+.locale-grid {
+  margin-top: 6px;
+}
+
+.locale-grid .btn-group {
+  flex-wrap: wrap;
+}
+
+.locale-grid .btn-group-item {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.btn-group-compact .btn-group-item {
+  flex: 0 0 auto;
+  padding: 4px 11px;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.btn-group-item {
+  flex: 1;
+  padding: 7px 6px;
+  /* The option's leading box is its glyphs' box, which is what lets a group
+     centre its own ink: with `line-height: normal` the box also carries the
+     font's descent slot, and centring it put the visible glyphs ~1px below the
+     group's centre -- the same low-reading text the toolbar label had. Every
+     option in the panel sets it at once, so the rows stay consistent with
+     each other. Glyphs with descenders still draw outside the box; `overflow`
+     is only `hidden` horizontally (below), so they are not clipped. */
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--ptc-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  text-align: center;
+  white-space: nowrap;
+  /* Horizontal only: `line-height: 1` shrinks the box to the glyphs, so a
+     descender (`g`, `y`, `p`) now draws past its bottom edge and a full
+     `overflow: hidden` would cut it. Horizontal clipping is still the job --
+     it is what turns a too-wide label into an ellipsis. */
+  overflow-x: hidden;
+  overflow-y: visible;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.btn-group-item:hover:not(.is-active):not(:disabled) {
+  background: var(--ptc-bg-raised);
+  color: #ffffff;
+}
+
+/* A level the fitted scale cannot reach: present so the control keeps its
+   shape, visibly unavailable so a click that changes nothing is explained. */
+.btn-group-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-group-item.is-active {
+  background: var(--ptc-accent);
+  color: var(--ptc-on-accent);
+}
+
+/* The selected option already carries the accent fill, so the ring takes the
+   fill's ink set above and pulls inside it. `-3px` rather than `-4px` because
+   these segments are smaller than the primary button. */
+.btn-group-item:focus-visible {
+  outline: 2px solid var(--ptc-on-accent);
+  outline-offset: -3px;
+}
+
+/* Feature Toggles List */
+.toggles-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 2px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ptc-border);
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.toggle-item:last-child {
+  border-bottom: none;
+}
+
+.toggle-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* The row carries no border of its own besides the divider between rows, so
+   without this a keyboard user tabbing the switches had nothing to show where
+   focus had landed. `:focus-visible` rather than `:focus`, so a mouse click does
+   not leave the ring behind. */
+.toggle-item:focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: -2px;
+  border-radius: var(--ptc-radius-sm);
+}
+
+.toggle-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ptc-text);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 38px;
+  height: 21px;
+  /* The off state's track has to be tellable from the panel it sits on, or the
+     switch reads as a label with nothing to press. 1.88:1 before; 3.1:1 now. */
+  background: rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.toggle-switch.is-checked {
+  background: var(--ptc-accent);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
+}
+
+.toggle-switch.is-checked .toggle-thumb {
+  transform: translateX(17px);
+  /* The knob has to stay a readable shape on the track it now sits on. White on
+     the mint track is 2.08:1, so the checked state takes the fill's own ink:
+     6.06:1, and the same colour the track carries as text. */
+  background: var(--ptc-on-accent);
+}
+
+/* -------------------------------------------------------------
+   Collapsible Low-Frequency Settings
+   ------------------------------------------------------------- */
+.more-section {
+  gap: 0;
+}
+
+.more-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 10px;
+  background: var(--ptc-bg-raised);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius);
+  color: var(--ptc-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.more-toggle:hover {
+  background: var(--ptc-bg-hover);
+  border-color: var(--ptc-border-strong);
+}
+
+.more-chevron {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--ptc-text-muted);
+  flex-shrink: 0;
+}
+
+.more-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px 2px 2px;
+  animation: ptc-reveal 0.18s ease-out;
+}
+
+.more-body[hidden] {
+  display: none;
+}
+
+@keyframes ptc-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* -------------------------------------------------------------
+   Sticky Export Action Bar
+   ------------------------------------------------------------- */
+.export-actions {
+  --export-bar-gap: 8px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--export-bar-gap);
+  padding: 12px 18px 16px;
+  background: var(--ptc-bg-panel);
+  border-top: 1px solid var(--ptc-border);
+  box-shadow: 0 -8px 20px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* Visually hidden, still announced. The wait state's text lives here: a screen
+   reader has no spinner to look at, and `role="status"` only reports what is
+   inside it. Not `display: none` and not `visibility: hidden` -- both remove it
+   from the accessibility tree, which is the whole point of the element. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The outcome line, in flow above the size readout, claiming no height until it
+   has something to say.
+
+   It used to reserve two lines at all times, so a message would not move the
+   buttons -- an empty band paid on every frame the dialog was open, including
+   the clean exports, which have nothing to report.
+
+   The row did not need to reserve anything to protect them. The bar is the
+   panel's last flex child, so content added above the buttons grows the bar
+   *upward* into the scrolling list and leaves the buttons exactly where they
+   were: reserving height was never what held them still. Measured at 1280x900,
+   the buttons sit at the same y in all three states, and only the bar's top
+   edge moves.
+
+   Empty, the row is zero-height: what it costs is the column's own gap, which
+   is why it is not `display: none` -- the live region inside has to stay in the
+   accessibility tree to announce the wait state. */
+.status-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Quiet: no outcome to show. The row is then zero-height but still a flex item,
+   so the bar would open its 8px column gap below it -- dead space under the
+   controls for the whole life of the dialog, which is the band this change
+   exists to remove. Taking that gap back is the whole of what quiet needs.
+
+   Not `display: none`: the live region inside has to stay mounted and in the
+   accessibility tree to announce the wait state -- which is also why the class
+   is keyed on the outcome and not on the row's contents. Not `:has()` either:
+   it matched correctly while the computed style never followed it. */
+.status-row.is-quiet {
+  margin-bottom: calc(-1 * var(--export-bar-gap));
+}
+
+.status-region {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The exported pixel size, read beside the button that produces it. Only rendered
+   once the card has been measured -- before that there is no figure to state, and
+   a placeholder would reserve a line for a number that may never arrive.
+   It wraps on its own: a column-flex child of `.export-actions` is stretched to
+   the bar's content box, and every shipped readout breaks at its spaces or
+   between CJK glyphs. Measured in ja/ru/de/en, wide and reduced, with and
+   without `overflow-wrap`/`max-width` -- identical two lines either way, so
+   neither is declared here. */
+.export-size-hint {
+  display: block;
+  text-align: center;
+}
+
+/* A pill rather than bare coloured text. At 12px/500 in the panel's own muted
+   grey family, the old line was the weakest thing in the bar and read as one
+   more hint; a tinted surface gives it the boundary that says "this is the
+   result". The tint is `currentColor`, so one rule covers success, warning and
+   failure -- each already sets `color` below -- and no fourth colour is named. */
+.status-message {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--ptc-success);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  animation: ptc-fade-in 0.15s ease-out;
+}
+
+/* The icon is a flex child of the pill, so it must not be squashed by a long
+   message and must not shrink the text either. */
+.status-message > svg {
+  flex: 0 0 auto;
+}
+
+.status-message.is-error {
+  color: var(--ptc-danger);
+}
+
+.status-message.is-warning {
+  color: var(--ptc-warning);
+}
+
+/* Outside the live region rather than inside it: the failure text is read
+   verbatim by the panel's own tests, so anything appended would change it, and
+   a control inside `role="status"` would be re-announced with every message. */
+.status-retry {
+  /* A long outcome line wraps; the button must not, or it turns into a
+     two-line "Try / again" and shrinks away from the text it belongs to. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border: 1px solid var(--ptc-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ptc-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.status-retry:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.export-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-primary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background: var(--ptc-accent);
+  border: none;
+  border-radius: var(--ptc-radius);
+  /* The fill's own ink, not white: white on the mint is 2.08:1. */
+  color: var(--ptc-on-accent);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  /* Pressed as well as hovered: the primary action is the one control here whose
+     whole job is being pressed, and it gave no feedback that it had been. */
+  transform: translateY(0);
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hover first, press second: both rules have the same specificity, so the later
+   one is the state a click that is also a hover ends up in. */
+.btn-primary:hover:not(:disabled) {
+  background: var(--ptc-accent-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--ptc-accent-press);
+  transform: translateY(1px);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* The button doing the work is disabled too, but "disabled" here means "do not
+   press this twice", not "unavailable" -- and 55% opacity dims the spinner,
+   which is the only thing on screen saying something is happening. The pressed
+   button keeps full contrast; its neighbour stays dimmed. */
+.btn-primary:disabled:has(.spinner),
+.btn-secondary:disabled:has(.spinner) {
+  opacity: 1;
+  cursor: progress;
+}
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  flex-shrink: 0;
+  padding: 12px 0;
+  background: var(--ptc-bg-raised);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius);
+  color: var(--ptc-text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--ptc-bg-hover);
+  border-color: var(--ptc-border-strong);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* The spinner sits on the accent fill, where a translucent ring was 2.55:1
+   against it — the moving part of the wait state was the least visible thing on
+   screen. The ring is now the fill's own ink, opaque: 6.06:1. Its gap is the
+   mint showing through rather than a washed-out tint of the same ink, which is
+   the same 6.06:1 and keeps the arc reading at a glance. */
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--ptc-on-accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ptc-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* The download button's spinner sits on the raised panel fill, not on the
+   accent, so it takes the panel's text colour instead of the fill's ink. */
+.spinner-on-panel {
+  width: 14px;
+  height: 14px;
+  border-color: var(--ptc-text);
+  border-top-color: var(--ptc-text-muted);
+}
+
+@keyframes ptc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* -------------------------------------------------------------
+   Tweet Scope & Exclusion Manager Section
+   ------------------------------------------------------------- */
+.tweet-manager-section {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--ptc-border);
+  border-radius: var(--ptc-radius-lg);
+  padding: 12px;
+  gap: 10px;
+}
+
+/* Wrapping is deliberate rather than incidental. This header carries a label, a
+   count and two actions, and in English that does not fit the panel's 269px:
+   the actions alone are 143px, leaving 116px for a label that wants 172px.
+   Without `wrap` the label simply folded mid-phrase and left the actions
+   floating beside the gap, which read as a broken layout.
+
+   One line is not reachable without cutting information -- dropping the count
+   badge only frees 38px of the 56px needed, and truncating a section heading to
+   "INCLUDED TW..." is worse than showing it on two rows. So the actions drop to
+   their own row when they have to, which costs 13px in English and nothing in
+   Chinese, where the header already fits. */
+.control-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.tweet-manager-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  /* Keeps the actions against the right edge on their own row, matching where
+     they sit when everything shares one. Redundant with `space-between` while
+     they do share a row, and correct once they do not. */
+  margin-left: auto;
+}
+
+.btn-text-action {
+  background: transparent;
+  border: none;
+  /* 8.12:1 on the section's own 2.5% float, 6.06:1 where its hover wash lands
+     on that float. */
+  color: var(--ptc-accent);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: var(--ptc-radius-sm);
+  transition: background 0.15s ease;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.btn-text-action:hover:not(:disabled) {
+  background: var(--ptc-accent-soft);
+}
+
+.btn-text-action:disabled {
+  color: var(--ptc-text-dim);
+  cursor: not-allowed;
+}
+
+.tweet-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 176px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.tweet-manager-list::-webkit-scrollbar {
+  width: 5px;
+}
+.tweet-manager-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+}
+
+/* One row of the included-posts list. The row is a box rather than a control:
+   it holds the pick button that selects the post and, at its end, the chip that
+   returns that post's author to the global switch -- and a button cannot hold a
+   button. The padding therefore moved from the row onto the pick button, so a
+   row is the same height whichever of the two is present. */
+.tweet-manager-item {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ptc-radius);
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.tweet-manager-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--ptc-radius);
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+}
+
+.tweet-manager-pick:hover:not(:disabled) {
+  background: var(--ptc-bg-raised);
+  border-radius: var(--ptc-radius);
+}
+
+.tweet-manager-pick:disabled {
+  cursor: not-allowed;
+}
+
+.tweet-manager-pick:focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: -2px;
+}
+
+/* Only ever present (and only shown) while this post's author has an override
+   of its own: `hidden` keeps the slot out of the row rather than leaving a
+   patch that cannot be clicked. */
+.tweet-manager-follow {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 6px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--ptc-border);
+  border-radius: 999px;
+  color: var(--ptc-text-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tweet-manager-follow[hidden] {
+  display: none;
+}
+
+.tweet-manager-follow:hover {
+  color: var(--ptc-accent);
+  border-color: var(--ptc-accent);
+}
+
+.tweet-manager-follow:focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: 2px;
+}
+
+.tweet-manager-item.is-included {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.tweet-manager-item.is-excluded {
+  opacity: 0.5;
+}
+
+.tweet-manager-item.is-excluded .tweet-snippet {
+  text-decoration: line-through;
+}
+
+.tweet-manager-item.is-target {
+  border-left: 2px solid var(--ptc-accent);
+}
+
+/* -------------------------------------------------------------
+   Per-post author privacy, under the privacy group
+   ------------------------------------------------------------- */
+
+/* One author per line: the post's number, its portrait, its name, and the three
+   chips. The card's own avatar is the primary control; this exists for a card
+   too small to click and for a keyboard user, and it reads the same overrides. */
+.author-privacy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.author-privacy-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.author-privacy-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--avatar-radius, 50%);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--ptc-bg-raised);
+}
+
+.author-privacy-thumb.is-placeholder {
+  box-shadow: inset 0 0 0 1px var(--ptc-border);
+}
+
+.author-privacy-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--ptc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.author-privacy-modes {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.author-privacy-chip {
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--ptc-border);
+  border-radius: 999px;
+  color: var(--ptc-text-muted);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.author-privacy-chip:hover {
+  color: var(--ptc-text);
+}
+
+.author-privacy-chip.is-active {
+  color: var(--ptc-accent);
+  border-color: var(--ptc-accent);
+  background: var(--ptc-accent-soft);
+}
+
+.author-privacy-chip:focus-visible {
+  outline: 2px solid var(--ptc-accent);
+  outline-offset: 1px;
+}
+
+.tweet-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--ptc-border-strong);
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  /* Only visible once checked, when the box is the accent fill: the fill's own
+     ink at 6.06:1, rather than white's 2.08:1. */
+  color: var(--ptc-on-accent);
+}
+
+.tweet-checkbox.is-checked {
+  background: var(--ptc-accent);
+  border-color: var(--ptc-accent);
+}
+
+.tweet-index-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ptc-text-muted);
+  flex-shrink: 0;
+  min-width: 18px;
+}
+
+.tweet-snippet {
+  font-size: 11.5px;
+  color: var(--ptc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.tweet-manager-item.is-excluded .tweet-snippet {
+  color: var(--ptc-text-muted);
+}
+
+.tweet-media-indicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ptc-text-muted);
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* -------------------------------------------------------------
+   Responsive: stack panes on narrow viewports
+
+   The 900px boundary here is the same number as `NARROW_BREAKPOINT` in
+   `ui/geometry.ts`, and the two have to agree: the stylesheet decides how the
+   panel is laid out and the script decides how it starts, so a mismatch would
+   show a collapsed panel on a wide screen or an expanded one on a narrow. A
+   media query's condition cannot be read from the script, so this is the one
+   number the stylesheet has to state for itself.
+   ------------------------------------------------------------- */
+@media (max-width: 900px) {
+  #post-to-card-backdrop {
+    padding: 0;
+  }
+  #post-to-card-dialog,
+  .post-to-card-dialog {
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+  .modal-body {
+    flex-direction: column;
+  }
+  .preview-stage {
+    flex: 1;
+    min-height: 0;
+  }
+  /* A phone has no room for the card's full 640px, so the stage trims its mat
+     to the minimum and lets the fitted card fill the width. */
+  .preview-viewport {
+    padding: 12px;
+  }
+  /* The panel holds roughly three screens of controls, and a fixed slice left
+     most of them unreachable, so it normally takes a share and scrolls.
+
+     Two caps, and the order they are read in is the whole design. The panel's own
+     52vh ceiling says the preview gets the larger share: the card is the artifact
+     this feature exists to produce, and giving the controls the majority meant a
+     phone showed barely a third of it. The stage's floor is then subtracted from
+     whatever the body has left, so the panel yields when the window is short --
+     a landscape phone is 844px wide and 390px tall, so it also matches this
+     query, and the original unconditional 62vh left the stage 91px, less than the
+     zoom toolbar above it, with the card visible as a 43px sliver.
+
+     The stage floor is `max(168px, 40vh)` rather than one number: 168px is what a
+     short landscape window needs (toolbar plus a usable strip of card), and 40vh
+     is what a tall portrait one needs. Whichever is larger wins, so a short window
+     keeps the fixed floor and a tall one gets a real share.
+
+     It sits inside the cap rather than on the stage as a `min-height` on purpose.
+     A cap can only ever make the panel smaller, so the column cannot overflow
+     while the floor fits; past that the floor wins and the stage is what
+     shrinks. 157px is that floor, and it is derived rather than chosen: the
+     pinned export bar is 132px at its *largest* -- a two-line outcome pill plus
+     the size readout and the buttons, measured at 375x812 -- and the scrolling
+     list cannot shrink below its own padding (24px below). It is the tallest
+     the bar gets that the floor has to hold, not its idle height (86.5px):
+     a floor sized for idle is one the message does not fit in. A reachable
+     primary action outranks a larger preview.
+
+     157 + the stage's own 168px floor is 325px: a 320px-tall landscape window
+     spends more than it has. Measured at 568x320 the panel still fits and the
+     export button is fully on screen (bottom 308 of 320) because the stage floor
+     is a `max()` and gives way first -- but the pair of floors no longer sums to
+     something a 320px window can honour, so this is the number to re-check if
+     either floor moves again. */
+  .controls-panel {
+    width: 100%;
+    max-height: max(157px, min(52vh, calc(100% - max(168px, 40vh))));
+    border-left: none;
+    border-top: 1px solid var(--ptc-border);
+    transition: max-height 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .panel-collapse-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 7px 12px 6px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--ptc-border);
+    color: var(--ptc-text-muted);
+    cursor: pointer;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    user-select: none;
+  }
+  .panel-collapse-toggle:hover {
+    color: var(--ptc-text);
+    background: var(--ptc-bg-hover);
+  }
+  .collapse-grab-bar {
+    display: block;
+    width: 32px;
+    height: 3.5px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    margin-right: 2px;
+  }
+  .collapse-toggle-text {
+    letter-spacing: 0.02em;
+  }
+  .controls-panel.is-collapsed {
+    max-height: none;
+    flex-shrink: 0;
+  }
+  .controls-panel.is-collapsed .controls-scroll,
+  .controls-panel .controls-scroll[hidden] {
+    display: none;
+  }
+  /* Trimming the list's block padding is what lets the panel yield that far: a
+     border-box box cannot be shorter than its own padding, so 20px of it became a
+     hard 40px the panel had to keep even when there was nothing left to show. */
+  .controls-scroll {
+    padding: 12px 18px;
+  }
+  /* The export bar is fixed chrome on every screen, so it trades some of its
+     generous padding for control space. It stays pinned and tappable. */
+  .export-actions {
+    --export-bar-gap: 6px;
+    padding: 8px 12px 12px;
+    gap: var(--export-bar-gap);
+  }
+}
+
+@media (min-width: 901px) {
+  .panel-collapse-toggle {
+    display: none !important;
+  }
+  .controls-panel.is-collapsed .controls-scroll,
+  .controls-panel .controls-scroll[hidden] {
+    display: flex !important;
+  }
+  .controls-panel.is-collapsed {
+    max-height: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* One exception, and only because the blanket rule breaks it rather than
+     calms it: a ring frozen at its first frame is indistinguishable from a
+     spinner that has stopped, which is the one thing this UI must never say.
+     Reduced motion is about vestibular triggers -- travel, scale, parallax --
+     and a 0.7s rotation of a 15px ring is not one of them. The pulse is the
+     substitute: brightness instead of movement, which is also what someone
+     who set this preference is more likely to be able to read. */
+  .spinner {
+    animation: ptc-pulse 1.6s ease-in-out infinite !important;
+  }
+}
+
+@keyframes ptc-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}

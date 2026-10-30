@@ -1,0 +1,28 @@
+// Type-checks the test-support layer: the dev harness, the in-memory DOM and
+// other doubles, the fixtures, and the tier files that stay inside the shim.
+//
+// Most tier files are deliberately not here. They hand shim nodes (`DomElement`)
+// to production functions that expect real `Element`s, and the two are
+// unassignable by construction -- a real `Element` has ~150 more members -- so
+// covering them means a cast at every boundary (109 errors measured on
+// 2026-10-10). They are exercised at runtime instead, where a stale field
+// reference mostly fails an assertion loudly. This layer is the one where a
+// stale field is silent: a fixture or harness object typed `TweetData` that no
+// longer matches the type drifts without any test touching it.
+//
+// The three tier files below are the exception that proves the rule: they never
+// cross the shim boundary (no `DomElement` reaches a production signature), so
+// they type-check clean and are listed. That is what catches a dead import in
+// them -- knip reads an import as a use, and nothing else parsed these files.
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/env.d.ts",
+    "dev/**/*.ts",
+    "tests/env/**/*.ts",
+    "tests/fixtures/**/*.ts",
+    "tests/tiers/tier_graphql.test.ts",
+    "tests/tiers/tier_i18n.test.ts",
+    "tests/tiers/tier_hygiene.test.ts"
+  ]
+}

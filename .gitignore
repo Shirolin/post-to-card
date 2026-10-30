@@ -1,0 +1,93 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+dist-harness/
+build/
+*.tsbuildinfo
+# Vite's own cache directory, when it is not inside node_modules
+.vite/
+
+# Subagent teamwork & internal logs
+.agents/
+
+# Claude Code harness state: launch config and per-machine settings for the
+# dev preview server. Nothing here is shared — the repo documents its agent
+# workflow in AGENTS.md and docs/agents/ instead.
+.claude/
+
+# Agent harness state (screenshots, panel state, issue tracker, diagram artifacts)
+.openchamber/
+.playwright-mcp/
+.scratch/
+.archify/
+
+# Throwaway probes written while investigating something. They belong in
+# .scratch/; these catch the ones that land in the tree instead, so `git add -A`
+# cannot sweep a probe into a commit. Anchored to the two directories probes
+# actually land in -- an unanchored `zz_*` would also swallow a real file named
+# that way further down.
+/scratch-*
+/zz_*
+/tests/zz_*
+
+# Local scratch that agents are told to keep in the repo: probe scripts,
+# screenshots and intermediate output from a run. Never part of a build.
+/.tmp/
+/probes/
+/*-runs/
+
+# Output of the design-taste tooling: the dealt direction sheet and the
+# inspection screenshots it writes. Regenerable, and megabytes of JPEGs.
+/.taste-skill/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and local overrides
+.env
+.env.local
+.env.*.local
+*.local
+
+# Editor and IDE directories
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Testing and coverage
+coverage/
+.nyc_output/
+
+# Temporary and cache
+.cache/
+.temp/
+*.tmp
+
+# Package managers: the repo installs with pnpm. A lockfile from another one is
+# a second source of truth for the dependency graph, not a thing to commit.
+yarn.lock
+package-lock.json

@@ -1,0 +1,2738 @@
+/**
+ * Tier 2 Test Suite: Boundary & Corner Cases
+ * Tests resilience against edge conditions, zero/extreme inputs, and fault injection.
+ */
+
+import assert from 'node:assert/strict';
+import { DomElement, DomImageElement, DomDocument, DomMutationObserver, DomShadowRoot, createDomElement } from '../env/browser.ts';
+import { createChromeMock } from '../env/chrome.ts';
+import { renderComponent, rasterizer, exportEngine, cardRenderer } from '../env/render.ts';
+import { createSuite } from '../env/harness.ts';
+import { extractTweetData } from '../../src/content/adapter/extractor.ts';
+import { isThreadConnectedPair } from '../../src/content/adapter/thread.ts';
+import { classifySocial, getReplyingToHandle, getRetweetedBy } from '../../src/content/adapter/social.ts';
+import { getPhotoUrlCandidates, getPhotoFallbackChain } from '../../src/content/adapter/urls.ts';
+import { TWEET_ARTICLE_SELECTOR } from '../../src/content/adapter/thread.ts';
+import { isPicMediaLink, normalizeTweetWhitespace, restoreUnicodeEmojis } from '../../src/content/adapter/emojis.ts';
+import { planMediaGrid, applyMediaGridPlan } from '../../src/content/ui/mediaGrid.ts';
+import { imageFallbackAttrs, avatarFallbackAttrs, advanceImageFallback, DEFAULT_AVATAR_SRC } from '../../src/content/ui/imageFallback.ts';
+import {
+  createTriggerButton,
+  applyTriggerLocale,
+  setInjectedButtonVisibility,
+  HIDE_ACTION_BUTTON_CLASS,
+  VISIBILITY_STYLE_ID,
+  injectIntoActionBar,
+  injectAll,
+  initTwitterInjection,
+} from '../../src/content/adapter/injection.ts';
+import { handleRadioKeyDown } from '../../src/content/ui/radioGroup.ts';
+import { getTranslation } from '../../src/content/i18n.ts';
+import { resolveOwnership, ownerOf } from '../../src/content/adapter/ownership.ts';
+import { threadSession } from '../../src/content/threadSession.ts';
+import { QUOTE_TWEET_HTML } from '../fixtures/quote-tweet.ts';
+import { NESTED_QUOTE_PREVIEW_HTML } from '../fixtures/nested-quote-preview.ts';
+import { NESTED_QUOTE_VIDEO_HTML } from '../fixtures/nested-quote-video.ts';
+import { SINGLE_TWEET_HTML } from '../fixtures/single-tweet.ts';
+import { RETWEET_HTML } from '../fixtures/retweet.ts';
+import { PINNED_HTML } from '../fixtures/pinned.ts';
+import { withoutTestIds } from '../fixtures/strip-testids.ts';
+import { loadUserPreferences, saveUserPreferences, subscribePreferences, STORAGE_KEY } from '../../src/content/prefs.ts';
+import { DEFAULT_CARD_CONFIG } from '../../src/content/ui/themes.ts';
+import type { TweetData, MediaItem, ThreadData, AuthorInfo } from '../../src/types/tweet.ts';
+import type { CardConfig } from '../../src/types/card.ts';
+
+const { test, run } = createSuite();
+
+/** The config a card is rendered with here — production's default, with the
+ * locale pinned so the copy does not follow the machine's language. */
+const CARD_CONFIG: CardConfig = { ...DEFAULT_CARD_CONFIG, locale: 'en-US' };
+
+/** The card, rendered from data, so a boundary claim is made against markup. */
+const renderCard = cardRenderer(CARD_CONFIG);
+
+const MEDIA_ONLY_TWEET: TweetData = {
+  id: '20001',
+  url: 'https://x.com/artist/status/20001',
+  author: { name: 'Artist', handle: '@artist', avatarUrl: 'https://pbs.twimg.com/avatar.jpg' },
+  text: '',
+  timestamp: '2026-02-01T10:00:00.000Z',
+  media: [{ type: 'image', url: 'https://pbs.twimg.com/media/art.jpg' }],
+};
+
+// -------------------------------------------------------------
+// Boundary 1: Empty and Whitespace-Only Text
+// -------------------------------------------------------------
+test('Tier 2.1: a media-only post renders its picture and leaves the text block empty', async () => {
+  const html = await renderCard({ data: MEDIA_ONLY_TWEET });
+
+  assert.equal((html.match(/class="media-box"/g) || []).length, 1, 'the picture did not reach the card');
+  const textBlock = html.match(/class="tweet-text-content"[^>]*>([\s\S]*?)<\/div>/);
+  assert.ok(textBlock, 'the card no longer renders a text block at all');
+  assert.equal(textBlock![1].replace(/<[^>]*>/g, '').trim(), '', 'a post with no words rendered words');
+  assert.ok(!html.includes('undefined'), 'an absent field leaked into the markup as "undefined"');
+});
+
+test('Tier 2.2: a whitespace-only node collapses without ghost spacing and keeps its break', () => {
+  // Pure indentation between two inline elements: one separator, no padding.
+  assert.equal(normalizeTweetWhitespace('    '), ' ');
+  // A node that carries a line break is the paragraph break X split out, so the
+  // break has to survive; only the spaces around it are noise.
+  const withBreak = normalizeTweetWhitespace('   \n\t   \n ');
+  assert.ok(withBreak.includes('\n'), 'the paragraph break was flattened away');
+  assert.equal(withBreak.replace(/\n/g, ''), '', `spaces survived as ghost spacing: ${JSON.stringify(withBreak)}`);
+  // Ordinary runs of spaces still collapse to one.
+  assert.equal(normalizeTweetWhitespace('  hi  there '), ' hi there ');
+});
+
+// -------------------------------------------------------------
+// Boundary 2: Extreme Length Content (4000+ Characters)
+// -------------------------------------------------------------
+test('Tier 2.3: a 4500-character post reaches the card whole, with no truncation', async () => {
+  const longText = 'A'.repeat(4500);
+  const html = await renderCard({ data: { ...MEDIA_ONLY_TWEET, text: longText } });
+
+  assert.ok(
+    html.includes(longText),
+    'the card truncated or mangled a long post on the way to the markup'
+  );
+});
+
+// Tier 2.4 (a 25-post thread parsed from a hand-built TweetData array) was
+// removed: it asserted its own array. Continuous-thread extraction is driven for
+// real by `tier_resolver.test.ts` res.3 (via `resolveThread`) and by tier1 F14
+// (3-post chaining, plus sponsored-post and outsider-reply exclusion). There is
+// no thread-length cap in `adapter/thread.ts` for a 25-post case to exercise.
+
+// -------------------------------------------------------------
+// Boundary 3: Emoji Edge Cases
+// -------------------------------------------------------------
+test('Tier 2.5: multi-codepoint ZWJ emojis survive restoration as single graphemes', () => {
+  const el = createDomElement('<div><span>👨‍👩‍👧‍👦 🏳️‍🌈 🧑🏽‍💻 🦸🏻‍♀️</span></div>');
+  const restored = restoreUnicodeEmojis(el);
+
+  for (const emoji of ['👨‍👩‍👧‍👦', '🏳️‍🌈', '🧑🏽‍💻', '🦸🏻‍♀️']) {
+    assert.ok(restored.includes(emoji), `${emoji} was broken apart by restoration`);
+  }
+});
+
+test('Tier 2.6: 50 consecutive Twemoji images restore with no separator between them', () => {
+  const el = new DomElement('DIV');
+  for (let i = 0; i < 50; i++) {
+    const img = new DomImageElement();
+    img.alt = '🔥';
+    el.appendChild(img);
+  }
+
+  const restored = restoreUnicodeEmojis(el);
+  assert.equal([...restored].length, 50, `a separator appeared between the emojis: ${JSON.stringify(restored.slice(0, 20))}`);
+  assert.equal(restored, '🔥'.repeat(50));
+});
+
+// -------------------------------------------------------------
+// Boundary 4: Missing & Corrupt Media
+// -------------------------------------------------------------
+test('Tier 2.7: a post with no avatar URL renders the inline placeholder, not a broken image', async () => {
+  const html = await renderCard({
+    data: { ...MEDIA_ONLY_TWEET, author: { name: 'Artist', handle: '@artist' } },
+  });
+
+  assert.ok(
+    /<img src="data:image\/svg\+xml;utf8,/.test(html),
+    'a missing avatar did not fall back to the inline placeholder'
+  );
+  assert.ok(!html.includes('src="undefined"'), 'the absent URL leaked into the markup');
+
+  const withAvatar = await renderCard({ data: MEDIA_ONLY_TWEET });
+  assert.ok(
+    withAvatar.includes('https://pbs.twimg.com/avatar.jpg'),
+    'a real avatar was replaced by the placeholder'
+  );
+
+  // The two states have to be wired, not just designed: the avatar <img> is the
+  // only place a failed load can be caught, so a real one carries the chain it
+  // walks on error, and one already showing the placeholder carries nothing --
+  // there is nothing for it to recover to.
+  const avatarTag = withAvatar
+    .slice(withAvatar.indexOf('class="author-avatar-img'))
+    .split('>')[0];
+  assert.ok(avatarTag.includes('data-fallback'), 'a real avatar must be able to recover');
+
+  const placeholderTag = html
+    .slice(html.indexOf('class="author-avatar-img'))
+    .split('>')[0];
+  assert.ok(!placeholderTag.includes('data-fallback'), 'the placeholder has nothing to fall back to');
+});
+
+// Tier 2.8 (a throwing `img.decode` caught by the test's own `.catch`) was
+// removed: it asserted its own error handling. The shipped catch is inside
+// `renderCardToBlob`, which tier1 F24/F25 and tier5 T5.1.3 drive for real.
+
+// Tier 2.9 (a test-registered `onMessage` listener answering the failure the
+// test itself wrote) was removed. The proxy's own failure handling is covered by
+// `tier1_features.test.ts` F4 and `tier5_adversarial.ts` T5.1.6/T5.1.7, and the
+// client-side fallback to the placeholder by T5.1.3 through the real engine.
+
+// -------------------------------------------------------------
+// Boundary 6: Clipboard Denial & Fallbacks
+// -------------------------------------------------------------
+// Tiers 2.10 and 2.11 (a test-written try/catch around `clipboard.write`, with a
+// `DownloadTracker` standing in for the shipped decision) were removed. The real
+// decision is `exportBlobWithFallback`, driven in `tier1_features.test.ts` F26
+// (per failure mode), `tier4_workloads.test.ts` W2 (a real unfocused refusal)
+// and `tier5_adversarial.ts` T5.2.
+
+
+// -------------------------------------------------------------
+// Boundary 7: Deleted and Unavailable Quote Tweets
+// -------------------------------------------------------------
+test('Tier 2.12: an unavailable quoted post renders the tombstone, not an empty quote card', async () => {
+  const html = await renderCard({
+    data: {
+      ...MEDIA_ONLY_TWEET,
+      text: 'What do you think of this?',
+      quotePost: {
+        author: { name: '', handle: '', avatarUrl: '' },
+        text: '',
+        timestamp: '',
+        isUnavailable: true,
+      },
+    },
+  });
+
+  assert.ok(html.includes('quote-card-unavailable'), 'the tombstone branch was not taken');
+  assert.ok(html.includes('quote-unavailable-text'), 'the tombstone rendered without its label');
+  assert.ok(
+    !html.includes('class="quote-card"'),
+    'an unavailable quote also rendered as a real quote card'
+  );
+});
+
+// Tiers 2.13 and 2.14 (zero stats, viral stats) were removed: both asserted a
+// stats object literal the test had just written. `formatStat` is driven for
+// real by `tier1_features.test.ts` F21.2b (a CJK count keeps its unit) and
+// F21.2c (a raw count is abbreviated).
+
+// Tiers 2.15 and 2.16 (0px/48px and 20px/16px config pairs) were removed: both
+// asserted their own config literal. `sanitizePadding`/`sanitizeRadius` and the
+// style they produce are driven for real by `tier1_features.test.ts` F18.1-F18.4.
+
+// Tier 2.17 (a hostile name round-tripped through `textContent`) was removed: it
+// asserted the DOM emulator's own setter. The shipped escaping is driven for real
+// by `tier1_features.test.ts` F5.3, which renders the card and reads the markup.
+
+// -------------------------------------------------------------
+// Boundary 10: Control Characters & RTL Text
+// -------------------------------------------------------------
+test('Tier 2.18: control-character removal is asked of the rasterizer, and RTL text is left alone', async () => {
+  // The extension does not strip control characters itself: the rasterizer is
+  // told to, through the options the export engine hands it. That flag is the
+  // contract, so it is what gets asserted.
+  const scope = globalThis as Record<string, unknown>;
+  const saved = { document: scope.document, HTMLElement: scope.HTMLElement, ShadowRoot: scope.ShadowRoot };
+  scope.document = new DomDocument();
+  scope.HTMLElement = DomElement;
+  scope.ShadowRoot = DomShadowRoot;
+
+  try {
+    const stub = await rasterizer();
+    stub.resetRasterizer();
+
+    const doc = scope.document as DomDocument;
+    const card = doc.createElement('div');
+    doc.body.appendChild(card);
+    card.textContent = 'مرحبا ‮reversed‬ \x00\x08';
+
+    const engine = await exportEngine();
+    await engine.renderCardToBlob(card, { scale: 2 });
+
+    const options = stub.rasterizerCalls[0]?.options as Record<string, any> | undefined;
+    assert.ok(options, 'the export engine never reached the rasterizer');
+    assert.equal(options.features.removeControlCharacter, true, 'control characters would reach the canvas');
+    assert.equal(options.features.removeAbnormalAttributes, true);
+    assert.equal(options.features.copyScrollbar, false, 'a scrollbar would be baked into the picture');
+
+    // The RTL text is the author's own writing and is not the export's to rewrite.
+    assert.equal(card.textContent, 'مرحبا ‮reversed‬ \x00\x08');
+  } finally {
+    scope.document = saved.document;
+    scope.HTMLElement = saved.HTMLElement;
+    scope.ShadowRoot = saved.ShadowRoot;
+  }
+});
+
+// -------------------------------------------------------------
+// Boundary 11: Quote Tweet Author Identity (real extractor)
+// The display-name anchor and the handle anchor share the same href on
+// Twitter/X, so a naive textContent read renders "任天堂株式会社 任天堂株式会社"
+// instead of "任天堂株式会社 @Nintendo". These lock the fix.
+// -------------------------------------------------------------
+test('Tier 2.19: quote author handle is derived from href, not the display-name link text', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.equal(data?.quotePost?.author.name, 'gKev1n');
+  assert.equal(
+    data?.quotePost?.author.handle,
+    '@gkev1n',
+    'Quote handle must come from href, not from the display-name anchor text'
+  );
+});
+
+test('Tier 2.20: quote author captures verified badge and its own avatar', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const quote = extractTweetData(article)?.quotePost;
+
+  assert.equal(quote?.author.verified, true, 'Verified badge inside the quote box must be detected');
+  assert.ok(
+    quote?.author.avatarUrl.includes('gkev1n_400x400'),
+    'Quote avatar must come from the quote box, not the main author'
+  );
+  assert.ok(!quote?.author.avatarUrl.includes('satya'), 'Main author avatar must not leak into the quote');
+});
+
+test('Tier 2.21: main tweet handle is unaffected when display-name link shares href with handle link', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.equal(data?.author.handle, '@ada_builds');
+});
+
+// -------------------------------------------------------------
+// Boundary 12: Quote Tweet Rich Content & Formatting Whitespace
+// -------------------------------------------------------------
+test('Tier 2.22: quote text preserves rich tokens so hashtags and links render styled', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const quote = extractTweetData(article)?.quotePost;
+
+  assert.ok(quote?.richTokens && quote.richTokens.length > 0, 'Quote must expose rich tokens');
+  const types = quote.richTokens.map(t => t.type);
+  assert.ok(types.includes('text'), 'Quote rich tokens must include plain text runs');
+});
+
+test('Tier 2.23: pretty-print indentation whitespace never leaks into tweet or quote text', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.ok(
+    !data?.text.includes('\n'),
+    'Main tweet text must not contain raw newlines (real breaks are <br> tags)'
+  );
+  assert.ok(
+    !data?.quotePost?.text.includes('\n'),
+    'Quote text must not contain raw newlines (real breaks are <br> tags)'
+  );
+});
+
+test('Tier 2.24: quote permalink is captured and points at the quoted post', () => {
+  const article = createDomElement(QUOTE_TWEET_HTML);
+  const data = extractTweetData(article);
+
+  assert.equal(data?.quotePost?.url, 'https://x.com/gkev1n/status/4999');
+});
+
+test('Tier 2.25: quote extraction returns undefined for a tweet without a quote box', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/user"><span>@user</span></a></div>
+      <div data-testid="tweetText"><span>plain tweet, no quote</span></div>
+    </article>
+  `);
+
+  assert.equal(extractTweetData(article)?.quotePost, undefined);
+});
+
+test('Tier 2.26: quoted post rendered as a nested <article> is still detected', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <a href="/main"><span>Main Author</span></a>
+        <a href="/main"><span>@main</span></a>
+      </div>
+      <div data-testid="tweetText"><span>look at this</span></div>
+      <article data-testid="tweet">
+        <div data-testid="User-Name">
+          <a href="/nested"><span>Nested Author</span></a>
+          <a href="/nested"><span>@nested</span></a>
+        </div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+      </article>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote, 'Nested article must be recognised as the quoted post');
+  assert.equal(quote.author.name, 'Nested Author');
+  assert.equal(quote.author.handle, '@nested');
+  assert.equal(quote.text, 'quoted body');
+});
+
+test('Tier 2.27: quote box without a data-testid is found structurally', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name">
+        <a href="/main"><span>Main Author</span></a>
+      </div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div role="link" tabindex="0">
+        <div data-testid="User-Name">
+          <a href="/quoted"><span>Quoted Author</span></a>
+          <a href="/quoted"><span>@quoted</span></a>
+        </div>
+        <div data-testid="tweetText"><span>quoted body without marker</span></div>
+      </div>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote, 'Structural fallback must locate the quote box');
+  assert.equal(quote.author.handle, '@quoted');
+  assert.equal(quote.text, 'quoted body without marker');
+  assert.equal(
+    extractTweetData(article)?.text,
+    'main body',
+    'Main tweet text must not be replaced by the quoted body'
+  );
+});
+
+test('Tier 2.28: quoted media never leaks into the main tweet media list', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div role="link" tabindex="0">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/media/quoted_only.png?format=png&name=small">
+        </div>
+      </div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  assert.ok(data?.quotePost, 'Quote must be detected');
+  assert.equal(data?.media, undefined, 'Main tweet must have no media of its own');
+  assert.equal(data?.quotePost?.media?.length, 1, 'Quoted media must belong to the quote');
+});
+
+test('Tier 2.29: an empty quote marker without content is not treated as a quote', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div data-testid="quoteTweet"></div>
+    </article>
+  `);
+
+  assert.equal(
+    extractTweetData(article)?.quotePost,
+    undefined,
+    'A quote marker with no author or text must not produce an empty quote card'
+  );
+  assert.equal(extractTweetData(article)?.text, 'main body');
+});
+
+test('Tier 2.30: external link card preview image is extracted as media', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>check this link</span></div>
+      <div data-testid="card.wrapper">
+        <div data-testid="card.layoutLarge.media">
+          <img data-testid="card-image" src="https://pbs.twimg.com/card_img/123/nintendo?format=jpg&name=small" alt="Nintendo Today!">
+        </div>
+      </div>
+    </article>
+  `);
+
+  const media = extractTweetData(article)?.media;
+  assert.ok(media && media.length === 1, 'Link card preview must yield one media item');
+  assert.ok(media[0].url.includes('card_img'), 'Link card media must point at the card image');
+  // Assert the resolution intent rather than a literal size token: the highest
+  // available variant is what keeps exports sharp, and its name changes.
+  assert.ok(
+    getPhotoUrlCandidates(media[0].url)[0].includes('name=orig'),
+    'Link card preview must request the highest resolution variant so exports stay sharp'
+  );
+});
+
+test('Tier 2.30b: external link card with non-div wrapper tag is extracted as media', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>check this link</span></div>
+      <section data-testid="card.wrapper">
+        <div data-testid="card.layoutLarge.media">
+          <img src="https://pbs.twimg.com/card_img/456/switch2?format=jpg&amp;name=900x900" alt="Switch 2 Review">
+        </div>
+      </section>
+    </article>
+  `);
+
+  const media = extractTweetData(article)?.media;
+  assert.ok(media && media.length === 1, 'Tag-agnostic link card preview must yield one media item');
+  assert.ok(media[0].url.includes('card_img'), 'Link card media must point at the card image');
+  assert.equal(media[0].alt, 'Switch 2 Review');
+  assert.ok(
+    getPhotoUrlCandidates(media[0].url)[0].includes('name=orig'),
+    'Link card preview must request the highest resolution variant so exports stay sharp'
+  );
+});
+
+test('Tier 2.30c: quote tweet carrying an external link card is extracted as quote media', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>check this quote</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted article link</span></div>
+        <div data-testid="card.wrapper">
+          <img src="https://pbs.twimg.com/card_img/789/review?format=jpg&amp;name=orig" alt="Quoted Article">
+        </div>
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.ok(tweet, 'expected extracted tweet');
+  assert.ok(!tweet.media, 'main tweet itself has no media');
+  assert.ok(tweet.quotePost, 'expected quote post');
+  assert.ok(tweet.quotePost.media && tweet.quotePost.media.length === 1, 'quoted link card must be extracted as quote media');
+  assert.ok(tweet.quotePost.media[0].url.includes('card_img'), 'quote media points to card image');
+  assert.equal(tweet.quotePost.media[0].alt, 'Quoted Article');
+});
+
+// -------------------------------------------------------------
+// Structural detection: retweets, replies, ads, and unavailable posts
+// -------------------------------------------------------------
+test('Tier 2.31: a repost is identified from socialContext without reading its label', () => {
+  // The notice is the reposter's own profile link -- that nesting is the signal,
+  // and the label text ("Alice reposted" here) is deliberately arbitrary so a
+  // check that read the wording would have nothing to match on.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <a href="/alice" role="link"><span data-testid="socialContext">Alice reposted</span></a>
+      <div data-testid="User-Name"><a href="/bob"><span>Bob</span></a></div>
+      <div data-testid="tweetText"><span>original words</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.retweetedBy, '@alice', 'reposting handle must come from the notice own link');
+  assert.equal(tweet?.diagnostics?.social, 'retweet');
+});
+
+test('Tier 2.31b: a real repost notice is a span, and its handle is the notice own link', () => {
+  // The community documentation said `div[data-testid="socialContext"]`, and a
+  // real repost (2026-10-11) puts that testid on a `span` whose *enclosing* link
+  // is the reposter. Both halves were wrong, so every repost read as an original
+  // post. This is the real markup; `RETWEET_HTML` carries it with its provenance.
+  const article = createDomElement(RETWEET_HTML);
+
+  const tweet = extractTweetData(article);
+  assert.ok(tweet, 'the repost must extract');
+  assert.equal(tweet!.retweetedBy, '@shirolinhime', 'the reposter is the notice own link');
+  assert.equal(tweet!.diagnostics?.social, 'retweet', 'and it must classify as a repost');
+  assert.equal(tweet!.author.handle, '@devindevelopers', 'the body belongs to the reposted author');
+  assert.equal(
+    tweet!.translatedFrom,
+    '翻译自 英语',
+    'the translation notice is still the entry own, not the notice'
+  );
+});
+
+test('Tier 2.31c: a real pinned notice is a div with no link, and reads as pinned', () => {
+  // The same testid as a repost, rendered the other way: a `div` here against a
+  // `span` there, and no link at all. That pair is why the lookup matches the
+  // testid and never the tag, and why the handle readers must answer nothing
+  // rather than reaching for the entry's own author.
+  const article = createDomElement(PINNED_HTML);
+
+  const tweet = extractTweetData(article);
+  assert.ok(tweet, 'the pinned post must extract');
+  assert.equal(tweet!.diagnostics?.social, 'pinned', 'a notice naming no account is pinned');
+  assert.equal(tweet!.retweetedBy, undefined, 'a pinned post is not a repost');
+  assert.equal(tweet!.author.handle, '@postpress_demo', 'and the body is its own author');
+
+  // And it must not depend on reading the wording. X localises that notice into
+  // forty-odd languages while the wording list knew three, so a German or Korean
+  // interface silently reported `none` -- which is exactly the drift the
+  // diagnostic exists to surface. The structure is the same in every language:
+  // a pinned notice names no account.
+  for (const wording of ['Angepinnt', 'Épinglé', '고정됨', 'フィン止め']) {
+    const localized = createDomElement(PINNED_HTML.replace('已置顶', wording));
+    assert.equal(
+      extractTweetData(localized)?.diagnostics?.social,
+      'pinned',
+      `a notice reading "${wording}" is still pinned`
+    );
+  }
+});
+
+test('Tier 2.32: a reply target is read structurally from socialContext', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="socialContext">
+        <span>Replying to</span>
+        <a href="/carol"><span>@carol</span></a>
+      </div>
+      <div data-testid="User-Name"><a href="/dave"><span>Dave</span></a></div>
+      <div data-testid="tweetText"><span>a reply</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.retweetedBy, undefined, 'a reply is not a retweet');
+  assert.equal(tweet?.diagnostics?.social, 'reply');
+});
+
+test('Tier 2.32b: the notice kind is read from structure, in any language', () => {
+  // The three notices are structurally distinct, and this is the property that
+  // matters: the wording is localized into forty-odd languages while the check
+  // used to know seven, so a German or Korean interface reported no reply at all
+  // (and, through `getRetweetedBy`, could report a reply as a repost).
+  const reply = (wording: string) =>
+    createDomElement(`
+      <article data-testid="tweet">
+        <div data-testid="socialContext"><span>${wording}</span> <a href="/carol" role="link"><span>@carol</span></a></div>
+        <div data-testid="User-Name"><a href="/dave"><span>@dave</span></a></div>
+        <div data-testid="tweetText"><span>a reply</span></div>
+      </article>
+    `);
+
+  for (const wording of ['Replying to', 'Antwort an', 'En réponse à', '답글 대상']) {
+    const article = reply(wording);
+    assert.equal(classifySocial(article), 'reply', `"${wording}" is a reply notice`);
+    assert.equal(getReplyingToHandle(article), '@carol', `and names its target, for "${wording}"`);
+    assert.equal(getRetweetedBy(article), null, `and is not a repost, for "${wording}"`);
+  }
+
+  // A repost keeps working when its own wording is unknown, too.
+  for (const wording of ['reposted', 'Weitergeleitet', '리포스트']) {
+    const article = createDomElement(RETWEET_HTML.replace('你已转帖', wording));
+    assert.equal(classifySocial(article), 'retweet', `"${wording}" is a repost notice`);
+    assert.equal(getRetweetedBy(article), '@shirolinhime', `and names the reposter, for "${wording}"`);
+  }
+});
+
+test('Tier 2.33: the word "reply" inside a quoted post does not classify the outer tweet', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/erin"><span>Erin</span></a></div>
+      <div data-testid="tweetText"><span>look at this</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/frank"><span>Frank</span></a></div>
+        <div data-testid="tweetText"><span>回复: please read this</span></div>
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.retweetedBy, undefined);
+  assert.equal(tweet?.diagnostics?.social, 'none', 'a quoted reply must not classify the outer entry');
+});
+
+test('Tier 2.34: pic.x.com media permalinks do not leak into the rendered text', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/gina"><span>Gina</span></a></div>
+      <div data-testid="tweetText">
+        <span>look at this</span>
+        <a href="https://t.co/abc123"><span>pic.x.com/abc123</span></a>
+      </div>
+      <div data-testid="tweetPhoto">
+        <img src="https://pbs.twimg.com/media/a.jpg?format=jpg&name=small" alt="A">
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.ok(!/pic\./.test(tweet?.text || ''), 'media permalink must not appear in the body text');
+  assert.ok(!(tweet?.richTokens || []).some(tk => tk.type === 'mention' && /pic\./.test(tk.value)),
+    'media permalink must not be tokenized as a mention');
+});
+
+test('Tier 2.35: a post with a permalink but no identity or body is flagged unavailable', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <a href="/someone/status/123"><time datetime="2026-01-01T00:00:00.000Z"></time></a>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.diagnostics?.isUnavailable, true);
+});
+
+test('Tier 2.36: an ordinary post is not flagged as unavailable', () => {
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/hank"><span>Hank</span></a></div>
+      <div data-testid="tweetText"><span>still here</span></div>
+      <a href="/hank/status/456"><time datetime="2026-01-01T00:00:00.000Z"></time></a>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.diagnostics?.isUnavailable, false);
+});
+
+test('Tier 2.37: photo resolution requests the highest available variant and keeps a fallback chain', () => {
+  const candidates = getPhotoUrlCandidates('https://pbs.twimg.com/media/x.webp?format=webp&name=small');
+  assert.ok(candidates.length >= 2, 'expected a fallback chain');
+  assert.ok(candidates[0].includes('name=orig'), 'first candidate must request the original');
+  assert.ok(candidates[0].includes('format=jpg'), 'webp must be rewritten to jpg for original quality');
+  assert.ok(candidates.some(c => c.includes('name=large')), 'chain must include a smaller fallback');
+});
+
+test('Tier 2.37b: a card picture’s fallback chain ends at the URL the page rendered', () => {
+  // `orig` is known to 404 where `large` still resolves, so the chain exists to
+  // recover a broken <img> rather than print its alt text. It must lead with the
+  // mounted URL, run through the derived variants, and finish on the exact URL
+  // X itself rendered -- the one variant that is certain to still exist.
+  const originalUrl = 'https://pbs.twimg.com/media/photo.jpg?format=jpg&name=small';
+  const preferredUrl = getPhotoUrlCandidates(originalUrl)[0];
+  const chain = getPhotoFallbackChain(originalUrl, preferredUrl);
+
+  assert.equal(chain[0], preferredUrl, 'the mounted URL must be tried first');
+  assert.equal(chain[chain.length - 1], originalUrl, 'the page-rendered URL is the last resort');
+  assert.ok(chain.some(c => c.includes('name=large')), 'large must remain in the chain');
+  assert.equal(new Set(chain).size, chain.length, 'no URL may be tried twice');
+});
+
+test('Tier 2.37c: a picture with no derivable variants still has itself as a fallback-free single entry', () => {
+  // A non-media source (or one already at its best) yields one URL. The card
+  // then mounts it with no `data-fallback`, so a broken image stays visibly
+  // broken instead of being retried against itself.
+  const raw = 'https://pbs.twimg.com/profile_images/1/avatar_400x400.jpg';
+  const chain = getPhotoFallbackChain(raw, raw);
+  assert.deepEqual(chain, [raw], 'a non-upgradable source must not invent a retry');
+});
+
+test('Tier 2.37d: a broken card picture advances to its next variant, one step per error', () => {
+  // The end-to-end recovery: mount the highest variant, then feed errors and
+  // watch the src walk down the chain until it lands on the page-rendered URL.
+  const item: MediaItem = {
+    type: 'image',
+    url: 'https://pbs.twimg.com/media/photo.jpg?format=jpg&name=orig',
+    originalUrl: 'https://pbs.twimg.com/media/photo.jpg?format=jpg&name=small',
+  };
+
+  const img = new DomImageElement();
+  img.setAttribute('src', item.url);
+  for (const [name, value] of Object.entries(imageFallbackAttrs(item))) {
+    img.setAttribute(name, value);
+  }
+
+  advanceImageFallback(img);
+  assert.match(img.src, /name=large/, 'first error drops to large');
+  advanceImageFallback(img);
+  assert.match(img.src, /name=medium/, 'second error drops to medium');
+  advanceImageFallback(img);
+  assert.equal(img.src, item.originalUrl, 'third error lands on the page-rendered URL');
+  // The last step emptied the chain, so the element is left with nothing to retry.
+  assert.equal(img.getAttribute('data-fallback'), '[]');
+
+  // One more error must not throw or loop: the picture is simply broken.
+  assert.doesNotThrow(() => advanceImageFallback(img));
+  assert.equal(img.src, item.originalUrl, 'an exhausted chain leaves the last URL in place');
+});
+
+test('Tier 2.37e: a picture with no fallback is mounted without the attribute and never retried', () => {
+  const item: MediaItem = { type: 'image', url: 'https://pbs.twimg.com/profile_images/1/plain_400x400.jpg' };
+  assert.deepEqual(imageFallbackAttrs(item), {}, 'nothing to fall back to means no attribute');
+
+  const img = new DomImageElement();
+  img.setAttribute('src', item.url);
+  advanceImageFallback(img);
+  assert.equal(img.src, item.url, 'a picture with no chain is left untouched');
+});
+
+test('Tier 2.37f: a video poster never falls back onto the video file', () => {
+  // The GraphQL channel stores the mp4 in `originalUrl` and the still frame in
+  // `url`/`posterUrl`. Deriving the chain from `originalUrl` made a 404 poster
+  // "recover" onto an `.mp4`, which an <img> cannot display -- worse than the
+  // broken poster it started with. The poster is the only valid source of
+  // picture variants. A poster thumbnail path X serves no `name=` variants for
+  // then yields no chain at all, which is the honest outcome rather than a
+  // wrong one.
+  const item: MediaItem = {
+    type: 'video',
+    url: 'https://pbs.twimg.com/amplify_video_thumb/9/img/x.jpg?format=jpg&name=orig',
+    originalUrl: 'https://video.twimg.com/amplify_video/9/vid/avc1/1280x720/x.mp4',
+    posterUrl: 'https://pbs.twimg.com/amplify_video_thumb/9/img/x.jpg?format=jpg&name=orig',
+  };
+
+  const attrs = imageFallbackAttrs(item);
+  assert.ok(!JSON.stringify(attrs).includes('.mp4'), 'the video file is never a fallback');
+  assert.ok(!JSON.stringify(attrs).includes('video.twimg.com'), 'nor is its host reached');
+
+  // The image path is unchanged: a photo still walks its own variants.
+  const photo: MediaItem = {
+    type: 'image',
+    url: 'https://pbs.twimg.com/media/p.jpg?format=jpg&name=orig',
+    originalUrl: 'https://pbs.twimg.com/media/p.jpg?format=jpg&name=small',
+  };
+  assert.match(imageFallbackAttrs(photo)['data-fallback'] || '', /name=large/,
+    'a photo still carries its variant chain');
+});
+
+test('Tier 2.37g: a failed avatar recovers onto the card silhouette, not onto a broken image', () => {
+  // The card mounts the avatar at `_400x400`, an upgrade of whatever the page
+  // rendered, but X derives every avatar size from the same source and they have
+  // only been observed resolving or 404ing together (2026-10-20,
+  // `docs/detection-audit.md`), so there is no smaller copy to walk down to. The
+  // one step is the silhouette the card already shows for an author with no
+  // picture at all, which is what makes it a state rather than a placeholder
+  // papering over a missing image.
+  const author: AuthorInfo = {
+    name: 'Someone',
+    handle: '@someone',
+    avatarUrl: 'https://pbs.twimg.com/profile_images/1/x_400x400.jpg',
+  };
+
+  const attrs = avatarFallbackAttrs(author);
+  assert.deepEqual(JSON.parse(attrs['data-fallback'] || 'null'), [DEFAULT_AVATAR_SRC]);
+
+  const img = new DomImageElement();
+  img.setAttribute('src', author.avatarUrl);
+  for (const [name, value] of Object.entries(attrs)) img.setAttribute(name, value);
+
+  advanceImageFallback(img);
+  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'one error lands on the silhouette');
+  assert.equal(img.getAttribute('data-fallback'), '[]', 'and there is nothing left to try');
+  assert.doesNotThrow(() => advanceImageFallback(img), 'a second error must not loop');
+  assert.equal(img.src, DEFAULT_AVATAR_SRC, 'the silhouette stays put');
+
+  // An author with no picture is already rendered with the silhouette, so there
+  // is nothing for it to recover to.
+  assert.deepEqual(
+    avatarFallbackAttrs({ name: 'Nobody', handle: '@nobody', avatarUrl: '' }),
+    {},
+    'no avatarUrl means no fallback to walk'
+  );
+});
+
+test('Tier 2.38: extraction degrades gracefully when no data-testid is present', () => {
+  // Logged-out pages carry no data-testid at all, so every testid-based lookup
+  // misses. The fixture is a real one with its attributes removed, which is what
+  // leaves the permalink and the timestamp as the only signals in the markup.
+  const article = createDomElement(withoutTestIds(SINGLE_TWEET_HTML));
+
+  let tweet;
+  assert.doesNotThrow(() => {
+    tweet = extractTweetData(article as unknown as Element);
+  }, 'extraction must not throw on a testid-free DOM');
+  assert.ok(tweet, 'a record must still be produced');
+
+  // Identity comes off the permalink and the timestamp rather than a testid, so
+  // it survives the loss. How much of the rest degrades is deliberately not
+  // pinned -- a later pass may recover more of it -- but the action bar must
+  // never become the body.
+  assert.equal(tweet!.id, '20', 'the permalink still identifies the post');
+  assert.equal(tweet!.url, 'https://x.com/jack/status/20');
+  for (const marker of ['48.5K', '120.2K', '1.5M', '32.1K', '18.4M']) {
+    assert.ok(
+      !tweet!.text.includes(marker),
+      `the body must not adopt the action bar's "${marker}"`
+    );
+  }
+  assert.equal(tweet!.diagnostics?.text, 'none', 'diagnostics must report the missing anchor');
+});
+
+test('Tier 2.39: the article selector falls back past data-testid', () => {
+  assert.ok(
+    TWEET_ARTICLE_SELECTOR.includes('role="article"'),
+    'a role-based fallback is required because logged-out pages lack data-testid'
+  );
+  assert.ok(
+    TWEET_ARTICLE_SELECTOR.includes('cellInnerDiv'),
+    'a structural fallback is required for layouts without either marker'
+  );
+  // Verified against a real logged-out tweet page, where the page carried no
+  // data-testid and no role, leaving only the bare tag inside main.
+  assert.ok(
+    TWEET_ARTICLE_SELECTOR.includes('main article'),
+    'a bare main article fallback is required for logged-out pages'
+  );
+});
+
+test('Tier 2.39b: the structural article fallbacks are reachable, not merely spelled', async () => {
+  // 2.39 asserts the constant carries the members; this asserts the engine
+  // resolves them. The matcher fed every comma member to the compound-only
+  // matcher, which read the space in `main article` as an unparsable tail and
+  // returned false — so `closest(TWEET_ARTICLE_SELECTOR)` answered null on
+  // exactly the logged-out page that member exists for, and the owning post was
+  // never marked. The button was still appended, so the failure was invisible:
+  // pressing it announced nothing.
+  await withInjectionEnv(async ({ doc }) => {
+    const main = createDomElement(`
+      <main>
+        <article tabindex="0">
+          <div role="group">
+            <button aria-label="Reply">64</button>
+          </div>
+        </article>
+      </main>
+    `);
+    doc.body.appendChild(main);
+
+    const article = main.querySelector('article')!;
+    assert.equal(article.getAttribute('data-testid'), null, 'the logged-out article carries no testid');
+    assert.equal(article.getAttribute('role'), null, 'and no role either');
+
+    const bar = article.querySelector('div[role="group"]') as unknown as Element;
+    assert.equal(injectIntoActionBar(bar, () => {}), true, 'the trigger is still injected');
+    assert.equal(
+      article.getAttribute('data-post-to-card-injected'),
+      'true',
+      'the owning post is resolved through the `main article` member and marked'
+    );
+
+    // The other structural member, on the layout that has a cell wrapper
+    // instead of a bare `<main>`.
+    const wrapped = createDomElement(`
+      <div data-testid="cellInnerDiv">
+        <article tabindex="0">
+          <div role="group"><button aria-label="Reply">7</button></div>
+        </article>
+      </div>
+    `);
+    doc.body.appendChild(wrapped);
+    const wrappedArticle = wrapped.querySelector('article')!;
+    const wrappedBar = wrappedArticle.querySelector('div[role="group"]') as unknown as Element;
+
+    assert.equal(injectIntoActionBar(wrappedBar, () => {}), true);
+    assert.equal(
+      wrappedArticle.getAttribute('data-post-to-card-injected'),
+      'true',
+      'and through the `cellInnerDiv article` member'
+    );
+  });
+});
+
+test('Tier 2.40: a translated post carries X’s "translated from" notice verbatim', () => {
+  // X renders the notice as the sibling directly above the body: a translate
+  // glyph, the label, and a "show original" toggle. The toggle must not end up
+  // in the extracted label.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div>
+        <svg viewBox="0 0 24 24"></svg>
+        <span>Translated from Portuguese</span>
+        <button aria-label="Show original"><span>Show original</span></button>
+      </div>
+      <div data-testid="tweetText" lang="en"><span>Best combat in a game so far</span></div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  assert.equal(data?.translatedFrom, 'Translated from Portuguese');
+  assert.equal(data?.text, 'Best combat in a game so far');
+});
+
+test('Tier 2.41: an untranslated post has no translation notice', () => {
+  // The row above the body is normally the author line, which must not be
+  // mistaken for a translation notice.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>hello</span></div>
+    </article>
+  `);
+
+  assert.equal(extractTweetData(article)?.translatedFrom, undefined);
+});
+
+test('Tier 2.42: a self-labelled link is tokenized, not dropped as a media permalink', () => {
+  // Regression guard. The old "visible text equals href" test for media
+  // permalinks also swallowed a genuine URL whose label is the URL itself,
+  // which dropped the styled link and left the raw body text unstyled.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/alice"><span>Alice</span></a></div>
+      <div data-testid="tweetText">
+        <span>Try </span>
+        <a href="https://example.com/app?x=1" role="link">https://example.com/app?x=1</a>
+      </div>
+    </article>
+  `);
+
+  const tokens = extractTweetData(article)?.richTokens || [];
+  const link = tokens.find(tk => tk.type === 'link');
+  assert.ok(link, 'a self-labelled URL must survive as a link token');
+  assert.equal(link!.value, 'https://example.com/app?x=1');
+});
+
+test('Tier 2.43: real line breaks in the body survive as newlines', () => {
+  // X renders line breaks as literal "\n" inside a pre-wrap block, not as <br>
+  // elements. Collapsing them to spaces flattened a bulleted/paragraph post into
+  // a single blob on the card.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>first line
+
+- bullet
+- bullet two
+
+last line</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.text, 'first line\n\n- bullet\n- bullet two\n\nlast line');
+
+  const textToken = (tweet?.richTokens || []).find(tk => tk.type === 'text');
+  assert.equal(
+    textToken?.value,
+    'first line\n\n- bullet\n- bullet two\n\nlast line',
+    'the token view must keep the same line breaks as the body text'
+  );
+});
+
+test('Tier 2.74: a paragraph break inside its own text node is not flattened', () => {
+  // X splits the body around every inline element (link, mention, emoji img), so
+  // a paragraph break between two such elements lives in a whitespace-only node
+  // of its own. The first fix only protected a break inside a content-bearing
+  // node, so any post whose line ended at a mention or emoji came back as one
+  // paragraph -- the regression that was reported twice.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>first para</span><span>\n\n</span><span>second para with <a href="/alice">@alice</a> here</span></div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  assert.equal(tweet?.text, 'first para\n\nsecond para with @alice here');
+
+  const tokens = tweet?.richTokens || [];
+  assert.equal(
+    tokens.map(tk => tk.value).join(''),
+    'first para\n\nsecond para with @alice here',
+    'the token view must flatten to the same body, break included'
+  );
+  assert.ok(
+    tokens.some(tk => tk.type === 'text' && tk.value.includes('\n\n')),
+    'the paragraph break must survive as a break, not a space'
+  );
+});
+
+test('Tier 2.75: newline indentation at the body edges prints no blank line', () => {
+  // A break that reaches the start or end of the body would show as an empty
+  // first or last line on the card. `tweet.text` trims its edges, so the token
+  // view must agree.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>
+</span><span>the only line <a href="/alice">@alice</a></span>
+</div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  const tokens = tweet?.richTokens || [];
+  assert.ok(tokens.length > 0, 'the body must still produce tokens');
+  assert.equal(tokens[0].type === 'text' ? tokens[0].value.trim() : tokens[0].value, 'the only line');
+  assert.equal(tweet?.text, 'the only line @alice');
+});
+
+test('Tier 2.44: a quoted video renders once, not as a poster plus the video', () => {
+  // Regression guard. The quote's media pass had no poster handling, so a quoted
+  // video kept its poster image AND the video item, and the card drew the same
+  // frame twice — once plain, once with the play badge.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>look at this</span></div>
+      <div role="link" tabindex="0" data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/tweet_video_thumb/quote_frame.jpg" alt="">
+          <video poster="https://pbs.twimg.com/tweet_video_thumb/quote_frame.jpg"></video>
+          <button data-testid="playButton" aria-label="play"></button>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  const media = data?.quotePost?.media;
+  assert.ok(media, 'the quoted video must produce media');
+  assert.equal(media!.length, 1, 'the quoted poster must not render alongside the video item');
+  assert.equal(media![0].type, 'video');
+  assert.equal(data?.media, undefined, "the quoted video must not leak into the main tweet's media");
+});
+
+// -------------------------------------------------------------
+// Media grid planning: threshold edges and settled decisions
+// -------------------------------------------------------------
+
+/** A picture of the given shape, with no shape recorded. */
+function picture(ratio?: number): MediaItem {
+  const item: MediaItem = { type: 'image', url: 'https://pbs.twimg.com/media/p.jpg' };
+  if (ratio !== undefined) item.aspectRatio = ratio;
+  return item;
+}
+
+/** The fixed-shape grid: a crop wants a box to crop into. */
+const AUTO_GRID = { aspectRatio: 'auto' as const, mediaLayout: 'grid' as const, imageFit: 'cover' as const };
+
+/** 完整展示 in the auto ratio: every cell is its picture's own rectangle. */
+const CONTAIN_GRID = { ...AUTO_GRID, imageFit: 'contain' as const };
+
+test('Tier 2.45: the 1.2 hero threshold puts each side on its own side of it', () => {
+  // Below 1.2 the first picture is tall or square and takes the left column;
+  // at 1.2 and above it is a banner and takes the whole first row. The edge is
+  // inclusive on the landscape side, so 1.2 itself is top-hero.
+  assert.equal(planMediaGrid([picture(1.19), picture(1.5), picture(1.5)], AUTO_GRID).layout, 'left-hero');
+  assert.equal(planMediaGrid([picture(1.2), picture(1.5), picture(1.5)], AUTO_GRID).layout, 'top-hero');
+});
+
+test('Tier 2.46: the 1.25 wide threshold is inclusive, 0.88 tall is not', () => {
+  // Two pictures only read as "both wide" at 1.25 and up.
+  assert.equal(planMediaGrid([picture(1.24), picture(1.6)], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(1.25), picture(1.25)], AUTO_GRID).layout, 'stacked');
+
+  // The tall pair reads on a tighter threshold, and stays strict: one wide
+  // partner is enough to make the pair a plain two-column grid.
+  assert.equal(planMediaGrid([picture(0.88), picture(0.88)], AUTO_GRID).layout, 'portrait-columns');
+  assert.equal(planMediaGrid([picture(0.88), picture(0.9)], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(0.88), picture(1.6)], AUTO_GRID).layout, 'columns');
+});
+
+test('Tier 2.47: one known shape can call a tall pair, on the looser threshold', () => {
+  // Only one picture has reported its shape so far. A single tall picture is
+  // enough to commit the pair to the portrait layout, and the looser 0.85
+  // threshold is what reflects the uncertainty.
+  assert.equal(planMediaGrid([picture(0.85), picture()], AUTO_GRID).layout, 'portrait-columns');
+  assert.equal(planMediaGrid([picture(0.86), picture()], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(), picture(0.85)], AUTO_GRID).layout, 'portrait-columns');
+  assert.equal(planMediaGrid([picture(1.6), picture()], AUTO_GRID).layout, 'columns');
+});
+
+test('Tier 2.48: a half-known grid leaves its shape to the stylesheet', () => {
+  // Every count-2 combination of shapes is a sum or a harmonic mean of two, so
+  // one shape on its own says nothing. The plan then states a layout and no
+  // ratio, which leaves card.css free to apply the default for that layout.
+  const shapeless = planMediaGrid([picture(), picture()], AUTO_GRID);
+  assert.equal(shapeless.layout, 'columns');
+  assert.equal(shapeless.aspectRatio, undefined);
+
+  // Regression guard. One tall picture is enough to commit the pair to the
+  // portrait layout, and that layout's own default is square. A blanket wide
+  // fallback here stated 1.6 inline, which beat the stylesheet and rendered a
+  // pair of vertical screenshots in a landscape box.
+  const halfTall = planMediaGrid([picture(0.8), picture()], AUTO_GRID);
+  assert.equal(halfTall.layout, 'portrait-columns');
+  assert.equal(halfTall.aspectRatio, undefined, 'the square default must survive');
+
+  // The same for a half-known wide picture, which lands on the plain columns.
+  assert.equal(planMediaGrid([picture(1.4), picture()], AUTO_GRID).layout, 'columns');
+  assert.equal(planMediaGrid([picture(1.4), picture()], AUTO_GRID).aspectRatio, undefined);
+
+  // Four shapeless pictures cannot be averaged at all, so that one leaves the
+  // shape to the stylesheet too.
+  const quad = planMediaGrid([picture(), picture(), picture(), picture()], AUTO_GRID);
+  assert.equal(quad.layout, 'quad');
+  assert.equal(quad.aspectRatio, undefined, 'four shapeless pictures cannot be averaged');
+
+  // One shape out of four is still an average of one, which says nothing about
+  // the other three.
+  const oneKnown = planMediaGrid([picture(1.5), picture(), picture(), picture()], AUTO_GRID);
+  assert.equal(oneKnown.aspectRatio, undefined);
+
+  // Both known, and the grid does take a shape from them.
+  assert.equal(planMediaGrid([picture(0.46), picture(0.46)], AUTO_GRID).aspectRatio, '0.92');
+});
+
+test('Tier 2.49: only auto mode lets the pictures shape the grid', () => {
+  const items = [picture(0.46), picture(0.46)];
+
+  // A poster ratio or a stacked grid has a shape of its own, which the stylesheet
+  // already states, so the plan must not also state one inline.
+  assert.equal(planMediaGrid(items, { aspectRatio: '3:4', mediaLayout: 'grid', imageFit: 'cover' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, { aspectRatio: '16:9', mediaLayout: 'grid', imageFit: 'cover' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, { aspectRatio: 'auto', mediaLayout: 'stack', imageFit: 'cover' }).aspectRatio, undefined);
+  assert.equal(planMediaGrid(items, AUTO_GRID).aspectRatio, '0.92');
+});
+
+test('Tier 2.50: a settled plan does not change when it is planned again', () => {
+  // The load path re-plans a grid that was planned before the shapes arrived.
+  // Planning twice with the same information has to land on the same answer,
+  // which is the whole point of the two paths sharing one rule.
+  const items = [picture(0.46), picture(0.46), picture(1.4)];
+  const first = planMediaGrid(items, AUTO_GRID);
+  const second = planMediaGrid(items, AUTO_GRID);
+  assert.deepEqual(second, first);
+
+  // The mixed pair is the case that drifted before: one tall and one wide, with
+  // an average wide enough to be called tall. The render rule is the only one.
+  const mixed = [picture(0.7), picture(1.1)];
+  assert.equal(planMediaGrid(mixed, AUTO_GRID).layout, 'columns');
+});
+
+test('Tier 2.51: a re-plan replaces the previous layout instead of adding to it', () => {
+  // The layout is one data attribute. It used to be written twice -- this
+  // attribute and a `grid-*` class card.css never read -- so the re-plan kept a
+  // class list in step as well, and a stale class could outlive the plan that
+  // set it. The attribute is now the whole answer.
+  const grid = new DomElement('DIV');
+  grid.setAttribute('data-grid-layout', 'default');
+
+  applyMediaGridPlan(grid, planMediaGrid([picture(0.46), picture(0.46)], AUTO_GRID));
+
+  assert.equal(grid.getAttribute('data-grid-layout'), 'portrait-columns');
+  assert.equal(grid.style.aspectRatio, '0.92');
+  assert.ok(
+    !grid.className || !/\bgrid-/.test(grid.className),
+    'and no layout class lingers beside it'
+  );
+});
+
+/** A width of the form `calc(<share>% - <gaps> - <insets> - 0.25px)`, read back. */
+function sharesOf(widths: string[]): number[] {
+  return widths.map(width => {
+    const match = /^calc\(([\d.]+)%/.exec(width);
+    assert.ok(match, `a line width states its share first: ${width}`);
+    return Number(match[1]);
+  });
+}
+
+test('Tier 2.52: 完整展示 gives each cell its picture\'s own share of the line', () => {
+  // Two pictures on one line: each takes the line in proportion to its own
+  // shape, so both come out the same height and each cell is its picture's
+  // rectangle. The shares are of the line's width, and they sum to it.
+  const mixed = planMediaGrid([picture(1.6), picture(0.8)], CONTAIN_GRID);
+  assert.equal(mixed.layout, 'columns');
+  assert.equal(mixed.aspectRatio, undefined, 'a packed grid has no shape of its own to state');
+  assert.equal(mixed.columns, undefined, 'only the hero layout needs column weights');
+  assert.ok(mixed.slots, '完整展示 plans a place for every picture');
+  assert.deepEqual(mixed.slots!.map(slot => slot.ratio), [1.6, 0.8]);
+  const shares = sharesOf(mixed.slots!.map(slot => slot.width));
+  assert.ok(Math.abs(shares[0] + shares[1] - 100) < 0.01, `shares must fill the line: ${shares.join(' + ')}`);
+  assert.ok(Math.abs(shares[0] / shares[1] - 2) < 0.001, 'the wider picture takes twice the line');
+
+  // The gutter is subtracted in proportion to the share, and the insets cancel:
+  // a line of two cells adds back exactly what it took out.
+  assert.ok(mixed.slots![0].width.includes('var(--media-gap, 4px)'), 'the gap is part of the same percent');
+  assert.ok(mixed.slots![0].width.includes('var(--border-width, 1px)'), 'the ring is accounted for');
+
+  // A single picture is the whole line, and its slot is its own shape — no
+  // floor and no crop, which is what 完整展示 promises a tall screenshot.
+  const lone = planMediaGrid([picture(0.4)], CONTAIN_GRID);
+  assert.equal(lone.layout, 'default');
+  assert.deepEqual(lone.slots, [{ ratio: 0.4, width: 'calc(100% - 0.25px)' }]);
+});
+
+test('Tier 2.53: a line of three splits into the layout\'s own lines', () => {
+  // Top-hero is a wide picture over a pair: the hero is its own line, and the
+  // pair divides the second in proportion to their shapes.
+  const hero = planMediaGrid([picture(1.6), picture(1.5), picture(0.75)], CONTAIN_GRID);
+  assert.equal(hero.layout, 'top-hero');
+  assert.equal(hero.slots![0].width, 'calc(100% - 0.25px)', 'the hero has the line to itself');
+  const pair = sharesOf([hero.slots![1].width, hero.slots![2].width]);
+  assert.ok(Math.abs(pair[0] + pair[1] - 100) < 0.01, 'the pair fills its line');
+  assert.ok(Math.abs(pair[0] / pair[1] - 2) < 0.001, '1.5 : 0.75 is 2 : 1');
+
+  // Left-hero stays a two-column grid, because the hero holds a column and no
+  // line can say that. Its hero column is weighted from the three shapes.
+  const left = planMediaGrid([picture(1), picture(1), picture(1)], CONTAIN_GRID);
+  assert.equal(left.layout, 'left-hero');
+  assert.ok(left.columns, 'left-hero states its column weights');
+  assert.match(left.columns!, /minmax\(0, 1fr\)$/, 'the second column takes the rest');
+  assert.equal(left.aspectRatio, undefined, 'the grid takes its height from the pictures');
+});
+
+test('Tier 2.54: a re-plan writes each slot onto its own cell', () => {
+  // The load path re-plans a grid whose pictures have reported their shapes.
+  // The cells are the grid's children, in item order, and each takes the width
+  // the plan computed for it.
+  const grid = new DomElement('DIV');
+  for (let i = 0; i < 2; i++) grid.appendChild(new DomElement('DIV'));
+
+  const plan = planMediaGrid([picture(1.6), picture(0.8)], CONTAIN_GRID);
+  applyMediaGridPlan(grid, plan);
+
+  assert.equal(grid.children[0].style.width, plan.slots![0].width);
+  assert.equal(grid.children[1].style.width, plan.slots![1].width);
+  assert.equal(grid.style.gridTemplateColumns, '', 'a line layout clears any hero weights');
+});
+
+test('Tier 2.55: cover and the poster ratios keep the fixed grid', () => {
+  // A crop wants a box to crop into, and a poster ratio is a canvas the user
+  // picked. Neither takes a slot plan; both keep the grid's own shape.
+  const covered = planMediaGrid([picture(1.4), picture(0.6)], AUTO_GRID);
+  assert.equal(covered.layout, 'columns');
+  assert.equal(covered.slots, undefined);
+  assert.equal(covered.aspectRatio, '2');
+
+  const poster = planMediaGrid([picture(1.4), picture(0.6)], { aspectRatio: '3:4', mediaLayout: 'grid', imageFit: 'contain' });
+  assert.equal(poster.slots, undefined);
+  assert.equal(poster.aspectRatio, undefined);
+
+  const stack = planMediaGrid([picture(1.4), picture(0.6)], { aspectRatio: 'auto', mediaLayout: 'stack', imageFit: 'contain' });
+  assert.equal(stack.slots, undefined);
+  assert.equal(stack.aspectRatio, undefined);
+});
+
+// -------------------------------------------------------------
+// Thread Session: exclusions saved for a thread that is no longer open
+// -------------------------------------------------------------
+
+/** A thread of `count` posts, ids `t1..tn`, targeting the second one. */
+function thread(count: number): ThreadData {
+  const author = { name: 'A', handle: '@a', avatarUrl: '' };
+  return {
+    author,
+    isSingle: count === 1,
+    targetTweetIndex: Math.min(1, count - 1),
+    tweets: Array.from({ length: count }, (_, i) => ({
+      id: `t${i + 1}`,
+      url: `https://x.com/a/status/t${i + 1}`,
+      author,
+      text: `post ${i + 1}`,
+      timestamp: '2026-02-01T10:00:00.000Z',
+    })),
+  };
+}
+
+test('Tier 2.52: another thread’s exclusions do not count against this card', () => {
+  // Exclusions live in the saved preferences, not with the thread, so they
+  // outlive it. Two keys left over from a previous thread must not decide how
+  // many tweets this one may drop: the on-card exclude button appears whenever
+  // more than one tweet shows, so a stricter verdict leaves a button that is
+  // there, focusable and inert.
+  const three = thread(3);
+  const session = threadSession(three, ['other1', 'other2']);
+
+  assert.equal(session.rawCount, 3);
+  assert.equal(session.totalCount, 3);
+  assert.equal(session.canExcludeMore, true);
+  assert.equal(session.rows.filter((row) => row.excluded).length, 0);
+});
+
+test('Tier 2.53: building the next set from the session drops the stale keys', () => {
+  // The cure for stale keys is that callers write from the session's own set,
+  // so the first exclusion after switching threads cleans the storage as a side
+  // effect and no rule about when to clear is needed anywhere.
+  const session = threadSession(thread(3), ['other1', 'other2', 't1']);
+  assert.deepEqual(session.rows.filter((row) => row.excluded).map((row) => row.key), ['t1']);
+
+  const next = new Set(session.rows.filter((row) => row.excluded).map((row) => row.key));
+  next.add('t2');
+  assert.deepEqual(Array.from(next).sort(), ['t1', 't2']);
+});
+
+test('Tier 2.54: one tweet left is the one that has to stay', () => {
+  const three = thread(3);
+  assert.equal(threadSession(three, []).canExcludeMore, true);
+  assert.equal(threadSession(three, ['t1']).canExcludeMore, true);
+  assert.equal(threadSession(three, ['t1', 't2']).canExcludeMore, false);
+  assert.equal(threadSession(three, ['t1', 't2']).rawCount, 1);
+});
+
+test('Tier 2.55: the session reports the raw count and floors the showing set', () => {
+  // Everything excluded is a state the surfaces have to survive rather than one
+  // the session hides: the card prints the target post and the preview summary
+  // floors its count, and those are two different decisions about two
+  // different surfaces. The session answers both, so it reports the exclusion
+  // as it is and shows a card that is never empty.
+  const session = threadSession(thread(2), ['t1', 't2']);
+  assert.equal(session.rawCount, 0);
+  assert.equal(session.canExcludeMore, false);
+  assert.equal(session.showing.length, 1, 'the card still has to print something');
+  assert.equal(session.showing[0].id, 't2', 'and the target post is what stands in');
+});
+
+test('Tier 2.56: a post without an id is keyed by its position, as every surface must', () => {
+  // The controls panel and the card have to name the same tweet. A post that
+  // arrived without an id is identified by where it sits, so the derivation is
+  // part of the session rather than written out at each call site.
+  const withoutIds = thread(3);
+  withoutIds.tweets[1] = { ...withoutIds.tweets[1], id: '' };
+
+  const session = threadSession(withoutIds, ['1']);
+  assert.deepEqual(session.rows.map((row) => row.key), ['t1', '1', 't3']);
+  assert.deepEqual(session.rows.filter((row) => row.excluded).map((row) => row.key), ['1']);
+  assert.equal(session.rawCount, 2);
+});
+
+test('Tier 2.57: the panel and the card read one answer, so they cannot disagree', () => {
+  // The card prints the session's showing set, and the panel offers its
+  // footers for the first post of that same set. Before there was one answer,
+  // each side derived the set itself and named different posts whenever a
+  // target or an exclusion moved it — and the panel would then offer a toggle
+  // for a footer the card was not drawing. That disagreement is not
+  // observable any more, because there is only one derivation left.
+  const three = thread(3);
+  const session = threadSession(three, ['t1']);
+
+  assert.deepEqual(
+    session.showing.map((tweet) => tweet.id),
+    ['t2', 't3'],
+    'the card prints the posts that are not excluded, in thread order'
+  );
+  assert.equal(
+    session.showing[0].id,
+    session.rows.find((row) => !row.excluded)!.tweet.id,
+    'and the panel asks about the first of those'
+  );
+  assert.equal(session.rawCount, 2, 'the panel quotes how many are not excluded');
+  assert.equal(session.totalCount, 3, 'and how many the thread holds');
+});
+
+// -------------------------------------------------------------
+// The language the injected triggers speak
+/**
+ * Runs `body` against a fake document, which is what the injection code reads.
+ * The triggers are injected before preferences resolve, so their label has to be
+ * correctable after the fact, and that can only be observed against a document.
+ */
+function withFakeDocument<T>(body: (doc: DomDocument) => T): T {
+  const scope = globalThis as { document?: unknown };
+  const previous = scope.document;
+  const doc = new DomDocument();
+  scope.document = doc;
+  try {
+    return body(doc);
+  } finally {
+    scope.document = previous;
+  }
+}
+
+// -------------------------------------------------------------
+// Injection: the trigger, the action bar, and the preference listener
+// -------------------------------------------------------------
+
+/** Enough of `window` for the lifecycle manager to install itself on. */
+function fakeWindow(): Record<string, unknown> {
+  const listeners = new Map<string, Set<(e: unknown) => void>>();
+  const push = (type: string) => (e: unknown) => {
+    for (const cb of listeners.get(type) || []) cb(e);
+  };
+  return {
+    location: { pathname: '/ada_builds' },
+    history: {
+      pushState: () => {},
+      replaceState: () => {},
+    },
+    addEventListener: (type: string, cb: (e: unknown) => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(cb);
+    },
+    removeEventListener: (type: string, cb: (e: unknown) => void) => {
+      listeners.get(type)?.delete(cb);
+    },
+    // A dispatched event goes to the listeners for its own type, which is what
+    // makes a window-level `keydown` reachable from a test.
+    dispatchEvent: (event: { type?: string } | undefined) => {
+      const byType = push(event?.type || '');
+      byType(event);
+    },
+    CustomEvent: class {
+      type: string;
+      detail: unknown;
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    },
+    Event: class {
+      type: string;
+      constructor(type: string) {
+        this.type = type;
+      }
+    },
+  };
+}
+
+/**
+ * Runs `body` with every global the injection path reads installed: a document
+ * to inject into, a window to listen on, a chrome to store preferences in, and
+ * an observer for the rescan.
+ *
+ * Awaited rather than returned, because a body that suspends has to keep its
+ * globals for the duration: restoring them the moment the promise is handed back
+ * tears the environment down underneath the code still running.
+ */
+async function withInjectionEnv<T>(
+  body: (ctx: { doc: DomDocument; chrome: ReturnType<typeof createChromeMock> }) => T | Promise<T>
+): Promise<T> {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = {
+    document: scope.document,
+    window: scope.window,
+    chrome: scope.chrome,
+    MutationObserver: scope.MutationObserver,
+    DomElement: scope.DomElement,
+  };
+
+  const doc = new DomDocument();
+  const chrome = createChromeMock();
+  scope.document = doc;
+  scope.window = fakeWindow();
+  scope.chrome = chrome;
+  scope.MutationObserver = DomMutationObserver;
+  scope.DomElement = DomElement;
+
+  try {
+    return await body({ doc, chrome });
+  } finally {
+    for (const key of Object.keys(saved)) {
+      if (saved[key as keyof typeof saved] === undefined) {
+        delete scope[key];
+      } else {
+        scope[key] = saved[key as keyof typeof saved];
+      }
+    }
+  }
+}
+
+/** One tweet with an action bar holding the engagement controls. */
+const TWEET_HTML = `
+  <article data-testid="tweet">
+    <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+    <div role="group">
+      <button data-testid="reply" aria-label="64 replies">64</button>
+      <button data-testid="like" aria-label="8.1K likes">8.1K</button>
+    </div>
+  </article>
+`;
+
+test('Tier 2.59b: the fallback scan anchors to the action row, never to the page', async () => {
+  // The stage-2 fallback runs when no `div[role="group"]` action bar was found.
+  // It builds its own selector by appending the control selectors to the article
+  // list, and the same precedence rule applies there: appending to the *joined*
+  // string matched tweet articles, `closest('div[role="group"]')` then answered
+  // null, and the anchor walked up to `<body>` — the trigger was appended to the
+  // page instead of the tweet.
+  //
+  // The post here has no `role="group"` at all, and its engagement row is the
+  // div holding the reply button, which is what the fallback must find.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`
+        <article data-testid="tweet">
+          <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+          <div class="action-row">
+            <button data-testid="reply" aria-label="64 replies">64</button>
+            <button data-testid="like" aria-label="8.1K likes">8.1K</button>
+          </div>
+        </article>
+      `)
+    );
+
+    const count = injectAll(() => {});
+    assert.equal(count, 1, 'the fallback has to inject exactly one trigger');
+
+    const article = doc.querySelector('article') as unknown as Element;
+    assert.ok(
+      article.querySelector('[data-post-to-card-btn="true"]'),
+      'the trigger belongs inside the tweet'
+    );
+    assert.equal(
+      doc.body.querySelector(':scope > [data-post-to-card-btn="true"]'),
+      null,
+      'and never appended to the page body, which is what the walk-up used to do'
+    );
+  });
+});
+
+test('Tier 2.59c: a quote with no role=group does not pull the trigger onto the outer post', async () => {
+  // `isTopLevelActionBar` rejects a control inside a quoted post, and the
+  // fallback's own guards must agree: a quoted post's engagement row is not the
+  // outer tweet's action bar, and anchoring to it would put the outer card's
+  // trigger inside the quote.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`
+        <article data-testid="tweet">
+          <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+          <div data-testid="tweetText"><span>outer body</span></div>
+          <div data-testid="quoteTweet">
+            <article data-testid="tweet">
+              <div data-testid="User-Name"><a href="/grace"><span>Grace</span></a></div>
+              <div class="quote-row">
+                <button data-testid="reply" aria-label="2 replies">2</button>
+                <button data-testid="like" aria-label="3 likes">3</button>
+              </div>
+            </article>
+          </div>
+        </article>
+      `)
+    );
+
+    injectAll(() => {});
+
+    const outer = doc.querySelectorAll('article')[0] as unknown as Element;
+    const quote = doc.querySelector('[data-testid="quoteTweet"]') as unknown as Element;
+    assert.equal(
+      quote.querySelector('[data-post-to-card-btn="true"]'),
+      null,
+      "a quoted post's own row is not the outer tweet's action bar"
+    );
+    assert.equal(
+      outer.querySelector('[data-post-to-card-btn="true"]'),
+      null,
+      'and with no outer action bar there is nothing to anchor to'
+    );
+  });
+});
+
+test('Tier 2.59d: a control with no wrapping row never anchors the trigger to the page', async () => {
+  // The fallback's second half is a walk up from the control to its row, and the
+  // walk has to stop inside the tweet. With the control as a direct child of the
+  // article, `parentElement.parentElement` is `<body>` — and `injectIntoActionBar`
+  // would then append the trigger to the page, because a body has no owning
+  // article to mark and its dedup guard never trips.
+  //
+  // Stage 1 already refuses a candidate with no owning article
+  // (`findActionBars`), so this is the same rule applied to the fallback.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`
+        <article data-testid="tweet">
+          <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+          <button data-testid="reply" aria-label="64 replies">64</button>
+          <button data-testid="like" aria-label="8.1K likes">8.1K</button>
+        </article>
+      `)
+    );
+
+    injectAll(() => {});
+
+    assert.equal(
+      doc.body.querySelector('[data-post-to-card-btn="true"]'),
+      null,
+      'the walk-up must not escape the tweet and append the trigger to the page'
+    );
+  });
+});
+
+test('Tier 2.59: a tweet gets one trigger, and asking twice does not add another', async () => {
+  // Deduplication is anchored to the tweet, not to the element that was handed
+  // over, because the three lookup strategies the scanner uses resolve to
+  // different elements for the same post. A container-level guard let one tweet
+  // collect several buttons that way.
+  await withInjectionEnv(async ({ doc }) => {
+    const article = createDomElement(TWEET_HTML);
+    doc.body.appendChild(article);
+    const bar = article.querySelector('div[role="group"]') as unknown as Element;
+
+    assert.equal(injectIntoActionBar(bar, () => {}), true, 'the first pass must inject');
+    assert.equal(
+      article.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      1,
+      'exactly one trigger on the tweet'
+    );
+
+    // The article is marked too, so a different element of the same post is refused.
+    assert.equal(injectIntoActionBar(article as unknown as Element, () => {}), false);
+    assert.equal(
+      article.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      1,
+      'the second element of the same post must not produce a second trigger'
+    );
+  });
+});
+
+test('Tier 2.60: a quoted post keeps its own action bar to itself', async () => {
+  // A quoted post renders as a nested article with its own engagement controls.
+  // Injecting there would put the trigger on the quoted card instead of the one
+  // the reader is looking at.
+  await withInjectionEnv(async ({ doc }) => {
+    const article = createDomElement(`
+      <article data-testid="tweet">
+        <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+        <div role="group">
+          <button data-testid="reply">12</button>
+        </div>
+        <div data-testid="quoteTweet">
+          <article>
+            <div data-testid="User-Name"><a href="/grace"><span>Grace</span></a></div>
+            <div role="group">
+              <button data-testid="reply">3</button>
+            </div>
+          </article>
+        </div>
+      </article>
+    `);
+    doc.body.appendChild(article);
+
+    const injected = injectAll(() => {});
+
+    assert.equal(injected, 1, 'only the outer tweet is eligible');
+    const quoteBox = article.querySelector('div[data-testid="quoteTweet"]') as unknown as Element;
+    assert.equal(
+      quoteBox.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      0,
+      'the quoted post must not receive a trigger'
+    );
+  });
+});
+
+test('Tier 2.61: a feed scan attaches at most one trigger per tweet', async () => {
+  // `div[role="group"]` is not specific to the action bar: media players and
+  // quoted posts carry their own. A scan that matched them put the trigger on
+  // the photo block, so more than one candidate per post has to collapse.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(
+      createDomElement(`<div data-testid="primaryColumn">${TWEET_HTML}${TWEET_HTML}</div>`)
+    );
+
+    assert.equal(injectAll(() => {}), 2, 'two tweets, two triggers');
+    assert.equal(
+      doc.body.querySelectorAll('[data-post-to-card-btn="true"]').length,
+      2,
+      'the media inner group must not have collected one of its own'
+    );
+  });
+});
+
+test('Tier 2.61b: the thread check carries the page facts, and cannot be called without them', () => {
+  // The check used to take the page's own answer as an argument: a flag saying
+  // whether this was a conversation's page, which its callers had to remember
+  // to compute, and which decided whether DOM order was proof enough. It also
+  // took a direction flag, and the direction the callers passed did nothing —
+  // the implementation never read it.
+  //
+  // The page fact now belongs to the context, so a call that leaves it out is
+  // not a call that compiles. And the direction is gone: a post either carries
+  // a thread marker or it does not, and which side of a pair it sits on says
+  // nothing about that.
+  const container = createDomElement(`
+  <div id="timeline">
+    <article data-testid="tweet" id="tweet-a">
+      <div data-testid="User-Name">
+        <span>Alice</span>
+        <a href="/alice"><span>@alice</span></a>
+        <a href="/alice/status/1001"><time datetime="2026-08-14T10:00:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetText"><span>First post</span></div>
+    </article>
+    <article data-testid="tweet" id="tweet-b">
+      <div data-testid="User-Name">
+        <span>Alice</span>
+        <a href="/alice"><span>@alice</span></a>
+        <a href="/alice/status/1002"><time datetime="2026-08-14T10:02:00.000Z"></time></a>
+      </div>
+      <div data-testid="tweetText"><span>Second post</span></div>
+    </article>
+  </div>
+  `);
+  const first = container.querySelector('#tweet-a') as unknown as Element;
+  const second = container.querySelector('#tweet-b') as unknown as Element;
+  const firstTweet = extractTweetData(first)!;
+  const secondTweet = extractTweetData(second)!;
+
+  // On a feed, two same-author posts with nothing to prove they belong
+  // together stay separate.
+  assert.equal(
+    isThreadConnectedPair(
+      { isDetailPage: false },
+      { article: first, tweet: firstTweet },
+      { article: second, tweet: secondTweet }
+    ),
+    false,
+    'a feed offers no proof, so the pair does not merge'
+  );
+
+  // On a conversation's own page the order is the author's own sequencing, so
+  // the same pair merges.
+  assert.equal(
+    isThreadConnectedPair(
+      { isDetailPage: true },
+      { article: first, tweet: firstTweet },
+      { article: second, tweet: secondTweet }
+    ),
+    true,
+    'the same pair merges on the conversation page'
+  );
+});
+
+test('Tier 2.62: hiding the triggers leaves them in the page', async () => {
+  // They are hidden rather than removed so the deduplication markers and the
+  // scroll state survive a round trip through the preference. Toggling the
+  // preference back has to make them visible again without re-injecting.
+  await withInjectionEnv(async ({ doc }) => {
+    doc.body.appendChild(createDomElement(TWEET_HTML));
+    injectAll(() => {});
+
+    const buttons = () => doc.body.querySelectorAll('[data-post-to-card-btn="true"]').length;
+    assert.equal(buttons(), 1);
+
+    setInjectedButtonVisibility(false);
+    assert.ok(
+      doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS),
+      'the root carries the class the stylesheet keys on'
+    );
+    // The class only hides anything if the rule that reads it was injected too;
+    // without it the buttons stay visible while every assertion above passes.
+    const styleEl = doc.getElementById(VISIBILITY_STYLE_ID);
+    assert.ok(styleEl, 'hiding the buttons must inject the rule that hides them');
+    assert.ok(
+      styleEl!.textContent.includes(`.${HIDE_ACTION_BUTTON_CLASS} [data-post-to-card-btn="true"]`) &&
+        styleEl!.textContent.includes('display: none'),
+      'the injected rule must key on the hide class and actually hide'
+    );
+    assert.equal(buttons(), 1, 'a hidden trigger is still in the DOM');
+
+    setInjectedButtonVisibility(true);
+    assert.ok(!doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS));
+    assert.equal(buttons(), 1);
+  });
+});
+
+test('Tier 2.63: a preference change reaches triggers that already exist', async () => {
+  // The path that was untestable for want of storage.onChanged: one tab saves a
+  // preference, another tab's triggers have to follow it. Visibility and the
+  // trigger's own language are both applied from the same listener, so a change
+  // to one without the other would mean only half the preference arrived.
+  //
+  // The write lands before the initial read resolves, which is the whole point:
+  // the read is a snapshot taken when the page loaded, and applying it after the
+  // change would put the old value back.
+  await withInjectionEnv(async ({ doc, chrome }) => {
+    doc.body.appendChild(createDomElement(TWEET_HTML));
+
+    const controller = initTwitterInjection(() => {});
+    try {
+      await chrome.storage.local.set({
+        post_to_card_user_prefs: { showActionBarButton: false, locale: 'zh-CN' },
+      });
+
+      // Let the initial preference read come back. It holds the state from
+      // before the write above, and must not undo it.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      assert.ok(
+        doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS),
+        'a stale initial read must not undo the change that arrived after it'
+      );
+      assert.equal(
+        doc.body.querySelector('[data-post-to-card-btn="true"]')?.getAttribute('aria-label'),
+        getTranslation('zh-CN').triggerButtonTitle,
+        'the saved language must reach a trigger injected before it resolved'
+      );
+
+      controller.injectAll();
+
+      await chrome.storage.local.set({
+        post_to_card_user_prefs: { showActionBarButton: true, locale: 'en-US' },
+      });
+
+      assert.ok(
+        !doc.documentElement.classList.contains(HIDE_ACTION_BUTTON_CLASS),
+        'a later change must reverse what the first one did'
+      );
+      assert.equal(
+        doc.body.querySelector('[data-post-to-card-btn="true"]')?.getAttribute('aria-label'),
+        getTranslation('en-US').triggerButtonTitle
+      );
+    } finally {
+      controller.disconnect();
+    }
+  });
+});
+
+test('Tier 2.57: a language chosen after the triggers exist reaches them', () => {
+  // A trigger is built before the saved preferences have resolved and then stays
+  // on the page, so a language picked afterwards has to reach the buttons that
+  // are already there. The label is also the button's accessible name, which is
+  // why it cannot be left to a title attribute the card never re-reads.
+  withFakeDocument((doc) => {
+    // The locale is passed to the factory, so this test states its own
+    // language rather than relying on module state from an earlier test.
+    const injected = createTriggerButton(() => {}, 'en-US');
+    doc.body.appendChild(injected);
+    const beforeSwitch = injected.getAttribute('title');
+    assert.ok(beforeSwitch, 'a trigger must carry a label from the moment it exists');
+
+    applyTriggerLocale('zh-CN');
+
+    const expected = getTranslation('zh-CN').triggerButtonTitle;
+    assert.notEqual(expected, beforeSwitch, 'the two dictionaries must differ for this to prove anything');
+    assert.equal(injected.getAttribute('title'), expected, 'the label must follow the saved language');
+    assert.equal(injected.getAttribute('aria-label'), expected, 'the accessible name follows too');
+  });
+});
+
+test('Tier 2.57b: an "auto" trigger follows the browser rather than falling back to English', () => {
+  // `'auto'` is a stored preference, not a locale, and the trigger's locale
+  // went from `Locale` to `LocalePreference` to carry it. The failure this
+  // guards is the one that widening invites: a path that indexes the
+  // dictionary with the preference itself gets `undefined` and falls back to
+  // English, so a Japanese browser would show an English button and nothing
+  // would report it. The resolution has to happen, and it has to happen here.
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { language: 'ja-JP' },
+    configurable: true,
+  });
+  try {
+    withFakeDocument((doc) => {
+      const injected = createTriggerButton(() => {}, 'auto');
+      doc.body.appendChild(injected);
+      assert.equal(
+        injected.getAttribute('title'),
+        getTranslation('ja').triggerButtonTitle,
+        'an "auto" trigger must speak the browser language, not English'
+      );
+    });
+  } finally {
+    if (saved) Object.defineProperty(globalThis, 'navigator', saved);
+    else delete (globalThis as Record<string, unknown>).navigator;
+  }
+});
+
+test('Tier 2.58: a trigger injected after the change agrees with the ones above it', () => {
+  // The manager holds the locale and hands it to each new button, so a tweet
+  // that scrolls in later says the same thing as the tweets already on screen.
+  // The factory takes the locale as an argument, which is what lets the manager
+  // read one place and the button read another without them drifting.
+  withFakeDocument((doc) => {
+    const earlier = createTriggerButton(() => {}, 'zh-CN');
+    doc.body.appendChild(earlier);
+
+    const later = createTriggerButton(() => {}, 'zh-CN');
+    doc.body.appendChild(later);
+
+    assert.equal(
+      later.getAttribute('title'),
+      earlier.getAttribute('title'),
+      'both triggers must carry the same label'
+    );
+    assert.equal(earlier.getAttribute('title'), getTranslation('zh-CN').triggerButtonTitle);
+  });
+});
+
+// -------------------------------------------------------------
+// The media-permalink host, shared by the text stripper and the token pass
+// -------------------------------------------------------------
+
+test('Tier 2.64: a pic link the author wrote mid-post stays in the body', () => {
+  // Regression guard for a real disagreement. The body-text stripper only
+  // removed a pic link at the very end of the text, while the token pass dropped
+  // one anywhere, so a link the author quoted mid-sentence survived in `text`
+  // and vanished from `richTokens` -- one TweetData contradicting itself, and
+  // the card rendering whichever field it reached first.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+      <div data-testid="tweetText">
+        <span>look at </span>
+        <a href="https://pic.x.com/midpost" role="link">pic.x.com/midpost</a>
+        <span> and then the rest</span>
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+
+  // The body keeps it, because the author put it there.
+  assert.ok(
+    tweet?.text.includes('pic.x.com/midpost'),
+    'a pic link inside the sentence is the author text, not the appended tail'
+  );
+  // And the token view agrees: the link is present as a link, not dropped.
+  const tokens = tweet?.richTokens || [];
+  assert.ok(
+    tokens.some((tk) => tk.value.includes('pic.x.com/midpost')),
+    'the token view must not drop what the body text keeps'
+  );
+});
+
+test('Tier 2.65: the host matcher and the tail stripper are the same rule', () => {
+  // Both are fed by `isPicMediaLink`'s pattern, so a new host only has to be
+  // taught once. This pins the two domains that matter.
+  assert.equal(isPicMediaLink('https://pic.twitter.com/abc'), true);
+  assert.equal(isPicMediaLink('pic.x.com/abc'), true);
+  assert.equal(isPicMediaLink('https://t.co/abc'), false);
+  assert.equal(isPicMediaLink(''), false);
+  assert.equal(isPicMediaLink('https://example.com/post'), false);
+});
+
+test('Tier 2.66: an emoji after a pic link keeps the link, in both views', () => {
+  // The two views agreed on a link at the very end and on one mid-sentence, but
+  // not on a link with an emoji after it: the DOM walk saw the emoji's `<img>`
+  // as empty (its glyph is in the `alt` attribute, not in `textContent`) and
+  // called the link trailing, while the text stripper's `\S+` swallowed the
+  // restored glyph and called it trailing too -- so the body dropped it and the
+  // token list kept it, or the reverse, depending on which side ran first. Both
+  // now see the emoji as content after the link, so the link is not the tail.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/ada"><span>Ada</span></a></div>
+      <div data-testid="tweetText">
+        <span>look at </span>
+        <a href="https://pic.x.com/mine" role="link">pic.x.com/mine</a>
+        <img alt="🔥">
+      </div>
+    </article>
+  `);
+
+  const tweet = extractTweetData(article);
+  const inText = (tweet?.text || '').includes('pic.x.com/mine');
+  const inTokens = (tweet?.richTokens || []).some((tk) => tk.value.includes('pic.x.com/mine'));
+
+  assert.ok(inText, 'an emoji after the link means the link is not the appended tail');
+  assert.equal(inTokens, inText, 'the two views must agree about the same link');
+});
+
+test('Tier 2.76: the stored toggle preferences are honoured, and their absence means on', async () => {
+  await withInjectionEnv(async ({ chrome }) => {
+    const toggles = async () => {
+      const prefs = await loadUserPreferences();
+      return { play: prefs.showPlayButton, actionBar: prefs.showActionBarButton };
+    };
+
+    assert.deepEqual(
+      await toggles(),
+      { play: true, actionBar: true },
+      'a storage with nothing saved must come back with both buttons on'
+    );
+
+    await chrome.storage.local.set({ [STORAGE_KEY]: { showPlayButton: false } });
+    assert.deepEqual(
+      await toggles(),
+      { play: false, actionBar: true },
+      'an explicit false is the only thing that turns a button off, and only its own'
+    );
+
+    // A config saved before either flag existed has no key for them at all.
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'darkroom' } });
+    assert.deepEqual(
+      await toggles(),
+      { play: true, actionBar: true },
+      'an older config that never mentioned the buttons leaves them on'
+    );
+  });
+});
+
+test('Tier 2.76b: a storage read that fails comes back with the defaults', async () => {
+  // Chrome reports a failed `storage.local.get` by setting `runtime.lastError`
+  // for the duration of the callback. Nothing in the suite ever set it, so the
+  // branch that notices was unreachable — a profile whose read fails would have
+  // been preferred over the defaults, reading `res[STORAGE_KEY]` out of a
+  // response that never arrived.
+  await withInjectionEnv(async ({ chrome }) => {
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'darkroom', padding: '48px' } });
+    chrome.runtime.lastError = { message: 'storage read failed' };
+
+    assert.deepEqual(
+      await loadUserPreferences(),
+      DEFAULT_CARD_CONFIG,
+      'a failed read falls back to the defaults rather than to the stored value'
+    );
+  });
+});
+
+test('Tier 2.76c: with no storage API at all the defaults still resolve', async () => {
+  // The fallback has no `chrome` at all — a preview build, a page where the
+  // extension's storage was never injected. Deleting the branch left the promise
+  // pending forever instead of failing, which a timeout turns back into a
+  // failure: a card that never opens is the symptom.
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+  delete scope.chrome;
+  try {
+    const prefs = await Promise.race([
+      loadUserPreferences(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('loadUserPreferences never settled without chrome')), 500)
+      ),
+    ]);
+    assert.deepEqual(prefs, DEFAULT_CARD_CONFIG, 'the defaults are what a storage-less page gets');
+  } finally {
+    scope.chrome = savedChrome;
+  }
+});
+
+test('Tier 2.76d: saving without a storage API is a no-op, not a throw', async () => {
+  const scope = globalThis as Record<string, unknown>;
+  const savedChrome = scope.chrome;
+  delete scope.chrome;
+  try {
+    await assert.doesNotReject(
+      () => saveUserPreferences(DEFAULT_CARD_CONFIG),
+      'a page with no storage must not break the caller that saved a preference'
+    );
+  } finally {
+    scope.chrome = savedChrome;
+  }
+});
+
+test('Tier 2.76e: only a local write of the preferences key reaches the subscriber', async () => {
+  // The guard reads the area name and the key. Without it any write to any area
+  // — a sync push, a removal — repainted the card, which is the kind of change
+  // nobody notices until a profile sync rewrites a field it never set.
+  await withInjectionEnv(async ({ chrome }) => {
+    const seen: CardConfig[] = [];
+    const unsubscribe = subscribePreferences((prefs) => seen.push(prefs));
+
+    chrome.storage.sync.set({ [STORAGE_KEY]: { theme: 'terminal' } });
+    chrome.storage.local.remove(STORAGE_KEY);
+    assert.equal(seen.length, 0, 'a sync write and a removal are both ignored');
+
+    // The positive control: a local write of the key does reach it, so the
+    // two silences above are the guard and not a dead subscription.
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'terminal' } });
+    assert.equal(seen.length, 1, 'a local write of the key is the one that does');
+
+    unsubscribe();
+    await chrome.storage.local.set({ [STORAGE_KEY]: { theme: 'gallery' } });
+    assert.equal(seen.length, 1, 'and unsubscribing retires the listener');
+  });
+});
+
+test('Tier 2.76f: a partial stored object cannot take the defaults with it', async () => {
+  // The popup's toggle writes back the object it read, and on a profile that has
+  // saved nothing yet that object holds one key. Loading it must leave every
+  // field it never mentioned alone.
+  //
+  // The corner used to be the one field where the merge could not protect a
+  // missing value: its sanitiser answered '12px' while the card shipped with
+  // 'theme', so calling it unguarded pinned a fresh profile to 12px for good --
+  // the panel read that 12px, showed it as the chosen corner, and wrote it back
+  // into every later save. Every option now answers the shipped default for a
+  // value that was never set, so the merge and the options cannot disagree.
+  await withInjectionEnv(async ({ chrome }) => {
+    await chrome.storage.local.set({ [STORAGE_KEY]: { showActionBarButton: false } });
+
+    const prefs = await loadUserPreferences();
+    assert.equal(
+      prefs.borderRadius,
+      DEFAULT_CARD_CONFIG.borderRadius,
+      'the corner the user never chose stays the shipped default'
+    );
+    assert.equal(prefs.theme, DEFAULT_CARD_CONFIG.theme, 'and so does every other absent field');
+    assert.equal(prefs.showActionBarButton, false, 'while the key that was stored still wins');
+  });
+});
+
+test('Tier 2.76g: the live-sync subscription hands over a complete configuration', async () => {
+  // The subscriber is what a card mounts on, and the popup's write is a partial
+  // object: forwarded raw, it would have handed the panel `theme: undefined`,
+  // which `THEMES[config.theme].tokens` cannot survive.
+  await withInjectionEnv(async ({ chrome }) => {
+    const seen: CardConfig[] = [];
+    const unsubscribe = subscribePreferences((prefs) => seen.push(prefs));
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEY]: { showActionBarButton: false } });
+
+      assert.equal(seen.length, 1, 'a local write of the key reaches the subscriber');
+      assert.equal(seen[0].theme, DEFAULT_CARD_CONFIG.theme, 'and carries the defaults for what it omits');
+      assert.equal(seen[0].borderRadius, DEFAULT_CARD_CONFIG.borderRadius);
+      assert.equal(seen[0].showActionBarButton, false, 'alongside the value that was written');
+    } finally {
+      unsubscribe();
+    }
+  });
+});
+
+test('Tier 2.77: Alt+C hands the tweet under the pointer to the card, and nothing else does', async () => {
+  // F30.4's claim, driven rather than read: the shortcut exists so a card can be
+  // opened without reaching for the injected trigger, which only helps if it
+  // follows the pointer instead of the top of the feed.
+  await withInjectionEnv(async ({ doc }) => {
+    const first = createDomElement(TWEET_HTML);
+    first.setAttribute('data-probe', 'first');
+    const second = createDomElement(TWEET_HTML);
+    second.setAttribute('data-probe', 'second');
+    doc.body.appendChild(first);
+    doc.body.appendChild(second);
+
+    const opened: Element[] = [];
+    const controller = initTwitterInjection((article: Element) => {
+      opened.push(article);
+    });
+
+    try {
+      second.dispatchEvent({ type: 'mouseover' });
+
+      const win = (globalThis as Record<string, unknown>).window as {
+        dispatchEvent: (event: unknown) => void;
+      };
+      const keyDown = (init: Record<string, unknown>) => ({
+        type: 'keydown',
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        ...init,
+      });
+
+      win.dispatchEvent(keyDown({ altKey: true, key: 'c' }));
+      assert.equal(opened.length, 1, 'a bare Alt+C must open the card');
+      assert.equal(
+        opened[0].getAttribute('data-probe'),
+        'second',
+        'and for the tweet the pointer is over, not the first in the feed'
+      );
+
+      // macOS Option+C produces 'ç', not 'c', so the shortcut is matched on the
+      // physical key as well. Without that the shortcut is dead on every Mac.
+      win.dispatchEvent(keyDown({ altKey: true, key: 'ç', code: 'KeyC' }));
+      assert.equal(opened.length, 2, 'Option+C on macOS must open the card');
+
+      // The combinations the handler has to leave alone: Ctrl/⌘+Alt+C belong to
+      // the browser or the OS, and a bare C is someone typing.
+      for (const ignored of [
+        { altKey: true, key: 'c', ctrlKey: true },
+        { altKey: true, key: 'c', metaKey: true },
+        { key: 'c' },
+        { altKey: true, key: 'ç', code: 'KeyV' },
+      ]) {
+        win.dispatchEvent(keyDown(ignored));
+      }
+      assert.equal(opened.length, 2, 'only a bare Alt+C opens the card');
+    } finally {
+      controller.disconnect();
+    }
+  });
+});
+
+test('Tier 2.87: a route change rescans the page, and the popstate hook is the only wiring for it', async () => {
+  // `injection.ts` hooks `popstate` and nothing else: a `history.pushState`
+  // wrapper used to live there too, but this script runs in the isolated world,
+  // so the wrapper it installed was one X's own scripts never called. What is
+  // left has to work, because a route change in the same tab is a back/forward
+  // press or a link X navigates itself.
+  await withInjectionEnv(async ({ doc }) => {
+    const controller = initTwitterInjection(() => {});
+    try {
+      const win = (globalThis as Record<string, unknown>).window as {
+        dispatchEvent: (event: unknown) => void;
+      };
+
+      assert.equal(
+        doc.querySelector('[data-post-to-card-btn="true"]'),
+        null,
+        'the page starts with nothing to inject into'
+      );
+
+      // The new route's column, mounted after the controller was wired.
+      doc.body.appendChild(createDomElement(TWEET_HTML));
+      win.dispatchEvent({ type: 'popstate' });
+
+      assert.ok(
+        doc.querySelector('[data-post-to-card-btn="true"]'),
+        'a popstate navigation must rescan the page it landed on'
+      );
+    } finally {
+      controller.disconnect();
+    }
+  });
+});
+
+test('Tier 2.79: a quote of a quote is extracted as a second, nested quote', () => {
+  // The reported bug. A quoted post that itself quotes someone rendered as one
+  // flat level: the inner author, body and media were attributed to the outer
+  // quote, and the inner post vanished as a distinct entry.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/gkev1n"><span>gKev1n</span></a><a href="/gkev1n"><span>@gkev1n</span></a>
+        <a href="/gkev1n/status/100"><time datetime="2026-10-14T04:29:00.000Z">6h</time></a></div>
+      <div data-testid="tweetText"><span>这把赚大发了</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/devindevelopers"><span>Devin Developers</span></a><a href="/devindevelopers"><span>@devindevelopers</span></a>
+          <a href="/devindevelopers/status/200"><time datetime="2026-10-14T00:24:00.000Z">10h</time></a></div>
+        <div data-testid="tweetText"><span>Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。</span></div>
+        <div data-testid="quoteTweet">
+          <div data-testid="User-Name"><a href="/cognition"><span>Cognition</span></a><a href="/cognition"><span>@cognition</span></a>
+            <a href="/cognition/status/300"><time datetime="2026-10-14T00:20:00.000Z">10h</time></a></div>
+          <div data-testid="tweetText"><span>Gemini 4 Argon is now available in Devin Desktop and CLI.</span></div>
+          <div data-testid="tweetPhoto">
+            <img src="https://pbs.twimg.com/media/chart.png?format=png&name=small" alt="chart">
+          </div>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote, 'the outer quote must be extracted');
+  assert.equal(quote.author.handle, '@devindevelopers');
+  assert.equal(quote.text, 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。');
+
+  const inner = quote.quotePost;
+  assert.ok(inner, 'the inner quote must be extracted as a nested level, not folded into the outer');
+  assert.equal(inner.author.handle, '@cognition');
+  assert.equal(inner.text, 'Gemini 4 Argon is now available in Devin Desktop and CLI.');
+  assert.equal(inner.url, 'https://x.com/cognition/status/300');
+  assert.equal(inner.media?.length, 1, 'the inner quote keeps its own media');
+  assert.ok(inner.media![0].url.includes('chart.png'), 'the inner media is the chart, not anything of the outer\'s');
+
+  // The outer quote's own media list holds only its own pictures. Before the
+  // fix the inner chart was attributed to it.
+  assert.equal(quote.media, undefined, 'the inner quote\'s media must not be attributed to the outer quote');
+  assert.equal(
+    extractTweetData(article)?.media,
+    undefined,
+    'and none of it belongs to the main tweet either'
+  );
+});
+
+test('Tier 2.80: a bodyless outer quote keeps its own text empty instead of the inner quote\'s', () => {
+  // An outer quote of a picture-only post carries no tweetText of its own, so
+  // the first tweetText inside the box belongs to the inner quote. Reading it by
+  // document order printed the inner body as the outer's.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/outer"><span>Outer</span></a><a href="/outer"><span>@outer</span></a>
+          <a href="/outer/status/2"><time datetime="2026-10-14T00:20:00.000Z">10h</time></a></div>
+        <div data-testid="tweetPhoto">
+          <img src="https://pbs.twimg.com/media/outer.png?format=png&name=small" alt="pic">
+        </div>
+        <div data-testid="quoteTweet">
+          <div data-testid="User-Name"><a href="/inner"><span>Inner</span></a><a href="/inner"><span>@inner</span></a></div>
+          <div data-testid="tweetText"><span>inner words that must not be printed as the outer's</span></div>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const quote = extractTweetData(article)?.quotePost;
+  assert.ok(quote);
+  assert.equal(quote.text, '', 'the bodyless outer quote has no text of its own');
+  assert.equal(quote.media?.length, 1, 'its own picture is still its media');
+  assert.ok(quote.media![0].url.includes('outer.png'));
+  assert.equal(quote.quotePost?.text, 'inner words that must not be printed as the outer\'s');
+});
+
+test('Tier 2.81: a quote inside a quote is bounded, so a chain stays finite', () => {
+  // Guard against a cycle in a hand-edited DOM, and against a chain long enough
+  // to matter. The extraction must stop somewhere rather than recurse forever.
+  let html = `
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>`;
+  const depth = 8;
+  for (let i = 0; i < depth; i++) {
+    html += `
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/l${i}"><span>Level ${i}</span></a><a href="/l${i}"><span>@l${i}</span></a></div>`;
+  }
+  for (let i = depth - 1; i >= 0; i--) {
+    html += `
+        <div data-testid="tweetText"><span>level ${i} body</span></div>
+        </div>`;
+  }
+  html += `
+    </article>
+  `;
+
+  let current = extractTweetData(createDomElement(html))?.quotePost;
+  let levels = 0;
+  while (current) {
+    levels += 1;
+    current = current.quotePost;
+  }
+  assert.ok(levels >= 1, 'a quote chain must still yield its outer levels');
+  assert.ok(levels < depth, `a quote chain must be bounded, but ${levels} levels were extracted from a ${depth}-deep one`);
+});
+
+// -------------------------------------------------------------
+// Nested quotes in the shape X actually renders
+//
+// The `quoteTweet` fixtures above never appear for a quote inside a quote on a
+// real timeline: both levels are `role="link"` containers and the deepest is
+// `nestedQuotePreview`, whose media is its own testid. `NESTED_QUOTE_PREVIEW_HTML`
+// is that markup verbatim, so every assertion below is against what X sends.
+// -------------------------------------------------------------
+test('Tier 2.82: a nested quote in X’s preview shape yields both levels', () => {
+  // The article as the injection layer hands it over: the element the action
+  // bar's `closest(TWEET_ARTICLE_SELECTOR)` resolves to, which the browser probe
+  // confirmed is the `<article>` itself.
+  const data = extractTweetData(createDomElement(NESTED_QUOTE_PREVIEW_HTML));
+
+  assert.equal(data?.author.handle, '@GKev1n');
+  assert.equal(data?.author.verified, true, 'the main author keeps its badge');
+  assert.equal(data?.timestamp, '2026-10-13T20:29:25.000Z');
+  assert.deepEqual(data?.stats, { replies: '4', reposts: '1', likes: '16', bookmarks: '3', views: '6,638' });
+
+  const outer = data?.quotePost;
+  assert.ok(outer, 'the outer quote is found without a quoteTweet testid');
+  assert.equal(outer.author.handle, '@devindevelopers');
+  assert.equal(outer.author.verified, true, 'the outer quote keeps its own badge');
+  assert.equal(outer.text, 'Gemini 4 Argon 现已在 Devin Desktop 和 Devin CLI 中提供。');
+  assert.equal(outer.timestamp, '2026-10-13T16:24:04.000Z');
+  assert.equal(outer.media, undefined, 'the outer quote carries no media of its own');
+
+  const inner = outer.quotePost;
+  assert.ok(inner, 'the deepest post is found as its own level');
+  assert.equal(inner.author.handle, '@cognition');
+  assert.equal(inner.author.verified, true);
+  assert.match(inner.text, /^Gemini 4 Argon is now available in Devin Desktop and CLI\./);
+  assert.equal(inner.timestamp, '2026-10-13T16:22:52.000Z');
+  assert.equal(data?.media, undefined, 'none of it belongs to the main tweet');
+});
+
+test('Tier 2.83: the previewed deepest post’s media is its own testid, and is read', () => {
+  // Why this test exists: the media lives in nestedQuotePreviewMedia, not the
+  // tweetPhoto the photo pass scans, so the deepest post's picture was absent.
+  const data = extractTweetData(createDomElement(NESTED_QUOTE_PREVIEW_HTML));
+
+  const inner = data?.quotePost?.quotePost;
+  assert.ok(inner?.media?.length, 'the previewed media must be read');
+  assert.match(inner!.media![0].originalUrl || '', /HUhftVoasAAzqss/);
+  assert.equal(inner!.media![0].type, 'image');
+  assert.equal(
+    data?.quotePost?.media,
+    undefined,
+    'the deepest picture belongs to the deepest level, not to the outer quote'
+  );
+});
+
+test('Tier 2.84: a preview permalink points at the post, not at one of its pictures', () => {
+  // The only link inside the preview is `/status/<id>/photo/1`; the card's
+  // timestamp links to the post, so the status segment is taken from it.
+  const url = extractTweetData(createDomElement(NESTED_QUOTE_PREVIEW_HTML))?.quotePost?.quotePost?.url;
+  assert.equal(url, 'https://x.com/cognition/status/2110043605528408110');
+});
+
+test('Tier 2.84b: a preview permalink keeps the link’s own host', () => {
+  // `statusPermalink` must not rewrite the host: the card links where the
+  // author linked. A `twitter.com` media permalink stays on `twitter.com`.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div data-testid="quoteTweet">
+        <div data-testid="User-Name"><a href="/quoted"><span>@quoted</span></a></div>
+        <div data-testid="tweetText"><span>quoted body</span></div>
+        <div data-testid="nestedQuotePreview">
+          <div data-testid="User-Name"><a href="/deep"><span>@deep</span></a></div>
+          <div data-testid="tweetText"><span>deep body</span></div>
+          <a href="https://twitter.com/deep/status/4242/photo/1" data-testid="nestedQuotePreviewMedia">
+            <img src="https://pbs.twimg.com/media/x.png" alt="">
+          </a>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const url = extractTweetData(article)?.quotePost?.quotePost?.url;
+  assert.equal(url, 'https://twitter.com/deep/status/4242');
+});
+
+test('Tier 2.84c: a previewed quote’s video is its own level’s, and is mounted once', () => {
+  // The reported bug. The previewed post's media is an `amplify_video_thumb`
+  // poster, so the video pass reads it as a video. Two things went wrong at
+  // once: the outer quote — which attached nothing — scanned past its own box
+  // into the inner one and adopted that poster, and the inner level mounted the
+  // same asset a second time as a photo through `nestedQuotePreviewMedia`. One
+  // previewed video rendered three times.
+  const data = extractTweetData(createDomElement(NESTED_QUOTE_VIDEO_HTML));
+
+  const outer = data?.quotePost;
+  assert.ok(outer, 'the outer quote is found');
+  assert.equal(outer.author.handle, '@devindevelopers');
+  assert.equal(outer.media, undefined, 'a quote that attached no media keeps none of the inner one’s');
+  assert.equal(data?.media, undefined, 'and none of it belongs to the main tweet');
+
+  const inner = outer.quotePost;
+  assert.ok(inner, 'the inner quote is its own level');
+  assert.equal(inner.author.handle, '@cognition');
+  assert.equal(inner.media?.length, 1, 'the asset is mounted once');
+  assert.equal(inner.media![0].type, 'video', 'the surviving item is the one that says what the picture is');
+  assert.match(inner.media![0].originalUrl || '', /amplify_video_thumb\/1000000000000000104/);
+  assert.equal(inner.url, 'https://x.com/cognition/status/900000000000000007');
+});
+
+test('Tier 2.85: a text-only nested preview still yields its own level', () => {
+  // The sampled preview always carried a picture, but a quoted text post
+  // renders the same container without the media link. The level must exist
+  // with body and identity even when there is nothing to mount.
+  const article = createDomElement(`
+    <article data-testid="tweet">
+      <div data-testid="User-Name"><a href="/main"><span>@main</span></a></div>
+      <div data-testid="tweetText"><span>main body</span></div>
+      <div role="link" tabindex="0">
+        <div data-testid="User-Name"><a href="/outer"><span>Outer</span></a></div>
+        <div data-testid="tweetText"><span>outer body</span></div>
+        <div data-testid="nestedQuotePreview">
+          <div data-testid="User-Name"><a href="/inner"><span>Inner</span></a></div>
+          <div data-testid="tweetText"><span>inner words, no picture</span></div>
+        </div>
+      </div>
+    </article>
+  `);
+
+  const data = extractTweetData(article);
+  const inner = data?.quotePost?.quotePost;
+  assert.ok(inner, 'the text-only inner quote is its own level');
+  assert.equal(inner!.author.handle, '@inner');
+  assert.equal(inner!.text, 'inner words, no picture');
+  assert.equal(inner!.media, undefined, 'no picture means no media, not a dropped level');
+  assert.equal(data?.quotePost?.text, 'outer body', 'the outer level keeps its own words');
+});
+
+test('Tier 2.85b: one answer says who owns what, and the passes read it', () => {
+  // The extractor used to answer "is this element the tweet's own?" with five
+  // separate predicates, and every pass picked its own combination: the quoted
+  // post's body was excluded by one, its pictures by three, its statistics by
+  // two, its timestamp by one. Nothing said those were meant to agree, so
+  // changing one changed one surface and left the others answering about a
+  // different post.
+  //
+  // The ownership module answers the question once, and the answers for the
+  // same element must be the same whoever asks.
+  const article = createDomElement(NESTED_QUOTE_PREVIEW_HTML) as unknown as Element;
+  const ownership = resolveOwnership(article);
+
+  // The structure is resolved once: the quote box, and the quote inside it.
+  assert.ok(ownership.quoteBox, 'the quoted post is found');
+  assert.ok(ownership.nestedQuoteBox, 'and the quote it carries');
+
+  // Every element inside the quoted post belongs to the quoted post.
+  const quotedBody = ownership.quoteBox!.querySelector('div[data-testid="tweetText"]');
+  assert.ok(quotedBody);
+  assert.equal(ownerOf(quotedBody, ownership).post, 'quote');
+
+  // Every element inside the deeper quote belongs to that one, not the outer.
+  const innerBody = ownership.nestedQuoteBox!.querySelector('div[data-testid="tweetText"]');
+  assert.ok(innerBody);
+  assert.equal(ownerOf(innerBody, ownership).post, 'quote');
+
+  // And the tweet's own body belongs to the tweet, whatever it sits beside.
+  const ownBody = article.querySelector('div[data-testid="tweetText"]');
+  assert.ok(ownBody);
+  assert.equal(ownerOf(ownBody, ownership).post, 'tweet');
+
+  // The quote box itself is the quoted post's container, and counts as such.
+  // It used to depend on whether X gave it a testid: the marked shape was
+  // excluded by the marker check, the unmarked one by the resolved-container
+  // check, and the two disagreed about the same element.
+  assert.equal(ownerOf(ownership.quoteBox!, ownership).post, 'quote');
+});
+
+test('Tier 2.86: the nested-preview fixture’s markup is balanced', () => {
+  // A hand-written fixture once carried one extra `</div>`, which collapsed the
+  // tree: the action bar vanished and two `<time>` elements with it, and the
+  // symptoms read exactly like an extractor bug. Count the tags so a future
+  // edit that unbalances the fixture fails here instead of misdirecting the
+  // next investigation.
+  const tagBalance = (html: string, tag: string): number => {
+    // Split-based counting: no regex escapes involved. `<div` also prefixes
+    // nothing else checked here (`<article` does not start `<a ` or `<a>`),
+    // and the fixture carries no self-closing div/a/span/article tags.
+    const opens =
+      html.split(`<${tag} `).length - 1 + (html.split(`<${tag}>`).length - 1);
+    const closes = html.split(`</${tag}>`).length - 1;
+    return opens - closes;
+  };
+
+  for (const tag of ['div', 'a', 'span', 'article']) {
+    assert.equal(
+      tagBalance(NESTED_QUOTE_PREVIEW_HTML, tag),
+      0,
+      `<${tag}> opens must match closes in the nested-preview fixture`
+    );
+  }
+});
+
+// -------------------------------------------------------------
+// Boundary: keyboard navigation of a radiogroup
+// -------------------------------------------------------------
+
+/**
+ * The group `Controls.tsx` renders — a `<div role="radiogroup">` of
+ * `<button role="radio">` — with each button wired the way the component wires
+ * it, against a tree that can actually receive and bubble a keydown.
+ *
+ * `renderComponent` answers a string, so the markup is assembled here instead.
+ * The handler, the roving tabindex and the disabled-level skipping all come from
+ * the shipped module; only the wiring around them is repeated.
+ */
+function radioGroupFixture(
+  doc: DomDocument,
+  values: string[],
+  options: { disabled?: number[]; selected?: number } = {}
+) {
+  const group = doc.createElement('div');
+  group.setAttribute('role', 'radiogroup');
+  const chosen: string[] = [];
+  const buttons: DomElement[] = [];
+  let selected = options.selected ?? 0;
+
+  const select = (next: string) => {
+    selected = values.indexOf(next);
+    chosen.push(next);
+    // The component re-renders on selection and Preact moves the roving
+    // tabindex; a fixture that skipped this would leave two tab stops behind.
+    buttons.forEach((button, index) => {
+      button.tabIndex = index === selected ? 0 : -1;
+    });
+  };
+
+  values.forEach((_, index) => {
+    const button = doc.createElement('button');
+    button.setAttribute('role', 'radio');
+    button.tabIndex = index === selected ? 0 : -1;
+    if (options.disabled?.includes(index)) button.disabled = true;
+    button.addEventListener('keydown', (e: any) =>
+      handleRadioKeyDown(e, values, values[selected], select)
+    );
+    group.appendChild(button);
+    buttons.push(button);
+  });
+
+  doc.body.appendChild(group);
+  return { buttons, chosen, selected: () => values[selected] };
+}
+
+/** A keydown the way the shim's `dispatchEvent` expects one. */
+function keyDown(key: string) {
+  return {
+    type: 'keydown',
+    key,
+    bubbles: true,
+    cancelable: true,
+    defaultPrevented: false,
+    _propagationStopped: false,
+    preventDefault() { this.defaultPrevented = true; },
+    stopPropagation() { this._propagationStopped = true; },
+  };
+}
+
+/**
+ * Runs `body` against a document whose `requestAnimationFrame` fires on the
+ * spot: the handler defers its focus move by a frame, and a queued callback
+ * would have to be pumped by every assertion.
+ */
+function withRadioGroup(
+  values: string[],
+  options: { disabled?: number[]; selected?: number },
+  body: (env: ReturnType<typeof radioGroupFixture> & { doc: DomDocument; fire: (index: number, key: string) => any }) => void
+): void {
+  const scope = globalThis as Record<string, unknown>;
+  const saved = { document: scope.document, requestAnimationFrame: scope.requestAnimationFrame };
+  const doc = new DomDocument();
+  scope.document = doc;
+  scope.requestAnimationFrame = (cb: (t: number) => void) => { cb(0); return 0; };
+
+  try {
+    const fixture = radioGroupFixture(doc, values, options);
+    const fire = (index: number, key: string) => {
+      const event = keyDown(key);
+      fixture.buttons[index].dispatchEvent(event);
+      return event;
+    };
+    body({ ...fixture, doc, fire });
+  } finally {
+    scope.document = saved.document;
+    scope.requestAnimationFrame = saved.requestAnimationFrame;
+  }
+}
+
+test('Tier 2.88: arrow keys move the selection and skip a level that cannot be selected', () => {
+  // The middle level is disabled the way the preview zoom disables one that
+  // does not fit: selecting it would do nothing, and a disabled button cannot
+  // hold focus, so focus would be dumped on the body.
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [1], selected: 0 }, ({ fire, chosen, selected, doc, buttons }) => {
+    const right = fire(0, 'ArrowRight');
+    assert.deepEqual(chosen, ['3x'], 'the disabled level is stepped over, not selected');
+    assert.equal(selected(), '3x');
+    assert.equal(right.defaultPrevented, true, 'an arrow key must not also scroll the page');
+    assert.equal(doc.activeElement, buttons[2], 'focus follows the selection');
+
+    const left = fire(2, 'ArrowLeft');
+    assert.deepEqual(chosen, ['3x', '1x'], 'and back the other way, over the same level');
+    assert.equal(left.defaultPrevented, true);
+    assert.equal(doc.activeElement, buttons[0]);
+  });
+});
+
+test('Tier 2.89: Home and End reach the ends of the group, over disabled levels', () => {
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [0], selected: 2 }, ({ fire, selected, doc, buttons }) => {
+    fire(2, 'Home');
+    assert.equal(selected(), '2x', 'Home lands on the first level that can actually be selected');
+    assert.equal(doc.activeElement, buttons[1]);
+  });
+
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [2], selected: 0 }, ({ fire, selected, doc, buttons }) => {
+    fire(0, 'End');
+    assert.equal(selected(), '2x', 'End lands on the last level that can be selected');
+    assert.equal(doc.activeElement, buttons[1]);
+  });
+});
+
+test('Tier 2.90: an unhandled key leaves the group alone, and an unmovable one is still consumed', () => {
+  withRadioGroup(['1x', '2x'], { selected: 0 }, ({ fire, chosen, selected }) => {
+    const other = fire(0, 'a');
+    assert.deepEqual(chosen, [], 'only the arrow keys, Home and End move the selection');
+    assert.equal(other.defaultPrevented, false, 'and any other key keeps its default behaviour');
+    assert.equal(selected(), '1x');
+  });
+
+  // Every level but this one is disabled, so the selection cannot move. The key
+  // is consumed all the same: returning early would let the browser's default
+  // arrow handling scroll the page and drop focus off the control.
+  withRadioGroup(['1x', '2x', '3x'], { disabled: [1, 2], selected: 0 }, ({ fire, chosen, selected }) => {
+    const right = fire(0, 'ArrowRight');
+    assert.deepEqual(chosen, [], 'there is nowhere to move to');
+    assert.equal(selected(), '1x');
+    assert.equal(right.defaultPrevented, true, 'and the key is still consumed');
+  });
+});
+
+test('Tier 2.91: focus stays in the group when the level just chosen turns out to be unavailable', () => {
+  // Picking a higher zoom can push the card past the window and disable the
+  // level that was just picked, which is why the focus move waits a frame and
+  // re-reads the buttons. Without the fallback, focus lands on the body and the
+  // next Tab restarts from the top of the host page.
+  const scope = globalThis as Record<string, unknown>;
+  const saved = { document: scope.document, requestAnimationFrame: scope.requestAnimationFrame };
+  const doc = new DomDocument();
+  scope.document = doc;
+  scope.requestAnimationFrame = (cb: (t: number) => void) => { cb(0); return 0; };
+
+  try {
+    const group = doc.createElement('div');
+    group.setAttribute('role', 'radiogroup');
+    const buttons = ['1x', '2x', '3x'].map((_, index) => {
+      const button = doc.createElement('button');
+      button.setAttribute('role', 'radio');
+      button.tabIndex = index === 0 ? 0 : -1;
+      group.appendChild(button);
+      return button;
+    });
+    doc.body.appendChild(group);
+
+    buttons[0].addEventListener('keydown', (e: any) =>
+      handleRadioKeyDown(e, ['1x', '2x', '3x'], '1x', (next) => {
+        // The re-render this triggers disables the level that was chosen.
+        buttons.forEach((button, index) => {
+          button.disabled = index > 0;
+          button.tabIndex = index === 0 ? 0 : -1;
+        });
+        assert.equal(next, '2x', 'the selection still moved to the level that was picked');
+      })
+    );
+
+    buttons[0].dispatchEvent(keyDown('ArrowRight'));
+    assert.equal(
+      doc.activeElement,
+      buttons[0],
+      'focus falls back to the reachable radio instead of leaving the group'
+    );
+  } finally {
+    scope.document = saved.document;
+    scope.requestAnimationFrame = saved.requestAnimationFrame;
+  }
+});
+
+// -------------------------------------------------------------
+// Test Execution Runner for Tier 2
+// -------------------------------------------------------------
+export function runTier2() {
+  return run();
+}

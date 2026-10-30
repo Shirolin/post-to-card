@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞
+    url: https://github.com/Shirolin/post-to-card/security/advisories/new
+    about: 请不要用公开 issue 报告安全问题。走这里的私密渠道，详见 SECURITY.md。
+  - name: 使用与安装问题
+    url: https://github.com/Shirolin/post-to-card#-安装与使用
+    about: 先看 README 的安装与使用一节，以及常见问题（FAQ）。

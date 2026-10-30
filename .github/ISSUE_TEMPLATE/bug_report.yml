@@ -1,0 +1,73 @@
+name: Bug 报告
+description: 扩展没有按预期工作，或卡片渲染出错了
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先确认：**未登录访问 x.com 时扩展不工作不是 bug** —— 那个页面没有任何推文标记可读，
+        原因写在 [docs/live-verification.md](https://github.com/Shirolin/post-to-card/blob/main/docs/live-verification.md)。
+        安全问题请**不要**开公开 issue，走 [SECURITY.md](https://github.com/Shirolin/post-to-card/blob/main/SECURITY.md) 里的私密渠道。
+
+  - type: input
+    id: version
+    attributes:
+      label: 扩展版本
+      description: 卡片右下角的构建号，或 chrome://extensions 里显示的版本
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 浏览器与系统
+      placeholder: Chrome 140 / Windows 11
+    validations:
+      required: true
+
+  - type: input
+    id: x-locale
+    attributes:
+      label: X 的界面语言
+      description: 有些判据依赖 X 自己的文案，语言不同可能走另一条分支
+      placeholder: 简体中文 / English
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开哪个页面开始，到哪一步出错
+      placeholder: |
+        1. 打开 https://x.com/...
+        2. 点击推文操作栏的印刷机图标
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: post
+    attributes:
+      label: 能复现的最小推文链接
+      description: 公开推文即可；不要贴需要关注才能看的账号内容
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望的结果与实际的结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: 控制台里以 [Post-to-Card] 开头的日志
+      description: 打开开发者工具 Console，复制与本问题相关的几行
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图或补充说明
+      description: 请遮盖个人信息、私信与未公开内容

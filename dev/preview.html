@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PostPress · UI Harness</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        background: #0b0c0e;
+      }
+      post-to-card-container {
+        display: block;
+      }
+      .bare-root {
+        display: flex;
+        align-items: stretch;
+        min-height: 100%;
+        position: static;
+        inset: auto;
+      }
+      .bare-stage {
+        flex: 1;
+        padding: 32px;
+        overflow: auto;
+        max-height: 100vh;
+      }
+      .bare-root > .controls-panel {
+        height: auto;
+        max-height: none;
+        overflow: visible;
+      }
+      .panel-only {
+        width: 380px;
+        margin: 0 auto;
+        position: static;
+        inset: auto;
+      }
+      .panel-only > .controls-panel {
+        height: auto;
+        max-height: none;
+        overflow: visible;
+      }
+    </style>
+  </head>
+  <body>
+    <post-to-card-container></post-to-card-container>
+    <script type="module" src="./preview.ts"></script>
+  </body>
+</html>
