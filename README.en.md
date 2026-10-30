@@ -199,6 +199,7 @@ Open `http://127.0.0.1:5199/` and switch states via URL parameters (e.g., `?them
 | [docs/real-dom-sampling-checklist.md](docs/real-dom-sampling-checklist.md) | Offline real-tweet DOM sampling checklist and extractor verification |
 | [docs/architecture-review-2026-10-21.md](docs/architecture-review-2026-10-21.md) | Architectural review conclusions and rejected directions |
 | [docs/store-listing.md](docs/store-listing.md) | Chrome Web Store listing copy (name, short and full descriptions) and its sync rule with `_locales` |
+| [docs/store-checklist.md](docs/store-checklist.md) | Submission checklist: packaging, store images, console fields, privacy answers |
 
 ---
 

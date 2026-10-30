@@ -199,6 +199,7 @@ pnpm exec vite --config dev/vite.harness.config.ts
 | [docs/real-dom-sampling-checklist.md](docs/real-dom-sampling-checklist.md) | 免登录离线采集真实推文 DOM 样本与验证提取器的方法 |
 | [docs/architecture-review-2026-10-21.md](docs/architecture-review-2026-10-21.md) | 历史架构决策与「已验证不可行方向」记录 |
 | [docs/store-listing.md](docs/store-listing.md) | Chrome 应用商店上架文案（名称、简短说明与详细说明）及与 `_locales` 的同步规则 |
+| [docs/store-checklist.md](docs/store-checklist.md) | 上架清单：打包、商店图片、后台字段、隐私声明与常见拒因 |
 
 ---
 
