@@ -83,6 +83,10 @@ Every step—parsing, layout, and rasterization—runs 100% locally in your brow
 
 ## 📦 Getting Started
 
+### Download
+
+Grab `postpress-1.0.0.zip` from [Releases](https://github.com/Shirolin/post-to-card/releases/latest), unzip it somewhere permanent, then skip to the two "Load unpacked" steps below.
+
 ### Build from Source
 
 Prerequisites: **Node.js >= 24**, **pnpm >= 10**.
@@ -99,7 +103,7 @@ pnpm run build
 
 Load unpacked into Chrome / Chromium:
 1. Open `chrome://extensions/` and enable **Developer mode** in the top-right corner.
-2. Click **Load unpacked** and select the generated `dist/` directory.
+2. Click **Load unpacked** and select the folder you unzipped (the build's `dist/` when building from source).
 
 ### Quick Workflow
 

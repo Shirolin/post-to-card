@@ -56,7 +56,7 @@ pnpm exec vite --config dev/vite.harness.config.ts
 | 名称 | `PostPress — X & Thread Card Studio` | `public/_locales/en_US/messages.json` |
 | 简短说明 | 125 字符版（上限 132） | `docs/store-listing.md` |
 | 详细说明 | 英文 / 中文两版 | `docs/store-listing.md` |
-| 类别 | Productivity（偏工具）或 Social & Communication | 自行判断，改类别要重新审核 |
+| 类别 | **Social & Communication** | 与 X 相关的工具集中在这里；类别改一次要重新审一次 |
 | 语言 | English；其余 13 种可在「翻译」里逐个添加 | `_locales/` |
 | 隐私政策 URL | `https://github.com/Shirolin/post-to-card/blob/main/PRIVACY.md` | `PRIVACY.md` |
 | 主页 | `https://shirolin.github.io/post-to-card/` | 已部署 |

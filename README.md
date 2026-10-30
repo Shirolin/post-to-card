@@ -83,6 +83,10 @@
 
 ## 📦 安装与使用
 
+### 直接下载
+
+从 [Releases](https://github.com/Shirolin/post-to-card/releases/latest) 下载 `postpress-1.0.0.zip`，解压到一个固定目录（不要删），然后直接跳到下面的「加载至 Chrome」两步。
+
 ### 从源码构建安装
 
 环境要求：**Node.js >= 24**、**pnpm >= 10**。
@@ -99,7 +103,7 @@ pnpm run build
 
 加载至 Chrome / Chromium 浏览器：
 1. 打开扩展管理页 `chrome://extensions/`，开启右上角「**开发者模式**」。
-2. 点击「**加载已解压的扩展程序**」，选择本项目生成的 `dist/` 目录。
+2. 点击「**加载已解压的扩展程序**」，选择解压后的那个目录（从源码构建时是 `dist/`）。
 
 ### 快速上手
 
