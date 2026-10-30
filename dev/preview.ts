@@ -304,20 +304,20 @@ const articleCover = svg(
 );
 
 const articleThreadData: ThreadData = {
-  author: { name: 'Kevin Le Guillou', handle: '@kevinleguillou', avatarUrl: avatar, verified: true },
+  author: { name: 'Ada Nakamura', handle: '@ada_builds', avatarUrl: avatar, verified: true },
   isSingle: true,
   targetTweetIndex: 0,
   tweets: [
     {
       id: '7001',
-      url: 'https://x.com/kevinleguillou/status/7001',
-      author: { name: 'Kevin Le Guillou', handle: '@kevinleguillou', avatarUrl: avatar, verified: true },
+      url: 'https://x.com/ada_builds/status/7001',
+      author: { name: 'Ada Nakamura', handle: '@ada_builds', avatarUrl: avatar, verified: true },
       timestamp: '2026-10-08T21:19:52.000Z',
-      text: 'Here is the promised write up, it explains how I made the recent videos, how to structure your work, and good ideas I picked up along the way.',
+      text: 'Here is the promised write-up, it explains how I assembled the recent videos, how to structure your work, and the shortcuts I picked up along the way.',
       stats: { replies: '2', reposts: '14', likes: '153', bookmarks: '105', views: '15.9K' },
       article: {
-        title: 'Anime Harry Potter',
-        openingLine: 'This is a writeup for those that wanted to know how I made the videos.',
+        title: 'A Field Guide to Print-Grade Cards',
+        openingLine: 'This is a write-up for everyone who asked how the videos were assembled.',
         cover: { type: 'image', url: articleCover, aspectRatio: 2.498 },
       },
     },
