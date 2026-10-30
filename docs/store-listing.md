@@ -13,13 +13,13 @@ PostPress · 印推
 
 ## 简短说明（manifest `description`，上限 132 字符）
 
-英文（125 字符，在上限以内）：
+英文（124 字符，在上限以内）：
 
 ```
 Press X posts and threads into print-grade cards. 12 tactile themes, custom canvas mats, 100% local rendering, zero uploads.
 ```
 
-中文（43 字符）：
+中文（46 字符）：
 
 ```
 把 X 推文与长串装帧成出版级高清卡片。12 款纸张肌理与自由画幅，纯本地排印，零数据上传。
@@ -27,7 +27,7 @@ Press X posts and threads into print-grade cards. 12 tactile themes, custom canv
 
 ## 详细说明
 
-### 英文
+### 英文 (en-US)
 
 ```
 PostPress — Press X posts and threads into publication-grade cards.
@@ -37,48 +37,48 @@ Stop sharing cluttered, low-DPI browser screenshots. Click the press icon on any
 WHAT YOU GET:
 
 • 12 Tactile & Digital Themes — Minimal, Midnight, Liquid Glass, Material 3, Gallery, Darkroom, Riso, Sumi, Clay, Terminal, Receipt, plus an experimental Brutalist. Each is a complete design system: paper grain, border rules, typographic pairs, accents, and signature marks.
-• Independent Canvas Matting — Mount the card on a standalone canvas mat. Aspect ratios: 1:1, 4:5, 3:4, 16:9 (elastic min-height; long text never truncates). Backdrops: follow theme, solid color, gradient, or transparent whitespace.
-• Smart Thread Stitching — Dual-pipeline resolution (GraphQL with DOM fallback) seamlessly threads consecutive posts by the same author while filtering out ads and third-party replies. Exclude individual posts with one click.
-• Long-form & Rich Quotes — Natively parses X Articles with cover images, kickers, titles, and ledes; quoted posts render in filled or outlined styles matching the active theme.
-• Granular Controls & Per-Author Privacy — Toggle source QR code, engagement metrics, timestamp, credit watermark, and video play badge. Blur all authors globally, or click any post's avatar in the preview to anonymize just that author.
-• 14 Languages & Readability Guard — Localized into 14 languages (following your browser or pinned manually). Alerts you before export if an ultra-long card would scale down too small in social feeds.
+• Output Canvas & Matting — Frame the card on a standalone canvas layer. Aspect ratios: 1:1, 4:5, 3:4, 16:9 (elastic min-height; long text never truncates). Backdrops: follow theme, solid color, gradient, or transparent margin.
+• Smart Thread Stitching — Dual-pipeline resolution (GraphQL with DOM fallback) seamlessly merges consecutive posts by the same author while stripping out ads and third-party replies. Exclude individual posts with one click.
+• Articles & Quoted Posts — Natively parses X Articles with cover images, kickers, titles, and ledes; quoted posts render in filled or outlined styles matching the active theme.
+• Granular Controls & Per-Author Privacy — Toggle QR code, engagement metrics, timestamp, credit & build number, and video play badge. Blur all authors globally, or click any post's avatar in the preview to anonymize just that author.
+• 14 Languages & Readability Guard — Localized into 14 languages (following your browser or pinned manually). Alerts you before export if a tall card would shrink below reading size in social feeds.
 
 PRIVACY:
 
-• Zero Remote Telemetry: Never transmits user data. The only network calls fetch card media from X's official CDN (*.twimg.com) to prevent HTML5 Canvas cross-origin tainting.
+• Zero Telemetry: Never transmits user data. The only network requests fetch post media from X's official CDN (*.twimg.com) so HTML5 Canvas can render images without cross-origin errors.
 • 100% Local: No account, no API keys, and no backend servers. Everything renders right in your browser.
-• Local Storage Only: Custom presets are saved purely in chrome.storage.local.
-• Minimal Permissions: clipboardWrite (to put the image on your clipboard), storage (to remember your settings), and host access to X's image servers.
+• Local Storage Only: Custom preferences live purely in chrome.storage.local.
+• Minimal Permissions: clipboardWrite (to copy the rendered PNG), storage (to remember your settings), and host access to X's image servers.
 
-Requires no login and no X API access — it reads the posts already rendered on the page you are on.
+Requires no login and no X API access — it reads the posts already rendered on the page you are viewing.
 
 Not affiliated with X Corp.
 ```
 
-### 中文
+### 简体中文 (zh-CN)
 
 ```
 PostPress · 印推 —— 把 X（Twitter）推文与长串，排印成出版级质感卡片。
 
-告别夹带浏览器杂乱 UI 与模糊缩放的普通截屏。在推文操作栏轻点印刷机图标（或按快捷键 Alt + C），PostPress（印推）即刻在本地将单条推文或同作者长串（Thread）重新组版，装帧为可一键复制或导出 3× 超清 PNG 的精美卡片。
+告别夹带杂乱界面与模糊缩放的普通截屏。轻点推文操作栏的印刷机图标（或悬停按 Alt + C），PostPress（印推）即刻在本地将单条推文或同作者长串（Thread）重新组版，装帧为可一键复制或导出 3× 超清 PNG 的精美卡片。
 
-你会得到：
+功能亮点：
 
-• 12 套实体级材质主题——从孔版印刷（Riso）、水墨宣纸、画廊装裱、暗房银盐，到极简、液态玻璃与热敏小票，外加一套实验性粗野派。每套主题均配备严谨匹配的纸面基调、边线质感、字体配对、强调色与专属签名装饰。
-• 独立外层画布装裱（Mat）——支持将卡片承托在外层画布上导出。提供 1:1、4:5、3:4、16:9 预设画幅（采用 min-height 弹性下限，长文本绝不截断），并支持跟随主题、纯色或渐变背景；仅选画幅时留白保持透明，便于二次合成。
-• 智能长串拼合（Thread）——双通道解析（GraphQL 优先 + DOM 降级兜底），自动识别并拼接同作者连续推文，剔除干扰广告与第三方回复，支持单条自由剔除。
-• 长文与深度排版——原生识别 X 长文推文（Article），提取封面、眉标、标题与导语；引用推文依主题呈现为填充或描边双重质感；支持 Twemoji Unicode 还原与 1~4 张高清网格图片解析。
-• 精细开关与逐条隐私脱敏——独立控制原文二维码、互动统计、发布时间戳、视频播放角标与署名版本；支持全局作者高斯模糊，也可直接点击卡片上某条推文的头像仅脱敏该作者。
-• 14 国语言与可读性警示——内置中、英、日、韩等 14 种界面与卡面日期语言；当长图比例过大、缩至社交平台信息流宽度可能导致字号难以阅读时，面板主动呈现视觉警示，建议分段导出。
+• 12 款实体质感与数字主题 —— 极简、夜幕、液态玻璃、质感 (MD3)、画廊、暗房、孔版、水墨、软陶、终端、小票，以及实验性的粗野派。每款主题都是一套完整的设计规范：纸张肌理、分栏线、字体配对、强调色与专属印记。
+• 输出画布与装裱衬底 —— 支持将卡片置于独立背景层上导出。提供 1:1、4:5、3:4、16:9 预设画幅（弹性最小高度，长文绝不截断）；背景可选跟随主题、纯色、渐变或透明留白，方便二次排版。
+• 智能长串拼合 —— 双通道解析（GraphQL 优先，DOM 兜底），自动识别并串联同作者连续推文，过滤广告与无关回复，并支持单条一键剔除。
+• 原生长文与引用排版 —— 原生解析 X 长文（Article）的封面、眉题、标题与导语；引用推文随主题切换填充或描边样式；完整还原高清多图网格与表情符号。
+• 呈现细节与逐条隐私脱敏 —— 独立开关原文二维码、互动数据、发布时间、署名与版本及视频播放角标。支持全局模糊所有作者，也可在预览中点击单条推文头像，仅隐去该作者信息。
+• 14 种语言与可读性提醒 —— 界面与卡面日期支持 14 种语言（可跟随浏览器或手动指定）。当长图过高、在信息流中缩略后文字可能过小时，导出前会自动提示拆分。
 
 隐私保障：
 
-• 零外部远程通信：除通过安全代理向 X 官方图片服务器（*.twimg.com）拉取配图（用于规避 Canvas 跨域污染 SecurityError）外，绝不向任何外部服务器发送请求。
-• 无遥测与追踪：无数据分析、无行为埋点、无远程动态配置。
-• 纯本地存储：个性化排版偏好仅保存在浏览器本地 chrome.storage.local。
-• 权限最小化：仅声明 clipboardWrite（复制图片至剪贴板）、storage（保存用户偏好）及 twimg.com 图片代理权限。
+• 零遥测与追踪：绝不上传任何用户数据。唯一的网络请求仅用于从 X 官方图床（*.twimg.com）加载配图，以规避浏览器 Canvas 跨域导出限制。
+• 100% 本地渲染：无需注册登录，无需 API 密钥，无后端服务器。
+• 纯本地存储：排版偏好仅保存在浏览器本地 chrome.storage.local。
+• 最小化权限：仅申请 clipboardWrite（复制图片到剪贴板）、storage（记住排版设置）与 X 官方图床读取权限。
 
-无需登录，也无需 X API 权限——直接读取当前页面已渲染的内容。
+无需登录账号，无需 X API —— 直接读取当前页面已加载的内容。
 
 与 X Corp. 无关联。
 ```
@@ -105,83 +105,83 @@ PostPress · 印推 —— 把 X（Twitter）推文与长串，排印成出版�
 ### 德语 (de)
 
 ```
-PostPress — X-Beiträge und Threads als Karten in Druckqualität.
+PostPress — X-Posts und Threads als druckreife Karten gestalten.
 
-Schluss mit überladenen, unscharfen Browser-Screenshots. Klicke auf das Drucker-Symbol in der Aktionsleiste eines Beitrags (oder drücke Alt + C), und PostPress setzt einzelne Beiträge oder Threads desselben Autors zu gestochen scharfen Karten — bereit für die Zwischenablage oder den Export als 3×-Retina-PNG.
+Schluss mit überladenen, unscharfen Browser-Screenshots. Ein Klick auf das Druckersymbol unter einem Post (oder Alt + C beim Überfahren mit der Maus), und PostPress setzt einzelne Posts oder mehrteilige Threads desselben Verfassers zu gestochen scharfen Karten — direkt in die Zwischenablage oder als 3×-Retina-PNG.
 
-DAS BEKOMMST DU:
+FUNKTIONEN IM ÜBERBLICK:
 
-• 12 Material-Themes — Minimal, Mitternacht, Liquid Glass, Material 3, Galerie, Dunkelkammer, Riso, Sumi, Ton, Terminal, Kassenbon und ein experimentelles Brutalistisch. Jedes ist ein vollständiges Designsystem: Papierstruktur, Linien, Schriftenpaare, Akzente und ein eigenes Signaturzeichen.
-• Eigene Leinwand (Mat) — Setze die Karte auf eine separate Leinwand. Formate 1:1, 4:5, 3:4, 16:9 (elastische Mindesthöhe, langer Text wird nie abgeschnitten). Hintergrund: dem Theme folgen, Vollton, Verlauf oder transparent.
-• Intelligente Thread-Erkennung — Zwei Auflösungswege (GraphQL, mit DOM-Rückfall): fügt aufeinanderfolgende Beiträge desselben Autors zusammen und filtert Werbung und fremde Antworten heraus. Einzelne Beiträge lassen sich per Klick entfernen.
-• Lange Beiträge und Zitate — Liest X-Artikel mit Titelbild, Kicker, Titel und Einleitung; zitierte Beiträge erscheinen gefüllt oder umrandet, passend zum Theme.
-• Feine Schalter und Datenschutz pro Autor — QR-Code, Interaktionszahlen, Zeitstempel, Wasserzeichen und Video-Badge einzeln schaltbar. Alle Autoren global unkenntlich machen oder im Vorschaufenster auf einen Avatar klicken, um nur diesen Autor zu verbergen.
-• 14 Sprachen und Lesbarkeits-Warnung — Oberfläche und Kartendatum in 14 Sprachen (folgt dem Browser oder fest gewählt). Warnt vor dem Export, wenn eine sehr lange Karte im Feed zu klein würde.
+• 12 charakterstarke Designs — Minimal, Mitternacht, Liquid Glass, Material 3, Galerie, Dunkelkammer, Riso, Sumi, Ton, Terminal, Kassenbon sowie ein experimentelles Brutalistisch. Jedes Design ist ein stimmiges System aus Papierkorn, Linienführung, Schriftpaarung, Akzentfarbe und Signatur.
+• Ausgabefläche & Passepartout — Platziere die Karte auf einem eigenen Hintergrundrahmen im Format 1:1, 4:5, 3:4 oder 16:9 (mit flexibler Mindesthöhe, damit lange Texte nie abgeschnitten werden). Wahlweise im Stil des Designs, einfarbig, mit Verlauf oder transparentem Rand.
+• Intelligente Thread-Bündelung — Zweistufige Erkennung (GraphQL mit DOM-Fallback) fasst aufeinanderfolgende Posts desselben Verfassers nahtlos zusammen und blendet Werbung sowie fremde Antworten aus. Einzelne Posts lassen sich per Klick ausschließen.
+• X-Artikel & Zitate — Übernimmt X-Artikel nativ mit Titelbild, Dachzeile, Überschrift und Vorspann; zitierte Posts werden passend zum Design gefüllt oder konturiert dargestellt.
+• Feine Steuerung & Datenschutz pro Verfasser — QR-Code, Interaktionen, Zeitpunkt, Quelle & Build sowie Video-Play-Button einzeln ein- und ausblendbar. Verwische alle Verfasser global oder klicke in der Vorschau auf ein Profilbild, um nur diesen einen Account zu anonymisieren.
+• 14 Sprachen & Lesbarkeits-Hinweis — Oberfläche und Datumsformat in 14 Sprachen (automatisch nach Browser oder fest gewählt). Warnt vor dem Export, wenn ein sehr langer Thread im Feed zu stark verkleinert würde.
 
 DATENSCHUTZ:
 
-• Keine Telemetrie: Es werden keine Nutzerdaten übertragen. Die einzigen Netzwerkaufrufe holen Bilder vom offiziellen CDN von X (*.twimg.com), damit die Leinwand nicht durch fremde Herkunft gesperrt wird.
-• 100 % lokal: kein Konto, keine API-Schlüssel, kein Server.
-• Nur lokaler Speicher: Einstellungen liegen ausschließlich in chrome.storage.local.
-• Minimale Berechtigungen: clipboardWrite (Bild in die Zwischenablage), storage (Einstellungen merken) und Zugriff auf die Bildserver von X.
+• Null Telemetrie: Es werden keinerlei Nutzerdaten erhoben oder versendet. Netzwerkabrufe erfolgen ausschließlich zum offiziellen X-CDN (*.twimg.com), um Beitragsbilder ohne Canvas-CORS-Blockade zu rendern.
+• 100 % lokal: Kein Konto, kein API-Schlüssel, keine externen Server — alles entsteht direkt im Browser.
+• Lokale Speicherung: Deine Einstellungen liegen ausschließlich in chrome.storage.local.
+• Minimale Berechtigungen: clipboardWrite (Kartenbild kopieren), storage (Einstellungen merken) und Lesezugriff auf die Bildserver von X.
 
-Kein Login und kein X-API-Zugang nötig — gelesen wird, was die Seite ohnehin anzeigt.
+Kein Login und kein X-API-Zugang erforderlich — verarbeitet wird nur, was bereits auf der geöffneten Seite sichtbar ist.
 
-Nicht mit X Corp. verbunden.
+Steht in keiner Verbindung zu X Corp.
 ```
 
 ### 俄语 (ru)
 
 ```
-PostPress — превращает посты и треды X в карточки печатного качества.
+PostPress — превращайте посты и треды X в карточки типографского качества.
 
-Хватит захламлённых и размытых скриншотов. Нажмите значок печатного станка в панели действий поста (или Alt + C) — и PostPress соберёт одиночный пост или тред одного автора в чёткую карточку, готовую для буфера обмена или экспорта в PNG 3× Retina.
+Забудьте о перегруженных и мыльных скриншотах из браузера. Нажмите на значок печатного пресса под любым постом (или сочетание Alt + C при наведении) — PostPress мгновенно сверстает отдельный пост или авторский тред в чёткую карточку. Копируйте её в буфер обмена в один клик или сохраняйте в PNG 3× Retina.
 
-ЧТО ВЫ ПОЛУЧИТЕ:
+ВОЗМОЖНОСТИ:
 
-• 12 материальных тем — Минимализм, Полночь, Жидкое стекло, Material 3, Галерея, Фотолаборатория, Ризограф, Суми, Глина, Терминал, Чек и экспериментальный Брутализм. Каждая — законченная система: фактура бумаги, линейки, шрифтовые пары, акценты и собственный знак.
-• Отдельный мат (Mat) — карточку можно поставить на отдельное поле. Форматы 1:1, 4:5, 3:4, 16:9 (эластичная минимальная высота, длинный текст не обрезается). Фон: как в теме, сплошной, градиент или прозрачный.
-• Умная сборка тредов — два канала (GraphQL, при промахе — DOM): склеивает подряд идущие посты одного автора, отсекает рекламу и чужие ответы. Любой пост убирается одним щелчком.
-• Длинные посты и цитаты — нативно читает статьи X (обложка, надзаголовок, заголовок, лид); цитаты рисуются заливкой или обводкой по теме.
-• Тонкие переключатели и приватность по авторам — QR-код, статистика, время, подпись и значок видео включаются отдельно. Размыть всех авторов сразу или щёлкнуть по аватару в превью, чтобы скрыть только его.
-• 14 языков и предупреждение о читаемости — интерфейс и даты на карточке на 14 языках (по браузеру или вручную). Перед экспортом предупредит, если очень длинная карточка станет нечитаемой в ленте.
+• 12 фактурных и цифровых тем — Минимализм, Полночь, Жидкое стекло, Material 3, Галерея, Фотолаборатория, Ризограф, Суми, Глина, Терминал, Чек и экспериментальный Брутализм. Каждая тема продумана до мелочей: текстура бумаги, линейки, шрифтовые пары, акценты и фирменное клеймо.
+• Область экспорта и паспарту — размещайте карточку на подложке формата 1:1, 4:5, 3:4 или 16:9 (высота тянется под текст без обрезки). Доступны фон в тон темы, сплошной цвет, градиент или прозрачные поля.
+• Умная сборка тредов — двухконтурный парсер (GraphQL с резервным чтением DOM) аккуратно склеивает цепочку постов одного автора, отсекая рекламу и чужие реплаи. Лишние посты в треде можно исключить одним кликом.
+• Статьи X и цитаты — нативная поддержка лонгридов X (обложка, рубрика, заголовок и лид) и аккуратное оформление цитируемых постов (с заливкой или в рамке под стать выбранной теме).
+• Детали отображения и приватность по авторам — гибкое управление QR-кодом, статистикой, датой, строкой «Авторство и сборка» и кнопкой воспроизведения на видео. Скрывайте всех авторов сразу или кликните по конкретному аватару в превью, чтобы размыть только его.
+• 14 языков и контроль читаемости — локализация интерфейса и дат на 14 языках (автоматически за браузером или вручную). Подскажет перед экспортом, если карточка получилась слишком высокой и текст станет мелким в ленте.
 
 ПРИВАТНОСТЬ:
 
-• Никакой телеметрии: данные никуда не отправляются. Единственные сетевые запросы — за картинками с официального CDN X (*.twimg.com), иначе canvas заблокируется.
-• Полностью локально: без аккаунта, без ключей API, без серверов.
-• Только локальное хранилище: настройки лежат в chrome.storage.local.
-• Минимум разрешений: clipboardWrite (картинка в буфер), storage (помнить настройки) и доступ к серверам изображений X.
+• Ноль телеметрии: расширение не собирает и никуда не отправляет данные. Единственные сетевые обращения идут к официальному CDN X (*.twimg.com) для загрузки медиафайлов поста в обход ограничений CORS для HTML5 Canvas.
+• 100 % локально: без регистрации, API-ключей и внешних серверов — рендеринг целиком происходит в вашем браузере.
+• Хранение на устройстве: все настройки сохраняются только локально в chrome.storage.local.
+• Минимум разрешений: clipboardWrite (копирование картинки в буфер), storage (сохранение настроек) и доступ к серверам изображений X.
 
-Вход и доступ к API X не нужны — расширение читает то, что страница уже отрисовала.
+Не требует авторизации или доступа к API X — работает прямо с открытой веб-страницей.
 
-Не связано с X Corp.
+Не связано с корпорацией X Corp.
 ```
 
 ### 法语 (fr)
 
 ```
-PostPress — transforme les posts et les threads de X en cartes de qualité éditoriale.
+PostPress — Transformez vos posts et threads X en cartes de qualité éditoriale.
 
-Fini les captures d'écran encombrées et floues. Cliquez sur l'icône d'imprimante dans la barre d'actions d'un post (ou appuyez sur Alt + C) : PostPress compose le post seul ou le thread d'un même auteur en une carte nette, prête à être copiée ou exportée en PNG 3× Retina.
+Oubliez les captures d’écran floues et encombrées par l’interface du navigateur. Cliquez sur l’icône de presse sous n’importe quel post (ou appuyez sur Alt + C au survol) : PostPress met en page un post isolé ou le fil complet d’un auteur en une carte impeccable, prête à être copiée dans le presse-papiers ou téléchargée en PNG 3× Retina.
 
-CE QUE VOUS OBTENEZ :
+FONCTIONNALITÉS CLÉS :
 
-• 12 thèmes matériels — Minimal, Minuit, Verre liquide, Material 3, Galerie, Chambre noire, Riso, Sumi, Argile, Terminal, Ticket, plus un Brutaliste expérimental. Chacun est un système complet : grain de papier, filets, paires typographiques, accents et marque signature.
-• Support indépendant (Mat) — Posez la carte sur un support séparé. Formats 1:1, 4:5, 3:4, 16:9 (hauteur minimale élastique, le texte long n'est jamais coupé). Fonds : suivre le thème, aplat, dégradé ou transparent.
-• Assemblage intelligent des threads — Résolution à deux canaux (GraphQL, avec repli sur le DOM) : recolle les posts consécutifs d'un même auteur et écarte les publicités et les réponses tierces. Chaque post se retire d'un clic.
-• Articles longs et citations — Lit nativement les Articles X (couverture, surtitre, titre, chapeau) ; les posts cités s'affichent en plein ou en contour selon le thème.
-• Réglages fins et confidentialité par auteur — QR code, statistiques, horodatage, filigrane et badge vidéo, chacun activable. Floutez tous les auteurs d'un coup, ou cliquez sur l'avatar d'un post dans l'aperçu pour n'anonymiser que celui-là.
-• 14 langues et garde-fou de lisibilité — Interface et dates de carte en 14 langues (suit le navigateur ou choix manuel). Prévient avant l'export si une carte très longue deviendrait illisible dans un fil.
+• 12 thèmes texturés et numériques — Minimal, Minuit, Verre liquide, Material 3, Galerie, Chambre noire, Riso, Sumi, Argile, Terminal, Ticket, ainsi qu’un thème Brutaliste expérimental. Chaque thème forme un véritable système éditorial : grain de papier, filets, duo typographique, couleurs d’accent et marque de signature.
+• Zone d’export et passe-partout — Encadrez la carte sur un fond dédié aux formats 1:1, 4:5, 3:4 ou 16:9 (hauteur minimale extensible : les textes longs ne sont jamais tronqués). Choisissez un fond assorti au thème, uni, dégradé ou à marge transparente.
+• Assemblage intelligent des threads — Double moteur d’extraction (GraphQL avec repli DOM) qui réunit automatiquement les posts consécutifs d’un même auteur tout en écartant publicités et réponses tierces. Retirez n’importe quel post du fil en un clic.
+• Articles X et citations enrichies — Prise en charge native des Articles X (image de couverture, surtitre, titre et chapô) ; rendu des posts cités en aplat ou en contour selon le thème actif.
+• Détails d’affichage et anonymisation ciblée — Activez à la carte le QR code, les statistiques, la date, la mention « Crédit et build » ou le bouton lecture vidéo. Floutez tous les auteurs globalement, ou cliquez sur un avatar dans l’aperçu pour n’anonymiser que ce compte.
+• 14 langues et alerte de lisibilité — Interface et format de date traduits en 14 langues (selon le navigateur ou au choix). Un avertissement s’affiche si un fil très haut risque de paraître minuscule dans un fil d’actualité.
 
 CONFIDENTIALITÉ :
 
-• Aucune télémétrie : aucune donnée n'est transmise. Les seuls appels réseau récupèrent les images du CDN officiel de X (*.twimg.com), sans quoi le canvas serait bloqué.
-• 100 % local : pas de compte, pas de clé API, pas de serveur.
-• Stockage local uniquement : les réglages restent dans chrome.storage.local.
-• Autorisations minimales : clipboardWrite (copier l'image), storage (mémoriser les réglages) et l'accès aux serveurs d'images de X.
+• Zéro télémétrie : aucune donnée personnelle n’est collectée ni transmise. Les seules requêtes réseau chargent les images du post depuis le CDN officiel de X (*.twimg.com) afin d’autoriser le rendu HTML5 Canvas sans blocage CORS.
+• 100 % local : ni compte, ni clé API, ni serveur distant — tout est généré directement dans votre navigateur.
+• Stockage strictement local : vos préférences sont enregistrées uniquement dans chrome.storage.local.
+• Autorisations minimales : clipboardWrite (copie de l’image), storage (mémorisation des réglages) et accès aux serveurs d’images de X.
 
-Aucune connexion et aucun accès à l'API X ne sont nécessaires — l'extension lit ce que la page affiche déjà.
+Fonctionne sans connexion ni accès à l’API X — à partir du contenu déjà affiché sur votre page.
 
 Non affilié à X Corp.
 ```
@@ -189,167 +189,167 @@ Non affilié à X Corp.
 ### 韩语 (ko)
 
 ```
-PostPress — X의 게시물과 스레드를 인쇄 품질의 카드로 만듭니다.
+PostPress · 트윗판화 — X(트위터) 게시물과 스레드를 출판 품질의 카드로 조판하세요.
 
-지저분하고 흐린 브라우저 스크린샷은 이제 그만. 게시물 작업 표시줄의 인쇄기 아이콘을 누르거나(또는 Alt + C) PostPress가 단일 게시물이나 같은 작성자의 스레드를 선명한 카드로 다시 조판합니다. 클립보드에 복사하거나 3× Retina PNG로 내보낼 수 있습니다.
+복잡한 브라우저 UI가 섞이거나 흐릿하게 깨지는 일반 스크린샷은 이제 그만. 게시물 하단 작업 표시줄의 프레스 아이콘을 클릭하거나(또는 마우스를 올린 채 Alt + C), 단일 게시물과 같은 작성자의 연속 스레드를 깔끔한 카드로 즉시 조판해 보세요. 클립보드로 바로 복사하거나 3× Retina 고해상도 PNG로 저장할 수 있습니다.
 
-제공 기능:
+주요 기능:
 
-• 12가지 질감 테마 — 미니멀, 미드나이트, 리퀴드 글라스, 머티리얼 (MD3), 갤러리, 암실, 리소, 수묵, 클레이, 터미널, 영수증, 그리고 실험적인 브루탈리즘. 각 테마는 종이 질감, 경계선, 서체 조합, 강조색, 고유 장식까지 갖춘 하나의 디자인 시스템입니다.
-• 독립 캔버스(Mat) — 카드를 별도 캔버스 위에 올려 내보냅니다. 비율 1:1, 4:5, 3:4, 16:9(최소 높이가 늘어나 긴 글도 잘리지 않음). 배경은 테마 따르기, 단색, 그라데이션, 투명 중에서 고릅니다.
-• 스마트 스레드 연결 — 두 갈래 해석(GraphQL 우선, 실패 시 DOM)으로 같은 작성자의 연속 게시물을 이어 붙이고 광고와 제3자 답글은 걸러냅니다. 게시물 하나만 골라 뺄 수도 있습니다.
-• 긴 글과 인용 — X 아티클(표지, 상단 문구, 제목, 도입부)을 그대로 읽고, 인용 게시물은 테마에 맞춰 채움 또는 테두리로 그립니다.
-• 세밀한 스위치와 작성자별 비공개 — QR 코드, 반응 수치, 시각, 서명, 동영상 배지를 각각 끄고 켭니다. 모든 작성자를 한 번에 흐리게 하거나, 미리보기에서 아바타를 눌러 그 작성자만 가릴 수 있습니다.
-• 14개 언어와 가독성 경고 — 인터페이스와 카드 날짜를 14개 언어로 제공합니다(브라우저를 따르거나 직접 고정). 카드가 너무 길어 피드에서 읽기 어려워질 것 같으면 내보내기 전에 알려 줍니다.
+• 12가지 감각적인 질감 및 디지털 테마 — 미니멀, 미드나이트, 리퀴드 글라스, 머티리얼 (MD3), 갤러리, 암실, 리소, 수묵, 클레이, 터미널, 영수증, 그리고 실험적인 브루탈리즘까지. 종이 질감, 구분선, 서체 조합, 강조색, 시그니처 마크가 정교하게 맞물린 12종의 디자인 시스템을 제공합니다.
+• 출력 캔버스 및 매트(Mat) 액자 — 카드를 독립된 배경 캔버스 위에 얹어 내보낼 수 있습니다. 1:1, 4:5, 3:4, 16:9 비율(긴 글도 절대 잘리지 않는 가변 최소 높이 적용)과 테마 연동·단색·그라데이션·투명 여백 배경을 자유롭게 조합하세요.
+• 스마트 스레드 자동 병합 — 이중 파싱 파이프라인(GraphQL 우선, DOM 폴백)으로 같은 작성자의 이어지는 게시물을 정확히 묶어 주고 중간 광고나 타인의 답글은 깔끔하게 걸러냅니다. 원치 않는 게시물은 클릭 한 번으로 제외할 수 있습니다.
+• 장문 아티클 및 인용구 완벽 지원 — X 장문(Article)의 표지 이미지, 말머리, 제목, 도입부를 원본 구조 그대로 추출하며, 인용 게시물도 선택한 테마에 맞춰 채움 또는 윤곽선 스타일로 자연스럽게 렌더링합니다.
+• 표시 세부 설정 및 작성자 개별 블러 — 원문 QR 코드, 참여 지표, 작성 시각, 출처와 버전, 동영상 재생 버튼을 개별 스위치로 제어하세요. 모든 작성자를 한꺼번에 블러 처리하거나, 미리보기에서 특정 프로필 사진만 클릭해 해당 작성자만 익명화할 수도 있습니다.
+• 14개 언어 지원 및 가독성 알림 — 인터페이스와 카드 날짜 표기를 14개 언어로 지원합니다(브라우저 언어 자동 연동 또는 직접 지정). 스레드가 너무 길어 타임라인에서 글자가 지나치게 작아질 우려가 있으면 내보내기 전에 미리 분할을 권장합니다.
 
-개인정보:
+개인정보 보호:
 
-• 원격 텔레메트리 없음: 어떤 사용자 데이터도 전송하지 않습니다. 유일한 네트워크 요청은 X의 공식 CDN(*.twimg.com)에서 카드 이미지를 가져오는 것이며, 캔버스가 교차 출처로 오염되는 것을 막기 위한 것입니다.
-• 100% 로컬: 계정도, API 키도, 서버도 없습니다.
-• 로컬 저장소만 사용: 설정은 chrome.storage.local에만 저장됩니다.
-• 최소 권한: clipboardWrite(이미지를 클립보드로), storage(설정 기억), X 이미지 서버 접근.
+• 원격 데이터 수집 제로: 사용자의 어떠한 데이터도 외부로 전송하지 않습니다. 유일한 네트워크 요청은 HTML5 캔버스의 교차 출처(CORS) 오염을 방지하기 위해 X 공식 이미지 서버(*.twimg.com)에서 게시물 원본 이미지를 불러올 때만 발생합니다.
+• 100% 로컬 렌더링: 별도 계정 가입도, API 키도, 외부 서버도 없이 모든 카드 생성이 브라우저 내부에서 이루어집니다.
+• 로컬 전용 저장소: 사용자의 레이아웃 및 테마 설정은 오직 브라우저 내부(chrome.storage.local)에만 보관됩니다.
+• 최소 권한 원칙: clipboardWrite(클립보드에 이미지 복사), storage(사용자 설정 저장), X 이미지 서버 접근 권한만 요청합니다.
 
-로그인도 X API 권한도 필요 없습니다. 페이지에 이미 그려진 내용을 읽을 뿐입니다.
+로그인이나 X API 연동 없이 현재 화면에 표시된 게시물 데이터를 그대로 읽어 동작합니다.
 
-X Corp.와 무관합니다.
+X Corp.와 무관한 독립 확장 프로그램입니다.
 ```
 
 ### 日语 (ja)
 
 ```
-PostPress — X の投稿とスレッドを、印刷品質のカードに。
+PostPress · 推刷 — X（旧Twitter）のポストやスレッドを、出版品質のカードに組版。
 
-乱雑でぼやけたスクリーンショットはもう不要です。投稿のアクションバーにある印刷機のアイコンをクリックするか（または Alt + C）、PostPress が単体の投稿や同じ著者のスレッドを、はっきりしたカードに組み直します。クリップボードへコピーするか、3× Retina の PNG として書き出せます。
+余計なUIが写り込んだり、縮小で文字がぼやけたりするスクリーンショットはもう不要です。ポスト下部のアクションバーにあるプレス機アイコンをクリック（またはカーソルを合わせて Alt + C）するだけで、単体ポストや同一投稿者の連続スレッドを瞬時に美しいカードへと再組版。ワンクリックでクリップボードにコピー、または 3× Retina 高解像度 PNG として保存できます。
 
-できること:
+主な機能:
 
-• 12 の質感テーマ — ミニマル、ミッドナイト、リキッドグラス、マテリアル (MD3)、ギャラリー、暗室、リソ、墨絵、クレイ、ターミナル、レシート、そして実験的なブルータリズム。どれも紙の質感、罫線、書体の組み合わせ、アクセント、独自の装飾まで揃った一つのデザインシステムです。
-• 独立したキャンバス（Mat） — カードを別のキャンバスに載せて書き出せます。比率は 1:1、4:5、3:4、16:9（最小高さが伸びるので長い文章も切れません）。背景はテーマに従う・単色・グラデーション・透明から選べます。
-• 賢いスレッド連結 — 二系統の解析（GraphQL 優先、失敗時は DOM）で同じ著者の連続投稿をつなぎ、広告や第三者への返信は除きます。投稿を一つだけ外すこともできます。
-• 長文と引用 — X の記事（カバー、キッカー、タイトル、リード）をそのまま読み取り、引用投稿はテーマに合わせて塗りまたは枠線で描きます。
-• 細かなスイッチと著者ごとの匿名化 — QR コード、反応数、日時、署名、動画バッジを個別に切り替え。全著者をまとめてぼかすことも、プレビューでアバターをクリックしてその著者だけを隠すこともできます。
-• 14 言語と可読性の警告 — 画面とカードの日付を 14 言語で表示（ブラウザに従うか手動で固定）。カードが長すぎてタイムラインで読めなくなりそうなときは、書き出す前に知らせます。
+• 12種類の質感・デジタルテーマ — ミニマル、ミッドナイト、リキッドグラス、マテリアル (MD3)、ギャラリー、暗室、リソ、墨絵、クレイ、ターミナル、レシート、さらに実験的なブルータリズムを収録。紙の風合い、罫線、フォントペアリング、アクセントカラー、シグネチャー装飾まで作り込まれたデザインシステムです。
+• 出力キャンバスとマット装丁 — カードの背面に独立した背景キャンバスを敷いて書き出せます。アスペクト比は 1:1、4:5、3:4、16:9 に対応（長文でも途切れない可変最小高さ）。背景はテーマ連動・単色・グラデーション・透明余白から選べます。
+• スマートなスレッド自動連結 — デュアル解析エンジン（GraphQL 優先＋DOM フォールバック）により、同じ投稿者の連投を自動的につなぎ合わせ、広告や他ユーザーの返信をきれいに除外。不要なポストは個別にワンクリックで外せます。
+• X 長文記事と引用ポストの最適化 — X の長文記事（Article）のカバー画像・肩書き・タイトル・リード文をネイティブに抽出。引用ポストもテーマに合わせて塗りつぶしや枠線スタイルで端正に描画します。
+• 細やかな表示切り替えと投稿者別の匿名化 — 元ポストの QR コード、エンゲージメント数、投稿日時、クレジットとバージョン、動画の再生ボタンを個別にオン／オフ可能。全投稿者の一括ぼかしはもちろん、プレビュー上のアイコンをクリックして特定の投稿者だけを匿名化することもできます。
+• 14言語対応＆可読性アラート — UI とカード上の日付表記は 14 言語に対応（ブラウザ連動または手動固定）。スレッドが縦に長すぎてタイムライン上で文字が潰れそうな場合は、書き出し前に分割を提案します。
 
-プライバシー:
+プライバシー保護:
 
-• 遠隔計測なし: 利用者のデータは一切送信しません。通信は X 公式 CDN（*.twimg.com）からカード用の画像を取るだけで、キャンバスが別オリジンで汚染されるのを防ぐためのものです。
-• 100% ローカル: アカウントも API キーもサーバーもありません。
-• 保存はローカルのみ: 設定は chrome.storage.local にだけ残ります。
-• 最小限の権限: clipboardWrite（画像をクリップボードへ）、storage（設定の記憶）、X の画像サーバーへのアクセス。
+• 外部送信・テレメトリ一切なし: ユーザーデータの収集や外部送信は一切行いません。通信が発生するのは、HTML5 Canvas の CORS 制限を回避するために X 公式画像サーバー（*.twimg.com）からポストの画像を読み込む際のみです。
+• 100% ローカル処理: アカウント登録、API キー、外部サーバーはすべて不要。ブラウザ内だけで完結します。
+• ローカルストレージのみ使用: お好みの設定はブラウザ内の chrome.storage.local にのみ保存されます。
+• 最小限の権限: clipboardWrite（画像のコピー）、storage（設定の保存）、および X 画像サーバーへのアクセス権限のみを使用します。
 
-ログインも X API の権限も不要です。ページにすでに描かれている内容を読むだけです。
+ログインや X API の連携は不要 — 現在開いているページに描画されている内容をそのまま読み取ります。
 
-X Corp. とは関係ありません。
+X Corp. とは一切関係ありません。
 ```
 
 ### 土耳其语 (tr)
 
 ```
-PostPress — X gönderilerini ve dizilerini baskı kalitesinde kartlara dönüştürür.
+PostPress — X gönderilerini ve dizilerini baskı kalitesinde kartlara dönüştürün.
 
-Dağınık ve bulanık tarayıcı ekran görüntülerine son. Gönderinin işlem çubuğundaki yazıcı simgesine dokunun (veya Alt + C), PostPress tek gönderiyi ya da aynı yazarın dizisini net bir karta dizsin: panoya kopyalayın veya 3× Retina PNG olarak dışa aktarın.
+Karmaşık arayüz öğeleriyle dolu, bulanık ekran görüntülerine veda edin. Herhangi bir gönderinin altındaki baskı simgesine tıklayın (veya fareyle üzerine gelip Alt + C tuşlarına basın); PostPress tekil gönderileri ya da aynı yazarın arka arkaya paylaştığı dizileri (thread) anında net ve şık kartlara dönüştürsün. Tek tıkla panoya kopyalayın veya 3× Retina PNG olarak indirin.
 
-NELER VAR:
+ÖNE ÇIKAN ÖZELLİKLER:
 
-• 12 dokulu tema — Minimal, Gece yarısı, Sıvı cam, Material 3, Galeri, Karanlık oda, Riso, Sumi, Kil, Terminal, Fiş ve deneysel Brütalist. Her biri kâğıt dokusu, çizgiler, yazı çiftleri, vurgu rengi ve kendi imza motifiyle tam bir tasarım sistemi.
-• Bağımsız tuval (Mat) — Kartı ayrı bir tuvale oturtun. Oranlar 1:1, 4:5, 3:4, 16:9 (esnek alt yükseklik, uzun metin asla kesilmez). Arka plan: temayı izle, düz renk, degrade veya saydam.
-• Akıllı dizi birleştirme — İki kanallı çözümleme (önce GraphQL, olmazsa DOM): aynı yazarın ardışık gönderilerini birleştirir, reklamları ve başkalarının yanıtlarını ayıklar. Tek gönderiyi tek tıkla çıkarabilirsiniz.
-• Uzun gönderiler ve alıntılar — X makalelerini (kapak, üst başlık, başlık, giriş) doğrudan okur; alıntılanan gönderiler temaya göre dolgulu veya çerçeveli çizilir.
-• İnce ayarlar ve yazar bazlı gizlilik — QR kod, etkileşim sayıları, saat, imza ve video rozeti ayrı ayrı açılır. Tüm yazarları birden bulanıklaştırın ya da önizlemede bir avatarın üzerine tıklayıp yalnız o yazarı gizleyin.
-• 14 dil ve okunabilirlik uyarısı — Arayüz ve kart tarihleri 14 dilde (tarayıcıyı izler veya elle sabitlenir). Kart çok uzayıp akışta okunamayacak kadar küçülecekse dışa aktarmadan önce uyarır.
+• 12 Dokulu ve Dijital Tema — Minimal, Gece yarısı, Sıvı cam, Material 3, Galeri, Karanlık oda, Riso, Sumi, Kil, Terminal, Fiş ve deneysel Brütalist. Her tema; kâğıt dokusu, cetvel çizgileri, yazı tipi eşleşmeleri, vurgu renkleri ve özel imza mührüyle eksiksiz bir tasarım sistemidir.
+• Çıktı Alanı ve Paspartu Çerçeve — Kartınızı 1:1, 4:5, 3:4 veya 16:9 oranlarında bağımsız bir arka plan katmanına yerleştirin (esnek minimum yükseklik sayesinde uzun metinler asla kesilmez). Temayla uyumlu, düz renk, gradyan veya saydam kenar boşluğu seçenekleriyle dışa aktarın.
+• Akıllı Dizi (Thread) Birleştirme — Çift kanallı çözümleme (GraphQL öncelikli, DOM yedekli) aynı yazarın ardışık gönderilerini kusursuzca birbirine bağlar; araya giren reklamları ve üçüncü taraf yanıtlarını otomatik temizler. İstenmeyen gönderileri tek tıkla hariç tutabilirsiniz.
+• X Makaleleri ve Zengin Alıntılar — X Makalelerini kapak görseli, üst başlık, ana başlık ve giriş metniyle doğal olarak işler; alıntılanan gönderileri seçili temaya göre dolgulu veya çerçeveli stilde çizer.
+• Görünüm Ayrıntıları ve Yazar Bazlı Gizlilik — QR kodu, etkileşim sayıları, tarih, kaynak ve derleme bilgisi ile video oynat düğmesini ayrı ayrı açıp kapatın. Tüm yazarları tek seferde bulanıklaştırın ya da önizlemede yalnızca belirli bir avatara tıklayarak o hesabı gizleyin.
+• 14 Dil Desteği ve Okunabilirlik Uyarısı — Arayüz ve kart tarihi 14 dili destekler (tarayıcı dilini izler veya elle seçilir). Çok uzun bir kart sosyal medya akışında okunamayacak kadar küçülecekse dışa aktarmadan önce sizi uyarır.
 
 GİZLİLİK:
 
-• Uzaktan ölçüm yok: hiçbir kullanıcı verisi gönderilmez. Tek ağ isteği, tuvalin başka kaynaktan kirlenmesini önlemek için X'in resmî CDN'inden (*.twimg.com) kart görsellerini almaktır.
-• %100 yerel: hesap yok, API anahtarı yok, sunucu yok.
-• Yalnız yerel depolama: ayarlar sadece chrome.storage.local içinde.
-• En az izin: clipboardWrite (görseli panoya), storage (ayarları hatırla) ve X'in görsel sunucularına erişim.
+• Sıfır Telemetri: Hiçbir kullanıcı verisi toplanmaz veya dışarı aktarılmaz. Tek ağ isteği, HTML5 Canvas CORS kısıtlamasını aşmak için gönderi görsellerini X'in resmî CDN sunucularından (*.twimg.com) çekmek amacıyla yapılır.
+• %100 Yerel İşleme: Hesap, API anahtarı veya uzak sunucu gerekmez; her şey doğrudan tarayıcınızda oluşturulur.
+• Yalnızca Yerel Depolama: Tercihleriniz yalnızca cihazınızdaki chrome.storage.local alanında tutulur.
+• Minimum İzinler: Yalnızca clipboardWrite (görseli panoya kopyalamak için), storage (ayarları kaydetmek için) ve X görsel sunucusu erişimi istenir.
 
-Oturum açmak ve X API erişimi gerekmez — sayfada zaten çizili olanı okur.
+Oturum açma veya X API erişimi gerektirmez — doğrudan sayfada görüntülenen içeriği okur.
 
-X Corp. ile bağlantılı değildir.
+X Corp. ile hiçbir bağlantısı yoktur.
 ```
 
 ### 乌克兰语 (uk)
 
 ```
-PostPress — перетворює дописи й треди X на картки друкарської якості.
+PostPress — перетворюйте пости й треди X на картки типографської якості.
 
-Досить захаращених і розмитих знімків екрана. Натисніть значок друкарського верстата в панелі дій допису (або Alt + C) — і PostPress збереже один допис чи тред одного автора в чітку картку, готову для буфера обміну або експорту в PNG 3× Retina.
+Забудьте про захаращені інтерфейсом і розмиті скриншоти з браузера. Натисніть значок друкарського преса під будь-яким постом (або Alt + C при наведенні курсора) — і PostPress миттєво зверстає окремий пост чи авторський тред у чітку картку. Копіюйте її до буфера обміну одним кліком або зберігайте у форматі PNG 3× Retina.
 
-ЩО ВИ ОТРИМАЄТЕ:
+МОЖЛИВОСТІ:
 
-• 12 матеріальних тем — Мінімалізм, Опівніч, Рідке скло, Material 3, Галерея, Фотолабораторія, Ризограф, Сумі, Глина, Термінал, Чек і експериментальний Бруталізм. Кожна — цілісна система: фактура паперу, лінійки, шрифтові пари, акценти й власний знак.
-• Окремий мат (Mat) — картку можна поставити на окреме поле. Формати 1:1, 4:5, 3:4, 16:9 (еластична мінімальна висота, довгий текст не обрізається). Тло: як у темі, суцільне, градієнт або прозоре.
-• Розумне зшивання тредів — два канали (GraphQL, за промаху — DOM): збирає послідовні дописи одного автора, відсікає рекламу й чужі відповіді. Будь-який допис прибирається одним кліком.
-• Довгі дописи й цитати — нативно читає статті X (обкладинка, надзаголовок, заголовок, лід); цитати малюються заливкою або обведенням за темою.
-• Тонкі перемикачі й приватність за авторами — QR-код, статистика, час, підпис і значок відео вмикаються окремо. Розмити всіх авторів одразу або клікнути аватар у превʼю, щоб приховати лише його.
-• 14 мов і попередження про читабельність — інтерфейс і дати на картці 14 мовами (за браузером або вручну). Перед експортом попередить, якщо дуже довга картка стане нечитабельною у стрічці.
+• 12 фактурних і цифрових тем — Мінімалізм, Опівніч, Рідке скло, Material 3, Галерея, Фотолабораторія, Ризограф, Сумі, Глина, Термінал, Чек та експериментальний Бруталізм. Кожна тема — це цілісна дизайн-система з текстурою паперу, лінійками, шрифтовими парами, акцентами й фірмовою позначкою.
+• Область експорту та паспарту — розміщуйте картку на окремому фоновому шарі з пропорціями 1:1, 4:5, 3:4 або 16:9 (завдяки гнучкій мінімальній висоті довгий текст ніколи не обрізається). Обирайте тло в тон теми, суцільний колір, градієнт або прозорі поля.
+• Розумне зшивання тредів — двоканальний аналізатор (GraphQL із резервним читанням DOM) автоматично збирає послідовні пости одного автора, відсікаючи рекламу та сторонні відповіді. Будь-який пост можна виключити з картки одним кліком.
+• Статті X і цитати — нативна підтримка лонгрідів X (обкладинка, надзаголовок, заголовок і лід) та охайне оформлення цитованих постів (із заливкою або контуром відповідно до обраної теми).
+• Деталі вигляду та приватність за авторами — окремі перемикачі для QR-коду, статистики, дати, рядка «Авторство і збірка» та кнопки відтворення на відео. Розмивайте всіх авторів глобально або клікніть на окремий аватар у прев’ю, щоб приховати лише цей акаунт.
+• 14 мов і контроль читабельності — інтерфейс і дати на картці доступні 14 мовами (автоматично за браузером або вручну). Якщо занадто довга картка стане дрібною у стрічці соцмереж, розширення попередить про це перед експортом.
 
 ПРИВАТНІСТЬ:
 
-• Жодної телеметрії: дані нікуди не надсилаються. Єдині мережеві запити — по картинки з офіційного CDN X (*.twimg.com), інакше canvas буде заблоковано.
-• Повністю локально: без акаунта, без ключів API, без серверів.
-• Лише локальне сховище: налаштування лежать у chrome.storage.local.
-• Мінімум дозволів: clipboardWrite (картинка в буфер), storage (памʼятати налаштування) і доступ до серверів зображень X.
+• Жодної телеметрії: жодні дані користувача не збираються й нікуди не передаються. Єдині мережеві запити завантажують медіафайли поста з офіційного CDN X (*.twimg.com), щоб уникнути блокування CORS під час рендерингу HTML5 Canvas.
+• 100 % локально: без облікового запису, ключів API чи сторонніх серверів — усе генерується безпосередньо у вашому браузері.
+• Лише локальне сховище: ваші налаштування зберігаються виключно в chrome.storage.local.
+• Мінімум дозволів: clipboardWrite (копіювання зображення до буфера), storage (збереження налаштувань) і доступ до серверів зображень X.
 
-Вхід і доступ до API X не потрібні — розширення читає те, що сторінка вже намалювала.
+Не потребує входу в акаунт чи доступу до API X — працює з контентом, який уже відображено на сторінці.
 
-Не повʼязано з X Corp.
+Не пов’язано з X Corp.
 ```
 
 ### 西班牙语 (es)
 
 ```
-PostPress — convierte las publicaciones e hilos de X en tarjetas con calidad de imprenta.
+PostPress — Convierte posts e hilos de X en tarjetas con acabado editorial.
 
-Se acabaron las capturas de pantalla abarrotadas y borrosas. Pulsa el icono de imprenta en la barra de acciones de una publicación (o Alt + C) y PostPress compone la publicación suelta o el hilo de un mismo autor en una tarjeta nítida, lista para copiar o exportar como PNG 3× Retina.
+Olvídate de las capturas de pantalla borrosas y llenas de elementos del navegador. Haz clic en el icono de prensa bajo cualquier post (o pulsa Alt + C al pasar el cursor) y PostPress maquetará al instante un post suelto o el hilo completo de un autor en una tarjeta nítida, lista para copiar al portapapeles o descargar en PNG 3× Retina.
 
-LO QUE OBTIENES:
+QUÉ INCLUYE:
 
-• 12 temas matéricos — Minimal, Medianoche, Cristal líquido, Material 3, Galería, Cuarto oscuro, Riso, Sumi, Arcilla, Terminal, Recibo y un Brutalista experimental. Cada uno es un sistema completo: grano de papel, filetes, parejas tipográficas, acentos y una marca propia.
-• Lienzo independiente (Mat) — Monta la tarjeta en un lienzo aparte. Formatos 1:1, 4:5, 3:4, 16:9 (altura mínima elástica; el texto largo nunca se recorta). Fondos: seguir el tema, color plano, degradado o transparente.
-• Unión inteligente de hilos — Resolución por dos canales (GraphQL, con respaldo en el DOM): enlaza publicaciones consecutivas del mismo autor y descarta anuncios y respuestas ajenas. Cada publicación se quita con un clic.
-• Textos largos y citas — Lee de forma nativa los Artículos de X (portada, antetítulo, título y entradilla); las citas se dibujan rellenas o con contorno según el tema.
-• Ajustes finos y privacidad por autor — Código QR, métricas, fecha, firma y distintivo de vídeo, cada uno por separado. Difumina a todos los autores de golpe o pulsa el avatar de una publicación en la vista previa para ocultar solo a ese autor.
-• 14 idiomas y aviso de legibilidad — Interfaz y fechas de la tarjeta en 14 idiomas (siguen el navegador o se fijan a mano). Avisa antes de exportar si una tarjeta muy larga quedaría ilegible en un feed.
+• 12 temas con textura y digitales — Minimal, Medianoche, Cristal líquido, Material 3, Galería, Cuarto oscuro, Riso, Sumi, Arcilla, Terminal, Recibo y un tema Brutalista experimental. Cada uno es un sistema de diseño completo: grano de papel, filetes, combinación tipográfica, color de acento y sello propio.
+• Lienzo de salida y paspartú — Enmarca la tarjeta sobre un fondo independiente en formato 1:1, 4:5, 3:4 o 16:9 (con altura mínima flexible para que los textos largos nunca se corten). Elige fondo según el tema, color sólido, degradado o margen transparente.
+• Unión inteligente de hilos — Doble vía de análisis (GraphQL con respaldo DOM) que enlaza automáticamente los posts consecutivos de un mismo autor y filtra anuncios o respuestas de terceros. Excluye cualquier post con un solo clic.
+• Artículos de X y citas enriquecidas — Extrae de forma nativa los Artículos de X con portada, antetítulo, titular y entradilla; presenta los posts citados con relleno o contorno a juego con el tema.
+• Detalles de presentación y privacidad por autor — Activa o desactiva por separado el código QR, las métricas, la fecha, la línea «Crédito y compilación» y el botón de reproducción en vídeos. Difumina a todos los autores a la vez o haz clic en un avatar en la vista previa para anonimizar solo esa cuenta.
+• 14 idiomas y aviso de legibilidad — Interfaz y fechas de la tarjeta en 14 idiomas (según el navegador o fijados manualmente). Te avisa antes de exportar si un hilo demasiado alto se vería diminuto en el feed.
 
 PRIVACIDAD:
 
-• Sin telemetría: no se transmite ningún dato. Las únicas peticiones de red traen las imágenes del CDN oficial de X (*.twimg.com), sin lo cual el lienzo quedaría bloqueado.
-• 100 % local: sin cuenta, sin claves de API, sin servidores.
-• Solo almacenamiento local: los ajustes viven en chrome.storage.local.
-• Permisos mínimos: clipboardWrite (copiar la imagen), storage (recordar los ajustes) y acceso a los servidores de imágenes de X.
+• Cero telemetría: no recopila ni envía datos de usuario. Las únicas peticiones de red descargan las imágenes del post desde el CDN oficial de X (*.twimg.com) para permitir el renderizado en HTML5 Canvas sin errores de CORS.
+• 100 % local: sin cuentas, sin claves de API y sin servidores externos; todo se genera en tu propio navegador.
+• Almacenamiento exclusivamente local: tus ajustes se guardan únicamente en chrome.storage.local.
+• Permisos mínimos: clipboardWrite (copiar la imagen al portapapeles), storage (recordar tus preferencias) y acceso a los servidores de imágenes de X.
 
-No hace falta iniciar sesión ni disponer de la API de X: lee lo que la página ya muestra.
+Sin iniciar sesión ni usar la API de X: lee directamente lo que ya se muestra en la página.
 
-No está afiliado a X Corp.
+No afiliado a X Corp.
 ```
 
 ### 意大利语 (it)
 
 ```
-PostPress — trasforma i post e i thread di X in carte di qualità tipografica.
+PostPress — Trasforma i post e i thread di X in card di qualità editoriale.
 
-Basta con screenshot ingombri e sfocati. Clicca l'icona della stampante nella barra delle azioni di un post (oppure premi Alt + C) e PostPress impagina il singolo post o il thread di uno stesso autore in una carta nitida, pronta da copiare o esportare come PNG 3× Retina.
+Basta screenshot sfocati e pieni di elementi dell’interfaccia. Clicca sull’icona del torchio tipografico sotto qualsiasi post (oppure premi Alt + C passando il cursore) e PostPress impaginerà all’istante un singolo post o l’intero thread di un autore in una card nitida, pronta da copiare negli appunti o scaricare come PNG 3× Retina.
 
-COSA OTTIENI:
+CARATTERISTICHE PRINCIPALI:
 
-• 12 temi materici — Minimal, Mezzanotte, Vetro liquido, Material 3, Galleria, Camera oscura, Riso, Sumi, Argilla, Terminale, Scontrino e un Brutalista sperimentale. Ognuno è un sistema compiuto: grana della carta, filetti, coppie tipografiche, accenti e un proprio segno.
-• Tela indipendente (Mat) — Appoggia la carta su una tela separata. Formati 1:1, 4:5, 3:4, 16:9 (altezza minima elastica: il testo lungo non viene mai tagliato). Sfondi: segui il tema, tinta unita, sfumatura o trasparente.
-• Unione intelligente dei thread — Risoluzione a due canali (GraphQL, con ripiego sul DOM): concatena i post consecutivi dello stesso autore e scarta pubblicità e risposte altrui. Ogni post si toglie con un clic.
-• Testi lunghi e citazioni — Legge nativamente gli Articoli di X (copertina, occhiello, titolo, sommario); le citazioni sono disegnate piene o con contorno secondo il tema.
-• Regolazioni fini e privacy per autore — Codice QR, metriche, data, firma e badge video, ciascuno separato. Sfoca tutti gli autori insieme oppure clicca l'avatar di un post nell'anteprima per nascondere solo quello.
-• 14 lingue e avviso di leggibilità — Interfaccia e date della carta in 14 lingue (seguono il browser o si fissano a mano). Avvisa prima dell'esportazione se una carta molto lunga diventerebbe illeggibile in un feed.
+• 12 temi materici e digitali — Minimal, Mezzanotte, Vetro liquido, Material 3, Galleria, Camera oscura, Riso, Sumi, Argilla, Terminale, Scontrino e un Brutalista sperimentale. Ogni tema è un sistema grafico completo di grana della carta, filetti, accoppiamenti tipografici, colori d’accento e marchio distintivo.
+• Area di esportazione e passe-partout — Incornicia la card su uno sfondo dedicato nei formati 1:1, 4:5, 3:4 o 16:9 (con altezza minima flessibile: i testi lunghi non vengono mai tagliati). Scegli tra sfondo abbinato al tema, tinta unita, sfumatura o margine trasparente.
+• Unione intelligente dei thread — Doppio motore di lettura (GraphQL con fallback sul DOM) che concatena automaticamente i post consecutivi dello stesso autore, scartando inserzioni e risposte di terzi. Puoi escludere qualsiasi post con un clic.
+• Articoli di X e citazioni — Interpreta nativamente gli Articoli di X completi di immagine di copertina, occhiello, titolo e sommario; disegna i post citati con riempimento o contorno in armonia con il tema.
+• Dettagli di presentazione e privacy per autore — Controlla singolarmente codice QR, metriche, data, dicitura «Credito e build» e pulsante play video. Sfoca tutti gli autori insieme oppure clicca su un singolo avatar nell’anteprima per rendere anonimo solo quel profilo.
+• 14 lingue e avviso di leggibilità — Interfaccia e date della card disponibili in 14 lingue (automatiche in base al browser o scelte manualmente). Ti avvisa prima dell’esportazione se una card troppo alta rischia di risultare illeggibile nel feed.
 
 PRIVACY:
 
-• Nessuna telemetria: nessun dato viene trasmesso. Le uniche richieste di rete scaricano le immagini dal CDN ufficiale di X (*.twimg.com), altrimenti la tela risulterebbe bloccata.
-• 100 % locale: nessun account, nessuna chiave API, nessun server.
-• Solo archiviazione locale: le impostazioni restano in chrome.storage.local.
-• Permessi minimi: clipboardWrite (copia l'immagine), storage (ricorda le impostazioni) e accesso ai server immagini di X.
+• Zero telemetria: nessun dato personale viene raccolto o trasmesso. Le uniche richieste di rete scaricano le immagini del post dal CDN ufficiale di X (*.twimg.com) per consentire il rendering su HTML5 Canvas senza blocchi CORS.
+• 100% locale: nessun account, nessuna chiave API, nessun server esterno; tutto viene elaborato nel tuo browser.
+• Archiviazione solo locale: le tue preferenze restano salvate esclusivamente in chrome.storage.local.
+• Permessi minimi: clipboardWrite (copia dell’immagine negli appunti), storage (salvataggio delle impostazioni) e accesso ai server immagini di X.
 
-Non servono accesso né API di X: legge ciò che la pagina mostra già.
+Non richiede login né accesso alle API di X: legge direttamente ciò che è già visibile nella pagina.
 
 Non affiliato a X Corp.
 ```
@@ -357,27 +357,27 @@ Non affiliato a X Corp.
 ### 巴西葡萄牙语 (pt-BR)
 
 ```
-PostPress — transforma posts e threads do X em cartões com qualidade de impressão.
+PostPress — Transforme posts e threads do X em cartões com acabamento editorial.
 
-Chega de capturas de tela poluídas e borradas. Clique no ícone da impressora na barra de ações de um post (ou pressione Alt + C) e o PostPress compõe o post sozinho ou o thread de um mesmo autor em um cartão nítido, pronto para copiar ou exportar como PNG 3× Retina.
+Chega de capturas de tela poluídas e em baixa resolução. Clique no ícone de prensa na barra de ações de qualquer post (ou pressione Alt + C ao passar o cursor) e o PostPress diagrama na hora um post avulso ou uma thread inteira do mesmo autor em um cartão nítido — pronto para copiar para a área de transferência ou baixar em PNG 3× Retina.
 
-O QUE VOCÊ RECEBE:
+O QUE VOCÊ ENCONTRA:
 
-• 12 temas materiais — Minimalista, Meia-noite, Vidro líquido, Material 3, Galeria, Câmara escura, Riso, Sumi, Argila, Terminal, Recibo e um Brutalista experimental. Cada um é um sistema completo: textura de papel, filetes, pares tipográficos, acentos e uma marca própria.
-• Tela independente (Mat) — Coloque o cartão sobre uma tela separada. Formatos 1:1, 4:5, 3:4, 16:9 (altura mínima elástica; texto longo nunca é cortado). Fundos: seguir o tema, cor sólida, gradiente ou transparente.
-• Junção inteligente de threads — Resolução em dois canais (GraphQL, com fallback no DOM): emenda posts consecutivos do mesmo autor e descarta anúncios e respostas de terceiros. Cada post sai com um clique.
-• Textos longos e citações — Lê nativamente os Artigos do X (capa, antetítulo, título e linha de abertura); citações aparecem preenchidas ou contornadas conforme o tema.
-• Ajustes finos e privacidade por autor — QR code, métricas, data, assinatura e selo de vídeo, cada um separado. Desfoque todos os autores de uma vez ou clique no avatar de um post na prévia para ocultar só aquele autor.
-• 14 idiomas e aviso de legibilidade — Interface e datas do cartão em 14 idiomas (seguem o navegador ou ficam fixos). Avisa antes de exportar se um cartão muito longo ficaria ilegível no feed.
+• 12 temas táteis e digitais — Minimalista, Meia-noite, Vidro líquido, Material 3, Galeria, Câmara escura, Riso, Sumi, Argila, Terminal, Recibo e um Brutalista experimental. Cada tema é um sistema completo: textura de papel, fios divisórios, pares tipográficos, cores de destaque e assinatura visual.
+• Área de exportação e moldura (Mat) — Posicione o cartão sobre um fundo independente nas proporções 1:1, 4:5, 3:4 ou 16:9 (com altura mínima elástica para nunca cortar textos longos). Escolha fundo seguindo o tema, cor sólida, gradiente ou margem transparente.
+• Costura inteligente de threads — Dupla camada de leitura (GraphQL com fallback no DOM) que reúne automaticamente posts consecutivos do mesmo autor, filtrando anúncios e respostas de terceiros. Remova qualquer post da seleção com um clique.
+• Artigos do X e citações ricas — Lê nativamente Artigos do X com imagem de capa, chapéu, título e linha fina; renderiza posts citados com preenchimento ou contorno combinando com o tema ativo.
+• Detalhes de exibição e privacidade por autor — Ative ou desative separadamente código QR, métricas, data, linha «Crédito e build» e botão de play do vídeo. Desfoque todos os autores de uma vez ou clique em um avatar específico na prévia para ocultar apenas aquele perfil.
+• 14 idiomas e alerta de legibilidade — Interface e datas do cartão em 14 idiomas (automático pelo navegador ou fixado manualmente). Avisa antes de exportar quando um cartão muito alto corre o risco de ficar pequeno demais no feed.
 
 PRIVACIDADE:
 
-• Sem telemetria: nenhum dado é transmitido. As únicas requisições de rede buscam imagens no CDN oficial do X (*.twimg.com), sem o que a tela ficaria bloqueada.
-• 100 % local: sem conta, sem chaves de API, sem servidores.
-• Apenas armazenamento local: as preferências ficam em chrome.storage.local.
-• Permissões mínimas: clipboardWrite (copiar a imagem), storage (lembrar as preferências) e acesso aos servidores de imagem do X.
+• Zero telemetria: nenhum dado do usuário é coletado ou enviado. As únicas requisições de rede buscam as imagens do post no CDN oficial do X (*.twimg.com) para permitir a renderização no HTML5 Canvas sem bloqueio de CORS.
+• 100% local: sem conta, sem chaves de API e sem servidores externos — tudo é processado diretamente no seu navegador.
+• Armazenamento apenas local: suas preferências ficam salvas exclusivamente em chrome.storage.local.
+• Permissões mínimas: clipboardWrite (copiar a imagem), storage (salvar suas preferências) e acesso aos servidores de imagem do X.
 
-Não precisa de login nem da API do X — lê o que a página já mostra.
+Não requer login nem acesso à API do X — lê apenas o conteúdo já carregado na página.
 
 Não afiliado à X Corp.
 ```
@@ -385,27 +385,27 @@ Não afiliado à X Corp.
 ### 印尼语 (id)
 
 ```
-PostPress — mengubah postingan dan utas X menjadi kartu berkualitas cetak.
+PostPress — Ubah postingan dan utas X menjadi kartu berkualitas cetak editorial.
 
-Tak perlu lagi tangkapan layar yang penuh dan buram. Klik ikon mesin cetak di bilah tindakan sebuah postingan (atau tekan Alt + C), lalu PostPress menyusun satu postingan atau utas dari penulis yang sama menjadi kartu tajam yang siap disalin atau diekspor sebagai PNG 3× Retina.
+Tinggalkan tangkapan layar yang berantakan dan buram. Klik ikon mesin cetak di bawah postingan mana pun (atau tekan Alt + C saat mengarahkan kursor), dan PostPress langsung menyusun postingan tunggal maupun utas beruntun dari penulis yang sama menjadi kartu yang tajam — siap disalin ke papan klip atau diunduh sebagai PNG 3× Retina.
 
-YANG ANDA DAPATKAN:
+FITUR UTAMA:
 
-• 12 tema material — Minimal, Tengah malam, Kaca cair, Material 3, Galeri, Kamar gelap, Riso, Sumi, Tanah liat, Terminal, Struk, dan satu Brutalis eksperimental. Semuanya sistem desain utuh: tekstur kertas, garis, pasangan huruf, aksen, dan tanda khasnya sendiri.
-• Kanvas terpisah (Mat) — Letakkan kartu di kanvas tersendiri. Rasio 1:1, 4:5, 3:4, 16:9 (tinggi minimum elastis, teks panjang tidak pernah terpotong). Latar: ikut tema, warna solid, gradien, atau transparan.
-• Penyambungan utas pintar — Dua jalur (GraphQL, dengan cadangan DOM): menyambung postingan berurutan dari penulis yang sama dan menyaring iklan serta balasan orang lain. Satu postingan bisa dikeluarkan dengan sekali klik.
-• Tulisan panjang dan kutipan — Membaca Artikel X secara asli (sampul, kicker, judul, paragraf pembuka); kutipan digambar berisi atau bergaris sesuai tema.
-• Sakelar rinci dan privasi per penulis — Kode QR, angka interaksi, waktu, tanda tangan, dan lencana video bisa diatur satu per satu. Buramkan semua penulis sekaligus, atau klik avatar sebuah postingan di pratinjau untuk menyembunyikan penulis itu saja.
-• 14 bahasa dan peringatan keterbacaan — Antarmuka dan tanggal kartu dalam 14 bahasa (mengikuti peramban atau dipilih manual). Memberi tahu sebelum ekspor bila kartu terlalu panjang hingga tak terbaca di linimasa.
+• 12 Tema Bertekstur & Digital — Minimal, Tengah malam, Kaca cair, Material 3, Galeri, Kamar gelap, Riso, Sumi, Tanah liat, Terminal, Struk, serta tema Brutalis eksperimental. Setiap tema dirancang utuh dengan tekstur kertas, garis batas, pasangan fon, warna aksen, dan tanda khasnya sendiri.
+• Area Ekspor & Bingkai Kanvas (Mat) — Tempatkan kartu di atas lapisan latar terpisah dengan rasio 1:1, 4:5, 3:4, atau 16:9 (tinggi minimum fleksibel agar teks panjang tidak pernah terpotong). Pilih latar mengikuti tema, warna solid, gradien, atau ruang tepi transparan.
+• Penyambungan Utas Cerdas — Pemindaian dua jalur (GraphQL dengan cadangan DOM) secara otomatis merangkai postingan berurutan dari penulis yang sama sekaligus menyaring iklan dan balasan pihak ketiga. Kecualikan postingan tertentu cukup dengan sekali klik.
+• Artikel X & Kutipan Kaya — Mengenali Artikel X secara bawaan lengkap dengan sampul, subjudul atas, judul utama, dan paragraf pembuka; menampilkan postingan yang dikutip dalam gaya isi penuh atau garis tepi sesuai tema.
+• Detail Tampilan & Privasi per Penulis — Atur sendiri tampilan kode QR, statistik, tanggal, info kredit dan build, serta tombol putar video. Buramkan semua penulis sekaligus, atau klik avatar tertentu di pratinjau untuk menyamarkan penulis itu saja.
+• 14 Bahasa & Pengingat Keterbacaan — Antarmuka dan format tanggal kartu tersedia dalam 14 bahasa (mengikuti peramban atau dipilih manual). Memberikan peringatan sebelum ekspor jika kartu terlalu tinggi sehingga teksnya berisiko tampak terlalu kecil di linimasa.
 
 PRIVASI:
 
-• Tanpa telemetri: tidak ada data pengguna yang dikirim. Satu-satunya permintaan jaringan mengambil gambar dari CDN resmi X (*.twimg.com), tanpanya kanvas akan terblokir.
-• 100% lokal: tanpa akun, tanpa kunci API, tanpa server.
-• Hanya penyimpanan lokal: pengaturan disimpan di chrome.storage.local.
-• Izin seminimal mungkin: clipboardWrite (menyalin gambar), storage (mengingat pengaturan), dan akses ke server gambar X.
+• Tanpa Telemetri: Tidak ada data pengguna yang dikumpulkan atau dikirim ke luar. Satu-satunya permintaan jaringan hanya mengambil gambar postingan dari CDN resmi X (*.twimg.com) agar HTML5 Canvas dapat menggambar tanpa kendala CORS.
+• 100% Lokal: Tanpa akun, tanpa kunci API, dan tanpa server eksternal — seluruh proses berlangsung di peramban Anda.
+• Penyimpanan Lokal Saja: Preferensi Anda hanya disimpan di dalam chrome.storage.local pada perangkat.
+• Izin Paling Minimal: Hanya memerlukan clipboardWrite (menyalin gambar ke papan klip), storage (menyimpan pengaturan), dan akses ke server gambar X.
 
-Tidak perlu masuk akun atau akses API X — ekstensi membaca apa yang sudah tampil di halaman.
+Tidak perlu login atau akses API X — ekstensi membaca konten yang sudah tampil di halaman.
 
 Tidak berafiliasi dengan X Corp.
 ```
@@ -415,26 +415,27 @@ Tidak berafiliasi dengan X Corp.
 ```
 PostPress · 印推 —— 把 X（Twitter）推文與長串，排印成出版級質感卡片。
 
-告別夾帶瀏覽器雜亂 UI 與模糊縮放的普通截圖。在推文操作列輕點印刷機圖示（或按快速鍵 Alt + C），PostPress（印推）即刻在本機將單條推文或同作者長串（Thread）重新組版，裝幀為可一鍵複製或匯出 3× 超清 PNG 的精美卡片。
+告別夾帶雜亂介面與模糊縮放的普通截圖。輕點推文操作列的印刷機圖示（或游標停留按 Alt + C），PostPress（印推）即刻在本機將單則推文或同作者長串（Thread）重新組版，裝幀為可一鍵複製或匯出 3× 超高解析 PNG 的精美卡片。
 
-你會得到：
+功能亮點：
 
-• 12 套實體級材質主題——從孔版印刷（Riso）、水墨宣紙、藝廊裝裱、暗房銀鹽，到極簡、液態玻璃與熱感收據，外加一套實驗性粗野派。每套主題均配備嚴謹匹配的紙面基調、邊線質感、字體配對、強調色與專屬簽名裝飾。
-• 獨立外層畫布裝裱（Mat）——支援將卡片承托在外層畫布上匯出。提供 1:1、4:5、3:4、16:9 預設畫幅（採 min-height 彈性下限，長文本絕不截斷），並支援跟隨主題、純色或漸層背景；僅選畫幅時留白保持透明，便於二次合成。
-• 智慧長串拼合（Thread）——雙通道解析（GraphQL 優先 + DOM 降級備援），自動辨識並拼接同作者連續推文，剔除干擾廣告與第三方回覆，支援單條自由剔除。
-• 長文與深度排版——原生辨識 X 長文推文（Article），擷取封面、眉標、標題與導語；引用推文依主題呈現為填色或描邊雙重質感；支援 Twemoji Unicode 還原與 1~4 張高解析網格圖片解析。
-• 精細開關與逐條隱私模糊——獨立控制原文 QR Code、互動統計、發布時間、影片播放角標與署名版本；支援全域作者高斯模糊，也可直接點擊卡片上某條推文的頭像僅模糊該作者。
-• 14 國語言與可讀性警示——內建中、英、日、韓等 14 種介面與卡面日期語言；當長圖比例過大、縮至社群平台動態牆寬度可能導致字級難以閱讀時，面板主動呈現視覺警示，建議分段匯出。
+• 12 款實體質感與數位主題 —— 極簡、夜幕、液態玻璃、質感 (MD3)、藝廊、暗房、孔版、水墨、軟陶、終端機、收據，以及實驗性的粗野派。每款主題皆為完整設計系統：紙張肌理、分欄線、字體配對、強調色與專屬印記。
+• 輸出畫布與裝裱襯底 —— 支援將卡片置於獨立背景層上匯出。提供 1:1、4:5、3:4、16:9 預設畫幅（彈性最小高度，長文絕不截斷）；背景可選跟隨主題、純色、漸層或透明留白，便於二次排版合成。
+• 智慧長串拼合 —— 雙通道解析（GraphQL 優先，DOM 備援），自動辨識並串聯同作者連續推文，過濾廣告與無關回覆，並支援單則推文一鍵剔除。
+• 原生長文與引用排版 —— 原生解析 X 長文（Article）的封面、眉標、標題與導言；引用推文隨主題切換填滿或描邊樣式；完整還原高解析多圖格線與表情符號。
+• 呈現細節與逐則隱私模糊 —— 獨立開關原文 QR Code、互動數據、發布時間、署名與版本及影片播放按鈕。支援全域模糊所有作者，也可在預覽中點擊單則推文頭像，僅隱藏該名作者。
+• 14 種語言與可讀性提醒 —— 介面與卡面日期支援 14 種語言（可跟隨瀏覽器或手動指定）。當長圖過高、縮至動態牆寬度後文字可能過小時，匯出前會主動提醒拆分為多張。
 
 隱私保障：
 
-• 零外部遠端通訊：除透過安全代理向 X 官方圖片伺服器（*.twimg.com）取得配圖（用於規避 Canvas 跨網域污染 SecurityError）外，絕不向任何外部伺服器發送請求。
-• 無遙測與追蹤：無數據分析、無行為埋點、無遠端動態設定。
+• 零遙測與追蹤：絕不傳送任何使用者資料。唯一的網路請求僅用於從 X 官方圖片伺服器（*.twimg.com）載入配圖，以規避瀏覽器 Canvas 跨網域匯出限制。
+• 100% 本機渲染：無需註冊帳號、無需 API 金鑰、無外部伺服器。
 • 純本機儲存：個人化排版偏好僅保存在瀏覽器本機 chrome.storage.local。
-• 權限最小化：僅宣告 clipboardWrite（複製圖片至剪貼簿）、storage（儲存使用者偏好）及 twimg.com 圖片代理權限。
+• 權限最小化：僅宣告 clipboardWrite（複製圖片至剪貼簿）、storage（記住排版設定）及 X 官方圖片伺服器讀取權限。
 
-無需登入，也無需 X API 權限——直接讀取目前頁面已渲染的內容。
+無需登入帳號，也無需 X API 權限 —— 直接讀取目前頁面已載入的內容。
 
 與 X Corp. 無關聯。
 ```
+
 
