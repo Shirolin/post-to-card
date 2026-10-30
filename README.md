@@ -179,7 +179,7 @@ pnpm run test:tier5  # 3. Tier 5 对抗性压力与产物取证审计（CORS 防
 pnpm exec vite --config dev/vite.harness.config.ts
 ```
 
-启动后访问 `http://127.0.0.1:5199/`，支持通过 URL 参数直接切换状态（如 `?theme=riso&ratio=3:4&bg=paper&canvas=4:5`）。更多真浏览器验证脚本（扩展加载、离线真实 DOM 夹具提取、帧率与像素动效探针）详见 [AGENTS.md](AGENTS.md) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
+启动后访问 `http://127.0.0.1:5199/preview.html`，支持通过 URL 参数直接切换状态（如 `?theme=riso&ratio=3:4&bg=paper&canvas=4:5`）。更多真浏览器验证脚本（扩展加载、离线真实 DOM 夹具提取、帧率与像素动效探针）详见 [AGENTS.md](AGENTS.md) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ---
 

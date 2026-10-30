@@ -179,7 +179,7 @@ Debug card typography, materials, and modal states directly in your browser with
 pnpm exec vite --config dev/vite.harness.config.ts
 ```
 
-Open `http://127.0.0.1:5199/` and switch states via URL parameters (e.g., `?theme=riso&ratio=3:4&bg=paper&canvas=4:5`). For real-browser verification scripts (`verify:extension`, `verify:extractor`, `verify:motion`), see [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+Open `http://127.0.0.1:5199/preview.html` and switch states via URL parameters (e.g., `?theme=riso&ratio=3:4&bg=paper&canvas=4:5`). For real-browser verification scripts (`verify:extension`, `verify:extractor`, `verify:motion`), see [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

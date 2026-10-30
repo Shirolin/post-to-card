@@ -34,7 +34,7 @@ bundle，它审的就是产物。`.github/workflows/ci.yml` 跑的是同一条�
 
 ```bash
 pnpm exec vite --config dev/vite.harness.config.ts
-# http://127.0.0.1:5199/ 支持 ?theme=riso&ratio=3:4&bg=paper&canvas=4:5 这类直接切状态
+# http://127.0.0.1:5199/preview.html 支持 ?theme=riso&ratio=3:4&bg=paper&canvas=4:5 这类直接切状态
 ```
 
 ## 改动约定
